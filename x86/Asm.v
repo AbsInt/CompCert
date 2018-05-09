@@ -1189,7 +1189,7 @@ Fixpoint get_extcall_arguments
   | nil => Some nil
  end.
 
-Definition at_external (ge:genv) (c: state) : option (external_function * signature * list val) :=
+Definition at_external (ge:genv) (c: state) : option (external_function * list val) :=
   match c with
     State rs m =>
     match rs PC with
@@ -1198,7 +1198,7 @@ Definition at_external (ge:genv) (c: state) : option (external_function * signat
                    | Some (External ef) =>
                      match get_extcall_arguments rs m
                                                  (Conventions1.loc_arguments (ef_sig ef)) with
-                     | Some args => Some (ef,(ef_sig ef), args)
+                     | Some args => Some (ef, args)
                      | None => None
                      end
                    | _ => None

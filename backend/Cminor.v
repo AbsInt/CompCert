@@ -240,7 +240,53 @@ Inductive state: Type :=
       forall (v: val)                   (**r Return value *)
              (k: cont)                  (**r what to do next *)
              (m: mem),                  (**r memory state *)
-      state.
+        state.
+
+
+
+(**NEW *)
+Definition get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
+
+(**NEW *)
+Definition set_mem (s:state)(m:mem):=
+  match s with
+  | State f s k e le _ => State f s k e le m
+  | Callstate fd args k _ => Callstate fd args k m
+  | Returnstate res k _ => Returnstate res k m
+  end.
+
+(**NEW *)
+Definition at_external (c: state) : option (external_function * list val) :=
+  match c with
+  | State _ _ _ _ _ _ => None
+  | Callstate fd args k _ =>
+      match fd with
+        Internal f => None
+      | External ef => 
+          Some (ef, args)
+      end
+  | Returnstate _ _ _ => None
+ end.
+
+(**NEW *)
+Definition after_external (rv: option val) (c: state) (m:mem): option state :=
+  match c with
+     Callstate fd vargs k m =>
+        match fd with
+          Internal _ => None
+        | External ef =>
+            match rv with
+              Some v => Some(Returnstate v k m)
+            | None  => Some(Returnstate Vundef k m)
+            end
+        end
+   | _ => None
+  end.
 
 Section RELSEM.
 
@@ -562,16 +608,34 @@ Inductive initial_state (p: program): state -> Prop :=
       funsig f = signature_main ->
       initial_state p (Callstate f nil Kstop m0).
 
+Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
+  | entry_point_intro: forall b f m0 fp arg,
+      let ge := Genv.globalenv p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      funsig f = signature_main ->
+      entry_point p m0 (Callstate f nil Kstop m0) fp arg.
+
 (** A final state is a [Returnstate] with an empty continuation. *)
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall r m,
       final_state (Returnstate (Vint r) Kstop m) r.
 
+
 (** The corresponding small-step semantics. *)
 
 Definition semantics (p: program) :=
-  Semantics step (initial_state p) final_state (Genv.globalenv p).
+  let ge:= (Genv.globalenv p) in
+  Semantics
+    get_mem set_mem
+    (step ge)
+    (entry_point p)
+    (at_external )
+    (after_external )
+    final_state ge
+    p.(prog_main)
+    (Genv.init_mem p ).
 
 (** This semantics is receptive to changes in events. *)
 
@@ -908,13 +972,13 @@ Lemma eval_funcall_exec_stmt_steps:
    eval_funcall ge m fd args t m' res ->
    forall k,
    is_call_cont k ->
-   star step ge (Callstate fd args k m)
+   star (step ge) (Callstate fd args k m)
               t (Returnstate res k m'))
 /\(forall f sp e m s t e' m' out,
    exec_stmt ge f sp e m s t e' m' out ->
    forall k,
    exists S,
-   star step ge (State f s k sp e m) t S
+   star (step ge) (State f s k sp e m) t S
    /\ outcome_state_match sp e' m' f k out S).
 Proof.
   apply eval_funcall_exec_stmt_ind2; intros.
@@ -1070,28 +1134,28 @@ Lemma eval_funcall_steps:
    eval_funcall ge m fd args t m' res ->
    forall k,
    is_call_cont k ->
-   star step ge (Callstate fd args k m)
+   star (step ge) (Callstate fd args k m)
               t (Returnstate res k m').
-Proof (proj1 eval_funcall_exec_stmt_steps).
-
+Proof. eapply (proj1 eval_funcall_exec_stmt_steps). Qed.
+       
 Lemma exec_stmt_steps:
    forall f sp e m s t e' m' out,
    exec_stmt ge f sp e m s t e' m' out ->
    forall k,
    exists S,
-   star step ge (State f s k sp e m) t S
+   star (step ge) (State f s k sp e m) t S
    /\ outcome_state_match sp e' m' f k out S.
-Proof (proj2 eval_funcall_exec_stmt_steps).
+Proof. eapply (proj2 eval_funcall_exec_stmt_steps). Qed.
 
 Lemma evalinf_funcall_forever:
   forall m fd args T k,
   evalinf_funcall ge m fd args T ->
-  forever_plus step ge (Callstate fd args k m) T.
+  forever_plus (step ge) (Callstate fd args k m) T.
 Proof.
   cofix CIH_FUN.
   assert (forall sp e m s T f k,
           execinf_stmt ge f sp e m s T ->
-          forever_plus step ge (State f s k sp e m) T).
+          forever_plus (step ge) (State f s k sp e m) T).
   cofix CIH_STMT.
   intros. inv H.
 
@@ -1154,15 +1218,18 @@ Qed.
 Theorem bigstep_semantics_sound:
   bigstep_sound (bigstep_semantics prog) (semantics prog).
 Proof.
-  constructor; intros.
+  constructor;
+    intros.
 (* termination *)
   inv H. econstructor; econstructor.
   split. econstructor; eauto.
+  econstructor; eauto.
   split. apply eval_funcall_steps. eauto. red; auto.
   econstructor.
 (* divergence *)
   inv H. econstructor.
   split. econstructor; eauto.
+         econstructor; eauto.
   eapply forever_plus_forever.
   eapply evalinf_funcall_forever; eauto.
 Qed.

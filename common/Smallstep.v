@@ -484,7 +484,7 @@ Record part_semantics : Type :=
   set_mem: state -> Memory.mem -> state;
   step : state -> trace -> state -> Prop;
   entry_point: Memory.mem -> state -> val -> list val -> Prop;
-  at_external : state ->  option (external_function * signature * list val);
+  at_external : state ->  option (external_function * list val);
   after_external : option val -> state -> Memory.mem -> option state;
   final_state: state -> int -> Prop;
   globalenv: genvtype;
@@ -523,7 +523,7 @@ Definition Semantics {state funtype vartype: Type}
                      (set_mem: state -> Memory.mem -> state)
                      (step: state -> trace -> state -> Prop)
                      (entry_point: Memory.mem -> state -> val -> list val  -> Prop)
-                     (at_external : state -> option (external_function * signature * list val))
+                     (at_external : state -> option (external_function * list val))
                      (after_external : option val -> state -> Memory.mem -> option state)
                      (final_state: state -> int -> Prop)
                      (globalenv: Genv.t funtype vartype)
@@ -548,7 +548,7 @@ Definition Semantics_gen (state genvtype: Type)
                      (set_mem: state -> Memory.mem -> state)
                      (step: state -> trace -> state -> Prop)
                      (entry_point: Memory.mem -> state -> val -> list val  -> Prop)
-                     (at_external : state ->  option (external_function * signature * list val))
+                     (at_external : state ->  option (external_function * list val))
                      (after_external : option val -> state -> Memory.mem -> option state)
                      (final_state: state -> int -> Prop)
                      (globalenv: genvtype)
@@ -613,7 +613,7 @@ Record fsim_properties (index: Type)
                                                                 }.
 
 (*In the case where initial_memories are equal, initial_states follows from entry_points. *)
-Lemma init_states_from_cores:
+Lemma init_states_from_entry_index:
   forall (INIT_MEM: init_mem L1 = init_mem L2)
    (INIT_BLOCK: main_block L1 = main_block L2),
     forall index match_states
@@ -627,7 +627,23 @@ Proof.
   eapply fsim_match_entry_points0 in H1. destruct H1 as (i&s2&init_core&MATCH).
   exists i, s2; split; eauto.
   econstructor; eauto.
-Qed.  
+Qed.
+
+Lemma init_states_from_entry:
+  forall (INIT_MEM: init_mem L1 = init_mem L2)
+   (INIT_BLOCK: main_block L1 = main_block L2),
+    forall match_states
+  (fsim_match_entry_points:
+      forall (s1:state L1) f arg m0, entry_point L1 m0 s1 f arg  -> 
+                     exists s2, entry_point L2 m0 s2 f arg /\ match_states s1 s2),
+    forall s1, initial_state L1 s1  -> 
+          exists s2, initial_state L2 s2 /\ match_states s1 s2.
+Proof.
+  intros. inv H. rewrite INIT_MEM, INIT_BLOCK in *.
+  eapply fsim_match_entry_points0 in H1. destruct H1 as (s2&init_core&MATCH).
+  exists s2; split; eauto.
+  econstructor; eauto.
+Qed. 
 
    Section EqualityAndExtension.
      (** *Equality Phases*)

@@ -1318,7 +1318,7 @@ Inductive match_transl: stmt -> cont -> stmt -> cont -> Prop :=
 Lemma match_transl_step:
   forall ts tk ts' tk' f te le m,
   match_transl (Sblock ts) tk ts' tk' ->
-  star step tge (State f ts' tk' te le m) E0 (State f ts (Kblock tk) te le m).
+  star (step tge) (State f ts' tk' te le m) E0 (State f ts (Kblock tk) te le m).
 Proof.
   intros. inv H.
   apply star_one. constructor.
@@ -1525,7 +1525,7 @@ Qed.
 Lemma transl_step:
   forall S1 t S2, Clight.step2 ge S1 t S2 ->
   forall T1, match_states S1 T1 ->
-  exists T2, plus step tge T1 t T2 /\ match_states S2 T2.
+  exists T2, plus (step tge) T1 t T2 /\ match_states S2 T2.
 Proof.
   induction 1; intros T1 MST; inv MST.
 
@@ -1754,7 +1754,7 @@ Proof.
   econstructor; eauto. simpl; reflexivity. constructor.
 Qed.
 
-Lemma transl_initial_states:
+(*Lemma transl_initial_states:
   forall S, Clight.initial_state prog S ->
   exists R, initial_state tprog R /\ match_states S R.
 Proof.
@@ -1767,8 +1767,37 @@ Proof.
   econstructor; split.
   econstructor; eauto. apply (Genv.init_mem_match TRANSL). eauto.
   econstructor; eauto. instantiate (1 := prog_comp_env cu). constructor; auto. exact I.
+Qed.*)
+
+Lemma transl_entry_points:
+  forall (s1 : Clight.state) (f : val) (arg : list val) (m0 : mem),
+  Clight.entry_point (globalenv prog) m0 s1 f arg ->
+  exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H.
+  exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
+  econstructor; split.
+  econstructor; eauto. 
+  econstructor; eauto. instantiate (1 := prog_comp_env cu). constructor; auto. exact I.
 Qed.
 
+Lemma transl_initial_states:
+    forall s1 : Smallstep.state (semantics2 prog),
+  Smallstep.initial_state (semantics2 prog) s1 ->
+  exists s2 : Smallstep.state (semantics tprog),
+    Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  intros. inv H.
+  eapply transl_entry_points in H1. destruct H1 as (s2 & ? & ?).
+  econstructor; split; eauto.
+  - econstructor.
+    + apply (Genv.init_mem_match TRANSL); eauto.
+    + simpl.
+      simpl in H.
+      replace (AST.prog_main tprog) with (prog_main prog); eauto.
+      destruct TRANSL as (P & Q & R). rewrite Q. auto.
+Qed.
+      
 Lemma transl_final_states:
   forall S R r,
   match_states S R -> Clight.final_state S r -> final_state R r.
@@ -1781,6 +1810,7 @@ Theorem transl_program_correct:
 Proof.
   eapply forward_simulation_plus.
   apply senv_preserved.
+  eexact transl_entry_points.
   eexact transl_initial_states.
   eexact transl_final_states.
   eexact transl_step.

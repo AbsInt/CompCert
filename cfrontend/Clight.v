@@ -510,14 +510,14 @@ Definition set_mem (s:state)(m:mem):=
   end.
 
 (**NEW *)
-Definition at_external (c: state) : option (external_function * signature * list val) :=
+Definition at_external (c: state) : option (external_function * list val) :=
   match c with
   | State _ _ _ _ _ _ => None
   | Callstate fd args k _ =>
       match fd with
         Internal f => None
       | External ef targs tres cc => 
-          Some (ef, ef_sig ef, args)
+          Some (ef, args)
       end
   | Returnstate _ _ _ => None
  end.

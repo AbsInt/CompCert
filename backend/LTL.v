@@ -146,6 +146,55 @@ Inductive state : Type :=
       state.
 
 
+(**NEW *)
+Definition get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Block _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
+
+(**NEW *)
+Definition set_mem (s:state)(m:mem):=
+  match s with
+  | State f s k e le _ => State f s k e le m
+  | Block f s k e le _ => Block f s k e le m
+  | Callstate fd args k _ => Callstate fd args k m
+  | Returnstate res k _ => Returnstate res k m
+  end.
+
+(**NEW *)
+Definition at_external (c: state) : option (external_function * list val) :=
+  match c with
+  | State _ _ _ _ _ _ => None
+  | Block _ _ _ _ _ _ => None
+  | Callstate _ fd rs _ =>
+      match fd with
+        Internal f => None
+      | External ef =>
+        let args := map (fun p => Locmap.getpair p rs) (loc_arguments (ef_sig ef)) in
+          Some (ef, args)
+      end
+  | Returnstate _ _ _ => None
+ end.
+
+(**NEW *)
+Definition after_external (rv: option val) (c: state) (m:mem): option state :=
+  match c with
+     Callstate s fd rs _ =>
+        match fd with
+          Internal _ => None
+        | External ef =>
+          let rs' := fun res => Locmap.setpair (loc_result (ef_sig ef)) res rs in
+          match rv with
+              Some v => Some (Returnstate s (rs' v) m)
+            | None  => Some (Returnstate s (rs' Vundef) m )
+            end
+        end
+   | _ => None
+  end.
+
 Section RELSEM.
 
 Variable ge: genv.
@@ -282,35 +331,30 @@ Inductive initial_state (p: program): state -> Prop :=
       funsig f = signature_main ->
       initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
+Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
+  | entry_point_intro: forall b f m0 fp arg,
+      let ge := Genv.globalenv p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      funsig f = signature_main ->
+      entry_point p m0 (Callstate nil f (Locmap.init Vundef) m0) fp arg.
+
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m retcode,
       Locmap.getpair (map_rpair R (loc_result signature_main)) rs = Vint retcode ->
       final_state (Returnstate nil rs m) retcode.
 
-Definition get_mem (s:state):=
-  match s with
-  | State _ _ _ _ _ m => m
-  | Block _ _ _ _ _ m => m
-  | Callstate _ _ _ m => m
-  | Returnstate _ _ m => m
-  end.
-
-Definition set_mem (s:state) (m:mem):=
-  match s with
-  | State sf f v n ls _ => State sf f v n ls m
-  | Block sf f v bb ls _ => Block sf f v bb ls m
-  | Callstate sf f ls _ => Callstate sf f ls m
-  | Returnstate sf ls _ => Returnstate sf ls m
-  end.
-
-Parameter entry_point: program -> mem -> state -> val -> list val -> Prop.
-Parameter at_external : state -> option (external_function * signature * list val).
-Parameter after_external : option val -> state -> Memory.mem -> option state.
-
 Definition semantics (p: program) :=
-  let main :=p.(prog_main) in
-  let init_mem:=(Genv.init_mem p) in
-  Semantics get_mem set_mem (step (Genv.globalenv p)) (entry_point p) at_external after_external final_state (Genv.globalenv p) main init_mem.
+  let ge:= (Genv.globalenv p) in
+  Semantics
+    get_mem set_mem
+    (step ge)
+    (entry_point p)
+    (at_external )
+    (after_external )
+    final_state ge
+    p.(prog_main)
+        (Genv.init_mem p ).
 
 (** * Operations over LTL *)
 

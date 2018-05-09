@@ -701,7 +701,7 @@ Section INF_SEQ_DECOMP.
 
 Variable genv: Type.
 Variable state: Type.
-Variable step: genv -> state -> trace -> state -> Prop.
+Variable step: state -> trace -> state -> Prop.
 
 Variable ge: genv.
 
@@ -715,7 +715,7 @@ Definition traceinf_of_tstate (S: tstate) : traceinf :=
 
 Inductive tstep: trace -> tstate -> tstate -> Prop :=
   | tstep_intro: forall s1 t T s2 S F,
-      tstep t (ST s1 (t *** T) (@forever_intro genv state step s1 t s2 T S F))
+      tstep t (ST s1 (t *** T) (@forever_intro state step s1 t s2 T S F))
               (ST s2 T F).
 
 Inductive tsteps: tstate -> tstate -> Prop :=

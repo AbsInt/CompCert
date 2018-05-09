@@ -179,6 +179,52 @@ Inductive state : Type :=
              (m: mem),                (**r memory state *)
       state.
 
+
+(**NEW *)
+Definition get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
+
+(**NEW *)
+Definition set_mem (s:state)(m:mem):=
+  match s with
+  | State f s k e le _ => State f s k e le m
+  | Callstate fd args k _ => Callstate fd args k m
+  | Returnstate res k _ => Returnstate res k m
+  end.
+
+
+(**NEW *)
+Definition at_external (c: state) : option (external_function * list val) :=
+  match c with
+  | State _ _ _ _ _ _ => None
+  | Callstate _ fd args _ =>
+      match fd with
+        Internal f => None
+      | External ef => 
+          Some (ef, args)
+      end
+  | Returnstate _ _ _ => None
+ end.
+
+(**NEW *)
+Definition after_external (rv: option val) (c: state) (m:mem): option state :=
+  match c with
+     Callstate s fd vargs _ =>
+        match fd with
+          Internal _ => None
+        | External ef =>
+            match rv with
+              Some v => Some (Returnstate s v m)
+            | None  => Some (Returnstate s Vundef m )
+            end
+        end
+   | _ => None
+  end.
+
 Section RELSEM.
 
 Variable ge: genv.
@@ -326,6 +372,14 @@ Inductive initial_state (p: program): state -> Prop :=
       funsig f = signature_main ->
       initial_state p (Callstate nil f nil m0).
 
+Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
+  | entry_point_intro: forall b f m0 fp arg,
+      let ge := Genv.globalenv p in
+      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Genv.find_funct_ptr ge b = Some f ->
+      funsig f = signature_main ->
+      entry_point p m0 (Callstate nil f nil m0) fp arg.
+
 (** A final state is a [Returnstate] with an empty call stack. *)
 
 Inductive final_state: state -> int -> Prop :=
@@ -335,7 +389,16 @@ Inductive final_state: state -> int -> Prop :=
 (** The small-step semantics for a program. *)
 
 Definition semantics (p: program) :=
-  Semantics step (initial_state p) final_state (Genv.globalenv p).
+  let ge:= (Genv.globalenv p) in
+  Semantics
+    get_mem set_mem
+    (step ge)
+    (entry_point p)
+    (at_external )
+    (after_external )
+    final_state ge
+    p.(prog_main)
+        (Genv.init_mem p ).
 
 (** This semantics is receptive to changes in events. *)
 
