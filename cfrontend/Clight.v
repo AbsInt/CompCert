@@ -773,7 +773,7 @@ Inductive val_casted_list: list val -> typelist -> Prop :=
       val_casted_list (v1 :: vl) (Tcons  ty1 tyl).
 
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
-Inductive entry_point  (ge:genv): mem -> state -> val -> list val -> Prop :=
+Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
     forall f fb m args targs tres,
       Genv.find_funct_ptr ge fb = Some f ->

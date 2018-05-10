@@ -2242,11 +2242,13 @@ Qed.
 
 
 Lemma entry_points_simulation:
-  forall g S v args m, entry_point g m S v args ->
-       exists R, entry_point g m R v args /\ match_states S R.
+  forall gs gt S v args m, entry_point gs m S v args ->
+       exists R, entry_point gt m R v args /\ match_states S R.
 Proof.
   intros. inv H.
-  exploit function_ptr_translated; eauto. intros [tf [A B]].
+  exploit function_ptr_translated; eauto.
+  admit.
+  intros [tf [A B]].
 
   eexists. split; eauto.
   - econstructor; try (instantiate (3 := tf)); eauto.
