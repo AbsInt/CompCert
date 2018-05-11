@@ -504,12 +504,13 @@ Inductive initial_state (p: program): state -> Prop :=
 
 
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f m0 fp arg,
+  | entry_point_intro: forall b f m0 fp args,
       let ge := Genv.globalenv p in
-      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Mem.mem_wd m0 ->
+      Mem.arg_well_formed args m0 ->
+      globals_not_fresh ge m0 ->
       Genv.find_funct_ptr ge b = Some f ->
-      funsig f = signature_main ->
-      entry_point p m0 (Callstate f nil Kstop m0) fp arg.
+      entry_point p m0 (Callstate f args Kstop m0) fp args.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall r m,

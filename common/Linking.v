@@ -432,6 +432,14 @@ Proof.
   intros. apply H.
 Qed.
 
+Lemma match_program_gen_len_defs:
+  forall ctx p1 p2,
+    match_program_gen ctx p1 p2 ->
+    length (AST.prog_defs p1) =length (AST.prog_defs p2) .
+Proof.
+  intros. inv H. eapply list_forall2_length; eauto.
+Qed.
+
 End MATCH_PROGRAM_GENERIC.
 
 (** In many cases, the context for [match_program_gen] is the source program or

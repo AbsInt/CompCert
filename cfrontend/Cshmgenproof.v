@@ -1777,8 +1777,12 @@ Proof.
   intros. inv H.
   exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
   econstructor; split.
-  econstructor; eauto. 
-  econstructor; eauto. instantiate (1 := prog_comp_env cu). constructor; auto. exact I.
+  - econstructor; eauto.
+    unfold globals_not_fresh.
+    erewrite <- len_defs_genv_next.
+    + simpl in H2; eapply H2.
+    + eapply match_program_gen_len_defs; eauto.   
+  - econstructor; eauto. instantiate (1 := prog_comp_env cu). constructor; auto. exact I.
 Qed.
 
 Lemma transl_initial_states:
@@ -1787,15 +1791,10 @@ Lemma transl_initial_states:
   exists s2 : Smallstep.state (semantics tprog),
     Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
 Proof.
-  intros. inv H.
-  eapply transl_entry_points in H1. destruct H1 as (s2 & ? & ?).
-  econstructor; split; eauto.
-  - econstructor.
-    + apply (Genv.init_mem_match TRANSL); eauto.
-    + simpl.
-      simpl in H.
-      replace (AST.prog_main tprog) with (prog_main prog); eauto.
-      destruct TRANSL as (P & Q & R). rewrite Q. auto.
+  
+  eapply init_states_from_entry; try apply transl_entry_points.
+  - apply (Genv.init_mem_match TRANSL); eauto.
+  - simpl. destruct TRANSL as (P & Q & R). auto.
 Qed.
       
 Lemma transl_final_states:

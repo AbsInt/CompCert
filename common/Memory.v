@@ -4208,6 +4208,17 @@ Proof.
   rewrite Z.add_0_r in H1; auto.
 Qed.
 
+(* No unvalid pointers, i.e. othing pointing after nextblock *)      
+Definition mem_wd (m:mem):=
+  inject_neutral (nextblock m) m.
+
+(* All arguments are in memory and without unvalid pointers*)
+Definition arg_well_formed args m0:=
+  Val.inject_list (flat_inj (nextblock m0)) args args.
+Remark mem_wd_inject:
+  forall m, mem_wd m -> inject (flat_inj (nextblock m)) m m.
+Proof. intros; eapply neutral_inject; auto. Qed.
+
 Theorem empty_inject_neutral:
   forall thr, inject_neutral thr empty.
 Proof.

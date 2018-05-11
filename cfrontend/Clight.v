@@ -745,23 +745,11 @@ Parameter tys_nonvoid: typelist -> bool .
 Parameter vals_defined: list val -> bool.
  *)
 
-(*Following definition mimics *_not_fresh lemmas from common/Globalenvs.v*)
-Record globals_not_fresh {F V} (ge:Genv.t F V) m:=
-  {
-    find_symbol_not_fresh:
-       forall id b, Genv.find_symbol ge id = Some b -> Mem.valid_block m b;
-    find_funct_ptr_not_fresh:
-      forall b fp, Genv.find_funct_ptr ge b = Some fp -> Mem.valid_block m b;
-    find_var_info_not_fresh:
-      forall b def, Genv.find_var_info ge b = Some def -> Mem.valid_block m b;
-}. 
-  
-    
-(* No dangling pointers. 
-   In particular, nothing pointing after nextblock *)      
+(* No unvalid pointers, i.e. othing pointing after nextblock *)      
 Definition mem_well_formed m:=
   Mem.inject (Mem.flat_inj (Mem.nextblock m)) m m.
 
+(* All arguments are in memory and without unvalid pointers*)
 Definition arg_well_formed args m0:=
       Val.inject_list (Mem.flat_inj (Mem.nextblock m0)) args args.
 
@@ -779,8 +767,8 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
       Genv.find_funct_ptr ge fb = Some f ->
       type_of_fundef f = Tfunction targs tres cc_default ->
       globals_not_fresh ge m ->
-      mem_well_formed m ->
-      arg_well_formed args m ->
+      Mem.mem_wd m ->
+      Mem.arg_well_formed args m ->
       val_casted_list args targs ->
       (*val_casted_list_func args targs 
                            && tys_nonvoid targs 

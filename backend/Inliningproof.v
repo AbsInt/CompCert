@@ -224,7 +224,7 @@ Lemma tr_moves_init_regs:
   (forall r, In r rdsts -> Ple r ctx2.(mreg)) ->
   list_forall2 (val_reg_charact F ctx1 rs1) vl rsrcs ->
   exists rs2,
-    star step tge (State stk f sp pc1 rs1 m)
+    star (step tge) (State stk f sp pc1 rs1 m)
                E0 (State stk f sp pc2 rs2 m)
   /\ agree_regs F ctx2 (init_regs vl rdsts) rs2
   /\ forall r, Plt r ctx2.(dreg) -> rs2#r = rs1#r.
@@ -363,6 +363,39 @@ Inductive match_globalenvs (F: meminj) (bound: block): Prop :=
       (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> Plt b bound)
       (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> Plt b bound)
       (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> Plt b bound).
+
+Tactic Notation "if_tac" := 
+  match goal with |- context [if ?a then _ else _] =>
+                  destruct a as [?H | ?H]; try congruence; auto
+  end.
+
+Tactic Notation "if_tac" "in" hyp(H0)
+  := match type of H0 with context [if ?a then _ else _] =>
+                           destruct a as [?H | ?H]; try congruence; auto
+     end.
+
+      Remark match_globalenvs_not_fresh:
+  forall m, globals_not_fresh ge m ->
+       match_globalenvs (Mem.flat_inj (Mem.nextblock m)) (Mem.nextblock m).
+Proof.
+  intros. unfold Mem.flat_inj.
+  constructor; eauto.
+  - intros; if_tac; auto.
+  - intros. if_tac in H0; auto.
+  - intros.
+    eapply ge in H0.
+    eapply Plt_Ple_trans; eauto.
+  - intros.
+    unfold Genv.find_funct_ptr in H0.
+    destruct (Genv.find_def ge b) eqn:HH; inv H0.
+    eapply ge in HH.
+    eapply Plt_Ple_trans; eauto.
+  - intros.
+    unfold Genv.find_var_info in H0.
+    destruct (Genv.find_def ge b) eqn:HH; inv H0.
+    eapply ge in HH.
+    eapply Plt_Ple_trans; eauto.
+Qed.
 
 Lemma find_function_agree:
   forall ros rs fd F ctx rs' bound,
@@ -933,7 +966,7 @@ Theorem step_simulation:
   forall S1 t S2,
   step ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
-  (exists S2', plus step tge S1' t S2' /\ match_states S2 S2')
+  (exists S2', plus (step tge) S1' t S2' /\ match_states S2 S2')
   \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 S1')%nat.
 Proof.
   induction 1; intros; inv MS.
@@ -1310,6 +1343,37 @@ Proof.
   eapply Genv.initmem_inject; eauto.
 Qed.
 
+Lemma transf_entry_points:
+  forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
+  entry_point prog m0 s1 f arg ->
+  exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H.
+  exploit function_ptr_translated; eauto. intros (cu & tf & FIND & TR & LINK).
+  econstructor; split.
+  - econstructor; eauto.
+    unfold globals_not_fresh.
+    erewrite <- len_defs_genv_next.
+    + unfold ge0 in *. simpl in H2; eapply H2.  
+    + eapply (@match_program_gen_len_defs program); eauto.
+  - econstructor; eauto.
+    + econstructor. instantiate (1:=Mem.nextblock m0).
+      eapply match_globalenvs_not_fresh; auto.
+      reflexivity.
+    + apply Mem.neutral_inject; auto.
+Qed.
+
+Lemma transf_initial_states':
+   forall s1 : RTL.state,
+  Smallstep.initial_state (semantics prog) s1 ->
+  exists s2 : RTL.state, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  eapply (@init_states_from_entry (semantics prog) (semantics tprog));
+    try apply transf_entry_points.
+  - apply (Genv.init_mem_match TRANSF); eauto.
+  - simpl. destruct TRANSF as (P & Q & R). auto.
+Qed.
+
 Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
@@ -1324,7 +1388,8 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_star.
   apply senv_preserved.
-  eexact transf_initial_states.
+  eexact transf_entry_points.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   eexact step_simulation.
 Qed.

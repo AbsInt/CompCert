@@ -440,6 +440,39 @@ Proof.
   intros. symmetry. eapply IMAGE; eauto.
 Qed.
 
+Tactic Notation "if_tac" := 
+  match goal with |- context [if ?a then _ else _] =>
+                  destruct a as [?H | ?H]; try congruence; auto
+  end.
+
+Tactic Notation "if_tac" "in" hyp(H0)
+  := match type of H0 with context [if ?a then _ else _] =>
+                           destruct a as [?H | ?H]; try congruence; auto
+     end.
+
+Remark match_globalenvs_not_fresh:
+  forall m, globals_not_fresh ge m ->
+       match_globalenvs (Mem.flat_inj (Mem.nextblock m)) (Mem.nextblock m).
+Proof.
+  intros. unfold Mem.flat_inj.
+  constructor; eauto.
+  - intros; if_tac; auto.
+  - intros. if_tac in H0; auto.
+  - intros.
+    eapply ge in H0.
+    eapply Plt_trans; eauto.
+  - intros.
+    unfold Genv.find_funct_ptr in H0.
+    destruct (Genv.find_def ge b) eqn:HH; inv H0.
+    eapply ge in HH.
+    eapply Plt_trans; eauto.
+  - intros.
+    unfold Genv.find_var_info in H0.
+    destruct (Genv.find_def ge b) eqn:HH; inv H0.
+    eapply ge in HH.
+    eapply Plt_trans; eauto.
+Qed.
+    
 (** * Invariant on abstract call stacks  *)
 
 (** Call stacks represent abstractly the execution state of the current
@@ -1651,7 +1684,7 @@ Lemma match_is_call_cont:
   match_cont k tk cenv xenv cs ->
   Csharpminor.is_call_cont k ->
   exists tk',
-    star step tge (State tfn Sskip tk sp te tm)
+    star (step tge) (State tfn Sskip tk sp te tm)
                E0 (State tfn Sskip tk' sp te tm)
     /\ is_call_cont tk'
     /\ match_cont k tk' cenv nil cs.
@@ -1745,7 +1778,7 @@ Lemma switch_descent:
   exists k',
   transl_lblstmt_cont cenv xenv ls k k'
   /\ (forall f sp e m,
-      plus step tge (State f s k sp e m) E0 (State f body k' sp e m)).
+      plus (step tge) (State f s k sp e m) E0 (State f body k' sp e m)).
 Proof.
   induction ls; intros.
 - monadInv H. econstructor; split.
@@ -1765,7 +1798,7 @@ Lemma switch_ascent:
   forall k k1,
   transl_lblstmt_cont cenv xenv ls k k1 ->
   exists k2,
-  star step tge (State f (Sexit n) k1 sp e m)
+  star (step tge) (State f (Sexit n) k1 sp e m)
              E0 (State f (Sexit O) k2 sp e m)
   /\ transl_lblstmt_cont cenv xenv ls' k k2.
 Proof.
@@ -1799,7 +1832,7 @@ Lemma switch_match_states:
     (MK: match_cont k tk cenv xenv cs)
     (TK: transl_lblstmt_cont cenv xenv ls tk tk'),
   exists S,
-  plus step tge (State tfn (Sexit O) tk' (Vptr sp Ptrofs.zero) te tm) E0 S
+  plus (step tge) (State tfn (Sexit O) tk' (Vptr sp Ptrofs.zero) te tm) E0 S
   /\ match_states (Csharpminor.State fn (seq_of_lbl_stmt ls) k e le m) S.
 Proof.
   intros. inv TK.
@@ -1946,7 +1979,7 @@ Definition measure (S: Csharpminor.state) : nat :=
 Lemma transl_step_correct:
   forall S1 t S2, Csharpminor.step ge S1 t S2 ->
   forall T1, match_states S1 T1 ->
-  (exists T2, plus step tge T1 t T2 /\ match_states S2 T2)
+  (exists T2, plus (step tge) T1 t T2 /\ match_states S2 T2)
   \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 T1)%nat.
 Proof.
   induction 1; intros T1 MSTATE; inv MSTATE.
@@ -2229,7 +2262,7 @@ Proof.
   simpl. fold tge. rewrite symbols_preserved.
   replace (prog_main tprog) with (prog_main prog). eexact H0.
   symmetry. unfold transl_program in TRANSL.
-  eapply match_program_main; eauto. 
+  eapply match_program_main. eassumption. 
   eexact FIND.
   rewrite <- H2. apply sig_preserved; auto.
   eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := PTree.empty Z).
@@ -2240,6 +2273,37 @@ Proof.
   constructor.
 Qed.
 
+Lemma transl_entry_point:
+   forall (s1 : Csharpminor.state) (f : val) (arg : list val) (m0 : mem),
+     Csharpminor.entry_point prog m0 s1 f arg ->
+  exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H.
+  exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
+  econstructor; split.
+  - econstructor; eauto.
+  - eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := PTree.empty Z).
+    + auto.
+    + eapply Mem.neutral_inject; apply H0.
+    + apply mcs_nil with (Mem.nextblock m0); try reflexivity.
+      eapply match_globalenvs_not_fresh. eauto.
+    + constructor.
+    + red; auto.
+    + eauto.
+Qed.
+
+Lemma transl_initial_states':
+    forall s1 : Smallstep.state (Csharpminor.semantics prog),
+  Smallstep.initial_state (Csharpminor.semantics prog) s1 ->
+  exists s2 : Smallstep.state (semantics tprog),
+    Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  eapply init_states_from_entry; try apply transl_entry_point.
+  - pose proof (Genv.init_mem_transf_partial TRANSL) as HH. eauto.
+  - simpl. unfold transl_program in TRANSL.
+    symmetry; eapply match_program_main. eassumption.
+Qed.
+
 Lemma transl_final_states:
   forall S R r,
   match_states S R -> Csharpminor.final_state S r -> Cminor.final_state R r.
@@ -2247,12 +2311,16 @@ Proof.
   intros. inv H0. inv H. inv MK. inv RESINJ. constructor.
 Qed.
 
+
+
 Theorem transl_program_correct:
   forward_simulation (Csharpminor.semantics prog) (Cminor.semantics tprog).
 Proof.
   eapply forward_simulation_star; eauto.
   apply senv_preserved.
-  eexact transl_initial_states.
+  simpl.
+  eexact transl_entry_point.
+  eexact transl_initial_states'.
   eexact transl_final_states.
   eexact transl_step_correct.
 Qed.

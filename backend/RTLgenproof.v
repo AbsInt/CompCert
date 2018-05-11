@@ -1575,14 +1575,31 @@ Proof.
 Qed.
 
 Lemma transl_entry_points:
-  forall (s1 : Smallstep.state (CminorSel.semantics prog)) (f : val) 
-    (arg : list val) (m0 : mem),
-  Smallstep.entry_point (CminorSel.semantics prog) m0 s1 f arg ->
-  exists s2 : Smallstep.state (semantics tprog),
-    Smallstep.entry_point (semantics tprog) m0 s2 f arg /\ match_states s1 s2.
+  forall (s1 : CminorSel.state) (f : val) (arg : list val) (m0 : mem),
+  CminorSel.entry_point prog m0 s1 f arg ->
+  exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
-Admitted.
-  
+  intros. inv H.
+  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  econstructor; split.
+  - econstructor; eauto.
+  - econstructor; eauto.
+    + constructor.
+    + clear. induction arg; auto.
+    + apply Mem.extends_refl.
+Qed.
+
+Lemma transl_initial_states':
+  forall s1 : CminorSel.state,
+  Smallstep.initial_state (CminorSel.semantics prog) s1 ->
+  exists s2 : RTL.state, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  eapply (@init_states_from_entry (CminorSel.semantics prog) (semantics tprog));
+    try apply transl_entry_points.
+  - apply (Genv.init_mem_match TRANSL); eauto.
+  - simpl. destruct TRANSL as (P & Q & R). auto.
+Qed.
+
 Lemma transl_final_states:
   forall S R r,
   match_states S R -> CminorSel.final_state S r -> RTL.final_state R r.
@@ -1595,8 +1612,9 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_star_wf with (order := lt_state).
   apply senv_preserved.
-  eexact transl_entry_points.
-  admit.
+  simpl.
+  exact transl_entry_points.
+  exact transl_initial_states'.
   eexact transl_final_states.
   apply lt_state_wf.
   exact transl_step_correct.

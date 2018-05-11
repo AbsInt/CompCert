@@ -1082,6 +1082,33 @@ Proof.
   econstructor; eauto. red; intros; constructor. apply Mem.extends_refl.
 Qed.
 
+Lemma sel_entry_points:
+    forall (s1 : Cminor.state) (f : val) (arg : list val) (m0 : mem),
+  Cminor.entry_point prog m0 s1 f arg ->
+  exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H.
+  exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
+  econstructor; split.
+  - econstructor; eauto.
+  - econstructor; eauto.
+    + constructor.
+    + clear. induction arg; auto.
+    + apply Mem.extends_refl.
+Qed.
+
+Lemma sel_initial_states':
+  forall s1 : Cminor.state,
+  Smallstep.initial_state (Cminor.semantics prog) s1 ->
+  exists s2 : state, Smallstep.initial_state (semantics tprog) s2 /\
+                match_states s1 s2.
+Proof.
+  eapply (@init_states_from_entry (Cminor.semantics prog) (semantics tprog));
+    try apply sel_entry_points.
+  - apply (Genv.init_mem_match TRANSF); eauto.
+  - simpl. destruct TRANSF as (P & Q & R). auto.
+Qed.
+
 Lemma sel_final_states:
   forall S R r,
   match_states S R -> Cminor.final_state S r -> final_state R r.
@@ -1096,7 +1123,8 @@ Theorem transf_program_correct:
 Proof.
   apply forward_simulation_opt with (match_states := match_states) (measure := measure).
   apply senv_preserved.
-  apply sel_initial_states; auto.
+  apply sel_entry_points.
+  apply sel_initial_states'; auto.
   apply sel_final_states; auto.
   apply sel_step_correct; auto.
 Qed.
