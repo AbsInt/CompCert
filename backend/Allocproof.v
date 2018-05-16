@@ -2540,7 +2540,7 @@ Proof.
 Admitted.
 
 
-Lemma transl_initial_states':
+Lemma initial_states_simulation':
   forall s1 : RTL.state,
   Smallstep.initial_state (RTL.semantics prog) s1 ->
   exists s2 : LTL.state, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
@@ -2550,6 +2550,7 @@ Proof.
   - apply (Genv.init_mem_match TRANSF); eauto.
   - simpl. destruct TRANSF as (P & Q & R). auto.
 Qed.
+
 
 Lemma final_states_simulation:
   forall st1 st2 r,
@@ -2583,14 +2584,16 @@ Proof.
 - intros.
   exploit transl_entry_points; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
-  econstructor.
-  apply wt_initial_state with (p := prog); auto. exact wt_prog.
--
-  intros.
-  exploit transl_entry_points; eauto.
-  exploit initial_states_simulation; eauto. intros [st2 [A B]].
+  inv H; subst ge0.
+  econstructor; eauto.
+  econstructor. admit. (*intial function must return int? *)
+  destruct f0; econstructor.
+  admit. (*Initial function must be "well typed"*)
+- intros.
+  exploit initial_states_simulation'; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
   apply wt_initial_state with (p := prog); auto. exact wt_prog.
+  
 - intros. destruct H. eapply final_states_simulation; eauto.
 - intros. destruct H0.
   exploit step_simulation; eauto. intros [s2' [A B]].
