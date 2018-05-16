@@ -460,17 +460,17 @@ Proof.
   - intros. if_tac in H0; auto.
   - intros.
     eapply ge in H0.
-    eapply Plt_trans; eauto.
+    eapply Plt_Ple_trans; eauto.
   - intros.
     unfold Genv.find_funct_ptr in H0.
     destruct (Genv.find_def ge b) eqn:HH; inv H0.
     eapply ge in HH.
-    eapply Plt_trans; eauto.
+    eapply Plt_Ple_trans; eauto.
   - intros.
     unfold Genv.find_var_info in H0.
     destruct (Genv.find_def ge b) eqn:HH; inv H0.
     eapply ge in HH.
-    eapply Plt_trans; eauto.
+    eapply Plt_Ple_trans; eauto.
 Qed.
     
 (** * Invariant on abstract call stacks  *)
@@ -2278,10 +2278,13 @@ Lemma transl_entry_point:
      Csharpminor.entry_point prog m0 s1 f arg ->
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
-  intros. inv H.
+  intros. inv H; subst ge0.
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
   econstructor; split.
   - econstructor; eauto.
+    eapply globals_not_fresh_preserve; simpl in *; try eassumption;
+      eapply match_program_gen_len_defs in TRANSL; eauto.
+    erewrite sig_preserved; eauto.
   - eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := PTree.empty Z).
     + auto.
     + eapply Mem.neutral_inject; apply H0.

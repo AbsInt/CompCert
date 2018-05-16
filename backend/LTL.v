@@ -331,13 +331,28 @@ Inductive initial_state (p: program): state -> Prop :=
       funsig f = signature_main ->
       initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
+Definition setpair (p: rpair loc) (v: val) (m: Locmap.t) :=
+  match p with
+  | One r => Locmap.set r v m
+  | Twolong hi lo => Locmap.set lo (Val.loword  v) (Locmap.set hi (Val.hiword v) m)
+  end.
+Fixpoint setlist (locs: list (rpair loc))(args:list val) base :=
+  match locs, args with
+  | loc::locs, arg::args => setpair loc arg (setlist locs args base)
+  | _, _ => base
+  end.
+Definition build_ls_from_arguments (fs: signature)(args:list val) :=
+  setlist (loc_arguments fs) args (Locmap.init Vundef).
+
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f m0 fp arg,
+  | entry_point_intro: forall b f m0 fp args,
       let ge := Genv.globalenv p in
-      Genv.find_symbol ge p.(prog_main) = Some b ->
+      Mem.mem_wd m0 ->
+      Mem.arg_well_formed args m0 ->
+      globals_not_fresh ge m0 ->
       Genv.find_funct_ptr ge b = Some f ->
-      funsig f = signature_main ->
-      entry_point p m0 (Callstate nil f (Locmap.init Vundef) m0) fp arg.
+      Val.has_type_list args (sig_args (funsig f)) ->
+      entry_point p m0 (Callstate nil f (build_ls_from_arguments (funsig f) args) m0) fp args.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m retcode,

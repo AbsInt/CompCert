@@ -1228,6 +1228,36 @@ Proof.
   econstructor. eauto. constructor. auto. auto. apply Mem.extends_refl.
 Qed.
 
+Lemma transf_entry_points:
+  forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
+  entry_point prog m0 s1 f arg ->
+  exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H.
+  exploit funct_ptr_translated; eauto. intros (cu & tf & A & B & C).
+  econstructor; split.
+  - econstructor; eauto.
+    unfold globals_not_fresh.
+    erewrite <- len_defs_genv_next.
+    + unfold ge0 in *. simpl in H2; eapply H2.  
+    + eapply (@match_program_gen_len_defs program); eauto.
+  - econstructor; eauto.
+    + constructor.
+    + clear. induction arg; auto.
+    + apply Mem.extends_refl.
+Qed.
+
+Lemma transf_initial_states':
+   forall s1 : RTL.state,
+  Smallstep.initial_state (semantics prog) s1 ->
+  exists s2 : RTL.state, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  eapply (@init_states_from_entry (semantics prog) (semantics tprog));
+    try apply transf_entry_points.
+  - apply (Genv.init_mem_match TRANSF); eauto.
+  - simpl. destruct TRANSF as (P & Q & R). auto.
+Qed.
+
 Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
@@ -1240,7 +1270,8 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_step with
     (match_states := fun s1 s2 => sound_state prog s1 /\ match_states s1 s2).
-- apply senv_preserved.
+  - apply senv_preserved.
+  - 
 - intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
   exists s2. split. auto. split. apply sound_initial; auto. auto.
 - intros. destruct H. eapply transf_final_states; eauto.

@@ -1778,10 +1778,9 @@ Proof.
   exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
   econstructor; split.
   - econstructor; eauto.
-    unfold globals_not_fresh.
-    erewrite <- len_defs_genv_next.
-    + simpl in H2; eapply H2.
-    + eapply match_program_gen_len_defs; eauto.   
+    eapply globals_not_fresh_preserve; simpl in *; try eassumption;
+      eapply match_program_gen_len_defs; eauto.
+    erewrite transl_fundef_sig2; simpl; eauto.
   - econstructor; eauto. instantiate (1 := prog_comp_env cu). constructor; auto. exact I.
 Qed.
 

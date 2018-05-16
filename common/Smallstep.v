@@ -583,20 +583,11 @@ Open Scope smallstep_scope.
 (** * Forward simulations between two transition semantics. *)
 
 (*Following definition mimics *_not_fresh lemmas from common/Globalenvs.v*)
+(* genv_next bounds all global blocks *)
 (* This should be part of GENV file?   *)
-(* Record globals_not_fresh {F V} (ge:Genv.t F V) m:=
-  {
-    find_symbol_not_fresh:
-       forall id b, Genv.find_symbol ge id = Some b -> Mem.valid_block m b;
-    find_funct_ptr_not_fresh:
-      forall b fp, Genv.find_funct_ptr ge b = Some fp -> Mem.valid_block m b;
-    find_var_info_not_fresh:
-      forall b def, Genv.find_var_info ge b = Some def -> Mem.valid_block m b;
-  }. *)
 Definition globals_not_fresh {F V} (ge:Genv.t F V) m:=
   Ple (Genv.genv_next ge) (Mem.nextblock m).
 
-(*This can be moved to Globalenvs*)
  Lemma len_defs_genv_next:
       forall {F1 V1 F2 V2} (p1:AST.program F1 V1) (p2:AST.program F2 V2),
         length (AST.prog_defs p1) =length (AST.prog_defs p2) ->
@@ -617,7 +608,17 @@ Definition globals_not_fresh {F V} (ge:Genv.t F V) m:=
       - intros. destruct ls2; inversion H; auto.
         simpl. eapply IHls1; auto.
     Qed.
-
+    
+    Lemma globals_not_fresh_preserve:
+      forall {F1 V1 F2 V2} (p1:AST.program F1 V1) (p2:AST.program F2 V2),
+        length (AST.prog_defs p1) = length (AST.prog_defs p2) ->
+        forall m0, globals_not_fresh (Genv.globalenv p1) m0 ->
+              globals_not_fresh (Genv.globalenv p2) m0.
+    Proof.
+      unfold globals_not_fresh; intros until m0.
+      erewrite len_defs_genv_next; eauto.
+    Qed.
+    
  Section ForwardSimulations.
    Context (L1 L2: semantics).
    

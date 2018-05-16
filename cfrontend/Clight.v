@@ -770,6 +770,7 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
       Mem.mem_wd m ->
       Mem.arg_well_formed args m ->
       val_casted_list args targs ->
+      Val.has_type_list args (typlist_of_typelist targs) ->
       (*val_casted_list_func args targs 
                            && tys_nonvoid targs 
                            && vals_defined args

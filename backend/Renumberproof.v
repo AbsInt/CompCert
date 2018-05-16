@@ -243,6 +243,34 @@ Proof.
   constructor. constructor.
 Qed.
 
+Lemma transf_entry_points:
+  forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
+  entry_point prog m0 s1 f arg ->
+  exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H.
+  econstructor; split.
+  - econstructor; eauto.
+    2: eapply function_ptr_translated; eauto.
+    unfold globals_not_fresh.
+    erewrite <- len_defs_genv_next.
+    + unfold ge0 in *. simpl in H2; eapply H2.  
+    + eapply (@match_program_gen_len_defs program); eauto.
+  - econstructor; eauto.
+    + econstructor. 
+Qed.
+
+Lemma transf_initial_states':
+   forall s1 : RTL.state,
+  Smallstep.initial_state (semantics prog) s1 ->
+  exists s2 : RTL.state, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  eapply (@init_states_from_entry (semantics prog) (semantics tprog));
+    try apply transf_entry_points.
+  - apply (Genv.init_mem_match TRANSL); eauto.
+  - simpl. destruct TRANSL as (P & Q & R). auto.
+Qed.
+
 Lemma transf_final_states:
   forall S1 S2 r, match_states S1 S2 -> RTL.final_state S1 r -> RTL.final_state S2 r.
 Proof.
@@ -254,7 +282,8 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_step.
   apply senv_preserved.
-  eexact transf_initial_states.
+  eexact transf_entry_points.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   exact step_simulation.
 Qed.

@@ -536,6 +536,7 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       Mem.arg_well_formed args m0 ->
       globals_not_fresh ge m0 ->
       Genv.find_funct_ptr ge b = Some f ->
+      Val.has_type_list args (sig_args (funsig f)) ->
       entry_point p m0 (Callstate f args Kstop m0) fp args. 
 
 (** A final state is a [Returnstate] with an empty continuation. *)

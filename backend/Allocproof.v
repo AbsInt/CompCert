@@ -1856,7 +1856,7 @@ Lemma exec_moves:
   satisf rs ls e' ->
   wt_regset env rs ->
   exists ls',
-    star step tge (Block s f sp (expand_moves mv bb) ls m)
+    star (step tge) (Block s f sp (expand_moves mv bb) ls m)
                E0 (Block s f sp bb ls' m)
   /\ satisf rs ls' e.
 Proof.
@@ -1900,8 +1900,9 @@ Qed.
 (** The simulation relation *)
 
 Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signature -> Prop :=
-  | match_stackframes_nil: forall sg,
-      sg.(sig_res) = Some Tint ->
+| match_stackframes_nil: forall sg,
+      (*This is only true for main!!*)
+      (* sg.(sig_res) = Some Tint -> *)
       match_stackframes nil nil sg
   | match_stackframes_cons:
       forall res f sp pc rs s tf bb ls ts sg an e env
@@ -1917,7 +1918,7 @@ Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signa
            Val.has_type v (env res) ->
            agree_callee_save ls ls1 ->
            exists ls2,
-           star LTL.step tge (Block ts tf sp bb ls1 m)
+           star (LTL.step tge) (Block ts tf sp bb ls1 m)
                           E0 (State ts tf sp pc ls2 m)
            /\ satisf (rs#res <- v) ls2 e),
       match_stackframes
@@ -1965,7 +1966,7 @@ Lemma match_stackframes_change_sig:
   match_stackframes s ts sg'.
 Proof.
   intros. inv H.
-  constructor. congruence.
+  constructor. 
   econstructor; eauto.
   unfold proj_sig_res in *. rewrite H0; auto.
   intros. rewrite (loc_result_exten sg' sg) in H by auto. eauto.
@@ -1999,7 +2000,7 @@ Qed.
 Lemma step_simulation:
   forall S1 t S2, RTL.step ge S1 t S2 -> wt_state S1 ->
   forall S1', match_states S1 S1' ->
-  exists S2', plus LTL.step tge S1' t S2' /\ match_states S2 S2'.
+  exists S2', plus (LTL.step tge) S1' t S2' /\ match_states S2 S2'.
 Proof.
   induction 1; intros WT S1' MS; inv MS; try UseShape.
 
@@ -2491,6 +2492,8 @@ Proof.
   apply wt_regset_assign; auto. rewrite WTRES0; auto.
 Qed.
 
+(* Can't prove this because I removed *)
+(*
 Lemma initial_states_simulation:
   forall st1, RTL.initial_state prog st1 ->
   exists st2, LTL.initial_state tprog st2 /\ match_states st1 st2.
@@ -2511,6 +2514,42 @@ Proof.
   apply Mem.extends_refl.
   rewrite SIG, H3. constructor.
 Qed.
+*)
+
+Lemma transl_entry_points:
+  forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
+  RTL.entry_point prog m0 s1 f arg ->
+  exists s2 : LTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H. subst ge0.
+  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  econstructor; split.
+  - econstructor; eauto.
+    eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+      eapply match_program_gen_len_defs in TRANSF; eauto.
+    erewrite sig_function_translated; simpl; eauto.
+  - assert (Val.has_type_list arg (sig_args (funsig tf))).
+    { erewrite sig_function_translated; simpl; eauto. }
+    econstructor; eauto.
+    + constructor. 
+    + simpl.
+      admit. (*ls contains all arguments. *)
+    + simpl. intros ? ?.
+      admit. (*loc_arguments only returns non callee_save? *)
+    + apply Mem.extends_refl.
+Admitted.
+
+
+Lemma transl_initial_states':
+  forall s1 : RTL.state,
+  Smallstep.initial_state (RTL.semantics prog) s1 ->
+  exists s2 : LTL.state, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  eapply (@init_states_from_entry (RTL.semantics prog) (semantics tprog));
+    try apply transl_entry_points.
+  - apply (Genv.init_mem_match TRANSF); eauto.
+  - simpl. destruct TRANSF as (P & Q & R). auto.
+Qed.
 
 Lemma final_states_simulation:
   forall st1 st2 r,
@@ -2518,8 +2557,9 @@ Lemma final_states_simulation:
 Proof.
   intros. inv H0. inv H. inv STACKS.
   econstructor. rewrite <- (loc_result_exten sg). inv RES; auto.
-  rewrite H; auto.
-Qed.
+  admit. (* problem with return signature*)
+  (* rewrite H; auto.*)
+Admitted.
 
 Lemma wt_prog: wt_program prog.
 Proof.
@@ -2540,7 +2580,15 @@ Proof.
   set (ms := fun s s' => wt_state s /\ match_states s s').
   eapply forward_simulation_plus with (match_states := ms).
 - apply senv_preserved.
-- intros. exploit initial_states_simulation; eauto. intros [st2 [A B]].
+- intros.
+  exploit transl_entry_points; eauto. intros [st2 [A B]].
+  exists st2; split; auto. split; auto.
+  econstructor.
+  apply wt_initial_state with (p := prog); auto. exact wt_prog.
+-
+  intros.
+  exploit transl_entry_points; eauto.
+  exploit initial_states_simulation; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
   apply wt_initial_state with (p := prog); auto. exact wt_prog.
 - intros. destruct H. eapply final_states_simulation; eauto.

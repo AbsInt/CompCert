@@ -1579,10 +1579,13 @@ Lemma transl_entry_points:
   CminorSel.entry_point prog m0 s1 f arg ->
   exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
-  intros. inv H.
+  intros. inv H. subst ge0.
   exploit function_ptr_translated; eauto. intros (tf & A & B).
   econstructor; split.
   - econstructor; eauto.
+    eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+      eapply match_program_gen_len_defs in TRANSL; eauto.
+    erewrite sig_transl_function; simpl; eauto.
   - econstructor; eauto.
     + constructor.
     + clear. induction arg; auto.
