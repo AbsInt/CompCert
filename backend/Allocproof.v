@@ -2592,7 +2592,9 @@ Proof.
 - intros.
   exploit initial_states_simulation'; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
-  apply wt_initial_state with (p := prog); auto. exact wt_prog.
+  admit.
+  (* need a new wt_initial_state*)
+  (*apply wt_initial_state with (p := prog); auto. exact wt_prog.*)
   
 - intros. destruct H. eapply final_states_simulation; eauto.
 - intros. destruct H0.
@@ -2600,6 +2602,6 @@ Proof.
   exists s2'; split. exact A. split.
   eapply subject_reduction; eauto. eexact wt_prog. eexact H.
   auto.
-Qed.
+Admitted.
 
 End PRESERVATION.
