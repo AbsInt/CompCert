@@ -373,14 +373,14 @@ Inductive initial_state (p: program): state -> Prop :=
       initial_state p (Callstate nil f nil m0).
 
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f m0 fp args,
+  | entry_point_intro: forall b f m0 args,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       Mem.arg_well_formed args m0 ->
       globals_not_fresh ge m0 ->
       Genv.find_funct_ptr ge b = Some f ->
       Val.has_type_list args (sig_args (funsig f)) ->
-      entry_point p m0 (Callstate nil f args m0) fp args.
+      entry_point p m0 (Callstate nil f args m0) (Vptr b Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty call stack. *)
 
