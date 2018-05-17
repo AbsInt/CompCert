@@ -14,7 +14,7 @@
 
 Require Import Coqlib Errors Maps Integers Floats.
 Require Import AST Linking.
-Require Import Values Events Memory Globalenvs Smallstep.
+Require Import Values Events Memory Globalenvs Smallstep ExposedSimulations.
 Require Import Ctypes Cop Clight Cminor Csharpminor.
 Require Import Cshmgen.
 
@@ -1803,7 +1803,7 @@ Proof.
   intros. inv H0. inv H. inv MK. constructor.
 Qed.
 
-Theorem transl_program_correct:
+Theorem transl_program_correct'':
   forward_simulation (Clight.semantics2 prog) (Csharpminor.semantics tprog).
 Proof.
   eapply forward_simulation_plus.
@@ -1812,6 +1812,29 @@ Proof.
   eexact transl_initial_states.
   eexact transl_final_states.
   eexact transl_step.
+Qed.
+
+Theorem transl_program_correct':
+  fsim_properties (Clight.semantics2 prog) (Csharpminor.semantics tprog)
+                  _ (ltof _ ( fun _ => O))
+(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply fsim_properties_plus.
+  apply senv_preserved.
+  eexact transl_entry_points.
+  eexact transl_initial_states.
+  eexact transl_final_states.
+  eexact transl_step.
+Qed.
+
+Theorem transf_program_correct:
+  @fsim_properties_ext
+    (Clight.semantics2 prog) (Csharpminor.semantics tprog)
+    Clight.get_mem Csharpminor.get_mem.
+Proof.
+  eapply EqEx_sim'; eapply sim_eqSim'; try eapply transl_program_correct'.
+  simpl; intros ? ? ? [? ?].
+    inversion H0; reflexivity.
 Qed.
 
 End CORRECTNESS.

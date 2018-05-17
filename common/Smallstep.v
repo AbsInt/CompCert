@@ -685,271 +685,7 @@ Proof.
   econstructor; eauto.
 Qed. 
 
-   Section EqualityAndExtension.
-     (** *Equality Phases*)
-    Record fsim_properties_eq: Type :=
-      {
-        Eqindex: Type;
-        Eqorder: Eqindex -> Eqindex -> Prop;
-        Eqmatch_states: Eqindex -> state L1 -> state L2 -> Prop;
-        Eqfsim:> fsim_properties Eqorder Eqmatch_states;
-        Eqfsim_match_meminj: forall i s1 s2, Eqmatch_states i s1 s2 ->  (get_mem s1) = (get_mem s2);
-      }.
 
-    Lemma sim_eqSim':
-      forall (index:Type) (order: index -> index -> Prop)
-        (match_states:index -> state L1 -> state L2 -> Prop),
-      (forall i s1 s2, match_states i s1 s2 ->  (@get_mem L1 s1) = (@get_mem L2 s2)) ->
-      fsim_properties order match_states ->
-      fsim_properties_eq.      
-    Proof.
-      intros ? ? ? H HH. 
-      econstructor; eauto.
-    Qed.
-
-    Lemma sim_eqSim:
-      forall (EQ_SIM:fsim_properties_eq),
-      fsim_properties (Eqorder EQ_SIM) (Eqmatch_states EQ_SIM).
-    Proof.
-      intros EQ_SIM. destruct EQ_SIM; auto.
-    Qed.
-    
-  
-  (** *Extension Phases*)
-    Record fsim_properties_ext: Type :=
-      {
-        Extindex: Type;
-        Extorder: Extindex -> Extindex -> Prop;
-        Extmatch_states: Extindex -> state L1 -> state L2 -> Prop;
-        Extfsim:> fsim_properties Extorder Extmatch_states;
-        Extfsim_match_meminj: forall i s1 s2, Extmatch_states i s1 s2 ->  (get_mem s1) = (get_mem s2);
-      }.
-
-    
-    Lemma sim_extSim':
-      forall (index:Type) (order: index -> index -> Prop)
-        (match_states:index -> state L1 -> state L2 -> Prop),
-      (forall i s1 s2, match_states i s1 s2 ->  (@get_mem L1 s1) = (@get_mem L2 s2)) ->
-      fsim_properties order match_states ->
-      fsim_properties_ext.      
-    Proof.
-      intros ? ? ? H HH. 
-      econstructor; eauto.
-    Qed.
-
-    (** An alternate form of the simulation diagram *)
-   Lemma Extfsim_simulation':
-       forall (SIM:fsim_properties_ext),
-       forall i s1 t s1',
-         Step L1 s1 t s1' ->
-         forall s2, Extmatch_states SIM i s1 s2 ->
-               (exists i', exists s2', Plus L2 s2 t s2' /\
-                                   Extmatch_states SIM i' s1' s2')
-               \/ (exists i', Extorder SIM i' i /\ t = E0 /\ Extmatch_states SIM i' s1' s2).
-   Proof.
-     intros. exploit fsim_simulation; eauto.
-     eapply SIM.
-     intros [i' [s2' [A B ]]]. intuition.
-     left; exists i'; exists s2'; auto .
-     inv H2. 
-     right; exists i'; eauto.
-     left; exists i'; exists s2'; split; auto. econstructor; eauto.
-   Qed.
-   
-    Lemma sim_extSim:
-      forall (EXT_SIM:fsim_properties_ext),
-      fsim_properties (Extorder EXT_SIM) (Extmatch_states EXT_SIM).
-    Proof.
-      intros EXT_SIM. destruct EXT_SIM; auto.
-    Qed.
-
-   (** *Star version of simulation*)
-    Lemma Extsimulation_star:
-      forall (SIM:fsim_properties_ext),
-      forall s1 t s1', Star L1 s1 t s1' ->
-                  forall i s2,
-                    Extmatch_states SIM  i s1 s2 ->
-                    exists i', exists s2', Star L2 s2 t s2' /\
-                                 Extmatch_states SIM  i' s1' s2'.
-    Proof.
-      intros S.
-      induction 1; intros.
-      exists i; exists s2; split; auto. apply star_refl.
-
-      (*split; auto; constructor.
-      apply inject_incr_refl. constructor.*)
-      
-      exploit fsim_simulation; eauto.
-      apply S.
-      intros [i' [s2' [A B]]].
-      exploit IHstar; eauto. intros [i'' [s2'' [E F ]]].
-      exists i'';exists s2''; split; auto. eapply star_trans; eauto.
-      intuition auto. apply plus_star; auto.
-    Qed.
-    
-    (** *Plus version of simulation*)
-    Lemma Extsimulation_plus:
-      forall (SIM: fsim_properties_ext),
-      forall s1 t s1', Plus L1 s1 t s1' ->
-                  forall i s2, Extmatch_states SIM  i s1 s2 -> 
-            (exists i', exists s2', Plus L2 s2 t s2' /\ Extmatch_states SIM  i' s1' s2')
-            \/ (exists i', clos_trans _ (Extorder SIM) i' i /\ t = E0 /\ Extmatch_states SIM  i' s1' s2).
-    Proof.
-      intros S.
-      induction 1 using plus_ind2; intros.
-      (* base case *)
-      exploit Extfsim_simulation'; eauto.
-      intros [[i' [s2' [A B ]]] | [i'  A]].
-      left. exists i', s2'; auto.
-      right; exists i'; intuition.
-      (* inductive case *)
-      exploit Extfsim_simulation'; eauto.
-      intros [[i' [s2' [A B]]] | [i' [A [B C] ]]].
-      exploit Extsimulation_star; eauto. apply plus_star; eauto. eauto.
-      intros [i'' [s2'' [P Q ]]].
-      left; exists i''; exists s2''; split; auto. eapply plus_star_trans; eauto.
-      repeat split; auto.
-      
-      exploit IHplus; eauto.
-      intros [[i'' [s2'' [P Q ]]] | [i'' [P Q]]].
-      subst. simpl. left; exists i''; exists s2''; auto.
-      repeat split; eauto.
-
-      subst. simpl. right; exists i''; intuition auto.
-      eapply t_trans; eauto. eapply t_step; eauto.
-    Qed.
-    
-    Lemma EqEx_sim': 
-        fsim_properties_eq ->
-        fsim_properties_ext.
-    Proof.
-      intros H; inv H.
-      econstructor; eauto.
-    Qed.
-
-    
-    End EqualityAndExtension.
-
-   Section InjectionSimulations.
-    (** *Injection Phases*)
-    
-    Record fsim_properties_inj: Type :=
-      {  Injindex: Type;
-        Injorder: Injindex -> Injindex -> Prop;
-        Injmatch_states: Injindex -> meminj -> state L1 -> state L2 -> Prop;  
-        Injfsim_order_wf: well_founded Injorder;
-        Injfsim_match_meminj: forall i f s1 s2, Injmatch_states i f s1 s2 ->
-                                           Mem.inject f (get_mem s1) (get_mem s2);
-        Injfsim_match_full: forall i f s1 s2, Injmatch_states i f s1 s2 ->  injection_full f (get_mem s1);
-        (*    fsim_match_initial_states:
-      forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
-      exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
-        Injfsim_match_entry_point:
-          forall s1 f arg m0, entry_point L1 m0 s1 f arg  ->
-                      exists i s2 mu, entry_point L2 m0 s2 f arg /\ Injmatch_states i mu s1 s2;
-        Injfsim_match_final_states:
-          forall i s1 s2 r f,
-            Injmatch_states i f s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
-        Injfsim_simulation:
-          forall s1 t s1' f, Step L1 s1 t s1' ->
-          forall i s2, Injmatch_states i f s1 s2 ->
-                  exists i', exists s2' f' t',
-                      (Plus L2 s2 t' s2' \/ (Star L2 s2 t' s2' /\ Injorder i' i))
-                      /\ Injmatch_states i' f' s1' s2' /\
-                      Values.inject_incr f f' /\
-                      inject_trace f' t t';
-        Injfsim_public_preserved:
-          forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
-      }.
-
-   (** An alternate form of the simulation diagram *)
-
-    Lemma Injfsim_simulation':
-        forall (SIM:fsim_properties_inj),
-        forall i s1 t s1' f,
-          Step L1 s1 t s1' ->
-          forall s2, Injmatch_states SIM i f s1 s2 ->
-                (exists i', exists s2' f' t',
-                      Plus L2 s2 t' s2' /\
-                      Injmatch_states SIM i' f' s1' s2'
-                      /\ inject_incr f f' /\ inject_trace f' t t')
-                \/ (exists i' f', Injorder SIM i' i /\ t = E0 /\ Injmatch_states SIM i' f' s1' s2
-                  /\ inject_incr f f').
-    Proof.
-      intros. exploit Injfsim_simulation; eauto.
-      intros [i' [s2' [f' [t'[A [B [C D]]]]]]]. intuition.
-      left; exists i'; exists s2'; auto. exists f', t'; eauto.
-      inv H2. inversion D; subst.
-      right; exists i'; eauto.
-      left; exists i'; exists s2',f', (t1 ** t2); split; auto. econstructor; eauto.
-    Qed.
-
-    
-    (** *Star version of simulation*)
-    Lemma Injsimulation_star:
-        forall (SIM:fsim_properties_inj),
-      forall s1 t s1', Star L1 s1 t s1' ->
-                  forall i f s2,
-                    Injmatch_states SIM i f s1 s2 ->
-                    exists i' f', exists s2' t', Star L2 s2 t' s2' /\ Injmatch_states SIM i' f' s1' s2'
-                                       /\ inject_incr f f' /\ inject_trace f' t t'.
-    Proof.
-      intros S.
-      induction 1; intros.
-      exists i, f; exists s2 , nil; split; auto. apply star_refl.
-      split; auto; constructor.
-      apply inject_incr_refl. constructor.
-      exploit Injfsim_simulation; eauto.
-      intros [i' [s2' [f'[t' [A [B [C D]]]]]]].
-      exploit IHstar; eauto. intros [i'' [f'' [s2'' [t'' [E [F [G HH]]]]]]].
-      exists i'';exists f''; exists s2'', (t' ** t''); split; auto. eapply star_trans; eauto.
-      intuition auto. apply plus_star; auto.
-      split; auto. subst t.
-      split; auto.
-      eapply inject_incr_trans; eauto.
-      admit. (*inject trace properties*)
-    Admitted.
-    
-    (** *Plus version of simulation*)
-    Lemma Injsimulation_plus:
-      forall (SIM:fsim_properties_inj),
-      forall s1 t s1', Plus L1 s1 t s1' ->
-                  forall i f s2, Injmatch_states SIM i f s1 s2 -> 
-            (exists i', exists f', exists s2' t', Plus L2 s2 t' s2' /\ Injmatch_states SIM i' f' s1' s2'
-            /\ inject_incr f f' /\ inject_trace f' t t')
-            \/ (exists i', exists f', clos_trans _ (Injorder SIM) i' i /\ t = E0 /\ Injmatch_states SIM i' f' s1' s2
-                           /\ inject_incr f f').
-    Proof.
-      intros S.
-      induction 1 using plus_ind2; intros.
-      (* base case *)
-      exploit Injfsim_simulation'; eauto.
-      intros [[i' [s2' [f' [t' [A [B [C D]]]]]]] | [i' [f' [t' A]]]].
-      left. exists i', f', s2', t'; auto.
-      right; exists i', f' ; intuition.
-      (* inductive case *)
-      exploit Injfsim_simulation'; eauto.
-      intros [[i' [s2' [f' [t' [A [B [C D]]]]]]] | [i' [f' [A [B [C D]]]]]].
-      exploit Injsimulation_star; eauto. apply plus_star; eauto. eauto.
-      intros [i'' [f'' [s2'' [t'' [P [Q [R SS]]]]]]].
-      left; exists i''; exists f''; exists s2'', (t'**t''); split; auto. eapply plus_star_trans; eauto.
-      repeat split; auto.
-      eapply inject_incr_trans; eauto.
-      subst t.
-      admit. (*Some properties about inject_trace*)
- 
-      
-      exploit IHplus; eauto.
-      intros [[i'' [f'' [s2'' [t' [P [Q [R SS]]]]]]] | [i'' [f'' [P [Q R]]]]].
-      subst. simpl. left; exists i''; exists f''; exists s2'', (t'); auto.
-      repeat split; eauto.
-      eapply inject_incr_trans; eauto.
-      subst. simpl. right; exists i''; exists f''; intuition auto.
-      eapply t_trans; eauto. eapply t_step; eauto.
-      eapply inject_incr_trans; eauto.
-    Admitted.
-    
-  End InjectionSimulations.
  End ForwardSimulations.
  
 Arguments fsim_properties: clear implicits.
@@ -1045,6 +781,24 @@ Proof.
 - auto.
 Qed.
 
+Notation match_states':=
+  (fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+
+Lemma fsim_properties_star_wf:
+   fsim_properties L1 L2 _ order match_states'.
+Proof.
+  constructor.
+- auto.
+- intros. exploit match_entry_points; eauto. intros [s2 [A B]].
+    exists s1; exists s2; auto.
+- intros. exploit match_initial_states; eauto. intros [s2 [A B]].
+    exists s1; exists s2; auto.
+- intros. destruct H. eapply match_final_states; eauto.
+- intros. destruct H0. subst i. exploit simulation; eauto. intros [s2' [A B]].
+  exists s1'; exists s2'; intuition auto.
+- auto.
+Qed.
+
 End SIMULATION_STAR_WF.
 
 Section SIMULATION_STAR.
@@ -1070,6 +824,17 @@ Proof.
   exists s2; split. right; split. rewrite B. apply star_refl. auto. auto.
 Qed.
 
+Lemma fsim_properties_star:
+  fsim_properties L1 L2 _ (ltof _ measure)
+(fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply fsim_properties_star_wf.
+  apply well_founded_ltof.
+  intros. exploit simulation; eauto. intros [[s2' [A B]] | [A [B C]]].
+  exists s2'; auto.
+  exists s2; split. right; split. rewrite B. apply star_refl. auto. auto.
+Qed.
+
 End SIMULATION_STAR.
 
 (** Simulation when one transition in the first program corresponds
@@ -1085,6 +850,14 @@ Hypothesis simulation:
 Lemma forward_simulation_plus: forward_simulation L1 L2.
 Proof.
   apply forward_simulation_star with (measure := fun _ => O).
+  intros. exploit simulation; eauto.
+Qed.
+
+Lemma fsim_properties_plus:
+  fsim_properties L1 L2 _ (ltof _ ( fun _ => O))
+(fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply fsim_properties_star with (measure := fun _ => O).
   intros. exploit simulation; eauto.
 Qed.
 

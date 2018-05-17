@@ -17,7 +17,7 @@ Require Import FSets FSetAVL Orders Mergesort.
 Require Import Coqlib Maps Ordered Errors Integers Floats.
 Require Intv.
 Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSimulations.
 Require Import Csharpminor Switch Cminor Cminorgen.
 
 Local Open Scope error_monad_scope.
@@ -2314,9 +2314,7 @@ Proof.
   intros. inv H0. inv H. inv MK. inv RESINJ. constructor.
 Qed.
 
-
-
-Theorem transl_program_correct:
+Theorem transl_program_correct':
   forward_simulation (Csharpminor.semantics prog) (Cminor.semantics tprog).
 Proof.
   eapply forward_simulation_star; eauto.
@@ -2326,6 +2324,36 @@ Proof.
   eexact transl_initial_states'.
   eexact transl_final_states.
   eexact transl_step_correct.
+Qed.
+
+Theorem transl_program_correct:
+  @fsim_properties_inj
+    (Csharpminor.semantics prog) (Cminor.semantics tprog)
+    Csharpminor.get_mem Cminor.get_mem
+    (*
+    _ (ltof _ measure)
+    (fun idx f s1 s2 => idx = s1 /\ match_states f s1 s2) *).
+Proof.
+  eapply Build_fsim_properties_inj with
+      (Injorder:=(ltof _ measure))
+      (Injmatch_states:=(fun idx f s1 s2 => idx = s1 /\ match_states s1 s2)).
+  - apply well_founded_ltof.
+  - intros. destruct H as [? H']; inv H'; auto.
+  - intros. destruct H as [? H']; inv H'; auto.
+  - intros.
+    exploit transl_initial_states; eauto.
+    intros (R & f & INIT & MATCH).
+    exists s1, f, R. split; eauto.
+  - intros. destruct H.
+    eapply transl_final_states; eauto.
+  - intros. inv H0.
+    exploit transl_step_correct; eauto.
+    intros [[s2' [f' [t' [STEP [MATCH [INCR TRACEINJ]]]]]]| [f' [A [B [MATCH INCR]]]]].
+    + exists s1', s2', f', t'; intuition.
+    + exists s1', s2, f', E0; intuition.
+      right. split. constructor. auto.
+      subst t; constructor.
+  - apply senv_preserved.
 Qed.
 
 End TRANSLATION.

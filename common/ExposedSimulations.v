@@ -27,12 +27,10 @@ Require Import Globalenvs.
 Require Import Integers.
 Require Import Smallstep.
 
-
 Require Import Values. (*for me
 minj, compose_meminj,...*)
 
 Set Implicit Arguments.
-
 
 (** * Transition semantics *)
 
