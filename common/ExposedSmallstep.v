@@ -51,26 +51,26 @@ Section ExposingMemory.
         Eqindex: Type;
         Eqorder: Eqindex -> Eqindex -> Prop;
         Eqmatch_states: Eqindex -> state L1 -> state L2 -> Prop;  
-    Eqfsim_order_wf: well_founded Eqorder;
-    Eqfsim_match_meminj: forall i s1 s2, Eqmatch_states i s1 s2 ->  (get_mem1 s1) = (get_mem2 s2);
-(*    fsim_match_initial_states:
+        Eqfsim_order_wf: well_founded Eqorder;
+        Eqfsim_match_meminj: forall i s1 s2, Eqmatch_states i s1 s2 ->  (get_mem1 s1) = (get_mem2 s2);
+        (*    fsim_match_initial_states:
       forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
       exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
-    Eqfsim_match_initial_states:
-      forall s1, initial_state L1 s1 -> 
-               exists i s2, initial_state L2 s2 /\ Eqmatch_states i s1 s2;
-    Eqfsim_match_final_states:
-      forall i s1 s2 r ,
-      Eqmatch_states i s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
-    Eqfsim_simulation:
-      forall s1 t s1', Step L1 s1 t s1' ->
-      forall i s2, Eqmatch_states i s1 s2 ->
-      exists i', exists s2',
-         (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ Eqorder i' i))
-         /\ Eqmatch_states i' s1' s2';
-    Eqfsim_public_preserved:
-      forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
-  }.
+        Eqfsim_match_initial_states:
+          forall s1, initial_state L1 s1 -> 
+                exists i s2, initial_state L2 s2 /\ Eqmatch_states i s1 s2;
+        Eqfsim_match_final_states:
+          forall i s1 s2 r ,
+            Eqmatch_states i s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
+        Eqfsim_simulation:
+          forall s1 t s1', Step L1 s1 t s1' ->
+                      forall i s2, Eqmatch_states i s1 s2 ->
+                              exists i', exists s2',
+                                  (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ Eqorder i' i))
+                                  /\ Eqmatch_states i' s1' s2';
+        Eqfsim_public_preserved:
+          forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
+      }.
   
     
     Lemma sim_eqSim':
@@ -209,7 +209,7 @@ Section ExposingMemory.
 
   End Extensions.
 
-  (** *Extension Phases*)
+  (** *Injection Phases*)
   Section Injection.
     Record fsim_properties_inj: Type :=
       {  Injindex: Type;

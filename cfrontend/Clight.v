@@ -685,6 +685,20 @@ Inductive initial_state (p: program): state -> Prop :=
       type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
       initial_state p (Callstate f nil Kstop m0).
 
+(*NEW: Proposal of new "initial_state" as entry points *)
+Inductive entry_point (p: program)(fval:val)(args:list val)(m0:mem): state -> Prop :=
+  | entry_point_intro: forall fptr ff arg_type ret_type call_conv,
+      let ge := Genv.globalenv p in
+      fval = Vptr fptr Int.zero ->
+      (* Genv.init_mem p = Some m0 -> *)
+      Genv.find_funct_ptr ge fptr = Some ff ->
+      type_of_fundef ff = Tfunction arg_type ret_type call_conv  ->
+      (* args have type arg_type -> *)
+      (* arg_types are nont void -> *)
+      (* args are not void -> *)
+      (* args are bounded by Int.max_unsigned/(4*2) *)
+      entry_point p fval args m0 (Callstate ff args Kstop m0).
+
 (** A final state is a [Returnstate] with an empty continuation. *)
 
 Inductive final_state: state -> int -> Prop :=
