@@ -286,15 +286,11 @@ Lemma locmap_set_lessdef:
   locmap_lessdef ls1 ls2 -> Val.lessdef v1 v2 -> locmap_lessdef (Locmap.set l v1 ls1) (Locmap.set l v2 ls2).
 Proof.
   intros; red; intros l'.
-  destruct l eqn:L. apply locmap_set_reg_lessdef; auto.
-  destruct l' eqn:L'. rewrite !Locmap.gso; simpl; auto. exact (H (R r)).
-  unfold Locmap.get, Locmap.set. destruct ls1, ls2.
-  rewrite <- L, <- L'. destruct (Loc.eq l l').
-- inversion H0. subst; auto.
-  rewrite decode_encode_undef; auto.
-- destruct (Loc.diff_dec l l'); auto.
-  unfold Locmap.chunk_of_loc; subst; simpl.
-  exact (H (S sl0 pos0 q0)).
+  destruct (Loc.eq l l').
+  rewrite e, !Locmap.gss. auto using Val.load_result_lessdef.
+  destruct (Loc.diff_dec l l').
+  rewrite !Locmap.gso; auto.
+  rewrite Locmap.gu_overlap; auto using Loc.diff_sym.
 Qed.
 
 Lemma regfile_set_undef_lessdef:
@@ -314,18 +310,11 @@ Lemma locmap_set_undef_lessdef:
   locmap_lessdef ls1 ls2 -> locmap_lessdef (Locmap.set l Vundef ls1) ls2.
 Proof.
   intros; red; intros l'.
-  destruct l eqn:L. apply regfile_set_undef_lessdef; auto.
-  destruct l' eqn:L'. rewrite Locmap.gso; simpl; auto.
-  destruct ls1, ls2. exact (H (R r)).
-  rewrite <- L, <- L'. destruct (Loc.eq l l').
-- rewrite e, Locmap.gss. subst l'; simpl.
-  destruct q0; simpl; auto.
-- destruct (Loc.diff_dec l l'); auto.
+  destruct (Loc.eq l l').
+  rewrite e, Locmap.gss. destruct (chunk_of_type (Loc.type l')); auto.
+  destruct (Loc.diff_dec l l').
   rewrite Locmap.gso; auto.
-  subst l'. unfold Locmap.set, Locmap.get. destruct ls1, ls2, l.
-  simpl in n0; tauto.
-  rewrite dec_eq_false, pred_dec_false by auto.
-  rewrite decode_encode_undef; auto.
+  rewrite Locmap.gu_overlap; auto using Loc.diff_sym.
 Qed.
 
 Lemma locmap_undef_regs_lessdef:
@@ -345,7 +334,7 @@ Proof.
   intros. destruct ls1, ls2.
   rewrite !LTL_undef_regs_Regfile_undef_regs.
   induction rl as [ | r rl]; simpl. auto.
-  fold (Locmap.set (R r) Vundef (Regfile.undef_regs rl t, l)).
+  fold (Locmap.set (R r) Vundef (Regfile.undef_regs rl t, t0)).
   apply regfile_set_undef_lessdef; auto.
 Qed.
 

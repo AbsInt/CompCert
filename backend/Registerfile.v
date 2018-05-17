@@ -18,9 +18,18 @@ Require Import AST.
 Require Import Values.
 Require Import Memdata.
 Require Import Memory.
+Require Import FragmentBlock.
 Require Export Machregs.
 
 Open Scope Z_scope.
+
+(** * Auxiliary definitions *)
+
+Definition quantity_of_mreg (r: mreg) : quantity :=
+  quantity_of_typ (mreg_type r).
+
+Definition chunk_of_mreg (r: mreg) : memory_chunk :=
+  chunk_of_type (mreg_type r).
 
 (** * Representation of the register file *)
 
@@ -33,9 +42,23 @@ Open Scope Z_scope.
 
 Module Regfile.
 
-  Definition t := ZMap.t memval.
+  Definition t := FragBlock.t.
 
-  Definition init := ZMap.init Undef.
+  Definition init := FragBlock.init.
+
+  (* A register's offset, in words, from an arbitrary starting point. *)
+  Definition ofs (r: mreg) : Z :=
+    Zpos (IndexedMreg.index r).
+
+  Definition typesize ty :=
+    match ty with
+    | Tint | Tsingle | Tany32 => 1
+    | Tlong | Tfloat | Tany64 => 2
+    end.
+
+  (* The offset just past the end of register [r]. The next nonoverlapping
+    register may start here. *)
+  Definition next_ofs (r: mreg) : Z := ofs r + typesize (mreg_type r).
 
   (* A register's address: The index of its first byte. *)
   Definition addr (r: mreg) : Z := Zpos (IndexedMreg.index r) * 4.
@@ -48,6 +71,48 @@ Module Regfile.
   (* The address one byte past the end of register [r]. The next nonoverlapping
      register may start here. *)
   Definition next_addr (r: mreg) : Z := addr r + AST.typesize (mreg_type r).
+
+  (* Our notions of offset and address are compatible with FragBlock's addresses. *)
+  Lemma addr_compat: forall r, FragBlock.addr (ofs r) = addr r.
+  Proof.
+    unfold addr, ofs, FragBlock.addr; intros. auto.
+  Qed.
+
+  Lemma size_compat:
+    forall r,
+    AST.typesize (mreg_type r) = FragBlock.quantity_size (quantity_of_mreg r).
+  Proof.
+    intros. unfold quantity_of_mreg. destruct (mreg_type r); simpl; auto.
+  Qed.
+
+  Lemma quantity_of_compat:
+    forall r,
+    quantity_of_mreg r = quantity_of_typ (mreg_type r).
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma chunk_of_mreg_type:
+    forall r,
+    chunk_of_mreg r = chunk_of_type (mreg_type r).
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma chunk_of_mreg_compat:
+    forall r,
+    chunk_of_mreg r = chunk_of_quantity (quantity_of_mreg r).
+  Proof.
+    intros.
+    rewrite quantity_of_compat, chunk_of_quantity_of_typ, chunk_of_mreg_type; auto.
+    apply mreg_type_cases.
+  Qed.
+
+  Lemma next_addr_compat: forall r, FragBlock.next_addr (ofs r) (quantity_of_mreg r) = next_addr r.
+  Proof.
+    unfold next_addr, addr, ofs, FragBlock.next_addr, FragBlock.addr; intros.
+    rewrite size_compat. auto.
+  Qed.
 
   Lemma outside_interval_diff:
     forall r s, next_addr r <= addr s \/ next_addr s <= addr r -> r <> s.
@@ -91,16 +156,16 @@ Module Regfile.
   Qed.
 
   Definition get_bytes (r: mreg) (rf: t) : list memval :=
-    Mem.getN (Z.to_nat (AST.typesize (mreg_type r))) (addr r) rf.
+    FragBlock.get_bytes (ofs r) (quantity_of_mreg r) rf.
 
   Definition get (r: mreg) (rf: t) : val :=
-    decode_val (chunk_of_mreg r) (get_bytes r rf).
+    FragBlock.get (ofs r) (quantity_of_mreg r) rf.
 
   Definition set_bytes (r: mreg) (bytes: list memval) (rf: t) : t :=
-    Mem.setN bytes (addr r) rf.
+    FragBlock.set_bytes (ofs r) (quantity_of_mreg r) bytes rf.
 
   Definition set (r: mreg) (v: val) (rf: t) : t :=
-    set_bytes r (encode_val (chunk_of_mreg r) v) rf.
+    FragBlock.set (ofs r) (quantity_of_mreg r) v rf.
 
   (* Update the [old] register file by choosing the values for the registers in
      [rs] from [new]. *)
@@ -120,10 +185,8 @@ Module Regfile.
     forall r v rf,
     get r (set r v rf) = Val.load_result (chunk_of_mreg r) v.
   Proof.
-    intros. unfold get, set, get_bytes, set_bytes.
-    erewrite chunk_length. rewrite Mem.getN_setN_same.
-    erewrite <- decode_encode_val_similar; eauto.
-    eapply decode_encode_val_general.
+    intros. unfold get, set.
+    rewrite FragBlock.gss, chunk_of_mreg_compat; auto.
   Qed.
 
   Lemma gso:
@@ -131,12 +194,18 @@ Module Regfile.
     r <> s ->
     get r (set s v rf) = get r rf.
   Proof.
-    intros. unfold get, set, get_bytes, set_bytes.
-    rewrite Mem.getN_setN_outside; auto.
-    rewrite <- chunk_length.
-    generalize (AST.typesize_pos (mreg_type s)), (AST.typesize_pos (mreg_type r)); intros.
-    apply diff_outside_interval in H. unfold next_addr in H.
-    rewrite !Z2Nat.id; omega.
+    intros. unfold get, set.
+    rewrite FragBlock.gso; auto.
+    rewrite !next_addr_compat, !addr_compat.
+    apply diff_outside_interval; auto.
+  Qed.
+
+  Lemma get_has_type:
+    forall r rf, Val.has_type (get r rf) (mreg_type r).
+  Proof.
+    intros. unfold get.
+    unfold quantity_of_mreg.
+    destruct (mreg_type_cases r) as [T | T]; rewrite T; apply FragBlock.get_has_type.
   Qed.
 
   Lemma override_in:
@@ -147,8 +216,7 @@ Module Regfile.
     destruct (mreg_eq r a).
     - subst; simpl; rewrite gss.
       unfold chunk_of_mreg. rewrite Val.load_result_same; auto.
-      unfold get. rewrite <- type_of_chunk_of_type.
-      apply decode_val_type.
+      apply get_has_type.
     - inversion H; try congruence.
       simpl; rewrite gso; auto.
   Qed.

@@ -103,9 +103,7 @@ Definition wt_locset (ls: locset) : Prop :=
 Lemma well_typed_locset:
   forall ls, wt_locset ls.
 Proof.
-  unfold wt_locset, Locmap.get, Locmap.chunk_of_loc. intros.
-  rewrite <- type_of_chunk_of_type.
-  destruct ls. destruct l; apply decode_val_type.
+  unfold wt_locset. intros. apply Locmap.get_has_type.
 Qed.
 
 Lemma wt_find_label:

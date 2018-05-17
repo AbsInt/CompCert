@@ -19,6 +19,7 @@ Require Import Integers AST Linking.
 Require Import Values Memory Separation Events Globalenvs Smallstep.
 Require Import LTL Op Locations Linear Mach.
 Require Import Bounds Conventions Conventions1 Stacklayout Lineartyping.
+Require Import FragmentBlock.
 Require Import Stacking.
 
 Local Open Scope sep_scope.
@@ -257,20 +258,20 @@ Proof.
   destruct (Loc.eq (S sl ofs q) (S sl ofs0 q0)); [|destruct (Loc.diff_dec (S sl ofs q) (S sl ofs0 q0))].
 * (* same location *)
   inv e. rename ofs0 into ofs. rename q0 into q.
-  exists (Val.load_result (chunk_of_quantity q) v'); split.
-  eapply Mem.load_store_similar_2; eauto. omega.
-  unfold Locmap.chunk_of_loc; simpl. rewrite chunk_of_typ_of_quantity.
-  erewrite <- decode_encode_val_similar; eauto using decode_encode_val_general.
-  auto using decode_val_inject, encode_val_inject.
+  exists (Val.load_result (chunk_of_type (typ_of_quantity q)) v').
+  split; rewrite chunk_of_typ_of_quantity.
+  exploit Mem.load_store_similar_2; eauto. omega.
+  rewrite Stack.gss. auto using Val.load_result_inject.
 * (* different locations *)
   exploit H; eauto. intros (v0 & X & Y). exists v0; split; auto.
   rewrite <- X; eapply Mem.load_store_other; eauto.
   destruct d. congruence. right. destruct q, q0; simpl in *; omega.
+  rewrite Stack.gso; auto using Loc.diff_sym.
 * (* overlapping locations *)
   destruct (Mem.valid_access_load m' (chunk_of_quantity q0) sp (pos + 4 * ofs0)) as [v'' LOAD].
   apply Mem.valid_access_implies with Writable; auto with mem.
   eapply valid_access_location; eauto.
-  exists v''; rewrite decode_encode_undef; auto.
+  exists v''; rewrite Stack.gu_overlap; auto using Loc.diff_sym.
 + apply (m_invar P) with m; auto.
   eapply Mem.store_unchanged_on; eauto.
   intros i. intros; red; intros.
@@ -2194,9 +2195,7 @@ Proof.
   set (j := Mem.flat_inj (Mem.nextblock m0)).
   eapply match_states_call with (j := j); eauto.
   constructor. red; intros. rewrite H3, loc_arguments_main in H. contradiction.
-  red; intros. unfold Locmap.get; simpl.
-  unfold Regfile.init, Regmap.init, Regfile.get, Regfile.get_bytes.
-  destruct (mreg_type r); simpl; rewrite Maps.ZMap.gi, decode_val_undef; simpl; auto.
+  red; intros. unfold Locmap.get, Regfile.get; simpl. rewrite FragBlock.gi; auto.
   simpl. rewrite sep_pure. split; auto. split;[|split].
   eapply Genv.initmem_inject; eauto.
   simpl. exists (Mem.nextblock m0); split. apply Ple_refl.

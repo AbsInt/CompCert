@@ -316,4 +316,28 @@ Module FragBlock.
              rewrite ZMap.gss; auto.
   Qed.
 
+  Lemma gi:
+    forall ofs q, get ofs q init = Vundef.
+  Proof.
+    intros. unfold init, get, get_bytes.
+    destruct q; simpl; rewrite ZMap.gi; apply decode_val_hd_undef.
+  Qed.
+
+  Lemma get_has_type:
+    forall ofs q fb, Val.has_type (get ofs q fb) (typ_of_quantity q).
+  Proof.
+    intros. unfold get.
+    generalize (decode_val_type (chunk_of_quantity q)); intro.
+    destruct q; auto.
+  Qed.
+
+  Lemma get_fits_quantity:
+    forall ofs q fb, fits_quantity (get ofs q fb) q.
+  Proof.
+    intros.
+    generalize (get_has_type ofs q fb); intro.
+    apply has_type_fits_quantity in H.
+    destruct q; auto.
+  Qed.
+
 End FragBlock.
