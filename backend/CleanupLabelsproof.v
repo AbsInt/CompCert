@@ -323,6 +323,23 @@ Proof.
   econstructor; eauto.
 Qed.
 
+Lemma transf_entry_points:
+   forall (s1 : state) (f : val) (arg : list val) (m0 : mem),
+  entry_point prog m0 s1 f arg ->
+  exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H. subst ge0.
+  exploit function_ptr_translated; eauto. intro A.
+  econstructor; split.
+  - econstructor; eauto.
+    eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+      eapply match_program_gen_len_defs in TRANSL; eauto.
+    rewrite sig_function_translated; auto.
+  - rewrite sig_function_translated.
+    econstructor; eauto.
+    constructor.
+Qed.
+
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
@@ -349,6 +366,7 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_opt.
   apply senv_preserved.
+  eexact transf_entry_points.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact transf_step_correct.
