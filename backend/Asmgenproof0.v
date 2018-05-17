@@ -381,6 +381,59 @@ Proof.
   eapply extcall_args_match; eauto.
 Qed.
 
+Lemma extcall_arg_match_init:
+  forall b m l v,
+  Mach.extcall_arg (Regmap.init Vundef) m Vnullptr l v ->
+  Asm.extcall_arg ((Pregmap.init Vundef)
+        # PC <- (Vptr b Ptrofs.zero)
+        # RA <- Vzero
+        # RSP <- Vnullptr) m l v.
+Proof.
+  intros. inv H.
+  - pose proof (extcall_arg_reg ((Pregmap.init Vundef)
+        # PC <- (Vptr b Ptrofs.zero) 
+        # RA <- Vzero
+        # RSP <- Vnullptr) m r).
+    destruct r;
+      rewrite !Pregmap.gso in H by discriminate; rewrite Pregmap.gi, Regmap.gi in *; auto.
+  - econstructor; eauto.
+Qed.
+
+Lemma extcall_arg_pair_match_init:
+  forall b m p v,
+  Mach.extcall_arg_pair (Regmap.init Vundef) m Vnullptr p v ->
+  Asm.extcall_arg_pair ((Pregmap.init Vundef)
+        # PC <- (Vptr b Ptrofs.zero)
+        # RA <- Vzero
+        # RSP <- Vnullptr) m p v.
+Proof.
+  intros. inv H; constructor; apply extcall_arg_match_init; auto.
+Qed.
+
+Lemma extcall_args_match_init:
+  forall b m ll vl,
+  list_forall2 (Mach.extcall_arg_pair (Regmap.init Vundef) m Vnullptr) ll vl ->
+  list_forall2 (Asm.extcall_arg_pair ((Pregmap.init Vundef)
+        # PC <- (Vptr b Ptrofs.zero)
+        # RA <- Vzero
+        # RSP <- Vnullptr) m) ll vl.
+Proof.
+  induction 1; intros; constructor; auto.
+  apply extcall_arg_pair_match_init; auto.
+Qed.
+
+Lemma extcall_arguments_match_init:
+  forall m b sg args,
+  Mach.extcall_arguments (Regmap.init Vundef) m Vnullptr sg args ->
+  Asm.extcall_arguments ((Pregmap.init Vundef)
+        # PC <- (Vptr b Ptrofs.zero)
+        # RA <- Vzero
+        # RSP <- Vnullptr) m sg args.
+Proof.
+  unfold Mach.extcall_arguments, Asm.extcall_arguments; intros.
+  apply extcall_args_match_init; auto.
+Qed.
+
 (** Translation of arguments and results to builtins. *)
 
 Remark builtin_arg_match:
@@ -843,7 +896,7 @@ Lemma exec_straight_steps_1:
   rs#PC = Vptr b ofs ->
   Genv.find_funct_ptr ge b = Some (Internal fn) ->
   code_tail (Ptrofs.unsigned ofs) (fn_code fn) c ->
-  plus step ge (State rs m) E0 (State rs' m').
+  plus (step ge) (State rs m) E0 (State rs' m').
 Proof.
   induction 1; intros.
   apply plus_one.

@@ -74,7 +74,7 @@ Lemma exec_straight_exec:
   forall fb f c ep tf tc c' rs m rs' m',
   transl_code_at_pc ge (rs PC) fb f c ep tf tc ->
   exec_straight tge tf tc rs m c' rs' m' ->
-  plus step tge (State rs m) E0 (State rs' m').
+  plus (step tge) (State rs m) E0 (State rs' m').
 Proof.
   intros. inv H.
   eapply exec_straight_steps_1; eauto.
@@ -401,7 +401,7 @@ Lemma exec_straight_steps:
     /\ agree ms2 sp rs2
     /\ (it1_is_parent ep i = true -> rs2#RAX = parent_sp s)) ->
   exists st',
-  plus step tge (State rs1 m1') E0 st' /\
+  plus (step tge) (State rs1 m1') E0 st' /\
   match_states (Mach.State s fb sp c ms2 m2) st'.
 Proof.
   intros. inversion H2. subst. monadInv H7.
@@ -425,7 +425,7 @@ Lemma exec_straight_steps_goto:
     /\ agree ms2 sp rs2
     /\ exec_instr tge tf jmp rs2 m2' = goto_label tf lbl rs2 m2') ->
   exists st',
-  plus step tge (State rs1 m1') E0 st' /\
+  plus (step tge) (State rs1 m1') E0 st' /\
   match_states (Mach.State s fb sp c' ms2 m2) st'.
 Proof.
   intros. inversion H3. subst. monadInv H9.
@@ -468,7 +468,7 @@ Definition measure (s: Mach.state) : nat :=
 Theorem step_simulation:
   forall S1 t S2, Mach.step return_address_offset ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
-  (exists S2', plus step tge S1' t S2' /\ match_states S2 S2')
+  (exists S2', plus (step tge) S1' t S2' /\ match_states S2 S2')
   \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 S1')%nat.
 Proof.
   induction 1; intros; inv MS.
@@ -870,6 +870,36 @@ Transparent destroyed_at_function_entry.
   econstructor; eauto. rewrite ATPC; eauto. congruence.
 Qed.
 
+Lemma sig_preserved:
+  forall f tf, transf_fundef f = OK tf -> Asm.funsig tf = Mach.funsig f.
+Proof.
+  intros until tf; unfold transf_fundef, transf_partial_fundef.
+  destruct f; intros; monadInv H.
+  apply bind_inversion in EQ as (? & EQ & H).
+  destruct (zlt _ _); inv H.
+  apply bind_inversion in EQ as (? & EQ & H).
+  inv H; auto.
+  auto.
+Qed.
+
+Lemma transf_entry_points:
+   forall (s1 : Mach.state) (f : val) (arg : list val) (m0 : mem),
+  Mach.entry_point prog m0 s1 f arg ->
+  exists s2 : Asm.state, Asm.entry_point tge m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H. subst ge0.
+  exploit functions_translated; eauto. intros (tf & A & B).
+  econstructor; split.
+  - econstructor; eauto.
+    apply extcall_arguments_match_init; auto.
+    erewrite sig_preserved; eauto.
+  - econstructor; eauto.
+    + constructor.
+    + apply Mem.extends_refl.
+    + constructor; auto.
+      discriminate.
+Qed.
+
 Lemma transf_initial_states:
   forall st1, Mach.initial_state prog st1 ->
   exists st2, Asm.initial_state tprog st2 /\ match_states st1 st2.
@@ -908,6 +938,7 @@ Theorem transf_program_correct:
 Proof.
   eapply forward_simulation_star with (measure := measure).
   apply senv_preserved.
+  eexact transf_entry_points.
   eexact transf_initial_states.
   eexact transf_final_states.
   exact step_simulation.

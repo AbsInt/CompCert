@@ -275,11 +275,95 @@ Inductive state: Type :=
              (m: mem),                 (**r memory state *)
       state.
 
+(**NEW *)
+Definition get_mem (s:state):=
+  match s with
+  | State _ _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  end.
+
+(**NEW *)
+Definition set_mem (s:state)(m:mem):=
+  match s with
+  | State f s k e le _ => State f s k e le m
+  | Callstate fd args k _ => Callstate fd args k m
+  | Returnstate res k _ => Returnstate res k m
+  end.
+
+(**NEW *)
+Definition get_extcall_arg (rs: regset) (m: mem) (sp: val) (l: loc) : option val :=
+ match l with
+  | R r => Some (rs r)
+  | S Outgoing ofs ty => 
+      let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z in
+      load_stack m sp ty (Ptrofs.repr bofs)
+  | _ => None
+  end.
+
+Fixpoint get_extcall_arguments
+    (rs: regset) (m: mem) (sp: val) (al: list (rpair loc)) : option (list val) :=
+  match al with
+  | One l :: al' => 
+     match get_extcall_arg rs m sp l with
+     | Some v => match get_extcall_arguments rs m sp al' with
+                         | Some vl => Some (v::vl)
+                         | None => None
+                        end
+     | None => None
+    end
+  | Twolong hi lo :: al' =>
+     match get_extcall_arg rs m sp hi with
+     | Some vhi => 
+       match get_extcall_arg rs m sp lo with
+       | Some vlo => 
+        match get_extcall_arguments rs m sp al' with
+                         | Some vl => Some (Val.longofwords vhi vlo :: vl)
+                         | None => None
+        end
+        | None => None
+      end
+     | None => None
+    end
+  | nil => Some nil
+ end.
+
 Definition parent_sp (s: list stackframe) : val :=
   match s with
   | nil => Vnullptr
   | Stackframe f sp ra c :: s' => sp
   end.
+
+Definition at_external (c: state) : option (external_function * list val) :=
+  match c with
+    Callstate s b rs m =>
+      match Genv.find_funct_ptr ge b with
+      | Some (External ef) =>
+          match get_extcall_arguments rs m (parent_sp s) (Conventions1.loc_arguments (ef_sig ef)) with
+          | Some args => Some (ef, args)
+          | None => None
+          end
+      | _ => None
+      end
+  | _ => None
+ end.
+
+(**NEW *)
+Definition after_external (rv: option val) (c: state) (m:mem): option state :=
+  match c with
+    Callstate s b rs _ =>
+      match Genv.find_funct_ptr ge b with
+      | Some (External ef) =>
+          let rs' := fun res => set_pair (loc_result (ef_sig ef)) res rs in
+          match rv with
+          | Some v => Some (Returnstate s (rs' v) m)
+          | None  => Some (Returnstate s (rs' Vundef) m )
+          end
+      | _ => None
+      end
+   | _ => None
+  end.
+
 
 Definition parent_ra (s: list stackframe) : val :=
   match s with
@@ -424,6 +508,16 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some fb ->
       initial_state p (Callstate nil fb (Regmap.init Vundef) m0).
 
+Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
+  | entry_point_intro: forall b f m0 args,
+      let ge := Genv.globalenv p in
+      Mem.mem_wd m0 ->
+      Mem.arg_well_formed args m0 ->
+      globals_not_fresh ge m0 ->
+      Genv.find_funct_ptr ge b = Some f ->
+      extcall_arguments (Regmap.init Vundef) m0 Vnullptr (funsig f) args ->
+      entry_point p m0 (Callstate nil b (Regmap.init Vundef) m0) (Vptr b (Ptrofs.zero)) args.
+
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r retcode,
       loc_result signature_main = One r ->
@@ -431,7 +525,16 @@ Inductive final_state: state -> int -> Prop :=
       final_state (Returnstate nil rs m) retcode.
 
 Definition semantics (rao: function -> code -> ptrofs -> Prop) (p: program) :=
-  Semantics (step rao) (initial_state p) final_state (Genv.globalenv p).
+  let ge:= (Genv.globalenv p) in
+  Semantics
+    get_mem set_mem
+    (step rao ge)
+    (entry_point p)
+    (at_external ge)
+    (after_external ge)
+    final_state ge
+    p.(prog_main)
+    (Genv.init_mem p ).
 
 (** * Leaf functions *)
 

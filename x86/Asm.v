@@ -1140,6 +1140,13 @@ Inductive entry_point' (p:program): mem -> state -> val -> list val -> Prop:=
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       extcall_arguments rs0 m (fn_sig f) args ->
       entry_point' p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+
+Definition funsig (fd: fundef) :=
+  match fd with
+  | Internal f => fn_sig f
+  | External ef => ef_sig ef
+  end.
+
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
     forall f b m args,
@@ -1148,8 +1155,8 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
         # PC <- (Vptr b Ptrofs.zero) 
         # RA <- Vzero
         # RSP <- Vnullptr in
-      Genv.find_funct_ptr ge b = Some (Internal f) ->
-      extcall_arguments rs0 m (fn_sig f) args ->
+      Genv.find_funct_ptr ge b = Some f ->
+      extcall_arguments rs0 m (funsig f) args ->
       entry_point ge m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
  Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=
