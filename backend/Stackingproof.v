@@ -2252,6 +2252,28 @@ Proof.
   intro; apply Val.val_inject_undef.
 Qed.
 
+Lemma setpair_gso : forall l v ls l', ~In l' (regs_of_rpair l) ->
+  setpair l v ls l' = ls l' \/ setpair l v ls l' = Vundef.
+Proof.
+  destruct l; simpl; intros.
+  - unfold Locmap.set.
+    destruct (Loc.eq r l'); [tauto|].
+    destruct (Loc.diff_dec r l'); auto.
+  - unfold Locmap.set.
+    destruct (Loc.eq rlo l'); [tauto|].
+    destruct (Loc.eq rhi l'); [tauto|].
+    destruct (Loc.diff_dec rlo l'), (Loc.diff_dec rhi l'); auto.
+Qed.
+
+Lemma setlist_gso : forall ll lv ls l, ~In l (regs_of_rpairs ll) ->
+  setlist ll lv ls l = ls l \/ setlist ll lv ls l = Vundef.
+Proof.
+  induction ll; auto; simpl; intros.
+  destruct lv; auto.
+  rewrite in_app in H.
+  destruct (setpair_gso a v (setlist ll lv ls) l) as [-> | ->]; auto.
+Qed.
+
 Lemma transf_entry_points:
    forall (s1 : Linear.state) (f : val) (arg : list val) (m0 : mem),
   Linear.entry_point prog m0 s1 f arg ->
@@ -2272,12 +2294,21 @@ Proof.
     + eapply make_arguments_inject; eauto.
     + intros ??; simpl.
       unfold build_ls_from_arguments.
-      admit.
+      destruct (setlist_gso (loc_arguments (Linear.funsig f0)) arg (Locmap.init Vundef) l) as [-> | ->];
+        auto.
+      intro Hin; specialize (H _ Hin).
+      apply loc_arguments_acceptable_2 in Hin.
+      destruct l; congruence.
     + simpl; rewrite sep_pure; split; auto.
       split; [|split; unfold disjoint_footprint; auto]; simpl.
       * apply Mem.mem_wd_inject; auto.
       * exists (Mem.nextblock m0); split; [apply Ple_refl|].
-        admit.
+        subst ge; unfold Mem.flat_inj; constructor; intros.
+          apply pred_dec_true; auto.
+          destruct (plt b1 (Mem.nextblock m0)); congruence.
+          eapply Plt_Ple_trans; [eapply Genv.genv_symb_range; eauto | auto].
+          eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_funct_ptr_iff; eauto | auto].
+          eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_var_info_iff; eauto | auto].
 Admitted.
 
 Lemma transf_initial_states:
