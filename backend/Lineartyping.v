@@ -170,6 +170,77 @@ Proof.
   auto.
 Qed.
 
+(* All this is x86-specific. Is there an alternative? *)
+Lemma wt_setpair_32:
+  forall r ofs v rs,
+  wt_locset rs ->
+  forall_rpair (loc_argument_32_charact ofs) r ->
+  wt_locset (setpair r v rs).
+Proof.
+  intros ?????. destruct r; simpl.
+- intros. destruct r; try contradiction.
+  apply wt_setstack; auto.
+- intros [].
+  destruct rlo; try contradiction. apply wt_setstack.
+  destruct rhi; try contradiction. apply wt_setstack.
+  auto.
+Qed.
+
+Lemma wt_setlist_32:
+  forall r ofs v rs,
+  wt_locset rs ->
+  Forall (forall_rpair (loc_argument_32_charact ofs)) r ->
+  wt_locset (setlist r v rs).
+Proof.
+  induction r; simpl; intros; auto.
+  inv H0.
+  destruct v; auto.
+  eapply wt_setpair_32; eauto.
+Qed.
+
+Lemma mreg_type_64:
+  forall m,
+  Archi.ptr64 = true ->
+  mreg_type m = Tany64.
+Proof.
+  intros; destruct m; auto; simpl; rewrite H; auto.
+Qed.
+
+Lemma has_mreg_type_64:
+  forall v m,
+  Archi.ptr64 = true ->
+  Val.has_type v (mreg_type m).
+Proof.
+  intros.
+  rewrite mreg_type_64 by auto.
+  destruct v; simpl; auto.
+Qed.
+
+Lemma wt_setlist_64:
+  forall tys a b c v rs,
+  wt_locset rs ->
+  Val.has_type_list v tys ->
+  Archi.ptr64 = true ->
+  wt_locset (setlist (loc_arguments_64 tys a b c) v rs).
+Proof.
+  induction tys; auto; intros.
+  unfold loc_arguments_64; fold loc_arguments_64.
+  destruct v; try contradiction; destruct H0.
+  destruct a; destruct (list_nth_z _ _) eqn: Hi; simpl;
+    try apply wt_setstack; auto; apply wt_setreg; auto; apply has_mreg_type_64; auto.
+Qed.
+
+Lemma wt_build_from_arguments:
+  forall sg args,
+  Val.has_type_list args (sig_args sg) ->
+  wt_locset (build_ls_from_arguments sg args).
+Proof.
+  intros; unfold build_ls_from_arguments, loc_arguments.
+  destruct Archi.ptr64 eqn: H64; [eapply wt_setlist_64 | eapply wt_setlist_32]; try apply wt_init; eauto.
+  rewrite Forall_forall; apply loc_arguments_32_charact.
+Qed.
+(* end x86-specific *)
+
 Lemma wt_setres:
   forall res ty v rs,
   wt_builtin_res ty res = true ->
@@ -352,6 +423,16 @@ Proof.
   unfold ge0 in H1. exploit Genv.find_funct_ptr_inversion; eauto.
   intros [id IN]. eapply wt_prog; eauto.
   apply wt_init.
+Qed.
+
+(* relies on x86-specific proofs *)
+Theorem wt_entry_point:
+  forall m S fp args, entry_point prog m S fp args -> wt_state S.
+Proof.
+  induction 1. econstructor. constructor.
+  unfold ge0 in H2. exploit Genv.find_funct_ptr_inversion; eauto.
+  intros [id IN]. eapply wt_prog; eauto.
+  apply wt_build_from_arguments; auto.
 Qed.
 
 End SOUNDNESS.

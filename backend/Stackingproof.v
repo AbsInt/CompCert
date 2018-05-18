@@ -941,7 +941,7 @@ Lemma save_callee_save_rec_correct:
   m |= range sp pos (size_callee_save_area_rec l pos) ** P ->
   agree_regs j ls rs ->
   exists rs', exists m',
-     star step tge
+     star (step tge)
         (State cs fb (Vptr sp Ptrofs.zero) (save_callee_save_rec l pos k) rs m)
      E0 (State cs fb (Vptr sp Ptrofs.zero) k rs' m')
   /\ m' |= contains_callee_saves j sp pos l ls ** P
@@ -1032,7 +1032,7 @@ Lemma save_callee_save_correct:
   let ls1 := LTL.undef_regs destroyed_at_function_entry (LTL.call_regs ls) in
   let rs1 := undef_regs destroyed_at_function_entry rs in
   exists rs', exists m',
-     star step tge
+     star (step tge)
         (State cs fb (Vptr sp Ptrofs.zero) (save_callee_save fe k) rs1 m)
      E0 (State cs fb (Vptr sp Ptrofs.zero) k rs' m')
   /\ m' |= contains_callee_saves j sp fe.(fe_ofs_callee_save) b.(used_callee_save) ls0 ** P
@@ -1081,7 +1081,7 @@ Lemma function_prologue_correct:
      Mem.alloc m1' 0 tf.(fn_stacksize) = (m2', sp')
   /\ store_stack m2' (Vptr sp' Ptrofs.zero) Tptr tf.(fn_link_ofs) parent = Some m3'
   /\ store_stack m3' (Vptr sp' Ptrofs.zero) Tptr tf.(fn_retaddr_ofs) ra = Some m4'
-  /\ star step tge
+  /\ star (step tge)
          (State cs fb (Vptr sp' Ptrofs.zero) (save_callee_save fe k) rs1 m4')
       E0 (State cs fb (Vptr sp' Ptrofs.zero) k rs' m5')
   /\ agree_regs j' ls1 rs'
@@ -1202,7 +1202,7 @@ Lemma restore_callee_save_rec_correct:
   agree_unused ls0 rs ->
   (forall r, In r l -> mreg_within_bounds b r) ->
   exists rs',
-    star step tge
+    star (step tge)
       (State cs fb (Vptr sp Ptrofs.zero) (restore_callee_save_rec l ofs k) rs m)
    E0 (State cs fb (Vptr sp Ptrofs.zero) k rs' m)
   /\ (forall r, In r l -> Val.inject j (ls0 (R r)) (rs' r))
@@ -1247,7 +1247,7 @@ Lemma restore_callee_save_correct:
   m |= frame_contents j sp ls ls0 pa ra ** P ->
   agree_unused j ls0 rs ->
   exists rs',
-    star step tge
+    star (step tge)
        (State cs fb (Vptr sp Ptrofs.zero) (restore_callee_save fe k) rs m)
     E0 (State cs fb (Vptr sp Ptrofs.zero) k rs' m)
   /\ (forall r,
@@ -1286,7 +1286,7 @@ Lemma function_epilogue_correct:
      load_stack m' (Vptr sp' Ptrofs.zero) Tptr tf.(fn_link_ofs) = Some pa
   /\ load_stack m' (Vptr sp' Ptrofs.zero) Tptr tf.(fn_retaddr_ofs) = Some ra
   /\ Mem.free m' sp' 0 tf.(fn_stacksize) = Some m1'
-  /\ star step tge
+  /\ star (step tge)
        (State cs fb (Vptr sp' Ptrofs.zero) (restore_callee_save fe k) rs m')
     E0 (State cs fb (Vptr sp' Ptrofs.zero) k rs1 m')
   /\ agree_regs j (return_regs ls0 ls) rs1
@@ -1685,6 +1685,88 @@ Qed.
 
 End EXTERNAL_ARGUMENTS.
 
+Lemma transl_make_arg:
+  forall m rs sg l v
+  (MS: tailcall_possible sg),
+  In l (regs_of_rpairs (loc_arguments sg)) ->
+  exists rs', make_arg rs m Vnullptr l v = Some (rs', m).
+Proof.
+  intros.
+  assert (loc_argument_acceptable l) by (apply loc_arguments_acceptable_2 with sg; auto).
+  destruct l; unfold make_arg; eauto; intros; simpl in H0.
+  destruct sl; try contradiction.
+  elim (MS _ H).
+Qed.
+
+Lemma transl_make_arguments_rec: forall m rs sg locs args
+  (MS: tailcall_possible sg),
+  incl locs (loc_arguments sg) ->
+  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end) locs args ->
+  exists rs', make_arguments rs m Vnullptr locs args = Some (rs', m).
+Proof.
+  intros.
+  revert rs; induction H0; simpl; intros; eauto.
+  destruct x.
+- destruct (transl_make_arg m rs sg r y) as (? & ->); auto.
+  { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
+  eapply IHForall2; eauto.
+  eapply incl_cons_inv; eauto.
+- destruct H0 as [|[]]; subst.
+  + destruct (transl_make_arg m rs sg rhi Vundef) as (rs' & ->); auto.
+    { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
+    destruct (transl_make_arg m rs' sg rlo Vundef) as (? & ->); auto.
+    { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
+    eapply IHForall2; eauto.
+    eapply incl_cons_inv; eauto.
+  + destruct (transl_make_arg m rs sg rhi (Vint (Int64.hiword x))) as (rs' & ->); auto.
+    { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
+    destruct (transl_make_arg m rs' sg rlo (Vint (Int64.loword x))) as (? & ->); auto.
+    { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
+    eapply IHForall2; eauto.
+    eapply incl_cons_inv; eauto.
+Qed.
+
+Lemma has_type_locs_32 : forall lv lt a, Val.has_type_list lv lt -> Archi.ptr64 = false ->
+  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end)
+    (loc_arguments_32 lt a) lv.
+Proof.
+  induction lv; destruct lt; try contradiction; simpl.
+  - constructor.
+  - intros ? [].
+    constructor; eauto.
+    destruct t; auto.
+    destruct a; try contradiction; eauto.
+    simpl in *; congruence.
+Qed.
+
+Lemma has_type_locs_64 : forall lv lt a b c, Val.has_type_list lv lt ->
+  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end)
+    (loc_arguments_64 lt a b c) lv.
+Proof.
+  induction lv; destruct lt; try contradiction; unfold loc_arguments_64; fold loc_arguments_64.
+  - constructor.
+  - intros ??? [].
+    destruct t; destruct (list_nth_z _ _); constructor; eauto.
+Qed.
+
+Lemma has_type_sig_locs : forall lv sg, Val.has_type_list lv (sig_args sg) ->
+  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end)
+    (loc_arguments sg) lv.
+Proof.
+  intros; unfold loc_arguments.
+  destruct Archi.ptr64 eqn: H64; [apply has_type_locs_64 | apply has_type_locs_32]; auto.
+Qed.
+
+Lemma transl_make_arguments: forall m rs sg args
+  (MS: tailcall_possible sg),
+  Val.has_type_list args (sig_args sg) ->
+  exists rs', make_arguments rs m Vnullptr (loc_arguments sg) args = Some (rs', m).
+Proof.
+  intros; eapply transl_make_arguments_rec; eauto.
+  - apply incl_refl.
+  - apply has_type_sig_locs; auto.
+Qed.
+
 (** Preservation of the arguments to a builtin. *)
 
 Section BUILTIN_ARGUMENTS.
@@ -1836,7 +1918,7 @@ Inductive match_states: Linear.state -> Mach.state -> Prop :=
 Theorem transf_step_correct:
   forall s1 t s2, Linear.step ge s1 t s2 ->
   forall (WTS: wt_state s1) s1' (MS: match_states s1 s1'),
-  exists s2', plus step tge s1' t s2' /\ match_states s2 s2'.
+  exists s2', plus (step tge) s1' t s2' /\ match_states s2 s2'.
 Proof.
   induction 1; intros;
   try inv MS;
@@ -2127,6 +2209,35 @@ Proof.
   apply frame_contents_exten with rs0 (parent_locset s); auto.
 Qed.
 
+Lemma transf_entry_points:
+   forall (s1 : Linear.state) (f : val) (arg : list val) (m0 : mem),
+  Linear.entry_point prog m0 s1 f arg ->
+  exists s2 : Mach.state, Mach.entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H. subst ge0.
+  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  assert (tailcall_possible (Linear.funsig f0)) by admit.
+  (* I'm not sure how we know this, but if it's not the case then we can't get match_state. *)
+  exploit transl_make_arguments; eauto. intros (rs' & ?).
+  econstructor; split.
+  - econstructor; eauto.
+    eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+      eapply match_program_gen_len_defs in TRANSF; eauto.
+    erewrite sig_preserved; eauto.
+  - econstructor; eauto.
+    + constructor; auto.
+    + intro.
+      admit.
+    + intros ??; simpl.
+      unfold build_ls_from_arguments.
+      admit.
+    + simpl; rewrite sep_pure; split; auto.
+      split; [|split; unfold disjoint_footprint; auto]; simpl.
+      * apply Mem.mem_wd_inject; auto.
+      * exists (Mem.nextblock m0); split; [apply Ple_refl|].
+        admit.
+Admitted.
+
 Lemma transf_initial_states:
   forall st1, Linear.initial_state prog st1 ->
   exists st2, Mach.initial_state tprog st2 /\ match_states st1 st2.
@@ -2187,6 +2298,9 @@ Proof.
   set (ms := fun s s' => wt_state s /\ match_states s s').
   eapply forward_simulation_plus with (match_states := ms).
 - apply senv_preserved.
+- intros. exploit transf_entry_points; eauto. intros [s2 [A B]].
+  exists s2; split; auto. split; auto.
+  eapply wt_entry_point with (prog := prog); eauto. exact wt_prog.
 - intros. exploit transf_initial_states; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
   apply wt_initial_state with (prog := prog); auto. exact wt_prog.

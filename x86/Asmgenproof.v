@@ -882,6 +882,36 @@ Proof.
   auto.
 Qed.
 
+Lemma make_arg_PC :
+  forall rs m l v rs' m', make_arg rs m l v = Some (rs', m') ->
+  rs' PC = rs PC /\ rs' RA = rs RA.
+Proof.
+  destruct l; simpl; intros.
+  - inv H.
+    rewrite !Pregmap.gso; auto with asmgen.
+  - destruct (Mem.storev _ _ _ _); inv H; auto.
+Qed.
+
+Lemma make_arguments_PC :
+  forall rs m l v rs' m', make_arguments rs m l v = Some (rs', m') ->
+  rs' PC = rs PC /\ rs' RA = rs RA.
+Proof.
+  intros until l; revert rs m; induction l; simpl; intros.
+  - destruct v; inv H; auto.
+  - destruct a, v; try discriminate.
+    + destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+      eapply make_arg_PC in Ha as [<- <-]; eauto.
+    + destruct v; try discriminate.
+      * destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+        eapply make_arg_PC in Ha as [<- <-].
+        destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+        eapply make_arg_PC in Ha as [<- <-]; eauto.
+      * destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+        eapply make_arg_PC in Ha as [<- <-].
+        destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+        eapply make_arg_PC in Ha as [<- <-]; eauto.
+Qed.
+
 Lemma transf_entry_points:
    forall (s1 : Mach.state) (f : val) (arg : list val) (m0 : mem),
   Mach.entry_point prog m0 s1 f arg ->
@@ -889,15 +919,20 @@ Lemma transf_entry_points:
 Proof.
   intros. inv H. subst ge0.
   exploit functions_translated; eauto. intros (tf & A & B).
+  exploit make_arguments_match; eauto.
+  { instantiate (1 := (Pregmap.init Vundef)
+        # PC <- (Vptr b Ptrofs.zero) 
+        # RA <- Vzero
+        # RSP <- Vnullptr).
+    constructor; auto; discriminate. }
+  intros (rs' & ? & ?).
   econstructor; split.
   - econstructor; eauto.
-    apply extcall_arguments_match_init; auto.
     erewrite sig_preserved; eauto.
-  - econstructor; eauto.
+  - eapply make_arguments_PC in H as [HPC HRA].
+    econstructor; eauto.
     + constructor.
     + apply Mem.extends_refl.
-    + constructor; auto.
-      discriminate.
 Qed.
 
 Lemma transf_initial_states:

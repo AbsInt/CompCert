@@ -508,15 +508,56 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some fb ->
       initial_state p (Callstate nil fb (Regmap.init Vundef) m0).
 
+Definition make_arg (rs: regset) (m: mem) (sp: val) (l: loc) (v: val) : option (regset * mem) :=
+  match l with
+  | R r => Some (rs # r <- v, m)
+  | S _ ofs ty =>
+      let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z  in
+      match Mem.storev (chunk_of_type ty) m (Val.offset_ptr sp (Ptrofs.repr bofs)) v with
+      | Some m' => Some (rs, m')
+      | None => None
+      end
+  end.
+
+Fixpoint make_arguments (rs: regset) (m: mem) (sp: val) (al: list (rpair loc)) (lv: list val) :
+  option (regset * mem) :=
+  match al, lv with
+  | One l :: al', v :: lv' => 
+     match make_arg rs m sp l v with
+     | Some (rs', m') => make_arguments rs' m' sp al' lv'
+     | None => None
+    end
+  | Twolong hi lo :: al', Vlong v' :: lv' =>
+     match make_arg rs m sp hi (Vint (Int64.hiword v')) with
+     | Some (rs', m') => 
+       match make_arg rs' m' sp lo (Vint (Int64.loword v')) with
+       | Some (rs'', m'') => make_arguments rs'' m'' sp al' lv'
+       | None => None
+      end
+     | None => None
+    end
+  | Twolong hi lo :: al', Vundef :: lv' =>
+     match make_arg rs m sp hi Vundef with
+     | Some (rs', m') => 
+       match make_arg rs' m' sp lo Vundef with
+       | Some (rs'', m'') => make_arguments rs'' m'' sp al' lv'
+       | None => None
+      end
+     | None => None
+    end
+  | nil, nil => Some (rs, m)
+  | _, _ => None
+ end.
+
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f m0 args,
+  | entry_point_intro: forall b f rs m0 m args,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       Mem.arg_well_formed args m0 ->
       globals_not_fresh ge m0 ->
       Genv.find_funct_ptr ge b = Some f ->
-      extcall_arguments (Regmap.init Vundef) m0 Vnullptr (funsig f) args ->
-      entry_point p m0 (Callstate nil b (Regmap.init Vundef) m0) (Vptr b (Ptrofs.zero)) args.
+      make_arguments (Regmap.init Vundef) m0 Vnullptr (loc_arguments (funsig f)) args = Some (rs, m) ->
+      entry_point p m0 (Callstate nil b rs m) (Vptr b (Ptrofs.zero)) args.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r retcode,

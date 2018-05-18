@@ -78,7 +78,13 @@ Proof.
   intros. apply data_diff; auto with asmgen.
 Qed.
 
-Hint Resolve preg_of_not_SP preg_of_not_PC: asmgen.
+Lemma preg_of_not_RA:
+  forall r, preg_of r <> RA.
+Proof.
+  intros. apply data_diff; auto with asmgen.
+Qed.
+
+Hint Resolve preg_of_not_SP preg_of_not_PC preg_of_not_RA: asmgen.
 
 Lemma nextinstr_pc:
   forall rs, (nextinstr rs)#PC = Val.offset_ptr rs#PC Ptrofs.one.
@@ -381,57 +387,42 @@ Proof.
   eapply extcall_args_match; eauto.
 Qed.
 
-Lemma extcall_arg_match_init:
-  forall b m l v,
-  Mach.extcall_arg (Regmap.init Vundef) m Vnullptr l v ->
-  Asm.extcall_arg ((Pregmap.init Vundef)
-        # PC <- (Vptr b Ptrofs.zero)
-        # RA <- Vzero
-        # RSP <- Vnullptr) m l v.
+Lemma make_arg_match:
+  forall ms ms' m m' sp rs l v,
+  Mach.make_arg ms m sp l v = Some (ms', m') ->
+  agree ms sp rs ->
+  exists rs', Asm.make_arg rs m l v = Some (rs', m') /\ agree ms' sp rs'.
 Proof.
-  intros. inv H.
-  - pose proof (extcall_arg_reg ((Pregmap.init Vundef)
-        # PC <- (Vptr b Ptrofs.zero) 
-        # RA <- Vzero
-        # RSP <- Vnullptr) m r).
-    destruct r;
-      rewrite !Pregmap.gso in H by discriminate; rewrite Pregmap.gi, Regmap.gi in *; auto.
-  - econstructor; eauto.
+  destruct l; unfold Mach.make_arg, Asm.make_arg; intros.
+  - inv H.
+    do 2 eexists; eauto.
+    apply agree_set_mreg_parallel; auto.
+  - inv H0.
+    destruct (Mem.storev _ _ _ _) eqn: Hm'; inv H.
+    do 2 eexists; eauto.
+    constructor; auto.
 Qed.
 
-Lemma extcall_arg_pair_match_init:
-  forall b m p v,
-  Mach.extcall_arg_pair (Regmap.init Vundef) m Vnullptr p v ->
-  Asm.extcall_arg_pair ((Pregmap.init Vundef)
-        # PC <- (Vptr b Ptrofs.zero)
-        # RA <- Vzero
-        # RSP <- Vnullptr) m p v.
+Lemma make_arguments_match:
+  forall ms ms' m m' sp rs ll vl,
+  Mach.make_arguments ms m sp ll vl = Some (ms', m') ->
+  agree ms sp rs ->
+  exists rs', Asm.make_arguments rs m ll vl = Some (rs', m') /\ agree ms' sp rs'.
 Proof.
-  intros. inv H; constructor; apply extcall_arg_match_init; auto.
-Qed.
-
-Lemma extcall_args_match_init:
-  forall b m ll vl,
-  list_forall2 (Mach.extcall_arg_pair (Regmap.init Vundef) m Vnullptr) ll vl ->
-  list_forall2 (Asm.extcall_arg_pair ((Pregmap.init Vundef)
-        # PC <- (Vptr b Ptrofs.zero)
-        # RA <- Vzero
-        # RSP <- Vnullptr) m) ll vl.
-Proof.
-  induction 1; intros; constructor; auto.
-  apply extcall_arg_pair_match_init; auto.
-Qed.
-
-Lemma extcall_arguments_match_init:
-  forall m b sg args,
-  Mach.extcall_arguments (Regmap.init Vundef) m Vnullptr sg args ->
-  Asm.extcall_arguments ((Pregmap.init Vundef)
-        # PC <- (Vptr b Ptrofs.zero)
-        # RA <- Vzero
-        # RSP <- Vnullptr) m sg args.
-Proof.
-  unfold Mach.extcall_arguments, Asm.extcall_arguments; intros.
-  apply extcall_args_match_init; auto.
+  intros until ll; revert ms ms' m m' rs; induction ll; simpl; intros.
+  - destruct vl; inv H; eauto.
+  - destruct a, vl; try discriminate.
+    + destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+      eapply make_arg_match in Hv as (? & -> & ?); eauto.
+    + destruct v; try discriminate.
+      * destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+        eapply make_arg_match in Hv as (? & -> & ?); eauto.
+        destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+        eapply make_arg_match in Hv as (? & -> & ?); eauto.
+      * destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+        eapply make_arg_match in Hv as (? & -> & ?); eauto.
+        destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+        eapply make_arg_match in Hv as (? & -> & ?); eauto.
 Qed.
 
 (** Translation of arguments and results to builtins. *)
