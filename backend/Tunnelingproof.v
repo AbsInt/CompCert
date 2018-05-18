@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps UnionFind.
 Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSimulations.
 Require Import Op Locations LTL.
 Require Import Tunneling.
 
@@ -574,7 +574,7 @@ Proof.
   eapply forward_simulation_opt.
   apply senv_preserved.
   eexact transf_entry_points.
-  eexact transf_initial_states.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   eexact tunnel_step_correct.
 Qed.
