@@ -724,7 +724,7 @@ Inductive step: state -> trace -> state -> Prop :=
       type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
       entry_point p m0 (Callstate f nil Kstop m0) (Vptr b Ptrofs.zero) args.*)
 
-(*
+
 Inductive initial_state (p: program): state -> Prop :=
   | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
@@ -733,7 +733,6 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_funct_ptr ge b = Some f ->
       type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
       initial_state p (Callstate f nil Kstop m0).
-*)
 
 (*NEW*)
 (* The following parameters are simple and reasonable, *)
@@ -820,7 +819,7 @@ Definition part_semantics1 (ge: genv) :=
 
 Definition semantics1 (p: program) :=
   let ge := globalenv p in
-  let main :=p.(prog_main) in
+  let main :=Genv.find_symbol ge p.(prog_main) in
   let init_mem:=(Genv.init_mem p) in
   Build_semantics (part_semantics1 ge) main init_mem.
 
@@ -833,7 +832,7 @@ Definition part_semantics2 (ge: genv) :=
 
 Definition semantics2 (p: program) :=
   let ge := globalenv p in
-  let main :=p.(prog_main) in
+  let main :=Genv.find_symbol ge p.(prog_main) in
   let init_mem:=(Genv.init_mem p) in
   Build_semantics (part_semantics2 ge) main init_mem.
 

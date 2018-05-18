@@ -17,7 +17,7 @@ Require Import FunInd.
 Require Import FSets.
 Require Import Coqlib Ordered Maps Errors Integers Floats.
 Require Import AST Linking Lattice Kildall.
-Require Import Values Memory Globalenvs Events Smallstep.
+Require Import Values Memory Globalenvs Events Smallstep ExposedSimulations.
 Require Archi.
 Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
 Require Import Allocation.
@@ -2549,6 +2549,7 @@ Proof.
     try apply transl_entry_points.
   - apply (Genv.init_mem_match TRANSF); eauto.
   - simpl. destruct TRANSF as (P & Q & R). auto.
+    rewrite symbols_preserved, Q; auto.
 Qed.
 
 
@@ -2575,7 +2576,7 @@ Proof.
 - constructor.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (LTL.semantics tprog).
 Proof.
   set (ms := fun s s' => wt_state s /\ match_states s s').
@@ -2603,5 +2604,45 @@ Proof.
   eapply subject_reduction; eauto. eexact wt_prog. eexact H.
   auto.
 Admitted.
+
+Theorem transf_program_correct':
+  @fsim_properties  (RTL.semantics prog) (LTL.semantics tprog)
+                  (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
+                  ( fun idx s1 s2 => idx = s1 /\ ( wt_state s1 /\ match_states s1 s2)).
+Proof.
+  eapply fsim_properties_plus.
+  - apply senv_preserved.
+
+- intros.
+  exploit transl_entry_points; eauto. intros [st2 [A B]].
+  exists st2; split; auto. split; auto.
+  inv H; subst ge0.
+  econstructor; eauto.
+  econstructor. admit. (*intial function must return int? *)
+  destruct f0; econstructor.
+  admit. (*Initial function must be "well typed"*)
+- intros.
+  exploit initial_states_simulation'; eauto. intros [st2 [A B]].
+  exists st2; split; auto. split; auto.
+  admit.
+  (* need a new wt_initial_state*)
+  (*apply wt_initial_state with (p := prog); auto. exact wt_prog.*)
+- intros. destruct H. eapply final_states_simulation; eauto.
+- intros. destruct H0.
+  exploit step_simulation; eauto. intros [s2' [A B]].
+  exists s2'; split. exact A. split.
+  eapply subject_reduction; eauto. eexact wt_prog. eexact H.
+  auto.
+Admitted.
+
+Theorem transf_program_correct:
+  @fsim_properties_ext
+    (RTL.semantics prog) (LTL.semantics tprog)
+    RTL.get_mem LTL.get_mem.
+Proof.
+  eapply sim_extSim; try eapply transf_program_correct'.
+  simpl. intros ? ? ? [? ?]; subst.
+  destruct H0 as [? H0]; inversion H0; auto.
+Qed.
 
 End PRESERVATION.

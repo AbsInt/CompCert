@@ -25,11 +25,11 @@ Require Import Fappli_IEEE.
 
 Section Binary_Bits.
 
-Implicit Arguments exist [[A] [P]].
-Implicit Arguments B754_zero [[prec] [emax]].
-Implicit Arguments B754_infinity [[prec] [emax]].
-Implicit Arguments B754_nan [[prec] [emax]].
-Implicit Arguments B754_finite [[prec] [emax]].
+Arguments exist [A] [P] _ _.
+Arguments B754_zero [prec] [emax] _.
+Arguments B754_infinity [prec] [emax] _.
+Arguments B754_nan [prec] [emax] _ _.
+Arguments B754_finite [prec] [emax] _ _ _ _.
 
 (** Number of bits for the fraction and exponent *)
 Variable mw ew : Z.
@@ -604,7 +604,7 @@ End Binary_Bits.
 (** Specialization for IEEE single precision operations *)
 Section B32_Bits.
 
-Implicit Arguments B754_nan [[prec] [emax]].
+Arguments B754_nan [prec] [emax] _ _.
 
 Definition binary32 := binary_float 24 128.
 
@@ -647,7 +647,7 @@ End B32_Bits.
 (** Specialization for IEEE double precision operations *)
 Section B64_Bits.
 
-Implicit Arguments B754_nan [[prec] [emax]].
+Arguments B754_nan [prec] [emax] _ _.
 
 Definition binary64 := binary_float 53 1024.
 

@@ -543,7 +543,7 @@ Proof.
   rewrite (surjective_pairing s1). rewrite (surjective_pairing s2). intuition congruence.
   (* initial states *)
   destruct H; destruct H0.
-  destruct H1; destruct H2.
+  destruct H2; destruct H4.
   rewrite (surjective_pairing st1). rewrite (surjective_pairing st0). decEq.
   eapply (sd_initial_determ D); eauto; congruence.
   congruence.

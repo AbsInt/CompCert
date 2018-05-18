@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
 Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
 Require Import Op Registers RTL.
 Require Import ValueDomain ValueAOp ValueAnalysis.
 Require Import CSEdomain CombineOp CombineOpproof CSE.
@@ -1265,7 +1265,7 @@ Proof.
   intros. inv H0. inv H. inv RES. inv STACK. constructor.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_step with
@@ -1277,6 +1277,30 @@ Proof.
 - intros. destruct H. eapply transf_final_states; eauto.
 - intros. destruct H0. exploit transf_step_correct; eauto.
   intros [s2' [A B]]. exists s2'; split. auto. split. eapply sound_step; eauto. auto.
+Qed.
+
+Theorem transl_program_correct':
+  @fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
+                  (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
+                  ( fun idx s1 s2 => idx = s1 /\ (sound_state prog s1 /\ match_states s1 s2)).
+Proof.
+  eapply forward_simulation_step'. 
+- apply senv_preserved.
+- intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
+  exists s2. split. auto. split. apply sound_initial; auto. auto.
+- intros. destruct H. eapply transf_final_states; eauto.
+- intros. destruct H0. exploit transf_step_correct; eauto.
+  intros [s2' [A B]]. exists s2'; split. auto. split. eapply sound_step; eauto. auto.
+Qed.
+
+Theorem transf_program_correct:
+  @fsim_properties_ext
+    (RTL.semantics prog) (RTL.semantics tprog)
+    RTL.get_mem RTL.get_mem.
+Proof.
+  eapply sim_extSim; try eapply transl_program_correct'.
+  simpl; intros ? ? ? [? ?]; subst.
+  destruct H0 as [? H0]; inversion H0; auto.
 Qed.
 
 End PRESERVATION.

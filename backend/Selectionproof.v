@@ -14,7 +14,7 @@
 
 Require Import FunInd.
 Require Import Coqlib Maps.
-Require Import AST Linking Errors Integers Values Memory Events Globalenvs Smallstep.
+Require Import AST Linking Errors Integers Values Memory Events Globalenvs Smallstep ExposedSimulations.
 Require Import Switch Cminor Op CminorSel.
 Require Import SelectOp SelectDiv SplitLong SelectLong Selection.
 Require Import SelectOpproof SelectDivproof SplitLongproof SelectLongproof.
@@ -1109,7 +1109,8 @@ Proof.
   eapply (@init_states_from_entry (Cminor.semantics prog) (semantics tprog));
     try apply sel_entry_points.
   - apply (Genv.init_mem_match TRANSF); eauto.
-  - simpl. destruct TRANSF as (P & Q & R). auto.
+  - simpl. destruct TRANSF as (P & Q & R).
+    rewrite symbols_preserved, Q; auto.
 Qed.
 
 Lemma sel_final_states:
@@ -1121,7 +1122,7 @@ Proof.
   inv MC. inv LD. constructor.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (Cminor.semantics prog) (CminorSel.semantics tprog).
 Proof.
   apply forward_simulation_opt with (match_states := match_states) (measure := measure).
@@ -1132,6 +1133,26 @@ Proof.
   apply sel_step_correct; auto.
 Qed.
 
+Theorem transf_program_correct':
+  fsim_properties (Cminor.semantics prog) (CminorSel.semantics tprog)
+                  _ (ltof _ measure)
+(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply fsim_properties_opt with (match_states := match_states) (measure := measure).
+  apply senv_preserved. 
+  apply sel_entry_points.
+  apply sel_initial_states'; auto.
+  apply sel_final_states; auto.
+  apply sel_step_correct; auto.
+Qed.
+
+Theorem transf_program_correct:
+  @fsim_properties_ext (Cminor.semantics prog) (CminorSel.semantics tprog)
+                      (Cminor.get_mem) (CminorSel.get_mem).
+Proof.
+  eapply sim_extSim; try eapply transf_program_correct'.
+  simpl; intros ? ? ? [? ?]; subst; inversion H0; eauto.
+Qed.
 End PRESERVATION.
 
 (** ** Commutation with linking *)

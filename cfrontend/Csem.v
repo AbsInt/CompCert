@@ -525,6 +525,57 @@ Inductive state: Type :=
       (m: mem) : state
   | Stuckstate.                         (**r undefined behavior occurred *)
 
+
+(**NEW *)
+Definition get_mem (s:state):=
+  match s with
+  | State _ _ _  _ m => m
+  | ExprState _ _ _ _ m => m
+  | Callstate _ _ _ m => m
+  | Returnstate _ _ m => m
+  | Stuckstate => Mem.empty
+  end.
+
+(**NEW *)
+Definition set_mem (s:state)(m:mem):=
+  match s with
+  | State f s k e _ => State f s k e m
+  | ExprState f r k e _ => ExprState f r k e m
+  | Callstate fd args k _ => Callstate fd args k m
+  | Returnstate res k _ => Returnstate res k m
+  | Stuckstate => Stuckstate
+  end.
+
+(**NEW *)
+Definition at_external (c: state) : option (external_function * list val) :=
+  match c with
+  | State _ _ _ _ _  => None
+  | ExprState _ _ _ _ m => None
+  | Callstate fd args k _ =>
+      match fd with
+        Internal f => None
+      | External ef targs tres cc => 
+          Some (ef, args)
+      end
+  | Returnstate _ _ _ => None
+  | Stuckstate => None
+ end.
+
+(**NEW *)
+Definition after_external (rv: option val) (c: state) (m:mem): option state :=
+  match c with
+     Callstate fd vargs k m =>
+        match fd with
+          Internal _ => None
+        | External ef tps tp cc =>
+            match rv with
+              Some v => Some(Returnstate v k m)
+            | None  => Some(Returnstate Vundef k m)
+            end
+        end
+   | _ => None
+  end.
+
 (** Find the statement and manufacture the continuation
   corresponding to a label. *)
 
@@ -786,6 +837,18 @@ Inductive final_state: state -> int -> Prop :=
 (** Wrapping up these definitions in a small-step semantics. *)
 
 Definition semantics (p: program) :=
+  let ge:= (globalenv p) in
+  Semantics_gen
+    get_mem set_mem
+    (step ge)
+    (entry_point p)
+    (at_external )
+    (after_external )
+    final_state ge
+    (Genv.find_symbol ge  p.(prog_main))
+    (Genv.init_mem p ).
+
+
   Semantics_gen step (initial_state p) final_state (globalenv p) (globalenv p).
 
 (** This semantics has the single-event property. *)

@@ -273,7 +273,7 @@ Inductive state: Type :=
       forall (stack: list stackframe)  (**r call stack *)
              (rs: regset)              (**r register state *)
              (m: mem),                 (**r memory state *)
-      state.
+        state.
 
 (**NEW *)
 Definition get_mem (s:state):=
@@ -573,7 +573,7 @@ Definition semantics (rao: function -> code -> ptrofs -> Prop) (p: program) :=
     (at_external ge)
     (after_external ge)
     final_state ge
-    p.(prog_main)
+    (Genv.find_symbol ge p.(prog_main))
     (Genv.init_mem p ).
 
 (** * Leaf functions *)
