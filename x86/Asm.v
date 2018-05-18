@@ -1296,11 +1296,6 @@ Inductive final_state: state -> int -> Prop :=
       final_state (State rs m) r.
 
 
-Definition get_mem (s:state) :=
-  match s with
-  | State _ m => m
-  end.
-
 Definition set_mem (s:state)(m:mem) :=
   match s with
   | State rs _ => State rs m
@@ -1315,7 +1310,7 @@ Definition part_semantics (ge: genv) :=
 
 Definition semantics (p: program) :=
   Build_semantics (part_semantics (Genv.globalenv p))
-                  p.(prog_main)
+                  (Genv.find_symbol (Genv.globalenv p) p.(prog_main))
                   (Genv.init_mem p).
 
 (** Determinacy of the [Asm] semantics. *)
