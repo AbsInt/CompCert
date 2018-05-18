@@ -506,15 +506,16 @@ Arguments set_mem {_} _ _.
 (* It contains a main function and an inital_mem     *)
 Record semantics : Type := {
   part_sem:> part_semantics;
-  main_block: block;
+  main_block: option block; (*location of main.*)
   init_mem: option Memory.mem
                           }.
 
 (*We can recover initial_states from entry_point *)
 Inductive initial_state (sem:semantics): state sem -> Prop :=
-| initial_state_derived_intro': forall st0 m0,
-  init_mem sem = Some m0 ->
-  entry_point sem m0 st0 (Vptr (main_block sem) (Ptrofs.of_ints Int.zero)) nil ->
+| initial_state_derived_intro': forall st0 m0 b,
+    init_mem sem = Some m0 ->
+    (main_block sem) = Some b ->
+  entry_point sem m0 st0 (Vptr b (Ptrofs.zero)) nil ->
   initial_state sem st0.
 
 (** The form used in earlier CompCert versions, for backward compatibility. *)
@@ -527,7 +528,7 @@ Definition Semantics {state funtype vartype: Type}
                      (after_external : option val -> state -> Memory.mem -> option state)
                      (final_state: state -> int -> Prop)
                      (globalenv: Genv.t funtype vartype)
-                     (main_block: block)
+                     (main_block: option block)
                      (init_mem: option Memory.mem):=
   Build_semantics
   {| state := state;
@@ -552,7 +553,7 @@ Definition Semantics_gen (state genvtype: Type)
                      (after_external : option val -> state -> Memory.mem -> option state)
                      (final_state: state -> int -> Prop)
                      (globalenv: genvtype)
-                     (main_block: block)
+                     (main_block: option block)
                      (init_mem: option Memory.mem)
                      (symbolenv: Senv.t):=
   Build_semantics
@@ -662,7 +663,7 @@ Lemma init_states_from_entry_index:
           exists (i:index), exists s2, initial_state L2 s2 /\ match_states i s1 s2.
 Proof.
   intros. inv H. rewrite INIT_BLOCK in *.
-  eapply fsim_match_entry_points0 in H1. destruct H1 as (i&s2&init_core&MATCH).
+  eapply fsim_match_entry_points0 in H2. destruct H2 as (i&s2&init_core&MATCH).
   exists i, s2; split; eauto.
   econstructor; eauto.
 Qed.
@@ -680,7 +681,7 @@ Lemma init_states_from_entry:
           exists s2, initial_state L2 s2 /\ match_states s1 s2.
 Proof.
   intros. inv H. rewrite INIT_BLOCK in *.
-  eapply fsim_match_entry_points0 in H1. destruct H1 as (s2&init_core&MATCH).
+  eapply fsim_match_entry_points0 in H2. destruct H2 as (s2&init_core&MATCH).
   exists s2; split; eauto.
   econstructor; eauto.
 Qed. 
@@ -880,6 +881,14 @@ Proof.
   exists s2'; split; auto. apply plus_one; auto.
 Qed.
 
+Lemma fsim_properties_step: fsim_properties L1 L2 _ (ltof _ ( fun _ => O))
+(fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply fsim_properties_plus.
+  intros. exploit simulation; eauto. intros [s2' [A B]].
+  exists s2'; split; auto. apply plus_one; auto.
+Qed.
+
 End SIMULATION_STEP.
 
 (** Simulation when one transition in the first program
@@ -901,6 +910,16 @@ Hypothesis simulation:
 Lemma forward_simulation_opt: forward_simulation L1 L2.
 Proof.
   apply forward_simulation_star with measure.
+  intros. exploit simulation; eauto. intros [[s2' [A B]] | [A [B C]]].
+  left; exists s2'; split; auto. apply plus_one; auto.
+  right; auto.
+Qed.
+
+Lemma fsim_properties_opt:
+  fsim_properties L1 L2 _ (ltof _ measure)
+(fun (idx s1 : state L1) (s2 : state L2) => idx = s1 /\ match_states s1 s2).
+Proof.
+  apply fsim_properties_star.
   intros. exploit simulation; eauto. intros [[s2' [A B]] | [A [B C]]].
   left; exists s2'; split; auto. apply plus_one; auto.
   right; auto.
@@ -1076,6 +1095,7 @@ Lemma sd_initial_state_determ:
 Proof.
   intros. inv H0; inv H1.
   eapply sd_initial_determ; eauto.
+  rewrite H3 in H5; inv H5.
   rewrite H2 in H0; inv H0; auto.
 Qed.
   
@@ -1923,7 +1943,7 @@ Proof.
   exists i; exists s2; repeat(split; auto). constructor; auto.
 - (* initial states *)
   intros. destruct s1 as [t1 s1]. inv H.
-  destruct H1; simpl in *; subst.
+  destruct H2; simpl in *; subst.
   exploit (fsim_match_initial_states sim); eauto.  
   econstructor; eauto.
   intros [i [s2 [A B]]].
@@ -2018,7 +2038,7 @@ Proof. intros ? ? H; inv H. econstructor; simpl; eauto. Qed.
 Lemma atomic_initial': forall L s t,
    initial_state (atomic L) (t, s) ->  initial_state L s.
 Proof.
-  intros ? ? ? H; inv H. destruct H1; simpl in *.
+  intros ? ? ? H; inv H. destruct H2; simpl in *.
   econstructor; simpl; eauto.
 Qed.
 
@@ -2045,7 +2065,7 @@ Proof.
   exists i; exists s1'; repeat(split; auto). econstructor. apply star_refl. auto. auto.
 - (* initial states match *)
   intros. destruct s2 as [t s2]; simpl in H0; inv H0; subst.
-  destruct H2; simpl in *; subst.
+  destruct H3; simpl in *; subst.
   exploit (bsim_match_initial_states sim); eauto.
   + econstructor; eauto.
   + intros [i [s1' [A B]]].

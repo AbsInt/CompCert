@@ -330,5 +330,5 @@ Definition semantics (p: program) :=
     (at_external )
     (after_external )
     final_state ge
-    p.(prog_main)
+    (Genv.find_symbol ge  p.(prog_main))
     (Genv.init_mem p ).

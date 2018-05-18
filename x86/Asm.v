@@ -1081,6 +1081,11 @@ Definition loc_external_result (sg: signature) : rpair preg :=
 Inductive state: Type :=
   | State: regset -> mem -> state.
 
+Definition get_mem (s:state) :=
+  match s with
+  | State _ m => m
+  end.
+
 Inductive step: state -> trace -> state -> Prop :=
   | exec_step_internal:
       forall b ofs f i rs m rs' m',

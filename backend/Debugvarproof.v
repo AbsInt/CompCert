@@ -14,7 +14,7 @@
 
 Require Import Axioms Coqlib Maps Iteration Errors.
 Require Import Integers Floats AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
 Require Import Machregs Locations Conventions Op Linear.
 Require Import Debugvar.
 
@@ -564,7 +564,7 @@ Proof.
   intros. inv H0. inv H. inv H5. econstructor; eauto.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (semantics prog) (semantics tprog).
 Proof.
   eapply forward_simulation_plus.
@@ -573,6 +573,27 @@ Proof.
   eexact transf_initial_states.
   eexact transf_final_states.
   eexact transf_step_correct.
+Qed.
+
+Theorem transf_program_correct':
+  @fsim_properties  (semantics prog) (semantics tprog)
+                    _ (ltof _ (fun _ => 0)%nat)
+                    ( fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply forward_simulation_plus'.
+  apply senv_preserved.
+  eexact transf_initial_states.
+  eexact transf_final_states.
+  eexact transf_step_correct.
+Qed.
+
+Theorem transf_program_correct:
+  @fsim_properties_ext
+    (Linear.semantics prog) (Linear.semantics tprog)
+    get_mem get_mem.
+Proof.
+  eapply EqEx_sim'; eapply sim_eqSim'; try eapply transf_program_correct'.
+  simpl; intros ? ? ? [? ?]; subst; destruct H0; auto.
 Qed.
 
 End PRESERVATION.

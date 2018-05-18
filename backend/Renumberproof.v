@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps Postorder.
 Require Import AST Linking.
-Require Import Values Memory Globalenvs Events Smallstep.
+Require Import Values Memory Globalenvs Events Smallstep ExposedSimulations.
 Require Import Op Registers RTL Renumber.
 
 Definition match_prog (p tp: RTL.program) :=
@@ -250,12 +250,13 @@ Lemma transf_entry_points:
 Proof.
   intros. inv H.
   econstructor; split.
-  - econstructor; eauto.
-    2: eapply function_ptr_translated; eauto.
-    unfold globals_not_fresh.
-    erewrite <- len_defs_genv_next.
-    + unfold ge0 in *. simpl in H2; eapply H2.  
-    + eapply (@match_program_gen_len_defs program); eauto.
+  - apply (entry_point_intro _ _ (transf_fundef f0));eauto . 
+    + unfold globals_not_fresh.
+      erewrite <- len_defs_genv_next.
+      * unfold ge0 in *. simpl in H2; eapply H2.  
+      * eapply (@match_program_gen_len_defs program); eauto.
+    + erewrite function_ptr_translated; eauto.
+    + rewrite sig_preserved; eauto.
   - econstructor; eauto.
     + econstructor. 
 Qed.
@@ -268,7 +269,8 @@ Proof.
   eapply (@init_states_from_entry (semantics prog) (semantics tprog));
     try apply transf_entry_points.
   - apply (Genv.init_mem_match TRANSL); eauto.
-  - simpl. destruct TRANSL as (P & Q & R). auto.
+  - simpl. destruct TRANSL as (P & Q & R).
+    rewrite symbols_preserved, Q; auto.
 Qed.
 
 Lemma transf_final_states:
@@ -277,7 +279,7 @@ Proof.
   intros. inv H0. inv H. inv STACKS. constructor.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_step.
@@ -288,11 +290,27 @@ Proof.
   exact step_simulation.
 Qed.
 
+Theorem transf_program_correct':
+  fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
+                  _ (ltof _ ( fun _ => O))
+(fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply fsim_properties_step.
+  apply senv_preserved.
+  eexact transf_entry_points.
+  eexact transf_initial_states'.
+  eexact transf_final_states.
+  exact step_simulation.
+Qed.
+
+Theorem transf_program_correct:
+  @fsim_properties_ext  (RTL.semantics prog) (RTL.semantics tprog)
+                        RTL.get_mem RTL.get_mem.
+Proof.
+  eapply EqEx_sim'; eapply sim_eqSim'; try eapply transf_program_correct'.
+  simpl; intros ? ? ? [? ?].
+  inversion H0; reflexivity.
+Qed.
+
 End PRESERVATION.
-
-
-
-
-
-
 

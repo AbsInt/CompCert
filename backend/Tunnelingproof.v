@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps UnionFind.
 Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
 Require Import Op Locations LTL.
 Require Import Tunneling.
 
@@ -568,7 +568,7 @@ Proof.
   econstructor; eauto.
 Qed.
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (LTL.semantics prog) (LTL.semantics tprog).
 Proof.
   eapply forward_simulation_opt.
@@ -579,4 +579,25 @@ Proof.
   eexact tunnel_step_correct.
 Qed.
 
+
+Theorem transf_program_correct':
+  @fsim_properties  (LTL.semantics prog) (LTL.semantics tprog)
+                  _ (ltof _ measure)
+                  ( fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
+Proof.
+  eapply forward_simulation_opt'.
+  apply senv_preserved.
+  eexact transf_initial_states.
+  eexact transf_final_states.
+  eexact tunnel_step_correct.
+Qed.
+
+Theorem transf_program_correct:
+  @fsim_properties_ext
+    (LTL.semantics prog) (LTL.semantics tprog)
+    LTL.get_mem LTL.get_mem.
+Proof.
+  eapply EqEx_sim'; eapply sim_eqSim'; try eapply transf_program_correct'.
+  simpl; intros ? ? ? [? ?]; subst;  destruct H0; auto.
+Qed.
 End PRESERVATION.

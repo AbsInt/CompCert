@@ -75,7 +75,7 @@ unfold canonic_exp.
 replace exy with (fexp (Zmin ex ey)).
 apply monotone_exp.
 now apply ln_beta_le_bpow.
-replace exy with (Fexp (Fplus beta fx fy)) by exact (f_equal Fexp Pxy).
+replace exy with (Fexp (Fplus beta fx fy)) by (rewrite Pxy ; reflexivity).
 rewrite Fexp_Fplus.
 simpl. clear -monotone_exp.
 apply sym_eq.

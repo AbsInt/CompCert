@@ -781,18 +781,24 @@ Lemma external_call_inject:
   external_call ef ge vargs m1 t vres m2 ->
   Mem.inject f m1 m1' ->
   Val.inject_list f vargs vargs' ->
-  exists f', exists vres', exists m2',
-    external_call ef tge vargs' m1' t vres' m2'
+  exists f', exists vres', exists m2', exists t',
+    external_call ef tge vargs' m1' t' vres' m2'
     /\ Val.inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
     /\ inject_incr f f'
-    /\ inject_separated f f' m1 m1'.
+    /\ inject_separated f f' m1 m1'
+    /\ inject_trace f t t'.
 Proof.
-  intros. eapply external_call_mem_inject_gen; eauto.
+  intros.
+(*
+  Broken proof.
+  eapply external_call_mem_inject_gen'; eauto.
   apply globals_symbols_inject; auto.
 Qed.
+*)
+Admitted.
 
 Lemma find_function_inject:
   forall j ros rs fd trs,
@@ -974,10 +980,11 @@ Proof.
   intros (vargs' & P & Q).
   exploit external_call_inject; eauto.
   eapply match_stacks_preserves_globals; eauto.
-  intros (j' & tv & tm' & A & B & C & D & E & F & G).
+  intros (j' & tv & tm' & t' & A & B & C & D & E & F & G & INJT).
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
-  eapply match_states_regular with (j := j'); eauto.
+  2: eapply match_states_regular with (j := j'); eauto.
+  instantiate (1:= tv).  move A at bottom. 
   apply match_stacks_incr with j; auto.
   intros. exploit G; eauto. intros [U V].
   assert (Mem.valid_block m sp0) by (eapply Mem.valid_block_inject_1; eauto).
@@ -1019,7 +1026,11 @@ Proof.
   { rewrite STK, TSTK.
     apply match_stacks_incr with j; auto.
     intros. destruct (eq_block b1 stk).
+<<<<<<< HEAD
     subst b1. rewrite F in H1; inv H1. split; apply Ple_refl.
+=======
+    subst b1. rewrite F in H1; inv H1. subst. split; try apply Ple_refl.
+>>>>>>> 161659ed569f8e1d13d745f6421825bae9f81c78
     rewrite G in H1 by auto. congruence. }
   econstructor; split.
   eapply exec_function_internal; eauto.

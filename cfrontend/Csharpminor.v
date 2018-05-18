@@ -165,8 +165,7 @@ Inductive state: Type :=
       forall (v: val)                   (**r Return value *)
              (k: cont)                  (**r what to do next *)
              (m: mem),                  (**r memory state *)
-      state.
-
+        state.
 
 (**NEW *)
 Definition get_mem (s:state):=
@@ -556,5 +555,5 @@ Definition semantics (p: program) :=
     (at_external )
     (after_external )
     final_state ge
-    p.(prog_main)
+    (Genv.find_symbol ge  p.(prog_main))
         (Genv.init_mem p ).

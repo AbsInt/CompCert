@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps Integers Floats Lattice Kildall.
 Require Import AST Linking.
-Require Import Values Events Memory Globalenvs Smallstep.
+Require Import Values Events Memory Globalenvs Smallstep ExposedSmallstep.
 Require Compopts Machregs.
 Require Import Op Registers RTL.
 Require Import Liveness ValueDomain ValueAOp ValueAnalysis.
@@ -582,7 +582,7 @@ Qed.
 (** The preservation of the observable behavior of the program then
   follows. *)
 
-Theorem transf_program_correct:
+Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   apply Forward_simulation with lt (fun n s1 s2 => sound_state prog s1 /\ match_states n s1 s2); constructor.
@@ -598,6 +598,36 @@ Proof.
   exists n2; exists s2'; split; auto. left; apply plus_one; auto.
   exists n2; exists s2; split; auto. right; split; auto. subst t; apply star_refl.
 - apply senv_preserved.
+Qed.
+
+Theorem transf_program_correct':
+  fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
+                  _ lt
+(fun n s1 s2 => sound_state prog s1 /\ match_states n s1 s2).
+Proof.
+  constructor.
+  
+- apply lt_wf.
+- simpl; intros. exploit transf_initial_states; eauto. intros (n & st2 & A & B).
+  exists n, st2; intuition. eapply sound_initial; eauto.
+- simpl; intros. destruct H. eapply transf_final_states; eauto.
+- simpl; intros. destruct H0.
+  assert (sound_state prog s1') by (eapply sound_step; eauto).
+  fold ge; fold tge.
+  exploit transf_step_correct; eauto.
+  intros [ [n2 [s2' [A B]]] | [n2 [A [B C]]]].
+  exists n2; exists s2'; split; auto. left; apply plus_one; auto.
+  exists n2; exists s2; split; auto. right; split; auto. subst t; apply star_refl.
+- apply senv_preserved.
+Qed.
+
+Theorem transf_program_correct:
+  @fsim_properties_ext
+    (RTL.semantics prog) (RTL.semantics tprog)
+    RTL.get_mem RTL.get_mem.
+Proof.
+  eapply sim_extSim; try eapply transf_program_correct'.
+  simpl; intros ? ? ? [? ?]; subst; inversion H0; auto.
 Qed.
 
 End PRESERVATION.

@@ -179,7 +179,6 @@ Inductive state : Type :=
              (m: mem),                (**r memory state *)
       state.
 
-
 (**NEW *)
 Definition get_mem (s:state):=
   match s with
@@ -399,7 +398,7 @@ Definition semantics (p: program) :=
     (at_external )
     (after_external )
     final_state ge
-    p.(prog_main)
+    (Genv.find_symbol ge p.(prog_main))
         (Genv.init_mem p ).
 
 (** This semantics is receptive to changes in events. *)

@@ -18,7 +18,7 @@ Require Import Values Events Memory Globalenvs Smallstep ExposedSimulations.
 Require Import Ctypes Cop Clight Cminor Csharpminor.
 Require Import Cshmgen.
 
-(** * Relational specification of the transformation *)
+(** * Relational specification of the transformation *) 
 
 Inductive match_fundef (p: Clight.program) : Clight.fundef -> Csharpminor.fundef -> Prop :=
   | match_fundef_internal: forall f tf,
@@ -1754,7 +1754,7 @@ Proof.
   econstructor; eauto. simpl; reflexivity. constructor.
 Qed.
 
-(*Lemma transl_initial_states:
+Lemma transl_initial_states:
   forall S, Clight.initial_state prog S ->
   exists R, initial_state tprog R /\ match_states S R.
 Proof.
@@ -1767,7 +1767,7 @@ Proof.
   econstructor; split.
   econstructor; eauto. apply (Genv.init_mem_match TRANSL). eauto.
   econstructor; eauto. instantiate (1 := prog_comp_env cu). constructor; auto. exact I.
-Qed.*)
+Qed.
 
 Lemma transl_entry_points:
   forall (s1 : Clight.state) (f : val) (arg : list val) (m0 : mem),
@@ -1784,7 +1784,7 @@ Proof.
   - econstructor; eauto. instantiate (1 := prog_comp_env cu). constructor; auto. exact I.
 Qed.
 
-Lemma transl_initial_states:
+Lemma transl_initial_states':
     forall s1 : Smallstep.state (semantics2 prog),
   Smallstep.initial_state (semantics2 prog) s1 ->
   exists s2 : Smallstep.state (semantics tprog),
@@ -1794,6 +1794,7 @@ Proof.
   eapply init_states_from_entry; try apply transl_entry_points.
   - apply (Genv.init_mem_match TRANSL); eauto.
   - simpl. destruct TRANSL as (P & Q & R). auto.
+    rewrite symbols_preserved, Q; auto.
 Qed.
       
 Lemma transl_final_states:
@@ -1809,7 +1810,7 @@ Proof.
   eapply forward_simulation_plus.
   apply senv_preserved.
   eexact transl_entry_points.
-  eexact transl_initial_states.
+  eexact transl_initial_states'.
   eexact transl_final_states.
   eexact transl_step.
 Qed.
@@ -1822,7 +1823,7 @@ Proof.
   eapply fsim_properties_plus.
   apply senv_preserved.
   eexact transl_entry_points.
-  eexact transl_initial_states.
+  eexact transl_initial_states'.
   eexact transl_final_states.
   eexact transl_step.
 Qed.

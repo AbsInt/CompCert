@@ -217,6 +217,9 @@ Bug fixing:
 - ARM in Thumb mode: incorrect "movs" instructions involving the stack
   pointer register were generated.
 
+Bug fixing:
+- Issue #179: clightgen produces wrong output for "switch" statements.
+
 
 Release 2.6, 2015-12-21
 =======================

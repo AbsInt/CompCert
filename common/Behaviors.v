@@ -655,15 +655,15 @@ Proof.
   destruct s as [t s]. 
   eapply program_runs with s; auto.
   eapply atomic_initial'; eauto.
-  inv H0. inv H2. simpl in *; subst t.
+  inv H0. inv H3. simpl in *; subst t.
   rename H0 into INITcore.
   inv H1.
 * (* termination *)
-  destruct s' as [t' s']. simpl in H2; destruct H2; subst t'.
+  destruct s' as [t' s']. simpl in H3; destruct H3; subst t'.
   econstructor. eapply atomic_star_star; eauto. auto.
 * (* silent divergence *)
   destruct s' as [t' s'].
-  assert (t' = E0). inv H2. inv H1; auto. subst t'.
+  assert (t' = E0). inv H3. inv H1; auto. subst t'.
   econstructor. eapply atomic_star_star; eauto.
   change s' with (snd (E0,s')). apply atomic_forever_silent_forever_silent. auto.
 * (* reactive divergence *)
@@ -671,13 +671,13 @@ Proof.
 * (* going wrong *)
   destruct s' as [t' s'].
   assert (t' = E0).
-    destruct t'; auto. eelim H2. simpl. apply atomic_step_continue.
+    destruct t'; auto. eelim H3. simpl. apply atomic_step_continue.
     eapply star_atomic_output_trace; eauto.
   subst t'. econstructor. apply atomic_star_star; eauto.
   red; intros; red; intros. destruct t0.
-  elim (H2 E0 (E0,s'0)). constructor; auto.
-  elim (H2 (e::nil) (t0,s'0)). constructor; auto.
-  intros; red; intros. elim (H3 r). simpl; auto.
+  elim (H3 E0 (E0,s'0)). constructor; auto.
+  elim (H3 (e::nil) (t0,s'0)). constructor; auto.
+  intros; red; intros. elim (H4 r). simpl; auto.
 + (* initial state undefined *)
   apply program_goes_initially_wrong.
   intros; red; intros. elim (H0 (E0,s)); simpl; auto.
