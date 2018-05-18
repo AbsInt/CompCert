@@ -1152,6 +1152,46 @@ Definition funsig (fd: fundef) :=
   | External ef => ef_sig ef
   end.
 
+Definition make_arg (rs: regset) (m: mem) (l: loc) (v: val) : option (regset * mem) :=
+  match l with
+  | R r => Some (rs # (preg_of r) <- v, m)
+  | S _ ofs ty =>
+      let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z  in
+      match Mem.storev (chunk_of_type ty) m (Val.offset_ptr (rs (IR SP)) (Ptrofs.repr bofs)) v with
+      | Some m' => Some (rs, m')
+      | None => None
+      end
+  end.
+
+Fixpoint make_arguments (rs: regset) (m: mem) (al: list (rpair loc)) (lv: list val) :
+  option (regset * mem) :=
+  match al, lv with
+  | a :: al', v :: lv' =>
+    match make_arguments rs m al' lv' with
+    | Some (rs', m') =>
+      match a with
+      | One l => make_arg rs' m' l v
+      | Twolong hi lo =>
+        match v with
+        | Vlong v' =>
+          match make_arg rs' m' hi (Vint (Int64.hiword v')) with
+          | Some (rs'', m'') => make_arg rs'' m'' lo (Vint (Int64.loword v'))
+          | None => None
+          end
+        | Vundef =>
+          match make_arg rs' m' hi Vundef with
+          | Some (rs'', m'') => make_arg rs'' m'' lo Vundef
+          | None => None
+          end
+        | _ => None
+        end
+      end
+    | _ => None
+    end
+  | nil, nil => Some (rs, m)
+  | _, _ => None
+ end.
+
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
     forall f b m args,
