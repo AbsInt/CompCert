@@ -1705,25 +1705,21 @@ Lemma transl_make_arguments_rec: forall m rs sg locs args
   exists rs', make_arguments rs m Vnullptr locs args = Some (rs', m).
 Proof.
   intros.
-  revert rs; induction H0; simpl; intros; eauto.
+  induction H0; simpl; intros; eauto.
+  destruct IHForall2 as [rs' ->].
+  { eapply incl_cons_inv; eauto. }
   destruct x.
-- destruct (transl_make_arg m rs sg r y) as (? & ->); auto.
-  { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-  eapply IHForall2; eauto.
-  eapply incl_cons_inv; eauto.
+- eapply transl_make_arg; eauto.
+  eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto.
 - destruct H0 as [|[]]; subst.
-  + destruct (transl_make_arg m rs sg rhi Vundef) as (rs' & ->); auto.
+  + destruct (transl_make_arg m rs' sg rhi Vundef) as [? ->]; auto.
     { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-    destruct (transl_make_arg m rs' sg rlo Vundef) as (? & ->); auto.
+    eapply transl_make_arg; eauto.
     { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-    eapply IHForall2; eauto.
-    eapply incl_cons_inv; eauto.
-  + destruct (transl_make_arg m rs sg rhi (Vint (Int64.hiword x))) as (rs' & ->); auto.
+  + destruct (transl_make_arg m rs' sg rhi (Vint (Int64.hiword x))) as [? ->]; auto.
     { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-    destruct (transl_make_arg m rs' sg rlo (Vint (Int64.loword x))) as (? & ->); auto.
+    eapply transl_make_arg; eauto.
     { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-    eapply IHForall2; eauto.
-    eapply incl_cons_inv; eauto.
 Qed.
 
 Lemma has_type_locs_32 : forall lv lt a, Val.has_type_list lv lt -> Archi.ptr64 = false ->
@@ -2209,6 +2205,53 @@ Proof.
   apply frame_contents_exten with rs0 (parent_locset s); auto.
 Qed.
 
+Lemma make_arg_inject : forall j ls rs m l v rs' m',
+  agree_regs j ls rs ->
+  Val.inject j v v ->
+  make_arg rs m Vnullptr l v = Some (rs', m') ->
+  agree_regs j (Locmap.set l v ls) rs'.
+Proof.
+  destruct l; simpl; intros.
+  - inv H1.
+    apply agree_regs_set_reg; auto.
+  - destruct (Mem.storev _ _ _ _); inv H1.
+    apply agree_regs_set_slot; auto.
+Qed.
+
+Lemma make_arguments_inject_rec : forall j ls rs m sigs args rs' m',
+  agree_regs j ls rs ->
+  Val.inject_list j args args ->
+  make_arguments rs m Vnullptr sigs args = Some (rs', m') ->
+  agree_regs j (setlist sigs args ls) rs'.
+Proof.
+  intros until sigs; revert ls rs m; induction sigs; simpl; intros.
+  - destruct args; inv H1; auto.
+  - destruct args; try discriminate.
+    inv H0.
+    destruct (make_arguments _ _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+    eapply IHsigs in Ha; eauto.
+    destruct a; simpl.
+    + eapply make_arg_inject; eauto.
+    + destruct v; try discriminate.
+      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+        eapply make_arg_inject; eauto.
+        eapply make_arg_inject; eauto.
+      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+        eapply make_arg_inject; eauto.
+        eapply make_arg_inject; eauto.
+        { apply Val.hiword_inject; auto. }
+        { apply Val.loword_inject; auto. }
+Qed.
+
+Lemma make_arguments_inject : forall m sg args rs' m',
+  Mem.arg_well_formed args m ->
+  make_arguments (Regmap.init Vundef) m Vnullptr (loc_arguments sg) args = Some (rs', m') ->
+  agree_regs (Mem.flat_inj (Mem.nextblock m)) (build_ls_from_arguments sg args) rs'.
+Proof.
+  intros; eapply make_arguments_inject_rec; eauto.
+  intro; apply Val.val_inject_undef.
+Qed.
+
 Lemma transf_entry_points:
    forall (s1 : Linear.state) (f : val) (arg : list val) (m0 : mem),
   Linear.entry_point prog m0 s1 f arg ->
@@ -2226,8 +2269,7 @@ Proof.
     erewrite sig_preserved; eauto.
   - econstructor; eauto.
     + constructor; auto.
-    + intro.
-      admit.
+    + eapply make_arguments_inject; eauto.
     + intros ??; simpl.
       unfold build_ls_from_arguments.
       admit.

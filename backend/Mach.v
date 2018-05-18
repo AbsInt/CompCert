@@ -522,28 +522,27 @@ Definition make_arg (rs: regset) (m: mem) (sp: val) (l: loc) (v: val) : option (
 Fixpoint make_arguments (rs: regset) (m: mem) (sp: val) (al: list (rpair loc)) (lv: list val) :
   option (regset * mem) :=
   match al, lv with
-  | One l :: al', v :: lv' => 
-     match make_arg rs m sp l v with
-     | Some (rs', m') => make_arguments rs' m' sp al' lv'
-     | None => None
-    end
-  | Twolong hi lo :: al', Vlong v' :: lv' =>
-     match make_arg rs m sp hi (Vint (Int64.hiword v')) with
-     | Some (rs', m') => 
-       match make_arg rs' m' sp lo (Vint (Int64.loword v')) with
-       | Some (rs'', m'') => make_arguments rs'' m'' sp al' lv'
-       | None => None
+  | a :: al', v :: lv' =>
+    match make_arguments rs m sp al' lv' with
+    | Some (rs', m') =>
+      match a with
+      | One l => make_arg rs' m' sp l v
+      | Twolong hi lo =>
+        match v with
+        | Vlong v' =>
+          match make_arg rs' m' sp hi (Vint (Int64.hiword v')) with
+          | Some (rs'', m'') => make_arg rs'' m'' sp lo (Vint (Int64.loword v'))
+          | None => None
+          end
+        | Vundef =>
+          match make_arg rs' m' sp hi Vundef with
+          | Some (rs'', m'') => make_arg rs'' m'' sp lo Vundef
+          | None => None
+          end
+        | _ => None
+        end
       end
-     | None => None
-    end
-  | Twolong hi lo :: al', Vundef :: lv' =>
-     match make_arg rs m sp hi Vundef with
-     | Some (rs', m') => 
-       match make_arg rs' m' sp lo Vundef with
-       | Some (rs'', m'') => make_arguments rs'' m'' sp al' lv'
-       | None => None
-      end
-     | None => None
+    | _ => None
     end
   | nil, nil => Some (rs, m)
   | _, _ => None

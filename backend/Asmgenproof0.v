@@ -411,18 +411,18 @@ Lemma make_arguments_match:
 Proof.
   intros until ll; revert ms ms' m m' rs; induction ll; simpl; intros.
   - destruct vl; inv H; eauto.
-  - destruct a, vl; try discriminate.
-    + destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
-      eapply make_arg_match in Hv as (? & -> & ?); eauto.
+  - destruct vl; try discriminate.
+    destruct (Mach.make_arguments _ _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+    eapply IHll in Ha as (? & -> & ?); auto.
+    destruct a.
+    + eapply make_arg_match; eauto.
     + destruct v; try discriminate.
       * destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
         eapply make_arg_match in Hv as (? & -> & ?); eauto.
-        destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
-        eapply make_arg_match in Hv as (? & -> & ?); eauto.
+        eapply make_arg_match; eauto.
       * destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
         eapply make_arg_match in Hv as (? & -> & ?); eauto.
-        destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
-        eapply make_arg_match in Hv as (? & -> & ?); eauto.
+        eapply make_arg_match; eauto.
 Qed.
 
 (** Translation of arguments and results to builtins. *)

@@ -898,18 +898,18 @@ Lemma make_arguments_PC :
 Proof.
   intros until l; revert rs m; induction l; simpl; intros.
   - destruct v; inv H; auto.
-  - destruct a, v; try discriminate.
-    + destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
-      eapply make_arg_PC in Ha as [<- <-]; eauto.
+  - destruct v; try discriminate.
+    destruct (make_arguments _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+    apply IHl in Ha as [<- <-].
+    destruct a.
+    + eapply make_arg_PC; eauto.
     + destruct v; try discriminate.
       * destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
         eapply make_arg_PC in Ha as [<- <-].
-        destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
-        eapply make_arg_PC in Ha as [<- <-]; eauto.
+        eapply make_arg_PC; eauto.
       * destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
         eapply make_arg_PC in Ha as [<- <-].
-        destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
-        eapply make_arg_PC in Ha as [<- <-]; eauto.
+        eapply make_arg_PC; eauto.
 Qed.
 
 Lemma transf_entry_points:
