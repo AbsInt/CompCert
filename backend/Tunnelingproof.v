@@ -558,6 +558,19 @@ Proof.
   constructor. constructor. red; simpl; auto. apply Mem.extends_refl.
 Qed.
 
+Lemma transf_initial_states':
+  forall s1 : state,
+  Smallstep.initial_state (semantics prog) s1 ->
+  exists s2 : state,
+    Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  eapply (@init_states_from_entry (semantics prog) (semantics tprog));
+    try apply transf_entry_points.
+  - apply (Genv.init_mem_match TRANSL); eauto.
+  - simpl. destruct TRANSL as (P & Q & R). auto.
+    rewrite symbols_preserved, Q; auto.
+Qed.
+
 Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
@@ -585,9 +598,10 @@ Theorem transf_program_correct':
                   _ (ltof _ measure)
                   ( fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
 Proof.
-  eapply forward_simulation_opt'.
+  eapply fsim_properties_opt.
   apply senv_preserved.
-  eexact transf_initial_states.
+  eexact transf_entry_points.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   eexact tunnel_step_correct.
 Qed.
@@ -597,7 +611,7 @@ Theorem transf_program_correct:
     (LTL.semantics prog) (LTL.semantics tprog)
     LTL.get_mem LTL.get_mem.
 Proof.
-  eapply EqEx_sim'; eapply sim_eqSim'; try eapply transf_program_correct'.
+  eapply sim_extSim; try eapply transf_program_correct'.
   simpl; intros ? ? ? [? ?]; subst;  destruct H0; auto.
 Qed.
 End PRESERVATION.

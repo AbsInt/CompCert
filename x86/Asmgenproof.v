@@ -14,7 +14,7 @@
 
 Require Import Coqlib Errors.
 Require Import Integers Floats AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSimulations.
 Require Import Op Locations Mach Conventions Asm.
 Require Import Asmgen Asmgenproof0 Asmgenproof1.
 

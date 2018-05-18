@@ -1152,57 +1152,17 @@ Definition funsig (fd: fundef) :=
   | External ef => ef_sig ef
   end.
 
-Definition make_arg (rs: regset) (m: mem) (l: loc) (v: val) : option (regset * mem) :=
-  match l with
-  | R r => Some (rs # (preg_of r) <- v, m)
-  | S _ ofs ty =>
-      let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z  in
-      match Mem.storev (chunk_of_type ty) m (Val.offset_ptr (rs (IR SP)) (Ptrofs.repr bofs)) v with
-      | Some m' => Some (rs, m')
-      | None => None
-      end
-  end.
-
-Fixpoint make_arguments (rs: regset) (m: mem) (al: list (rpair loc)) (lv: list val) :
-  option (regset * mem) :=
-  match al, lv with
-  | a :: al', v :: lv' =>
-    match make_arguments rs m al' lv' with
-    | Some (rs', m') =>
-      match a with
-      | One l => make_arg rs' m' l v
-      | Twolong hi lo =>
-        match v with
-        | Vlong v' =>
-          match make_arg rs' m' hi (Vint (Int64.hiword v')) with
-          | Some (rs'', m'') => make_arg rs'' m'' lo (Vint (Int64.loword v'))
-          | None => None
-          end
-        | Vundef =>
-          match make_arg rs' m' hi Vundef with
-          | Some (rs'', m'') => make_arg rs'' m'' lo Vundef
-          | None => None
-          end
-        | _ => None
-        end
-      end
-    | _ => None
-    end
-  | nil, nil => Some (rs, m)
-  | _, _ => None
- end.
-
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
-    forall f b rs m0 m args,
+    forall f b m args,
       let rs0 :=
         (Pregmap.init Vundef)
         # PC <- (Vptr b Ptrofs.zero) 
         # RA <- Vzero
         # RSP <- Vnullptr in
       Genv.find_funct_ptr ge b = Some f ->
-      make_arguments rs0 m0 (loc_arguments (funsig f)) args = Some (rs, m) ->
-      entry_point ge m0 (State rs m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+      extcall_arguments rs0 m (funsig f) args ->
+      entry_point ge m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
  Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=
  match l with
@@ -1368,9 +1328,7 @@ Ltac Equalities :=
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 - (* initial cores *)
-  inv H; inv H0.
-  rewrite H3 in H1; inv H1.
-  subst rs0 rs2. rewrite H6 in H2; congruence.
+  inv H; inv H0. f_equal.
 - (* final no step *)
   assert (NOTNULL: forall b ofs, Vnullptr <> Vptr b ofs).
   { intros; unfold Vnullptr; destruct Archi.ptr64; congruence. }

@@ -14,7 +14,7 @@
 
 Require Import Axioms Coqlib Maps Iteration Errors.
 Require Import Integers Floats AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSimulations.
 Require Import Machregs Locations Conventions Op Linear.
 Require Import Debugvar.
 

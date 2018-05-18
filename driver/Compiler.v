@@ -15,7 +15,7 @@
 (** Libraries. *)
 Require Import String.
 Require Import Coqlib Errors.
-Require Import AST Linking Smallstep ExposedSmallstep.
+Require Import AST Linking Smallstep ExposedSimulations.
 (** Languages (syntax and semantics). *)
 Require Ctypes Csyntax Csem Cstrategy Cexec.
 Require Clight.

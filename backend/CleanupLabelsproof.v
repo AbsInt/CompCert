@@ -15,7 +15,7 @@
 Require Import FSets.
 Require Import Coqlib Ordered Integers.
 Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep ExposedSmallstep.
+Require Import Values Memory Events Globalenvs Smallstep ExposedSimulations.
 Require Import Op Locations Linear.
 Require Import CleanupLabels.
 
@@ -353,6 +353,19 @@ Proof.
   rewrite sig_function_translated. auto.
   constructor; auto. constructor.
 Qed.
+  
+Lemma transf_initial_states':
+  forall s1 : state,
+  Smallstep.initial_state (semantics prog) s1 ->
+  exists s2 : state,
+    Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  eapply (@init_states_from_entry (semantics prog) (semantics tprog));
+    try apply transf_entry_points.
+  - apply (Genv.init_mem_match TRANSL); eauto.
+  - simpl. destruct TRANSL as (P & Q & R). auto.
+    rewrite symbols_preserved, Q; auto.
+Qed.
 
 Lemma transf_final_states:
   forall st1 st2 r,
@@ -367,7 +380,7 @@ Proof.
   eapply forward_simulation_opt.
   apply senv_preserved.
   eexact transf_entry_points.
-  eexact transf_initial_states.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   eexact transf_step_correct.
 Qed.
@@ -377,9 +390,10 @@ Theorem transl_program_correct':
                     _ (ltof _ measure)
                     ( fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
 Proof.
-  eapply forward_simulation_opt'.
+  eapply fsim_properties_opt.
   apply senv_preserved.
-  eexact transf_initial_states.
+  eexact transf_entry_points.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   eexact transf_step_correct.
 Qed.

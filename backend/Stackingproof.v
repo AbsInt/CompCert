@@ -2314,14 +2314,14 @@ Qed.
 Lemma transf_entry_points:
    forall (s1 : Linear.state) (f : val) (arg : list val) (m0 : mem),
   Linear.entry_point prog m0 s1 f arg ->
-  exists s2 : Mach.state, Mach.entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+  exists j s2, Mach.entry_point tprog m0 s2 f arg /\ match_states j s1 s2.
 Proof.
   intros. inv H. subst ge0.
   exploit function_ptr_translated; eauto. intros (tf & A & B).
   assert (tailcall_possible (Linear.funsig f0)) by admit.
   (* I'm not sure how we know this, but if it's not the case then we can't get match_state. *)
   exploit transl_make_arguments; eauto. intros (rs' & ?).
-  econstructor; split.
+  do 2 econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
