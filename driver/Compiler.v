@@ -17,7 +17,7 @@ Require Import String.
 Require Import Coqlib Errors.
 Require Import AST Linking Smallstep ExposedSimulations.
 (** Languages (syntax and semantics). *)
-Require Ctypes Csyntax Csem Cstrategy Cexec.
+Require Ctypes Csyntax (*Csem Cstrategy Cexec*).
 Require Clight.
 Require Csharpminor.
 Require Cminor.
@@ -50,7 +50,7 @@ Require Debugvar.
 Require Stacking.
 Require Asmgen.
 (** Proofs of semantic preservation. *)
-Require SimplExprproof.
+(*Require SimplExprproof.*)
 (*Require SimplLocalsproof.*)
 Require Cshmgenproof.
 Require Cminorgenproof.
@@ -59,9 +59,9 @@ Require RTLgenproof.
 Require Tailcallproof.
 (*Require Inliningproof.*)
 Require Renumberproof.
-Require Constpropproof.
+(*Require Constpropproof.
 Require CSEproof.
-Require Deadcodeproof.
+Require Deadcodeproof.*)
 (*Require Unusedglobproof.*)
 Require Allocproof.
 Require Tunnelingproof.
@@ -124,11 +124,11 @@ Definition simpl_transf_rtl_program (f: RTL.program) : res Asm.program:=
    @@ print (print_RTL 2)
    @@ time "Renumbering" Renumber.transf_program
    @@ print (print_RTL 3)
-   @@ total_if Compopts.optim_constprop (time "Constant propagation" Constprop.transf_program)
-   @@ print (print_RTL 4)
+(*   @@ total_if Compopts.optim_constprop (time "Constant propagation" Constprop.transf_program)
+   @@ print (print_RTL 4)*)
    @@ total_if Compopts.optim_constprop (time "Renumbering" Renumber.transf_program)
    @@ print (print_RTL 5)
-  @@@ partial_if Compopts.optim_CSE (time "CSE" CSE.transf_program)(*
+(*  @@@ partial_if Compopts.optim_CSE (time "CSE" CSE.transf_program)
    @@ print (print_RTL 6)
   @@@ partial_if Compopts.optim_redundancy (time "Redundancy elimination" Deadcode.transf_program) *)(*
    @@ print (print_RTL 7)
@@ -161,7 +161,7 @@ Definition simpl_transf_clight_program (p: Clight.program) : res Asm.program :=
 (** Force [Initializers] and [Cexec] to be extracted as well. *)
 
 Definition transl_init := Initializers.transl_init.
-Definition cexec_do_step := Cexec.do_step.
+(*Definition cexec_do_step := Cexec.do_step.*)
 
 (** The following lemmas help reason over compositions of passes. *)
 
@@ -229,9 +229,9 @@ Definition Simpl_CompCert's_passes :=
   ::: mkpass RTLgenproof.match_prog
   ::: mkpass (match_if Compopts.optim_tailcalls Tailcallproof.match_prog)
   ::: mkpass Renumberproof.match_prog
-  ::: mkpass (match_if Compopts.optim_constprop Constpropproof.match_prog)
+(*  ::: mkpass (match_if Compopts.optim_constprop Constpropproof.match_prog)*)
   ::: mkpass (match_if Compopts.optim_constprop Renumberproof.match_prog)
-  ::: mkpass (match_if Compopts.optim_CSE CSEproof.match_prog)
+(*  ::: mkpass (match_if Compopts.optim_CSE CSEproof.match_prog) *)
   ::: mkpass Allocproof.match_prog
   ::: mkpass Tunnelingproof.match_prog
   ::: mkpass Linearizeproof.match_prog
@@ -268,10 +268,10 @@ Proof.
   unfold simpl_transf_rtl_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
   set (p7 := total_if optim_tailcalls Tailcall.transf_program p6) in *.
   set (p8 := Renumber.transf_program p7) in *.
-  set (p9 := total_if optim_constprop Constprop.transf_program p8) in *.
-  set (p10 := total_if optim_constprop Renumber.transf_program p9) in *.
-  destruct (partial_if optim_CSE CSE.transf_program p10) as [p11|e] eqn:P11; simpl in T; try discriminate.
-  destruct (Allocation.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
+(*  set (p9 := total_if optim_constprop Constprop.transf_program p8) in *. *)
+  set (p10 := total_if optim_constprop Renumber.transf_program p8) in *. 
+(*  destruct (partial_if optim_CSE CSE.transf_program p10) as [p11|e] eqn:P11; simpl in T; try discriminate. *)
+  destruct (Allocation.transf_program p10) as [p12|e] eqn:P12; simpl in T; try discriminate.
   set (p13 := Tunneling.tunnel_program p12) in *.
   destruct (Linearize.transf_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
   set (p15 := CleanupLabels.transf_program p14) in *.
@@ -283,10 +283,10 @@ Proof.
   exists p5; split. apply Selectionproof.transf_program_match; auto.
   exists p6; split. apply RTLgenproof.transf_program_match; auto.
   exists p7; split. apply total_if_match. apply Tailcallproof.transf_program_match.
-  exists p8; split. apply Renumberproof.transf_program_match; auto.
-  exists p9; split. apply total_if_match. apply Constpropproof.transf_program_match.
+ exists p8; split. apply Renumberproof.transf_program_match; auto.
+(*  exists p9; split. apply total_if_match. apply Constpropproof.transf_program_match.*)
   exists p10; split. apply total_if_match. apply Renumberproof.transf_program_match.
-  exists p11; split. eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
+(*  exists p11; split. eapply partial_if_match; eauto. apply CSEproof.transf_program_match. *)
   exists p12; split. apply Allocproof.transf_program_match; auto.
   exists p13; split. apply Tunnelingproof.transf_program_match.
   exists p14; split. apply Linearizeproof.transf_program_match; auto.
@@ -317,6 +317,7 @@ Remark forward_simulation_identity:
 Proof.
   intros. apply forward_simulation_step with (fun s1 s2 => s2 = s1); intros.
 - auto.
+- exists s1; auto.
 - exists s1; auto.
 - subst s2; auto.
 - subst s2. exists s1'; auto.
@@ -379,10 +380,10 @@ Proof.
   unfold simpl_transf_rtl_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
   set (p7 := total_if optim_tailcalls Tailcall.transf_program p6) in *.
   set (p8 := Renumber.transf_program p7) in *.
-  set (p9 := total_if optim_constprop Constprop.transf_program p8) in *.
-  set (p10 := total_if optim_constprop Renumber.transf_program p9) in *.
-  destruct (partial_if optim_CSE CSE.transf_program p10) as [p11|e] eqn:P11; simpl in T; try discriminate.
-  destruct (Allocation.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
+(*  set (p9 := total_if optim_constprop Constprop.transf_program p8) in *.*)
+  set (p10 := total_if optim_constprop Renumber.transf_program p8) in *.
+(*  destruct (partial_if optim_CSE CSE.transf_program p10) as [p11|e] eqn:P11; simpl in T; try discriminate.*)
+  destruct (Allocation.transf_program p10) as [p12|e] eqn:P12; simpl in T; try discriminate.
   set (p13 := Tunneling.tunnel_program p12) in *.
   destruct (Linearize.transf_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
   set (p15 := CleanupLabels.transf_program p14) in *.
@@ -410,18 +411,18 @@ Proof.
   eapply Renumberproof.transf_program_correct;
     apply Renumberproof.transf_program_match; eassumption.
   eapply extension_injection_composition.
-    eapply (exposed_match_if_extension _ RTL.semantics ( fun _ => RTL.get_mem)); eauto.
+(*    eapply (exposed_match_if_extension _ RTL.semantics ( fun _ => RTL.get_mem)); eauto.
     apply total_if_match; apply Constpropproof.transf_program_match.
     eexact Constpropproof.transf_program_correct.
-  eapply extension_injection_composition.
+  eapply extension_injection_composition.*)
     eapply (exposed_match_if_extension _ RTL.semantics ( fun _ => RTL.get_mem)); eauto.
     apply total_if_match; apply Renumberproof.transf_program_match.
     eexact Renumberproof.transf_program_correct.
   eapply extension_injection_composition.
-    eapply (exposed_match_if_extension _ RTL.semantics ( fun _ => RTL.get_mem)); eauto.
+(*    eapply (exposed_match_if_extension _ RTL.semantics ( fun _ => RTL.get_mem)); eauto.
     eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
     eexact CSEproof.transf_program_correct.
-  eapply extension_injection_composition.
+  eapply extension_injection_composition.*)
   eapply Allocproof.transf_program_correct;
     apply Allocproof.transf_program_match; eassumption.
   eapply extension_injection_composition.

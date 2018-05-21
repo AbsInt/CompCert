@@ -1134,17 +1134,6 @@ Inductive initial_state (p: program): state -> Prop :=
 (* The following parameters are simple and reasonable, *)
 (* but might not be needed. All definitions come from  *)
 (* compcomp/core/val_casted.v                          *)
-(*This is the old non-deterministic entry_point. Can be deleted after 05/18*)
-Inductive entry_point' (p:program): mem -> state -> val -> list val -> Prop:=
-| INIT_CORE':
-    let ge := Genv.globalenv p in
-    forall f b m args rs0,
-      rs0 PC = Vptr b Ptrofs.zero ->
-      rs0 RA = Vzero ->
-      rs0 RSP = Vnullptr ->
-      Genv.find_funct_ptr ge b = Some (Internal f) ->
-      extcall_arguments rs0 m (fn_sig f) args ->
-      entry_point' p m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
 Definition funsig (fd: fundef) :=
   match fd with
