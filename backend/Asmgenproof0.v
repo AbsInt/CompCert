@@ -388,40 +388,31 @@ Proof.
 Qed.
 
 Lemma set_arg_match:
-  forall ms ms' m m' sp rs l v,
+  forall ms sp rs l v,
   agree ms sp rs ->
-  agree (Mach.set_arg ms l v) (Asm.set_arg rs l v).
+  agree (Mach.set_arg ms l v) sp (Asm.set_arg rs l v).
 Proof.
-  destruct l; unfold Mach.make_arg, Asm.make_arg; intros.
-  - inv H.
-    do 2 eexists; eauto.
-    apply agree_set_mreg_parallel; auto.
-  - inv H0.
-    destruct (Mem.storev _ _ _ _) eqn: Hm'; inv H.
-    do 2 eexists; eauto.
-    constructor; auto.
+  destruct l; auto; simpl; intros.
+  apply agree_set_mreg_parallel; auto.
 Qed.
 
 Lemma set_arguments_match:
-  forall ms ms' m m' sp rs ll vl,
-  Mach.make_arguments ms m sp ll vl = Some (ms', m') ->
+  forall ms ms' sp rs ll vl,
+  Mach.set_arguments ms ll vl = Some ms' ->
   agree ms sp rs ->
-  exists rs', Asm.make_arguments rs m ll vl = Some (rs', m') /\ agree ms' sp rs'.
+  exists rs', Asm.set_arguments rs ll vl = Some rs' /\ agree ms' sp rs'.
 Proof.
-  intros until ll; revert ms ms' m m' rs; induction ll; simpl; intros.
-  - destruct vl; inv H; eauto.
+  intros until ll; revert ms ms' rs; induction ll; simpl; intros.
+  - inv H; eauto.
   - destruct vl; try discriminate.
-    destruct (Mach.make_arguments _ _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+    { inv H; eauto. }
+    destruct (Mach.set_arguments _ _ _) eqn: Ha; try discriminate.
     eapply IHll in Ha as (? & -> & ?); auto.
     destruct a.
-    + eapply make_arg_match; eauto.
-    + destruct v; try discriminate.
-      * destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
-        eapply make_arg_match in Hv as (? & -> & ?); eauto.
-        eapply make_arg_match; eauto.
-      * destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
-        eapply make_arg_match in Hv as (? & -> & ?); eauto.
-        eapply make_arg_match; eauto.
+    + inv H.
+      eexists; split; eauto; apply set_arg_match; auto.
+    + destruct v; inv H; eexists; split; eauto;
+        apply set_arg_match; auto; apply set_arg_match; auto.
 Qed.
 
 (** Translation of arguments and results to builtins. *)

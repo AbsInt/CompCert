@@ -538,14 +538,14 @@ Fixpoint set_arguments (rs: regset) (al: list (rpair loc)) (lv: list val) : opti
   end.
 
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f rs m0 m args,
+  | entry_point_intro: forall b f rs m args,
       let ge := Genv.globalenv p in
-      Mem.mem_wd m0 ->
-      Mem.arg_well_formed args m0 ->
-      globals_not_fresh ge m0 ->
+      Mem.mem_wd m ->
+      Mem.arg_well_formed args m ->
+      globals_not_fresh ge m ->
       Genv.find_funct_ptr ge b = Some f ->
       set_arguments (Regmap.init Vundef) (loc_arguments (funsig f)) args = Some rs ->
-      entry_point p m0 (Callstate nil b rs m) (Vptr b (Ptrofs.zero)) args.
+      entry_point p m (Callstate nil b rs m) (Vptr b (Ptrofs.zero)) args.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r retcode,

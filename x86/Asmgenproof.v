@@ -882,34 +882,31 @@ Proof.
   auto.
 Qed.
 
-Lemma make_arg_PC :
-  forall rs m l v rs' m', make_arg rs m l v = Some (rs', m') ->
-  rs' PC = rs PC /\ rs' RA = rs RA.
+Lemma set_arg_PC:
+  forall rs l v,
+  set_arg rs l v PC = rs PC /\ set_arg rs l v RA = rs RA.
 Proof.
-  destruct l; simpl; intros.
-  - inv H.
-    rewrite !Pregmap.gso; auto with asmgen.
-  - destruct (Mem.storev _ _ _ _); inv H; auto.
+  destruct l; auto; simpl; intros.
+  rewrite !Pregmap.gso; auto with asmgen.
 Qed.
 
-Lemma make_arguments_PC :
-  forall rs m l v rs' m', make_arguments rs m l v = Some (rs', m') ->
+Lemma set_arguments_PC:
+  forall rs l v rs', set_arguments rs l v = Some rs' ->
   rs' PC = rs PC /\ rs' RA = rs RA.
 Proof.
-  intros until l; revert rs m; induction l; simpl; intros.
-  - destruct v; inv H; auto.
+  intros until l; revert rs; induction l; simpl; intros.
+  - inv H; auto.
   - destruct v; try discriminate.
-    destruct (make_arguments _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+    { inv H; auto. }
+    destruct (set_arguments _ _) eqn: Ha; try discriminate.
     apply IHl in Ha as [<- <-].
     destruct a.
-    + eapply make_arg_PC; eauto.
-    + destruct v; try discriminate.
-      * destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
-        eapply make_arg_PC in Ha as [<- <-].
-        eapply make_arg_PC; eauto.
-      * destruct (make_arg _ _ _ _) as [[]|] eqn: Ha; try discriminate.
-        eapply make_arg_PC in Ha as [<- <-].
-        eapply make_arg_PC; eauto.
+    + inv H; apply set_arg_PC.
+    + destruct v; inv H.
+      * destruct (set_arg_PC r rhi Vundef) as [<- <-].
+        apply set_arg_PC.
+      * destruct (set_arg_PC r rhi (Vint (Int64.hiword i))) as [<- <-].
+        apply set_arg_PC.
 Qed.
 
 Lemma transf_entry_points:
@@ -919,7 +916,7 @@ Lemma transf_entry_points:
 Proof.
   intros. inv H. subst ge0.
   exploit functions_translated; eauto. intros (tf & A & B).
-  exploit make_arguments_match; eauto.
+  exploit set_arguments_match; eauto.
   { instantiate (1 := (Pregmap.init Vundef)
         # PC <- (Vptr b Ptrofs.zero) 
         # RA <- Vzero
@@ -929,14 +926,11 @@ Proof.
   econstructor; split.
   - econstructor; eauto.
     erewrite sig_preserved; eauto.
-    admit.
-  - eapply make_arguments_PC in H as [HPC HRA].
+  - eapply set_arguments_PC in H as [HPC HRA].
     econstructor; eauto.
     + constructor.
-    + admit. (*apply Mem.extends_refl.*)
-    + admit.
-    + admit.
-Admitted.
+    + apply Mem.extends_refl.
+Qed.
 
 Lemma transf_initial_states:
   forall st1, Mach.initial_state prog st1 ->

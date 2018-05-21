@@ -1170,7 +1170,7 @@ Fixpoint set_arguments (rs: regset) (al: list (rpair loc)) (lv: list val) : opti
 
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
-    forall f b rs m0 m args,
+    forall f b rs m args,
       let rs0 :=
         (Pregmap.init Vundef)
         # PC <- (Vptr b Ptrofs.zero) 
@@ -1178,7 +1178,7 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
         # RSP <- Vnullptr in
       Genv.find_funct_ptr ge b = Some f ->
       set_arguments rs0 (loc_arguments (funsig f)) args = Some rs ->
-      entry_point ge m0 (State rs m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+      entry_point ge m (State rs m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
  Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=
  match l with
