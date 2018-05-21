@@ -387,11 +387,10 @@ Proof.
   eapply extcall_args_match; eauto.
 Qed.
 
-Lemma make_arg_match:
+Lemma set_arg_match:
   forall ms ms' m m' sp rs l v,
-  Mach.make_arg ms m sp l v = Some (ms', m') ->
   agree ms sp rs ->
-  exists rs', Asm.make_arg rs m l v = Some (rs', m') /\ agree ms' sp rs'.
+  agree (Mach.set_arg ms l v) (Asm.set_arg rs l v).
 Proof.
   destruct l; unfold Mach.make_arg, Asm.make_arg; intros.
   - inv H.
@@ -403,7 +402,7 @@ Proof.
     constructor; auto.
 Qed.
 
-Lemma make_arguments_match:
+Lemma set_arguments_match:
   forall ms ms' m m' sp rs ll vl,
   Mach.make_arguments ms m sp ll vl = Some (ms', m') ->
   agree ms sp rs ->

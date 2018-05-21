@@ -1685,41 +1685,17 @@ Qed.
 
 End EXTERNAL_ARGUMENTS.
 
-Lemma transl_make_arg:
-  forall m rs sg l v
-  (MS: tailcall_possible sg),
-  In l (regs_of_rpairs (loc_arguments sg)) ->
-  exists rs', make_arg rs m Vnullptr l v = Some (rs', m).
-Proof.
-  intros.
-  assert (loc_argument_acceptable l) by (apply loc_arguments_acceptable_2 with sg; auto).
-  destruct l; unfold make_arg; eauto; intros; simpl in H0.
-  destruct sl; try contradiction.
-  elim (MS _ H).
-Qed.
-
-Lemma transl_make_arguments_rec: forall m rs sg locs args
-  (MS: tailcall_possible sg),
+Lemma transl_set_arguments_rec: forall rs sg locs args,
   incl locs (loc_arguments sg) ->
   Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end) locs args ->
-  exists rs', make_arguments rs m Vnullptr locs args = Some (rs', m).
+  exists rs', set_arguments rs locs args = Some rs'.
 Proof.
   intros.
   induction H0; simpl; intros; eauto.
   destruct IHForall2 as [rs' ->].
   { eapply incl_cons_inv; eauto. }
-  destruct x.
-- eapply transl_make_arg; eauto.
-  eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto.
-- destruct H0 as [|[]]; subst.
-  + destruct (transl_make_arg m rs' sg rhi Vundef) as [? ->]; auto.
-    { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-    eapply transl_make_arg; eauto.
-    { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-  + destruct (transl_make_arg m rs' sg rhi (Vint (Int64.hiword x))) as [? ->]; auto.
-    { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-    eapply transl_make_arg; eauto.
-    { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
+  destruct x; eauto.
+  destruct H0 as [|[]]; subst; eauto.
 Qed.
 
 Lemma has_type_locs_32 : forall lv lt a, Val.has_type_list lv lt -> Archi.ptr64 = false ->
@@ -1753,12 +1729,11 @@ Proof.
   destruct Archi.ptr64 eqn: H64; [apply has_type_locs_64 | apply has_type_locs_32]; auto.
 Qed.
 
-Lemma transl_make_arguments: forall m rs sg args
-  (MS: tailcall_possible sg),
+Lemma transl_set_arguments: forall rs sg args,
   Val.has_type_list args (sig_args sg) ->
-  exists rs', make_arguments rs m Vnullptr (loc_arguments sg) args = Some (rs', m).
+  exists rs', set_arguments rs (loc_arguments sg) args = Some rs'.
 Proof.
-  intros; eapply transl_make_arguments_rec; eauto.
+  intros; eapply transl_set_arguments_rec; eauto.
   - apply incl_refl.
   - apply has_type_sig_locs; auto.
 Qed.
@@ -2242,50 +2217,41 @@ Proof.
   apply frame_contents_exten with rs0 (parent_locset s); auto.
 Qed.
 
-Lemma make_arg_inject : forall j ls rs m l v rs' m',
+Lemma set_arg_inject : forall j ls rs l v,
   agree_regs j ls rs ->
   Val.inject j v v ->
-  make_arg rs m Vnullptr l v = Some (rs', m') ->
-  agree_regs j (Locmap.set l v ls) rs'.
+  agree_regs j (Locmap.set l v ls) (set_arg rs l v).
 Proof.
   destruct l; simpl; intros.
-  - inv H1.
-    apply agree_regs_set_reg; auto.
-  - destruct (Mem.storev _ _ _ _); inv H1.
-    apply agree_regs_set_slot; auto.
+  - apply agree_regs_set_reg; auto.
+  - apply agree_regs_set_slot; auto.
 Qed.
 
-Lemma make_arguments_inject_rec : forall j ls rs m sigs args rs' m',
+Lemma set_arguments_inject_rec : forall j ls rs sigs args rs',
   agree_regs j ls rs ->
   Val.inject_list j args args ->
-  make_arguments rs m Vnullptr sigs args = Some (rs', m') ->
+  set_arguments rs sigs args = Some rs' ->
   agree_regs j (setlist sigs args ls) rs'.
 Proof.
-  intros until sigs; revert ls rs m; induction sigs; simpl; intros.
+  intros until sigs; revert ls rs; induction sigs; simpl; intros.
   - destruct args; inv H1; auto.
   - destruct args; try discriminate.
+    { inv H1; auto. }
     inv H0.
-    destruct (make_arguments _ _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+    destruct (set_arguments _ _ _) eqn: Ha; try discriminate.
     eapply IHsigs in Ha; eauto.
     destruct a; simpl.
-    + eapply make_arg_inject; eauto.
-    + destruct v; try discriminate.
-      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
-        eapply make_arg_inject; eauto.
-        eapply make_arg_inject; eauto.
-      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
-        eapply make_arg_inject; eauto.
-        eapply make_arg_inject; eauto.
-        { apply Val.hiword_inject; auto. }
-        { apply Val.loword_inject; auto. }
+    + inv H1.
+      apply set_arg_inject; auto.
+    + destruct v; inv H1; apply set_arg_inject; auto; apply set_arg_inject; auto.
 Qed.
 
-Lemma make_arguments_inject : forall m sg args rs' m',
+Lemma set_arguments_inject : forall m sg args rs',
   Mem.arg_well_formed args m ->
-  make_arguments (Regmap.init Vundef) m Vnullptr (loc_arguments sg) args = Some (rs', m') ->
+  set_arguments (Regmap.init Vundef) (loc_arguments sg) args = Some rs' ->
   agree_regs (Mem.flat_inj (Mem.nextblock m)) (build_ls_from_arguments sg args) rs'.
 Proof.
-  intros; eapply make_arguments_inject_rec; eauto.
+  intros; eapply set_arguments_inject_rec; eauto.
   intro; apply Val.val_inject_undef.
 Qed.
 
@@ -2311,6 +2277,10 @@ Proof.
   destruct (setpair_gso a v (setlist ll lv ls) l) as [-> | ->]; auto.
 Qed.
 
+(* In the execution of a Linear program, we step into a CallState through either Lcall or
+   Ltailcall, and in the former case we always add a stack frame in the process. As a result,
+   the match relations for an empty stack are specialized to tailcalls following from a main
+   with no arguments, and we'll have to generalize this if we want entry points with arguments. *)
 Lemma transf_entry_points:
    forall (s1 : Linear.state) (f : val) (arg : list val) (m0 : mem),
   Linear.entry_point prog m0 s1 f arg ->
@@ -2318,9 +2288,7 @@ Lemma transf_entry_points:
 Proof.
   intros. inv H. subst ge0.
   exploit function_ptr_translated; eauto. intros (tf & A & B).
-  assert (tailcall_possible (Linear.funsig f0)) by admit.
-  (* I'm not sure how we know this, but if it's not the case then we can't get match_state. *)
-  exploit transl_make_arguments; eauto. intros (rs' & ?).
+  exploit transl_set_arguments; eauto. intros (rs' & ?).
   do 2 econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
@@ -2328,8 +2296,11 @@ Proof.
     erewrite sig_preserved; eauto.
   - econstructor; eauto.
     + constructor; auto.
-    + eapply make_arguments_inject; eauto.
-    + intros ??; simpl.
+      admit.
+    + eapply set_arguments_inject; eauto.
+    + (* Perhaps this should be "if parent_locset is not nil", since if it is then
+         
+      intros ??; simpl.
       unfold build_ls_from_arguments.
       destruct (setlist_gso (loc_arguments (Linear.funsig f0)) arg (Locmap.init Vundef) l) as [-> | ->];
         auto.
@@ -2346,6 +2317,8 @@ Proof.
           eapply Plt_Ple_trans; [eapply Genv.genv_symb_range; eauto | auto].
           eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_funct_ptr_iff; eauto | auto].
           eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_var_info_iff; eauto | auto].
+    + apply Mem.mem_wd_inject; auto.
+    + apply flat_injection_full.
 Admitted.
 
 Lemma transf_initial_states:

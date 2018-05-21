@@ -1152,45 +1152,32 @@ Definition funsig (fd: fundef) :=
   | External ef => ef_sig ef
   end.
 
-Definition make_arg (rs: regset) (m: mem) (l: loc) (v: val) : option (regset * mem) :=
+Definition set_arg (rs: regset) (l: loc) (v: val) : regset :=
   match l with
-  | R r => Some (rs # (preg_of r) <- v, m)
-  | S _ ofs ty =>
-      let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z  in
-      match Mem.storev (chunk_of_type ty) m (Val.offset_ptr (rs (IR SP)) (Ptrofs.repr bofs)) v with
-      | Some m' => Some (rs, m')
-      | None => None
-      end
+  | R r => rs # (preg_of r) <- v
+  | S _ _ _ => rs
   end.
 
-Fixpoint make_arguments (rs: regset) (m: mem) (al: list (rpair loc)) (lv: list val) :
-  option (regset * mem) :=
+Fixpoint set_arguments (rs: regset) (al: list (rpair loc)) (lv: list val) : option regset :=
   match al, lv with
   | a :: al', v :: lv' =>
-    match make_arguments rs m al' lv' with
-    | Some (rs', m') =>
+    match set_arguments rs al' lv' with
+    | Some rs' =>
       match a with
-      | One l => make_arg rs' m' l v
+      | One l => Some (set_arg rs' l v)
       | Twolong hi lo =>
         match v with
         | Vlong v' =>
-          match make_arg rs' m' hi (Vint (Int64.hiword v')) with
-          | Some (rs'', m'') => make_arg rs'' m'' lo (Vint (Int64.loword v'))
-          | None => None
-          end
+            Some (set_arg (set_arg rs' hi (Vint (Int64.hiword v'))) lo (Vint (Int64.loword v')))
         | Vundef =>
-          match make_arg rs' m' hi Vundef with
-          | Some (rs'', m'') => make_arg rs'' m'' lo Vundef
-          | None => None
-          end
+            Some (set_arg (set_arg rs' hi Vundef) lo Vundef)
         | _ => None
         end
       end
     | _ => None
     end
-  | nil, nil => Some (rs, m)
-  | _, _ => None
- end.
+  | _, _ => Some rs
+  end.
 
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
@@ -1201,7 +1188,7 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
         # RA <- Vzero
         # RSP <- Vnullptr in
       Genv.find_funct_ptr ge b = Some f ->
-      make_arguments rs0 m0 (loc_arguments (funsig f)) args = Some (rs, m) ->
+      set_arguments rs0 (loc_arguments (funsig f)) args = Some rs ->
       entry_point ge m0 (State rs m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
  Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=

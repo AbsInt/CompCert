@@ -508,45 +508,34 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some fb ->
       initial_state p (Callstate nil fb (Regmap.init Vundef) m0).
 
-Definition make_arg (rs: regset) (m: mem) (sp: val) (l: loc) (v: val) : option (regset * mem) :=
+(* Arguments on the stack will be stored at the beginning of the function body, after leaving the
+   Callstate, so we only need to store register arguments. *)
+Definition set_arg (rs: regset) (l: loc) (v: val) : regset :=
   match l with
-  | R r => Some (rs # r <- v, m)
-  | S _ ofs ty =>
-      let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z  in
-      match Mem.storev (chunk_of_type ty) m (Val.offset_ptr sp (Ptrofs.repr bofs)) v with
-      | Some m' => Some (rs, m')
-      | None => None
-      end
+  | R r => rs # r <- v
+  | S _ _ _ => rs
   end.
 
-Fixpoint make_arguments (rs: regset) (m: mem) (sp: val) (al: list (rpair loc)) (lv: list val) :
-  option (regset * mem) :=
+Fixpoint set_arguments (rs: regset) (al: list (rpair loc)) (lv: list val) : option regset :=
   match al, lv with
   | a :: al', v :: lv' =>
-    match make_arguments rs m sp al' lv' with
-    | Some (rs', m') =>
+    match set_arguments rs al' lv' with
+    | Some rs' =>
       match a with
-      | One l => make_arg rs' m' sp l v
+      | One l => Some (set_arg rs' l v)
       | Twolong hi lo =>
         match v with
         | Vlong v' =>
-          match make_arg rs' m' sp hi (Vint (Int64.hiword v')) with
-          | Some (rs'', m'') => make_arg rs'' m'' sp lo (Vint (Int64.loword v'))
-          | None => None
-          end
+            Some (set_arg (set_arg rs' hi (Vint (Int64.hiword v'))) lo (Vint (Int64.loword v')))
         | Vundef =>
-          match make_arg rs' m' sp hi Vundef with
-          | Some (rs'', m'') => make_arg rs'' m'' sp lo Vundef
-          | None => None
-          end
+            Some (set_arg (set_arg rs' hi Vundef) lo Vundef)
         | _ => None
         end
       end
     | _ => None
     end
-  | nil, nil => Some (rs, m)
-  | _, _ => None
- end.
+  | _, _ => Some rs
+  end.
 
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
   | entry_point_intro: forall b f rs m0 m args,
@@ -555,7 +544,7 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       Mem.arg_well_formed args m0 ->
       globals_not_fresh ge m0 ->
       Genv.find_funct_ptr ge b = Some f ->
-      make_arguments (Regmap.init Vundef) m0 Vnullptr (loc_arguments (funsig f)) args = Some (rs, m) ->
+      set_arguments (Regmap.init Vundef) (loc_arguments (funsig f)) args = Some rs ->
       entry_point p m0 (Callstate nil b rs m) (Vptr b (Ptrofs.zero)) args.
 
 Inductive final_state: state -> int -> Prop :=
