@@ -1183,15 +1183,15 @@ Fixpoint make_arguments (rs: regset) (m: mem) (al: list (rpair loc)) (lv: list v
 
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
-    forall f b m args,
+    forall f b rs m0 m args,
       let rs0 :=
         (Pregmap.init Vundef)
         # PC <- (Vptr b Ptrofs.zero) 
         # RA <- Vzero
         # RSP <- Vnullptr in
       Genv.find_funct_ptr ge b = Some f ->
-      extcall_arguments rs0 m (funsig f) args ->
-      entry_point ge m (State rs0 m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+      make_arguments rs0 m0 (loc_arguments (funsig f)) args = Some (rs, m) ->
+      entry_point ge m0 (State rs m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
 
  Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=
  match l with
@@ -1352,7 +1352,9 @@ Ltac Equalities :=
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 - (* initial cores *)
-  inv H; inv H0. f_equal.
+  inv H; inv H0.
+  rewrite H3 in H1; inv H1.
+  subst rs0 rs2. rewrite H6 in H2; congruence.
 - (* final no step *)
   assert (NOTNULL: forall b ofs, Vnullptr <> Vptr b ofs).
   { intros; unfold Vnullptr; destruct Archi.ptr64; congruence. }
