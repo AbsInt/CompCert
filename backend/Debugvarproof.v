@@ -557,6 +557,19 @@ Proof.
   constructor. constructor. auto.
 Qed.
 
+Lemma transf_initial_states':
+  forall s1,
+  Smallstep.initial_state (semantics prog) s1 ->
+  exists s2, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  
+  eapply init_states_from_entry; try apply transf_entry_points.
+  - pose proof (Genv.init_mem_transf_partial TRANSF) as HH. eauto.
+  - simpl. unfold transf_program in TRANSF.
+    destruct TRANSF as ( P & Q & R).
+    rewrite Q, symbols_preserved; auto.
+Qed.
+    
 Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
@@ -570,7 +583,7 @@ Proof.
   eapply forward_simulation_plus.
   apply senv_preserved.
   eexact transf_entry_points.
-  eexact transf_initial_states.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   eexact transf_step_correct.
 Qed.
@@ -580,9 +593,10 @@ Theorem transf_program_correct':
                     _ (ltof _ (fun _ => 0)%nat)
                     ( fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
 Proof.
-  eapply forward_simulation_plus'.
+  eapply fsim_properties_plus.
   apply senv_preserved.
-  eexact transf_initial_states.
+  eexact transf_entry_points.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   eexact transf_step_correct.
 Qed.

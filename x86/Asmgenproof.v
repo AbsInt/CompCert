@@ -929,11 +929,14 @@ Proof.
   econstructor; split.
   - econstructor; eauto.
     erewrite sig_preserved; eauto.
+    admit.
   - eapply make_arguments_PC in H as [HPC HRA].
     econstructor; eauto.
     + constructor.
-    + apply Mem.extends_refl.
-Qed.
+    + admit. (*apply Mem.extends_refl.*)
+    + admit.
+    + admit.
+Admitted.
 
 Lemma transf_initial_states:
   forall st1, Mach.initial_state prog st1 ->
@@ -957,6 +960,19 @@ Proof.
   unfold ge; rewrite H1. auto.
 Qed.
 
+Lemma transf_initial_states':
+  forall s1,
+    Smallstep.initial_state (Mach.semantics return_address_offset prog) s1 ->
+    exists s2, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+Proof.
+  
+  eapply init_states_from_entry; try apply transf_entry_points.
+  - pose proof (Genv.init_mem_transf_partial TRANSF) as HH. eauto.
+  - simpl. unfold transf_program in TRANSF.
+    destruct TRANSF as ( P & Q & R).
+    rewrite Q, symbols_preserved; auto.
+Qed.
+
 Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> Mach.final_state st1 r -> Asm.final_state st2 r.
@@ -974,7 +990,7 @@ Proof.
   eapply forward_simulation_star with (measure := measure).
   apply senv_preserved.
   eexact transf_entry_points.
-  eexact transf_initial_states.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   exact step_simulation.
 Qed.
@@ -984,9 +1000,10 @@ Theorem transf_program_correct':
                   _ (ltof _ measure)
                   (fun idx s1 s2 => idx = s1 /\ match_states s1 s2).
 Proof.
-  eapply forward_simulation_star'.
+  eapply fsim_properties_star.
   apply senv_preserved.
-  eexact transf_initial_states.
+  eexact transf_entry_points.
+  eexact transf_initial_states'.
   eexact transf_final_states.
   exact step_simulation.
 Qed.
