@@ -217,8 +217,6 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
         comparison env (<=) None tyop v1 v2
     | Oge ->
         comparison env (>=) None tyop v1 v2
-    | Ocomma ->
-        v2
     | Ologand ->
         if boolean_value v1
         then if boolean_value v2 then I 1L else I 0L
@@ -315,10 +313,8 @@ and is_constant_expr env e =
       | Oadd | Osub | Omul | Odiv | Omod
       | Oand | Oor  | Oxor | Oshl | Oshr
       | Oeq  | One  | Olt  | Ogt  | Ole  | Oge
-      | Ocomma | Ologand | Ologor ->
+      | Ologand | Ologor ->
           is_constant_expr env e1 && is_constant_expr env e2
-          (* ISO C99 says that constant expressions shall not contain comma
-             operators.  However, clang accepts them, and they are harmless. *)
       | Oindex ->
           is_constant_rval_of_lval env e
       | Oassign 
@@ -326,6 +322,10 @@ and is_constant_expr env e =
       | Oand_assign | Oor_assign | Oxor_assign  | Oshl_assign | Oshr_assign ->
           false
         (* constant expressions shall not contain assignments *)
+      | Ocomma ->
+          false
+        (* some C compilers accept "e1, e2" as a constant expression.
+           But this is not standard ISO C. *)
       end
   | EConditional(e1, e2, e3) ->
       is_constant_expr env e1 && is_constant_expr env e2
