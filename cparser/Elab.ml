@@ -211,9 +211,11 @@ let enter_or_refine_ident_base local loc env new_id sto ty =
   | _ ->
      ()
   end;
-  (* For a block-scoped, non-"extern" variable, a new declaration
-     is entered, and it has no linkage. *)
-  if local && sto <> Storage_extern then begin
+  (* For a block-scoped, "static" or "auto" or "register" variable,
+     a new declaration is entered, and it has no linkage. *)
+  if local
+  && (sto = Storage_auto || sto = Storage_register || sto = Storage_static)
+  then begin
     (new_id, sto, Env.add_ident env new_id sto ty, ty, false)
   end else begin
   (* For a file-scoped or "extern" variable, we need to check against
@@ -2293,11 +2295,12 @@ let enter_decdefs local loc env sto dl =
                     (name_of_storage_class sto)
       | _ -> ()
     end;
-    (* Local function declarations are always treated as extern *)
-    (* Local variable declarations with default storage are treated as 'auto' *)
+    (* Local variable declarations with default storage are treated as 'auto'.
+       Local function declarations with default storage remain with
+       default storage. *)
     let sto1 =
-      if local && isfun then Storage_extern
-      else if local && sto = Storage_default then Storage_auto
+      if local && sto = Storage_default && not isfun 
+      then Storage_auto
       else sto in
     (* enter ident in environment with declared type, because
        initializer can refer to the ident *)
