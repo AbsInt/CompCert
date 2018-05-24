@@ -31,34 +31,86 @@ Definition quantity_of_mreg (r: mreg) : quantity :=
 Definition chunk_of_mreg (r: mreg) : memory_chunk :=
   chunk_of_type (mreg_type r).
 
-(** * Representation of the register file *)
+Definition typesize ty :=
+  match ty with
+  | Tint | Tsingle | Tany32 => 1
+  | Tlong | Tfloat | Tany64 => 2
+  end.
 
-(** The [Regfile] module defines mappings from registers to values. The register
-  file is represented as a kind of memory block containing bytes addressed using
-  register numbers.
-  The register numbers are taken from [IndexedMreg], interpreted as words and
-  scaled internally to bytes. The indices of adjacent 64-bit registers must
-  therefore differ by at least 2. *)
+Lemma typesize_pos:
+  forall ty, typesize ty > 0.
+Proof.
+  destruct ty; simpl; omega.
+Qed.
 
-Module Regfile.
+(** * Definition of a general register model *)
 
-  Definition t := FragBlock.t.
+(** We will be using slightly different models of the target CPU's register
+  architecture: [mreg] models data registers only, with no separation of
+  different kinds of registers, while [preg] models integer and floating-point
+  registers differently and includes condition code registers and the program
+  counter as well.
 
-  Definition init := FragBlock.init.
+  We will want to use the same basic representation of the register file for
+  both of these register models, so we capture their commonalities in this
+  module type. *)
+
+Module Type REGISTER_MODEL.
+
+  Parameter reg: Set.
+  Axiom eq_dec: forall r s: reg, {r = s} + {r <> s}.
+
+  Parameter type: reg -> typ.
+  Parameter quantity_of: reg -> quantity.
+  Parameter chunk_of: reg -> memory_chunk.
+
+  Axiom type_cases:
+    forall r, type r = Tany32 \/ type r = Tany64.
+
+  Parameter ofs: reg -> Z.
+  Parameter addr: reg -> Z.
+  Parameter next_addr: reg -> Z.
+
+  Axiom addr_pos: forall r, addr r > 0.
+
+  Axiom addr_compat: forall r, FragBlock.addr (ofs r) = addr r.
+  Axiom next_addr_compat: forall r, FragBlock.next_addr (ofs r) (quantity_of r) = next_addr r.
+
+  Axiom size_compat:
+    forall r,
+    AST.typesize (type r) = FragBlock.quantity_size (quantity_of r).
+
+  Axiom quantity_of_compat:
+    forall r,
+    quantity_of r = quantity_of_typ (type r).
+
+  Axiom chunk_of_reg_compat:
+    forall r,
+    chunk_of r = chunk_of_quantity (quantity_of r).
+
+  Axiom chunk_of_reg_type:
+    forall r,
+    chunk_of r = chunk_of_type (type r).
+
+  Axiom diff_outside_interval:
+    forall r s, r <> s -> next_addr r <= addr s \/ next_addr s <= addr r.
+
+End REGISTER_MODEL.
+
+Module Mreg <: REGISTER_MODEL.
+
+  Definition reg := mreg.
+  Definition eq_dec := mreg_eq.
+
+  Definition type := mreg_type.
+  Definition quantity_of := quantity_of_mreg.
+  Definition chunk_of := chunk_of_mreg.
+
+  Definition type_cases := mreg_type_cases.
 
   (* A register's offset, in words, from an arbitrary starting point. *)
   Definition ofs (r: mreg) : Z :=
     Zpos (IndexedMreg.index r).
-
-  Definition typesize ty :=
-    match ty with
-    | Tint | Tsingle | Tany32 => 1
-    | Tlong | Tfloat | Tany64 => 2
-    end.
-
-  (* The offset just past the end of register [r]. The next nonoverlapping
-    register may start here. *)
-  Definition next_ofs (r: mreg) : Z := ofs r + typesize (mreg_type r).
 
   (* A register's address: The index of its first byte. *)
   Definition addr (r: mreg) : Z := Zpos (IndexedMreg.index r) * 4.
@@ -87,39 +139,31 @@ Module Regfile.
 
   Lemma quantity_of_compat:
     forall r,
-    quantity_of_mreg r = quantity_of_typ (mreg_type r).
+    quantity_of r = quantity_of_typ (type r).
   Proof.
     reflexivity.
   Qed.
 
-  Lemma chunk_of_mreg_type:
+  Lemma chunk_of_reg_type:
     forall r,
-    chunk_of_mreg r = chunk_of_type (mreg_type r).
+    chunk_of r = chunk_of_type (type r).
   Proof.
     reflexivity.
   Qed.
 
-  Lemma chunk_of_mreg_compat:
+  Lemma chunk_of_reg_compat:
     forall r,
-    chunk_of_mreg r = chunk_of_quantity (quantity_of_mreg r).
+    chunk_of r = chunk_of_quantity (quantity_of_mreg r).
   Proof.
     intros.
-    rewrite quantity_of_compat, chunk_of_quantity_of_typ, chunk_of_mreg_type; auto.
-    apply mreg_type_cases.
+    rewrite quantity_of_compat, chunk_of_quantity_of_typ, chunk_of_reg_type; auto.
+    apply type_cases.
   Qed.
 
   Lemma next_addr_compat: forall r, FragBlock.next_addr (ofs r) (quantity_of_mreg r) = next_addr r.
   Proof.
     unfold next_addr, addr, ofs, FragBlock.next_addr, FragBlock.addr; intros.
     rewrite size_compat. auto.
-  Qed.
-
-  Lemma outside_interval_diff:
-    forall r s, next_addr r <= addr s \/ next_addr s <= addr r -> r <> s.
-  Proof.
-    intros. destruct H; unfold next_addr in H.
-    generalize (AST.typesize_pos (mreg_type r)); intros. contradict H. subst. omega.
-    generalize (AST.typesize_pos (mreg_type s)); intros. contradict H. subst. omega.
   Qed.
 
   Lemma address_lt:
@@ -130,6 +174,14 @@ Module Regfile.
   Proof.
     intros. unfold addr in H0.
     apply IndexedMreg.scaled_index_with_size; omega.
+  Qed.
+
+  Lemma outside_interval_diff:
+    forall r s, next_addr r <= addr s \/ next_addr s <= addr r -> r <> s.
+  Proof.
+    intros. destruct H; unfold next_addr in H.
+    generalize (AST.typesize_pos (mreg_type r)); intros. contradict H. subst. omega.
+    generalize (AST.typesize_pos (mreg_type s)); intros. contradict H. subst. omega.
   Qed.
 
   Lemma diff_outside_interval:
@@ -144,8 +196,27 @@ Module Regfile.
     - right. apply address_lt; auto.
   Qed.
 
-  Definition chunk_of_mreg (r: mreg) : memory_chunk :=
-    chunk_of_type (mreg_type r).
+End Mreg.
+
+(** * Representation of the register file *)
+
+(** The [Regfile] module defines mappings from registers to values. The register
+  file is represented as a kind of memory block containing bytes addressed using
+  register numbers.
+
+  The register offset numbers are interpreted as words and scaled internally to
+  bytes. The indices of adjacent 64-bit registers must therefore differ by at
+  least 2. *)
+
+Module Regfile(M: REGISTER_MODEL).
+
+  Definition t := FragBlock.t.
+
+  Definition init := FragBlock.init.
+
+  (* The offset just past the end of register [r]. The next nonoverlapping
+    register may start here. *)
+  Definition next_ofs (r: M.reg) : Z := M.ofs r + typesize (M.type r).
 
   Lemma chunk_length:
     forall r v,
@@ -155,27 +226,27 @@ Module Regfile.
     unfold chunk_of_mreg. destruct (mreg_type r); auto.
   Qed.
 
-  Definition get_bytes (r: mreg) (rf: t) : list memval :=
-    FragBlock.get_bytes (ofs r) (quantity_of_mreg r) rf.
+  Definition get_bytes (r: M.reg) (rf: t) : list memval :=
+    FragBlock.get_bytes (M.ofs r) (M.quantity_of r) rf.
 
-  Definition get (r: mreg) (rf: t) : val :=
-    FragBlock.get (ofs r) (quantity_of_mreg r) rf.
+  Definition get (r: M.reg) (rf: t) : val :=
+    FragBlock.get (M.ofs r) (M.quantity_of r) rf.
 
-  Definition set_bytes (r: mreg) (bytes: list memval) (rf: t) : t :=
-    FragBlock.set_bytes (ofs r) (quantity_of_mreg r) bytes rf.
+  Definition set_bytes (r: M.reg) (bytes: list memval) (rf: t) : t :=
+    FragBlock.set_bytes (M.ofs r) (M.quantity_of r) bytes rf.
 
-  Definition set (r: mreg) (v: val) (rf: t) : t :=
-    FragBlock.set (ofs r) (quantity_of_mreg r) v rf.
+  Definition set (r: M.reg) (v: val) (rf: t) : t :=
+    FragBlock.set (M.ofs r) (M.quantity_of r) v rf.
 
   (* Update the [old] register file by choosing the values for the registers in
      [rs] from [new]. *)
-  Fixpoint override (rs: list mreg) (new old: t) : t :=
+  Fixpoint override (rs: list M.reg) (new old: t) : t :=
     match rs with
     | nil => old
     | r :: rs' => set r (get r new) (override rs' new old)
     end.
 
-  Fixpoint undef_regs (rs: list mreg) (rf: t) : t :=
+  Fixpoint undef_regs (rs: list M.reg) (rf: t) : t :=
     match rs with
     | nil => rf
     | r :: rs => set r Vundef (undef_regs rs rf)
@@ -183,10 +254,10 @@ Module Regfile.
 
   Lemma gss:
     forall r v rf,
-    get r (set r v rf) = Val.load_result (chunk_of_mreg r) v.
+    get r (set r v rf) = Val.load_result (M.chunk_of r) v.
   Proof.
     intros. unfold get, set.
-    rewrite FragBlock.gss, chunk_of_mreg_compat; auto.
+    rewrite FragBlock.gss, M.chunk_of_reg_compat; auto.
   Qed.
 
   Lemma gso:
@@ -196,16 +267,29 @@ Module Regfile.
   Proof.
     intros. unfold get, set.
     rewrite FragBlock.gso; auto.
-    rewrite !next_addr_compat, !addr_compat.
-    apply diff_outside_interval; auto.
+    rewrite !M.next_addr_compat, !M.addr_compat.
+    apply M.diff_outside_interval; auto.
   Qed.
 
   Lemma get_has_type:
-    forall r rf, Val.has_type (get r rf) (mreg_type r).
+    forall r rf, Val.has_type (get r rf) (M.type r).
   Proof.
     intros. unfold get.
     unfold quantity_of_mreg.
-    destruct (mreg_type_cases r) as [T | T]; rewrite T; apply FragBlock.get_has_type.
+    rewrite M.quantity_of_compat.
+    destruct (M.type_cases r) as [T | T]; rewrite T; apply FragBlock.get_has_type.
+  Qed.
+
+  Lemma get_bytes_compat:
+    forall r rf, get r rf = decode_val (M.chunk_of r) (get_bytes r rf).
+  Proof.
+    intros. unfold get, FragBlock.get. rewrite M.chunk_of_reg_compat. reflexivity.
+  Qed.
+
+  Lemma set_bytes_compat:
+    forall r v rf, set r v rf = set_bytes r (encode_val (M.chunk_of r) v) rf.
+  Proof.
+    intros. unfold set, FragBlock.set. rewrite M.chunk_of_reg_compat. reflexivity.
   Qed.
 
   Lemma override_in:
@@ -213,9 +297,9 @@ Module Regfile.
     In r rs -> get r (override rs new old) = get r new.
   Proof.
     intros. induction rs; try contradiction.
-    destruct (mreg_eq r a).
+    destruct (M.eq_dec r a).
     - subst; simpl; rewrite gss.
-      unfold chunk_of_mreg. rewrite Val.load_result_same; auto.
+      rewrite M.chunk_of_reg_type, Val.load_result_same; auto.
       apply get_has_type.
     - inversion H; try congruence.
       simpl; rewrite gso; auto.
@@ -234,9 +318,9 @@ Module Regfile.
     In r rs -> get r (undef_regs rs rf) = Vundef.
   Proof.
     induction rs; simpl; intros. contradiction.
-    destruct (mreg_eq r a).
+    destruct (M.eq_dec r a).
     - subst; simpl; rewrite gss.
-      destruct (chunk_of_mreg a); auto.
+      destruct (M.chunk_of a); auto.
     - inversion H; try congruence.
       simpl; rewrite gso; auto.
   Qed.

@@ -300,7 +300,7 @@ Proof.
   intros; red; intros l. destruct l as [r'|], ls1, ls2; simpl.
 - destruct (mreg_eq r r').
   + subst; rewrite Regfile.gss; auto.
-    destruct (Regfile.chunk_of_mreg r'); simpl; auto.
+    destruct (Mreg.chunk_of r'); simpl; auto.
   + rewrite Regfile.gso; auto. exact (H (R r')).
 - exact (H (S sl pos q)).
 Qed.

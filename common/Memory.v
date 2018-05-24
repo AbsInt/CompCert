@@ -752,6 +752,14 @@ Proof.
   apply decode_val_type.
 Qed.
 
+Theorem loadv_type:
+  forall m chunk addr v,
+  loadv chunk m addr = Some v ->
+  Val.has_type v (type_of_chunk chunk).
+Proof.
+  unfold loadv; intros. destruct addr; try congruence. eauto using load_type.
+Qed.
+
 Theorem load_cast:
   forall m chunk b ofs v,
   load chunk m b ofs = Some v ->

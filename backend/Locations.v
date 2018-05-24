@@ -469,6 +469,8 @@ Set Implicit Arguments.
 
 Module Locmap.
 
+  Module Regfile := Regfile(Mreg).
+
   Definition t := (Regfile.t * Stack.t)%type.
 
   Definition chunk_of_loc (l: loc) : memory_chunk :=

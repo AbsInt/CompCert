@@ -59,6 +59,22 @@ Proof. decide equality. Defined.
 Lemma freg_eq: forall (x y: freg), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
 
+Definition ireg_index (i: ireg): Z :=
+  1 + match i with
+  | IR0  =>  0 | IR1  =>  1 | IR2  =>  2 | IR3  =>  3
+  | IR4  =>  4 | IR5  =>  5 | IR6  =>  6 | IR7  =>  7
+  | IR8  =>  8 | IR9  =>  9 | IR10 => 10 | IR11 => 11
+  | IR12 => 12 | IR13 => 13 | IR14 => 14
+  end.
+
+Definition freg_index (f: freg): Z :=
+  16 + match f with
+  | FR0  =>  0 | FR1  =>  2 | FR2  =>  4 | FR3  =>  6
+  | FR4  =>  8 | FR5  => 10 | FR6  => 12 | FR7  => 14
+  | FR8  => 16 | FR9  => 18 | FR10 => 20 | FR11 => 22
+  | FR12 => 24 | FR13 => 26 | FR14 => 28 | FR15 => 30
+  end.
+
 (** Bits in the condition register. *)
 
 Inductive crbit: Type :=
@@ -85,12 +101,118 @@ Coercion CR: crbit >-> preg.
 Lemma preg_eq: forall (x y: preg), {x=y} + {x<>y}.
 Proof. decide equality. apply ireg_eq. apply freg_eq. apply crbit_eq. Defined.
 
-Module PregEq.
-  Definition t := preg.
-  Definition eq := preg_eq.
-End PregEq.
+Definition crbit_index (c: crbit): Z :=
+  16 + 32 + match c with
+  | CN => 0
+  | CZ => 1
+  | CC => 2
+  | CV => 3
+  end.
 
-Module Pregmap := EMap(PregEq).
+Definition preg_index (p: preg): Z :=
+  match p with
+  | IR i => ireg_index i
+  | FR f => freg_index f
+  | CR c => crbit_index c
+  | PC   => 16 + 32 + 4 + 1
+  end.
+
+Module Preg <: REGISTER_MODEL.
+
+  Definition reg := preg.
+  Definition eq_dec := preg_eq.
+
+  Definition type pr :=
+    match pr with
+    | IR _ | CR _ | PC => Tany32
+    | FR _ => Tany64
+    end.
+
+  Definition quantity_of pr :=
+    match pr with
+    | IR _ | CR _ | PC => Q32
+    | FR _ => Q64
+    end.
+
+  Definition chunk_of pr :=
+    match pr with
+    | IR _ | CR _ | PC => Many32
+    | FR _ => Many64
+    end.
+
+  Lemma type_cases: forall r, type r = Tany32 \/ type r = Tany64.
+  Proof.
+    destruct r; auto.
+  Qed.
+
+  Definition ofs (r: preg): Z :=
+    preg_index r.
+
+  (* A register's address: The index of its first byte. *)
+  Definition addr (r: preg): Z :=
+    preg_index r * 4.
+
+  (* The address one byte past the end of register [r]. The next nonoverlapping
+     register may start here. *)
+  Definition next_addr (r: preg): Z := addr r + AST.typesize (type r).
+
+  Remark addr_pos: forall p, addr p > 0.
+  Proof.
+    intros. unfold addr. destruct p as [x|x|x|]; try destruct x; simpl; omega.
+  Qed.
+
+  Lemma addr_compat: forall p, FragBlock.addr (ofs p) = addr p.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma size_compat:
+    forall p,
+    AST.typesize (type p) = FragBlock.quantity_size (quantity_of p).
+  Proof.
+    intros. unfold quantity_of. destruct (type p) eqn:TYP, p; simpl; auto; inv TYP.
+  Qed.
+
+  Lemma next_addr_compat: forall p, FragBlock.next_addr (ofs p) (quantity_of p) = next_addr p.
+  Proof.
+    unfold next_addr, addr, ofs, FragBlock.next_addr, FragBlock.addr; intros.
+    rewrite size_compat. auto.
+  Qed.
+
+  Lemma quantity_of_compat:
+    forall p,
+    quantity_of p = quantity_of_typ (type p).
+  Proof.
+    destruct p; reflexivity.
+  Qed.
+
+  Lemma chunk_of_reg_compat:
+    forall p,
+    chunk_of p = chunk_of_quantity (quantity_of p).
+  Proof.
+    destruct p; simpl; auto.
+  Qed.
+
+  Lemma chunk_of_reg_type:
+    forall p,
+    chunk_of p = chunk_of_type (type p).
+  Proof.
+    destruct p; reflexivity.
+  Qed.
+
+  Lemma diff_outside_interval:
+    forall r s, r <> s -> next_addr r <= addr s \/ next_addr s <= addr r.
+  Proof.
+    intros.
+    destruct s as [x|x|x|] eqn:S; try destruct x; simpl in H;
+      destruct r as [y|y|y|] eqn:R; try destruct y; simpl in H; compute;
+        try (left; congruence); try (right; congruence);
+          compute in H; tauto.
+  Qed.
+
+End Preg.
+
+Module Pregmap := Regfile(Preg).
 
 (** Conventional names for stack pointer ([SP]) and return address ([RA]) *)
 
@@ -325,11 +447,13 @@ Definition program := AST.program fundef unit.
   type [Tint], float registers to values of type [Tfloat],
   and condition bits to either [Vzero] or [Vone]. *)
 
-Definition regset := Pregmap.t val.
+Definition regset := Pregmap.t.
 Definition genv := Genv.t fundef unit.
 
-Notation "a # b" := (a b) (at level 1, only parsing) : asm.
+Notation "a # b" := (Pregmap.get b a) (at level 1, only parsing) : asm.
 Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level) : asm.
+
+Definition pregmap_read rs := fun r => Pregmap.get r rs.
 
 Open Scope asm.
 
@@ -338,13 +462,33 @@ Open Scope asm.
 Fixpoint undef_regs (l: list preg) (rs: regset) : regset :=
   match l with
   | nil => rs
-  | r :: l' => undef_regs l' (rs#r <- Vundef)
+  | r :: l' => (undef_regs l' rs)#r <- Vundef
   end.
+
+Lemma undef_regs_other:
+  forall r rl rs, ~In r rl -> (undef_regs rl rs) # r = rs # r.
+Proof.
+  induction rl; simpl; intros. auto. rewrite Pregmap.gso. apply IHrl. intuition. intuition.
+Qed.
+
+Lemma undef_regs_same:
+  forall r rl rs, In r rl -> (undef_regs rl rs) # r = Vundef.
+Proof.
+  induction rl; simpl; intros. tauto.
+  destruct H.
+  - subst a. rewrite Pregmap.gss. destruct (Preg.chunk_of r); auto.
+  - destruct (Preg.eq_dec r a).
+    + subst a. rewrite Pregmap.gss. destruct (Preg.chunk_of r); auto.
+    + rewrite Pregmap.gso; auto.
+Qed.
 
 (** Undefining the condition codes *)
 
 Definition undef_flags (rs: regset) : regset :=
-  fun r => match r with CR _ => Vundef | _ => rs r end.
+  Pregmap.set (CR CN) Vundef
+    (Pregmap.set (CR CZ) Vundef
+      (Pregmap.set (CR CC) Vundef
+        (Pregmap.set (CR CV) Vundef rs))).
 
 (** Assigning a register pair *)
 
@@ -432,11 +576,11 @@ Definition goto_label (f: function) (lbl: label) (rs: regset) (m: mem) :=
 Definition eval_shift_op (so: shift_op) (rs: regset) :=
   match so with
   | SOimm n => Vint n
-  | SOreg r => rs r
-  | SOlsl r n => Val.shl (rs r) (Vint n)
-  | SOlsr r n => Val.shru (rs r) (Vint n)
-  | SOasr r n => Val.shr (rs r) (Vint n)
-  | SOror r n => Val.ror (rs r) (Vint n)
+  | SOreg r => rs # r
+  | SOlsl r n => Val.shl (rs # r) (Vint n)
+  | SOlsr r n => Val.shru (rs # r) (Vint n)
+  | SOasr r n => Val.shr (rs # r) (Vint n)
+  | SOror r n => Val.ror (rs # r) (Vint n)
   end.
 
 (** Auxiliaries for memory accesses *)
@@ -450,7 +594,7 @@ Definition exec_load (chunk: memory_chunk) (addr: val) (r: preg)
 
 Definition exec_store (chunk: memory_chunk) (addr: val) (r: preg)
                       (rs: regset) (m: mem) :=
-  match Mem.storev chunk m addr (rs r) with
+  match Mem.storev chunk m addr (rs # r) with
   | None => Stuck
   | Some m' => Next (nextinstr rs) m'
   end.
@@ -505,62 +649,62 @@ Definition compare_float32 (rs: regset) (v1 v2: val) :=
 Definition eval_testcond (c: testcond) (rs: regset) : option bool :=
   match c with
   | TCeq =>                             (**r equal *)
-      match rs CZ with
+      match rs # CZ with
       | Vint n => Some (Int.eq n Int.one)
       | _ => None
       end
   | TCne =>                             (**r not equal *)
-      match rs CZ with
+      match rs # CZ with
       | Vint n => Some (Int.eq n Int.zero)
       | _ => None
       end
   | TClo =>                             (**r unsigned less than  *)
-      match rs CC with
+      match rs # CC with
       | Vint n => Some (Int.eq n Int.zero)
       | _ => None
       end
   | TCls =>                             (**r unsigned less or equal *)
-      match rs CC, rs CZ with
+      match rs # CC, rs # CZ with
       | Vint c, Vint z => Some (Int.eq c Int.zero || Int.eq z Int.one)
       | _, _ => None
       end
   | TChs =>                             (**r unsigned greater or equal *)
-      match rs CC with
+      match rs # CC with
       | Vint n => Some (Int.eq n Int.one)
       | _ => None
       end
   | TChi =>                             (**r unsigned greater *)
-      match rs CC, rs CZ with
+      match rs # CC, rs # CZ with
       | Vint c, Vint z => Some (Int.eq c Int.one && Int.eq z Int.zero)
       | _, _ => None
       end
   | TClt =>                             (**r signed less than *)
-      match rs CV, rs CN with
+      match rs # CV, rs # CN with
       | Vint o, Vint s => Some (Int.eq (Int.xor o s) Int.one)
       | _, _ => None
       end
   | TCle =>                             (**r signed less or equal *)
-      match rs CV, rs CN, rs CZ with
+      match rs # CV, rs # CN, rs # CZ with
       | Vint o, Vint s, Vint z => Some (Int.eq (Int.xor o s) Int.one || Int.eq z Int.one)
       | _, _, _ => None
       end
   | TCge =>                             (**r signed greater or equal *)
-      match rs CV, rs CN with
+      match rs # CV, rs # CN with
       | Vint o, Vint s => Some (Int.eq (Int.xor o s) Int.zero)
       | _, _ => None
       end
   | TCgt =>                             (**r signed greater *)
-      match rs CV, rs CN, rs CZ with
+      match rs # CV, rs # CN, rs # CZ with
       | Vint o, Vint s, Vint z => Some (Int.eq (Int.xor o s) Int.zero && Int.eq z Int.zero)
       | _, _, _ => None
       end
   | TCpl =>                             (**r positive *)
-      match rs CN with
+      match rs # CN with
       | Vint n => Some (Int.eq n Int.zero)
       | _ => None
       end
   | TCmi =>                             (**r negative *)
-      match rs CN with
+      match rs # CN with
       | Vint n => Some (Int.eq n Int.one)
       | _ => None
       end
@@ -860,12 +1004,41 @@ Definition preg_of (r: mreg) : preg :=
 
 (** Undefine all registers except SP and callee-save registers *)
 
-Definition undef_caller_save_regs (rs: regset) : regset :=
+Definition undef_caller_save_regs_spec (rs: preg -> val) : preg -> val :=
   fun r =>
     if preg_eq r SP
     || In_dec preg_eq r (List.map preg_of (List.filter is_callee_save all_mregs))
     then rs r
     else Vundef.
+
+Definition pregs_destroyed_at_call :=
+  PC :: CR CN :: CR CZ :: CR CC :: CR CV :: IR RA
+     :: (map preg_of (filter (fun m => negb (is_callee_save m)) all_mregs)).
+
+Lemma pregs_destroyed_at_call_correct:
+  forall r,
+  preg_eq r SP
+  || In_dec preg_eq r (List.map preg_of (List.filter is_callee_save all_mregs))
+  =
+  negb (In_dec preg_eq r pregs_destroyed_at_call).
+Proof.
+  intros.
+  destruct r as [x|x|x|]; try destruct x; auto.
+Qed.
+
+Definition undef_caller_save_regs (rs: regset) : regset :=
+  undef_regs pregs_destroyed_at_call rs.
+
+Lemma undef_caller_save_regs_correct:
+  forall rs r,
+  (undef_caller_save_regs rs) # r = undef_caller_save_regs_spec (fun r' => rs # r) r.
+Proof.
+  intros. unfold undef_caller_save_regs, undef_caller_save_regs_spec.
+  rewrite pregs_destroyed_at_call_correct.
+  destruct (In_dec preg_eq r pregs_destroyed_at_call) as [IN | NOTIN].
+  - rewrite undef_regs_same; auto.
+  - rewrite undef_regs_other; auto.
+Qed.
 
 (** Extract the values of the arguments of an external call.
     We exploit the calling conventions from module [Conventions], except that
@@ -873,11 +1046,11 @@ Definition undef_caller_save_regs (rs: regset) : regset :=
 
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
-      extcall_arg rs m (R r) (rs (preg_of r))
+      extcall_arg rs m (R r) (rs # (preg_of r))
   | extcall_arg_stack: forall ofs q bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
       Mem.loadv (chunk_of_quantity q) m
-                (Val.offset_ptr (rs (IR IR13)) (Ptrofs.repr bofs)) = Some v ->
+                (Val.offset_ptr (rs # (IR IR13)) (Ptrofs.repr bofs)) = Some v ->
       extcall_arg rs m (S Outgoing ofs q) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
@@ -904,17 +1077,17 @@ Inductive state: Type :=
 Inductive step: state -> trace -> state -> Prop :=
   | exec_step_internal:
       forall b ofs f i rs m rs' m',
-      rs PC = Vptr b ofs ->
+      rs # PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Ptrofs.unsigned ofs) (fn_code f) = Some i ->
       exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
       forall b ofs f ef args res rs m vargs t vres rs' m',
-      rs PC = Vptr b ofs ->
+      rs # PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
-      eval_builtin_args ge rs (rs SP) m args vargs ->
+      eval_builtin_args ge (pregmap_read rs) (rs # SP) m args vargs ->
       external_call ef ge vargs m t vres m' ->
       rs' = nextinstr
               (set_res res vres
@@ -922,11 +1095,11 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State rs m) t (State rs' m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
-      rs PC = Vptr b Ptrofs.zero ->
+      rs # PC = Vptr b Ptrofs.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
       external_call ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
-      rs' = (set_pair (loc_external_result (ef_sig ef) ) res (undef_caller_save_regs rs))#PC <- (rs IR14) ->
+      rs' = (set_pair (loc_external_result (ef_sig ef) ) res (undef_caller_save_regs rs))#PC <- (rs#IR14) ->
       step (State rs m) t (State rs' m').
 
 End RELSEM.
@@ -937,7 +1110,7 @@ Inductive initial_state (p: program): state -> Prop :=
   | initial_state_intro: forall m0,
       let ge := Genv.globalenv p in
       let rs0 :=
-        (Pregmap.init Vundef)
+        Pregmap.init
         # PC <- (Genv.symbol_address ge p.(prog_main) Ptrofs.zero)
         # IR14 <- Vzero
         # IR13 <- Vzero in

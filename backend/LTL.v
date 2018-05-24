@@ -66,6 +66,7 @@ Definition funsig (fd: fundef) :=
 
 Definition genv := Genv.t fundef unit.
 Definition locset := Locmap.t.
+Module Regfile := Locmap.Regfile.
 
 Open Scope ltl.
 
