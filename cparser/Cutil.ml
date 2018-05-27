@@ -932,8 +932,12 @@ let ptrdiff_t_ikind () = find_matching_signed_ikind !config.sizeof_ptrdiff_t
 let type_of_constant = function
   | CInt(_, ik, _) -> TInt(ik, [])
   | CFloat(_, fk) -> TFloat(fk, [])
-  | CStr _ -> TPtr(TInt(IChar, []), [])
-  | CWStr _ -> TPtr(TInt(wchar_ikind(), []), [])
+  | CStr s ->
+    let size = Int64.of_int (String.length s + 1) in
+    TArray(TInt(IChar,[]), Some size, [])
+  | CWStr s ->
+    let size = Int64.of_int (List.length s + 1) in
+    TArray(TInt(wchar_ikind(), []), Some size, [])
   | CEnum(_, _) -> TInt(IInt, [])
 
 (* Check that a C expression is a lvalue *)
@@ -941,6 +945,8 @@ let type_of_constant = function
 let rec is_lvalue e =
   match e.edesc with
   | EVar id -> true
+  | EConst (CStr _)
+  | EConst (CWStr _) -> true
   | EUnop((Oderef | Oarrow _), _) -> true
   | EUnop(Odot _, e') -> is_lvalue e'
   | EBinop(Oindex, _, _, _) -> true

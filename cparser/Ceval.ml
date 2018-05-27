@@ -103,7 +103,7 @@ let cast env ty_to v =
       else raise Notconst
   | TPtr(ty, _), I n ->
       I (normalize_int n (ptr_t_ikind ()))
-  | TPtr(ty, _), (S _ | WS _) ->
+  | (TArray(ty, _, _) | TPtr (ty, _)), (S _ | WS _) ->
       v
   | TEnum(_, _), I n ->
       I (normalize_int n enum_ikind)
@@ -272,8 +272,8 @@ let constant_expr env ty e =
     match unroll env ty, cast env ty (expr env e) with
     | TInt(ik, _), I n -> Some(CInt(n, ik, ""))
     | TPtr(_, _), I n -> Some(CInt(n, IInt, ""))
-    | TPtr(_, _), S s -> Some(CStr s)
-    | TPtr(_, _), WS s -> Some(CWStr s)
+    | (TArray(_, _, _) | TPtr(_, _)), S s -> Some(CStr s)
+    | (TArray(_, _, _) | TPtr(_, _)), WS s -> Some(CWStr s)
     | TEnum(_, _), I n -> Some(CInt(n, enum_ikind, ""))
     | _   -> None
   with Notconst -> None
@@ -348,6 +348,8 @@ and is_constant_rval_of_lval env e =
 
 and is_constant_lval env e =
   match e.edesc with
+  | EConst (CStr _)
+  | EConst (CWStr _) -> true
   | EVar id ->
       begin match Env.find_ident env id with
       | Env.II_ident(sto, _) ->

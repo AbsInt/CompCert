@@ -717,6 +717,7 @@ let ewrap = function
 
 let rec convertExpr env e =
   match e.edesc with
+  | C.EConst (C.CStr _ | C.CWStr _)
   | C.EVar _
   | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
   | C.EBinop(C.Oindex, _, _, _) ->
@@ -732,12 +733,6 @@ let rec convertExpr env e =
       if k = C.FLongDouble && not !Clflags.option_flongdouble then
         unsupported "'long double' floating-point constant";
       convertFloat f k
-  | C.EConst(C.CStr s) ->
-      let ty = typeStringLiteral s in
-      Evalof(Evar(name_for_string_literal s, ty), ty)
-  | C.EConst(C.CWStr s) ->
-      let ty = typeWideStringLiteral s in
-      Evalof(Evar(name_for_wide_string_literal s, ty), ty)
   | C.EConst(C.CEnum(id, i)) ->
       Ctyping.econst_int (convertInt32 i) Signed
   | C.ESizeof ty1 ->
@@ -960,6 +955,12 @@ and convertLvalue env e =
       let e1' = convertExpr env e1 and e2' = convertExpr env e2 in
       let e3' = ewrap (Ctyping.ebinop Cop.Oadd e1' e2') in
       ewrap (Ctyping.ederef e3')
+  | C.EConst(C.CStr s) ->
+      let ty = typeStringLiteral s in
+      Evar(name_for_string_literal s, ty)
+  | C.EConst(C.CWStr s) ->
+      let ty = typeWideStringLiteral s in
+      Evar(name_for_wide_string_literal s, ty)
   | _ ->
       error "illegal lvalue"; ezero
 

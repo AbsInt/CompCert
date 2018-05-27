@@ -1765,18 +1765,7 @@ let elab_expr vararg loc env a =
         error "invalid application of 'sizeof' to an incomplete type %a" (print_typ env) b1.etyp;
       if wrap is_bitfield loc env b1 then
         error "invalid application of 'sizeof' to a bit-field";
-      let bdesc =
-        (* Catch special cases sizeof("string literal") *)
-        match b1.edesc with
-        | EConst(CStr s) ->
-            let sz = String.length s + 1 in
-            EConst(CInt(Int64.of_int sz, size_t_ikind(), ""))
-        | EConst(CWStr s) ->
-            let sz = (!config).sizeof_wchar * (List.length s + 1) in
-            EConst(CInt(Int64.of_int sz, size_t_ikind(), ""))
-        | _ ->
-            ESizeof b1.etyp in
-      { edesc = bdesc; etyp = TInt(size_t_ikind(), []) },env
+      { edesc = ESizeof b1.etyp; etyp = TInt(size_t_ikind(), []) },env
 
   | TYPE_SIZEOF (spec, dcl) ->
       let (ty, env') = elab_type loc env spec dcl in
