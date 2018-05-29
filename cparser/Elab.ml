@@ -499,7 +499,7 @@ let extract_alignas loc a =
   match a with
   | Attr(("aligned"|"__aligned__"), args) ->
       begin match args with
-      | [AInt n] when is_power_of_two n  -> AAlignas (Int64.to_int n)
+      | [AInt n] when is_power_of_two n || n = 0L  -> AAlignas (Int64.to_int n)
       | [AInt n] -> error loc "requested alignment is not a power of 2"; a
       | [_] -> error loc "requested alignment is not an integer constant"; a
       | [] -> a (* Use the default alignment as the gcc does *)
@@ -519,7 +519,7 @@ let elab_attribute env = function
   | ALIGNAS_ATTR ([a], loc) ->
       begin match elab_attr_arg loc env a with
       | AInt n ->
-          if is_power_of_two n then
+          if is_power_of_two n || n = 0L then
             [AAlignas (Int64.to_int n)]
           else begin
             error loc "requested alignment is not a power of 2"; []
