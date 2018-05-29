@@ -2274,7 +2274,7 @@ let enter_decdefs local loc env sto dl =
   let enter_decdef (decls, env) (s, ty, init) =
     let isfun = is_function_type env ty in
     if sto = Storage_extern && init <> NO_INIT then
-      error loc "'extern' declaration  variable has an initializer";
+      error loc "'extern' declaration variable has an initializer";
     if local && isfun then begin
       match sto with
       | Storage_static ->
