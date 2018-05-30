@@ -18,11 +18,13 @@
 prefix='/usr/local'
 bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
+coqdevdir='$(PREFIX)/lib/compcert/coq'
 toolprefix=''
 target=''
 has_runtime_lib=true
 has_standard_headers=true
 clightgen=false
+install_coqdev=false
 responsefile="gnu"
 ignore_coq_version=false
 
@@ -75,10 +77,12 @@ Options:
   -prefix <dir>        Install in <dir>/bin and <dir>/lib/compcert
   -bindir <dir>        Install binaries in <dir>
   -libdir <dir>        Install libraries in <dir>
+  -coqdevdir <dir>     Install Coq development (.vo files) in <dir>
   -toolprefix <pref>   Prefix names of tools ("gcc", etc) with <pref>
   -no-runtime-lib      Do not compile nor install the runtime support library
   -no-standard-headers Do not install nor use the standard .h headers
-  -clightgen           Also compile the clightgen tool
+  -clightgen           Also compile and install the clightgen tool
+  -install-coqdev      Also install the Coq development (implied by -clightgen)
   -ignore-coq-version  Accept to use experimental or unsupported versions of Coq
 '
 
@@ -96,6 +100,8 @@ while : ; do
         bindir="$2"; shift;;
     -libdir|--libdir)
         libdir="$2"; shift;;
+    -coqdevdir|--coqdevdir)
+        coqdevdir="$2"; install_coqdev=true; shift;;
     -toolprefix|--toolprefix)
         toolprefix="$2"; shift;;
     -no-runtime-lib)
@@ -103,9 +109,12 @@ while : ; do
     -no-standard-headers)
         has_standard_headers=false;;
     -clightgen)
-        clightgen=true;;
+        clightgen=true
+        install_coqdev=true;;
     -ignore-coq-version|--ignore-coq-version)
         ignore_coq_version=true;;
+    -install-coqdev|--install-coqdev|-install-coq-dev|--install-coq-dev)
+        install_coqdev=true;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -623,6 +632,7 @@ BINDIR=$bindir
 LIBDIR=$libdir
 MANDIR=$sharedir/man
 SHAREDIR=$sharedir
+COQDEVDIR=$coqdevdir
 OCAML_OPT_COMP=$ocaml_opt_comp
 MENHIR_INCLUDES=$menhir_includes
 COMPFLAGS=-bin-annot
@@ -646,6 +656,7 @@ CPREPRO_OPTIONS=$cprepro_options
 ENDIANNESS=$endianness
 HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
+INSTALL_COQDEV=$install_coqdev
 LIBMATH=$libmath
 MODEL=$model
 SYSTEM=$system
@@ -761,6 +772,7 @@ else
 
 bindirexp=`echo "$bindir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
 libdirexp=`echo "$libdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
+coqdevdirexp=`echo "$coqdevdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
 
 cat <<EOF
 
@@ -778,12 +790,23 @@ CompCert configuration:
     Linker........................ $clinker
     Linker needs '-no-pie'........ $clinker_needs_no_pie
     Math library.................. $libmath
+    Build command to use.......... $make
     Binaries installed in......... $bindirexp
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $libdirexp
     Standard headers provided..... $has_standard_headers
     Standard headers installed in. $libdirexp/include
-    Build command to use.......... $make
+EOF
 
+if $install_coqdev; then
+cat <<EOF
+    Coq development installed in.. $coqdevdirexp
+EOF
+else
+cat <<EOF
+    Coq development will not be installed
 EOF
 fi
+
+fi
+

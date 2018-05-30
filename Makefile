@@ -21,7 +21,7 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
-DIRS=lib common $(ARCHDIRS) backend cfrontend driver debug\
+DIRS=lib common $(ARCHDIRS) backend cfrontend driver \
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
   cparser cparser/validator
 
@@ -253,6 +253,15 @@ install:
 ifeq ($(CLIGHTGEN),true)
 	install -m 0755 ./clightgen $(BINDIR)
 endif
+ifeq ($(INSTALL_COQDEV),true)
+	install -d $(COQDEVDIR)
+	for d in $(DIRS); do \
+          install -d $(COQDEVDIR)/$$d && \
+          install -m 0644 $$d/*.vo $(COQDEVDIR)/$$d/; \
+	done
+	@(echo "To use, pass the following to coq_makefile or add the following to _CoqProject:"; echo "-R $(COQDEVDIR) compcert") > $(COQDEVDIR)/README
+endif
+
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
