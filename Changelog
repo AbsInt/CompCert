@@ -68,6 +68,9 @@ Coq development:
 - Rewrote "Implicit Arguments" and "Require" inside sections,
   these are obsolete in 8.8.0.
 - Upgraded Flocq to version 2.6.1.
+- Optionally install the .vo files for reuse by other projects
+  (options -install-coqdev and -coqdevdir to configure script;
+   automatically selected if option -clightgen is given).
 
 
 Release 3.2, 2018-01-15
