@@ -9,26 +9,23 @@ New features:
   define the max_align_t type in stddef.h.
 - PowerPC 64-bit port: new built-in functions for 64-bit load-store with
   byte reversal and for 64-bit integer multiply high.
-- x86 64-bit port: add support for BSD.
+- x86 64 bits: add support for BSD.
 
 Bug fixing:
 - Wrong code generated for unions containing several bit fields.
 - Internal compiler errors for some initializers for structs and
-  unions containing bit-fields.
-- Internal compiler errors for some initializers for anonymous members
-  of unions.
+  unions containing bit-fields, and for anonymous members of unions.
 - Missing error reporting for <integer> - <ptr> subtraction,
   causing an internal retyping error later during compilation.
 - String literals are l-values.
 - String literals have array types, not pointer types.
-- Array dimensions >= 2^32 were handled incorrectly on 64-bit platforms.
+- Array sizes >= 2^32 were handled incorrectly on 64-bit platforms.
 - Wrong code generated for global variables of size 2^31 bytes or more.
 - struct and union arguments to annotation builtins must be passed by
   reference, regardless of the ABI calling conventions.
 - "e1, e2" has pointer type if "e2" has array type.
-- x86, 64 bits: in "symbol + ofs" addressing modes, the offset "ofs"
+- x86 64 bits: in "symbol + ofs" addressing modes, the offset "ofs"
   must be limited to [-2^24, 2^24) otherwise linking can fail.
-- exportclight: bad printing of Init_addrof.
 
 New or improved diagnostics (errors and warnings):
 - Warn for comparison of a pointer to a complete type and a pointer to
