@@ -1,3 +1,75 @@
+Release 3.3, 2018-05-30
+=======================
+
+New features:
+- Introduced the __builtin_ais_annot built-in function to communicate
+  source-level annotations to AbsInt's a3 tool suite via a special
+  section in object and executable files.
+- Improved C11 support: define the C11 conditional feature macros;
+  define the max_align_t type in stddef.h.
+- PowerPC 64-bit port: new built-in functions for 64-bit load-store with
+  byte reversal and for 64-bit integer multiply high.
+- x86 64-bit port: add support for BSD.
+
+Bug fixing:
+- Wrong code generated for unions containing several bit fields.
+- Internal compiler errors for some initializers for structs and
+  unions containing bit-fields.
+- Internal compiler errors for some initializers for anonymous members
+  of unions.
+- Missing error reporting for <integer> - <ptr> subtraction,
+  causing an internal retyping error later during compilation.
+- String literals are l-values.
+- String literals have array types, not pointer types.
+- Array dimensions >= 2^32 were handled incorrectly on 64-bit platforms.
+- Wrong code generated for global variables of size 2^31 bytes or more.
+- struct and union arguments to annotation builtins must be passed by
+  reference, regardless of the ABI calling conventions.
+- "e1, e2" has pointer type if "e2" has array type.
+- x86, 64 bits: in "symbol + ofs" addressing modes, the offset "ofs"
+  must be limited to [-2^24, 2^24) otherwise linking can fail.
+- exportclight: bad printing of Init_addrof.
+
+New or improved diagnostics (errors and warnings):
+- Warn for comparison of a pointer to a complete type and a pointer to
+  an incomplete type.
+- More checks on variables declared in "for" loops: not static, not
+  extern, not function types.
+- Reject empty declarations in K&R functions.
+- Reject arrays of incomplete types.
+- Reject duplicate 'case' or 'default' statements within a 'switch'.
+- Reject 'case' and 'default' statements outside a 'switch'.
+- Check that 'typedef' declares a name and doesn't contain '_Noreturn'.
+- Function parameters are in the same scope as function local variables.
+- More comprehensive constant-ness checks for initializers of global
+  or static local variables.
+- Make sure an enum cannot have the same tag as a struct or an union.
+- More checks on where the 'auto' storage class can be used.
+- Accept empty enum declaration after nonempty enum definition.
+- Reject pointers to incomplete types in ptr - ptr subtraction.
+- When defining a function, take attributes (_Noreturn, etc) from
+  earlier declarations of the function into account.
+- Better check for multiple definitions of functions or global variables.
+- Reject illegal initializations of aggregates such as "char c[4] = 42;".
+- Reject designated initializers where a member of a composite type is
+  re-initialized after the composite has been initialized as a whole.
+- Reject casts to struct/union types.
+- Reject sizeof(e) where e designates a bit-field member of a struct or union.
+- "e1, e2" is not a compile-time constant expression even if e1 and e2 are.
+- "main" function must not be "inline"
+- Warn for functions declared extern after having been defined.
+- Warn for function declarations after function definitions when the
+  declaration has more attributes than the definition.
+- Warn for assignment of a volatile struct to a non-volatile struct.
+- Warn for "main" function if declared _Noreturn.
+
+Coq development:
+- Added support for Coq versions 8.7.2 and 8.8.0.
+- Rewrote "Implicit Arguments" and "Require" inside sections,
+  these are obsolete in 8.8.0.
+- Upgraded Flocq to version 2.6.1.
+
+
 Release 3.2, 2018-01-15
 =======================
 
