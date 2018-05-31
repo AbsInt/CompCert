@@ -173,7 +173,7 @@ let expand_builtin_vload_common chunk addr res =
      emit (Pmovl_rm (res,addr))
   | Mint64, BR(IR res) ->
      emit (Pmovq_rm (res,addr))
-  | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
+  | Mint64, BR_splitlong(IR res1, IR res2) ->
      let addr' = offset_addressing addr _4z in
      if not (Asmgen.addressing_mentions addr res2) then begin
 	 emit (Pmovl_rm (res2,addr));
@@ -323,7 +323,7 @@ let expand_builtin_inline name args res =
        emit (Pmov_rr (res,a1));
      emit (Pbswap64 res)
   | "__builtin_bswap64", [BA_splitlong(BA(IR ah), BA(IR al))],
-                         BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                         BR_splitlong(IR rh, IR rl) ->
      assert (ah = RAX && al = RDX && rh = RDX && rl = RAX);
      emit (Pbswap32 RAX);
      emit (Pbswap32 RDX)
@@ -411,25 +411,25 @@ let expand_builtin_inline name args res =
         (fun r1 r2 r3 -> Pfnmsub231(r1, r2, r3))
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
      assert (ah = RDX && al = RAX && rh = RDX && rl = RAX);
      emit (Pnegl RAX);
      emit (Padcl_ri (RDX,_0));
      emit (Pnegl RDX)
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                       BR_splitlong(IR rh, IR rl) ->
      assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
      emit (Paddl_rr (RAX,RBX));
      emit (Padcl_rr (RDX,RCX))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                       BR_splitlong(IR rh, IR rl) ->
      assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
      emit (Psubl_rr (RAX,RBX));
      emit (Psbbl_rr (RDX,RCX))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
      assert (a = RAX && b = RDX && rh = RDX && rl = RAX);
      emit (Pmull_r RDX)
   (* Memory accesses *)

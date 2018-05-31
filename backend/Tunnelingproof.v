@@ -271,7 +271,7 @@ Lemma locmap_set_undef_lessdef:
   locmap_lessdef ls1 ls2 -> locmap_lessdef (Locmap.set l Vundef ls1) ls2.
 Proof.
   intros; red; intros l'. unfold Locmap.set. destruct (Loc.eq l l').
-- destruct l; auto. destruct ty; auto. 
+- subst. destruct (Loc.type l'); auto.
 - destruct (Loc.diff_dec l l'); auto.
 Qed.
 
