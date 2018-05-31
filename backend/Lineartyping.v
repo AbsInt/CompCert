@@ -429,11 +429,12 @@ Qed.
 Theorem wt_entry_point:
   forall m S fp args, entry_point prog m S fp args -> wt_state S.
 Proof.
-  induction 1. econstructor. constructor.
+  induction 1. econstructor.
+  constructor. constructor. admit. (* f0's code must be well-typed *) reflexivity. apply wt_build_from_arguments; auto.
   unfold ge0 in H2. exploit Genv.find_funct_ptr_inversion; eauto.
   intros [id IN]. eapply wt_prog; eauto.
   apply wt_build_from_arguments; auto.
-Qed.
+Admitted.
 
 End SOUNDNESS.
 

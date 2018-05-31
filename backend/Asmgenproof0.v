@@ -387,18 +387,19 @@ Proof.
   eapply extcall_args_match; eauto.
 Qed.
 
-Lemma set_arg_match:
-  forall ms sp rs l v,
+Lemma make_arg_match:
+  forall ms ms' m m' sp rs l v,
+  Mach.make_arg ms m sp l v = Some (ms', m') ->
   agree ms sp rs ->
-  agree (Mach.set_arg ms l v) sp (Asm.set_arg rs l v).
+  exists rs', Asm.make_arg rs m l v = Some (rs', m') /\ agree ms' sp rs'.
 Proof.
   destruct l; auto; simpl; intros.
   apply agree_set_mreg_parallel; auto.
 Qed.
 
-Lemma set_arguments_match:
-  forall ms ms' sp rs ll vl,
-  Mach.set_arguments ms ll vl = Some ms' ->
+Lemma make_arguments_match:
+  forall ms ms' m m' sp rs ll vl,
+  Mach.make_arguments ms m sp ll vl = Some (ms', m') ->
   agree ms sp rs ->
   exists rs', Asm.set_arguments rs ll vl = Some rs' /\ agree ms' sp rs'.
 Proof.

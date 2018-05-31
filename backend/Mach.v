@@ -508,44 +508,67 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some fb ->
       initial_state p (Callstate nil fb (Regmap.init Vundef) m0).
 
-(* Arguments on the stack will be stored at the beginning of the function body, after leaving the
-   Callstate, so we only need to store register arguments. *)
-Definition set_arg (rs: regset) (l: loc) (v: val) : regset :=
+Definition make_arg (rs: regset) (m: mem) sp (l: loc) (v: val) : option (regset * mem) :=
   match l with
-  | R r => rs # r <- v
-  | S _ _ _ => rs
+  | R r => Some (rs # r <- v, m)
+  | S _ ofs ty =>
+      let bofs := (Stacklayout.fe_ofs_arg + 4 * ofs)%Z  in
+      match store_stack m sp ty (Ptrofs.repr bofs) v with
+      | Some m' => Some (rs, m')
+      | None => None
+      end
   end.
 
-Fixpoint set_arguments (rs: regset) (al: list (rpair loc)) (lv: list val) : option regset :=
+Fixpoint make_arguments (rs: regset) (m: mem) sp (al: list (rpair loc)) (lv: list val) :
+  option (regset * mem) :=
   match al, lv with
   | a :: al', v :: lv' =>
-    match set_arguments rs al' lv' with
-    | Some rs' =>
+    match make_arguments rs m sp al' lv' with
+    | Some (rs', m') =>
       match a with
-      | One l => Some (set_arg rs' l v)
+      | One l => make_arg rs' m' sp l v
       | Twolong hi lo =>
         match v with
         | Vlong v' =>
-            Some (set_arg (set_arg rs' hi (Vint (Int64.hiword v'))) lo (Vint (Int64.loword v')))
+          match make_arg rs' m' sp hi (Vint (Int64.hiword v')) with
+          | Some (rs'', m'') => make_arg rs'' m'' sp lo (Vint (Int64.loword v'))
+          | None => None
+          end
         | Vundef =>
-            Some (set_arg (set_arg rs' hi Vundef) lo Vundef)
+          match make_arg rs' m' sp hi Vundef with
+          | Some (rs'', m'') => make_arg rs'' m'' sp lo Vundef
+          | None => None
+          end
         | _ => None
         end
       end
     | _ => None
     end
-  | _, _ => Some rs
+  | nil, nil => Some (rs, m)
+  | _, _ => None
+ end.
+
+Fixpoint stack_bounds ll :=
+  match ll with
+  | nil => (0, 0)
+  | R _ :: ll' => stack_bounds ll'
+  | S _ ofs ty :: ll' => let '(lo, hi) := stack_bounds ll' in
+      let bofs := Stacklayout.fe_ofs_arg + 4 * ofs in
+      (Z.min lo bofs, Z.max hi (bofs + size_chunk (chunk_of_type ty)))
   end.
 
+(* When we spawn a thread, it should have a stack frame under it with its arguments. *)
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f rs m args,
+  | entry_point_intro: forall b m0 f0 f rs m args lo hi m1 stk,
       let ge := Genv.globalenv p in
+      stack_bounds (regs_of_rpairs (loc_arguments (funsig f))) = (lo, hi) ->
+      Mem.alloc m0 lo hi = (m1, stk) ->
       Mem.mem_wd m ->
       Mem.arg_well_formed args m ->
       globals_not_fresh ge m ->
       Genv.find_funct_ptr ge b = Some f ->
-      set_arguments (Regmap.init Vundef) (loc_arguments (funsig f)) args = Some rs ->
-      entry_point p m (Callstate nil b rs m) (Vptr b (Ptrofs.zero)) args.
+      make_arguments (Regmap.init Vundef) m1 (Vptr stk Ptrofs.zero) (loc_arguments (funsig f)) args = Some (rs, m) ->
+      entry_point p m0 (Callstate (Stackframe f0 (Vptr stk Ptrofs.zero) Vnullptr nil :: nil) b rs m) (Vptr b (Ptrofs.zero)) args.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r retcode,

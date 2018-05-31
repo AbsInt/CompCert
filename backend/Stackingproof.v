@@ -1685,17 +1685,84 @@ Qed.
 
 End EXTERNAL_ARGUMENTS.
 
-Lemma transl_set_arguments_rec: forall rs sg locs args,
-  incl locs (loc_arguments sg) ->
-  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end) locs args ->
-  exists rs', set_arguments rs locs args = Some rs'.
+Lemma make_arg_valid : forall rs rs' m m' sp l v, make_arg rs m sp l v = Some (rs', m') ->
+  forall ch b ofs p, Mem.valid_access m' ch b ofs p <-> Mem.valid_access m ch b ofs p.
+Proof.
+  destruct l; unfold make_arg; intros.
+  - inv H; reflexivity.
+  - unfold store_stack, Mem.storev, Val.offset_ptr in H.
+    destruct sp; try discriminate.
+    destruct (Mem.store _ _ _ _ _) eqn: Hstore; inv H.
+    split; [eapply Mem.store_valid_access_2 | eapply Mem.store_valid_access_1]; eauto.
+Qed.
+
+Lemma make_arguments_valid : forall rs rs' m m' sp l v, make_arguments rs m sp l v = Some (rs', m') ->
+  forall ch b ofs p, Mem.valid_access m' ch b ofs p <-> Mem.valid_access m ch b ofs p.
+Proof.
+  intros until l; revert rs' m'; induction l; simpl; intros.
+  - destruct v; inv H; reflexivity.
+  - destruct v; try discriminate.
+    destruct (make_arguments _ _ _ _ _) as [[]|] eqn: Hargs; try discriminate.
+    rewrite <- IHl by eauto.
+    destruct a.
+    + eapply make_arg_valid; eauto.
+    + destruct v; try discriminate.
+      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+        etransitivity; eapply make_arg_valid; eauto.
+      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+        etransitivity; eapply make_arg_valid; eauto.
+Qed.
+
+Lemma transl_make_arg:
+  forall m rs sp sg l v,
+  In l (regs_of_rpairs (loc_arguments sg)) ->
+  (forall s ofs ty, l = S s ofs ty -> fe_ofs_arg + 4 * ofs <= Ptrofs.max_unsigned /\
+     Mem.valid_access m (chunk_of_type ty) sp (fe_ofs_arg + 4 * ofs) Writable) ->
+  exists rs' m', make_arg rs m (Vptr sp Ptrofs.zero) l v = Some (rs', m').
 Proof.
   intros.
-  induction H0; simpl; intros; eauto.
-  destruct IHForall2 as [rs' ->].
+  assert (loc_argument_acceptable l) by (apply loc_arguments_acceptable_2 with sg; auto).
+  destruct l; unfold make_arg; eauto; intros.
+  destruct sl; try contradiction.
+  unfold store_stack, Mem.storev, Val.offset_ptr.
+  rewrite Ptrofs.add_zero_l.
+  edestruct (Mem.valid_access_store) as [? ->]; eauto.
+  edestruct H0; eauto.
+  rewrite Ptrofs.unsigned_repr; eauto.
+  simpl in H1.
+  split; [unfold fe_ofs_arg; omega | auto].
+Qed.
+
+Lemma transl_make_arguments_rec: forall m rs sp sg locs args,
+  incl locs (loc_arguments sg) ->
+  (forall s ofs ty, In (S s ofs ty) (regs_of_rpairs (loc_arguments sg)) -> fe_ofs_arg + 4 * ofs <= Ptrofs.max_unsigned /\
+     Mem.valid_access m (chunk_of_type ty) sp (fe_ofs_arg + 4 * ofs) Writable) ->
+  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end) locs args ->
+  exists rs' m', make_arguments rs m (Vptr sp Ptrofs.zero) locs args = Some (rs', m').
+Proof.
+  intros.
+  induction H1; simpl; intros.
+  { do 3 eexists; eauto; reflexivity. }
+  destruct IHForall2 as (rs' & m' & Hargs).
   { eapply incl_cons_inv; eauto. }
-  destruct x; eauto.
-  destruct H0 as [|[]]; subst; eauto.
+  rewrite Hargs; destruct x.
+- eapply transl_make_arg; eauto.
+  + eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto.
+  + intros; subst; rewrite make_arguments_valid by eauto; eapply H0; eauto.
+    eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto.
+- assert (In rhi (regs_of_rpairs (loc_arguments sg))).
+  { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
+  assert (In rlo (regs_of_rpairs (loc_arguments sg))).
+  { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
+  destruct H1 as [|[]]; subst.
+  + destruct (transl_make_arg m' rs' sp sg rhi Vundef) as (? & ? & Ha); auto.
+    { intros; subst; rewrite make_arguments_valid by eauto; eapply H0; eauto. }
+    rewrite Ha; eapply transl_make_arg; eauto.
+    { intros; subst; rewrite make_arg_valid, make_arguments_valid by eauto; eapply H0; eauto. }
+  + destruct (transl_make_arg m' rs' sp sg rhi (Vint (Int64.hiword x))) as (? & ? & Ha); auto.
+    { intros; subst; rewrite make_arguments_valid by eauto; eapply H0; eauto. }
+    rewrite Ha; eapply transl_make_arg; eauto.
+    { intros; subst; rewrite make_arg_valid, make_arguments_valid by eauto; eapply H0; eauto. }
 Qed.
 
 Lemma has_type_locs_32 : forall lv lt a, Val.has_type_list lv lt -> Archi.ptr64 = false ->
@@ -1729,11 +1796,13 @@ Proof.
   destruct Archi.ptr64 eqn: H64; [apply has_type_locs_64 | apply has_type_locs_32]; auto.
 Qed.
 
-Lemma transl_set_arguments: forall rs sg args,
+Lemma transl_make_arguments: forall m rs sp sg args,
   Val.has_type_list args (sig_args sg) ->
-  exists rs', set_arguments rs (loc_arguments sg) args = Some rs'.
+  (forall s ofs ty, In (S s ofs ty) (regs_of_rpairs (loc_arguments sg)) -> fe_ofs_arg + 4 * ofs <= Ptrofs.max_unsigned /\
+     Mem.valid_access m (chunk_of_type ty) sp (fe_ofs_arg + 4 * ofs) Writable) ->
+  exists rs' m', make_arguments rs m (Vptr sp Ptrofs.zero) (loc_arguments sg) args = Some (rs', m').
 Proof.
-  intros; eapply transl_set_arguments_rec; eauto.
+  intros; eapply transl_make_arguments_rec; eauto.
   - apply incl_refl.
   - apply has_type_sig_locs; auto.
 Qed.
@@ -2217,41 +2286,50 @@ Proof.
   apply frame_contents_exten with rs0 (parent_locset s); auto.
 Qed.
 
-Lemma set_arg_inject : forall j ls rs l v,
+Lemma make_arg_inject : forall j ls rs m sp l v rs' m',
   agree_regs j ls rs ->
   Val.inject j v v ->
-  agree_regs j (Locmap.set l v ls) (set_arg rs l v).
+  make_arg rs m (Vptr sp Ptrofs.zero) l v = Some (rs', m') ->
+  agree_regs j (Locmap.set l v ls) rs'.
 Proof.
   destruct l; simpl; intros.
-  - apply agree_regs_set_reg; auto.
-  - apply agree_regs_set_slot; auto.
+  - inv H1.
+    apply agree_regs_set_reg; auto.
+  - destruct (store_stack _ _ _ _); inv H1.
+    apply agree_regs_set_slot; auto.
 Qed.
 
-Lemma set_arguments_inject_rec : forall j ls rs sigs args rs',
+Lemma make_arguments_inject_rec : forall j ls rs m sp sigs args rs' m',
   agree_regs j ls rs ->
   Val.inject_list j args args ->
-  set_arguments rs sigs args = Some rs' ->
+  make_arguments rs m (Vptr sp Ptrofs.zero) sigs args = Some (rs', m') ->
   agree_regs j (setlist sigs args ls) rs'.
 Proof.
-  intros until sigs; revert ls rs; induction sigs; simpl; intros.
+  intros until sigs; revert ls rs m; induction sigs; simpl; intros.
   - destruct args; inv H1; auto.
   - destruct args; try discriminate.
-    { inv H1; auto. }
     inv H0.
-    destruct (set_arguments _ _ _) eqn: Ha; try discriminate.
+    destruct (make_arguments _ _ _ _ _) as [[]|] eqn: Ha; try discriminate.
     eapply IHsigs in Ha; eauto.
     destruct a; simpl.
-    + inv H1.
-      apply set_arg_inject; auto.
-    + destruct v; inv H1; apply set_arg_inject; auto; apply set_arg_inject; auto.
+    + eapply make_arg_inject; eauto.
+    + destruct v; try discriminate.
+      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+        eapply make_arg_inject; eauto.
+        eapply make_arg_inject; eauto.
+      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+        eapply make_arg_inject; eauto.
+        eapply make_arg_inject; eauto.
+        { apply Val.hiword_inject; auto. }
+        { apply Val.loword_inject; auto. }
 Qed.
 
-Lemma set_arguments_inject : forall m sg args rs',
+Lemma make_arguments_inject : forall m sp sg args rs' m',
   Mem.arg_well_formed args m ->
-  set_arguments (Regmap.init Vundef) (loc_arguments sg) args = Some rs' ->
+  make_arguments (Regmap.init Vundef) m (Vptr sp Ptrofs.zero) (loc_arguments sg) args = Some (rs', m') ->
   agree_regs (Mem.flat_inj (Mem.nextblock m)) (build_ls_from_arguments sg args) rs'.
 Proof.
-  intros; eapply set_arguments_inject_rec; eauto.
+  intros; eapply make_arguments_inject_rec; eauto.
   intro; apply Val.val_inject_undef.
 Qed.
 
@@ -2276,6 +2354,76 @@ Proof.
   rewrite in_app in H.
   destruct (setpair_gso a v (setlist ll lv ls) l) as [-> | ->]; auto.
 Qed.
+
+Lemma is_tail_nil: forall {A} (c : list A), is_tail nil c.
+Proof.
+  induction c; constructor; auto.
+Qed.
+
+Lemma transf_entry_points:
+   forall (s1 : Linear.state) (f : val) (arg : list val) (m0 : mem),
+  Linear.entry_point prog m0 s1 f arg ->
+  exists j s2, Mach.entry_point tprog m0 s2 f arg /\ match_states j s1 s2.
+Proof.
+  intros. inv H. subst ge0.
+  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
+  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
+  destruct (transf_function f1) eqn: Hf1; inv B0.
+  destruct (stack_bounds (regs_of_rpairs (loc_arguments (funsig tf)))) as (lo, hi) eqn: Hbounds.
+  destruct (Mem.alloc m0 lo hi) as (m1, stk) eqn: Hstack.
+  pose proof (Mem.alloc_result _ _ _ _ _ Hstack).
+  destruct (transl_make_arguments m1 (Regmap.init Vundef) stk (Linear.funsig f0) arg) as (rs' & m' & Hmake).
+  { admit. }
+  { admit. }
+  assert (Mem.arg_well_formed arg m1).
+  { admit. }
+  do 2 econstructor; split.
+  - econstructor; try (erewrite sig_preserved by eauto; apply Hmake); eauto.
+    + admit.
+    + admit.
+    + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+      eapply match_program_gen_len_defs in TRANSF; eauto.
+      admit.
+  - subst; econstructor; eauto.
+    + econstructor; eauto.
+      * apply is_tail_nil.
+      * instantiate (1 := Mem.flat_inj (Mem.nextblock m1)).
+        unfold Mem.flat_inj.
+        admit. (* How does the stack pointer factor into the injection? *)
+      * apply Val.Vnullptr_has_type.
+      * constructor.
+        { subst ls0.
+          admit. }
+        intros.
+        subst ls0; unfold build_ls_from_arguments.
+        destruct (setlist_gso (loc_arguments (Linear.funsig f0)) arg (Locmap.init Vundef) (S Incoming ofs ty)) as [-> | ->];
+          auto.
+        intro Hin.
+        apply loc_arguments_acceptable_2 in Hin; contradiction.
+      * intros ???%loc_arguments_bounded; auto.
+        admit.
+      * constructor.
+        admit.
+    + eapply make_arguments_inject; eauto.
+    + hnf; auto.
+    + simpl; split; [|split].
+      * rewrite (sep_comm _ (pure _)), sep_pure; split; auto.
+        admit.
+      * split; [|split; unfold disjoint_footprint; auto]; simpl.
+        { admit. (*
+          apply Mem.mem_wd_inject; auto.*) }
+        admit. (*
+        exists (Mem.nextblock m1); split; [apply Ple_refl|].
+        subst ge; unfold Mem.flat_inj; constructor; intros.
+          apply pred_dec_true; auto.
+          destruct (plt b1 (Mem.nextblock m0)); congruence.
+          eapply Plt_Ple_trans; [eapply Genv.genv_symb_range; eauto | auto].
+          eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_funct_ptr_iff; eauto | auto].
+          eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_var_info_iff; eauto | auto].*)
+      * admit.
+    + admit.
+    + admit.
+Admitted.
 
 (* In the execution of a Linear program, we step into a CallState through either Lcall or
    Ltailcall, and in the former case we always add a stack frame in the process. As a result,
