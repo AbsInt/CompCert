@@ -259,6 +259,7 @@ ifeq ($(INSTALL_COQDEV),true)
           install -d $(COQDEVDIR)/$$d && \
           install -m 0644 $$d/*.vo $(COQDEVDIR)/$$d/; \
 	done
+	install -m 0644 ./VERSION $(COQDEVDIR)
 	@(echo "To use, pass the following to coq_makefile or add the following to _CoqProject:"; echo "-R $(COQDEVDIR) compcert") > $(COQDEVDIR)/README
 endif
 
