@@ -177,18 +177,11 @@ FORCE:
 
 .PHONY: proof extraction runtime FORCE
 
-documentation: doc/coq2html $(FILES)
+documentation: $(FILES)
 	mkdir -p doc/html
 	rm -f doc/html/*.html
-	doc/coq2html -o 'doc/html/%.html' doc/*.glob \
+	coq2html -d doc/html/ -base compcert -short-names doc/*.glob \
           $(filter-out doc/coq2html cparser/Parser.v, $^)
-	cp doc/coq2html.css doc/coq2html.js doc/html/
-
-doc/coq2html: doc/coq2html.ml
-	ocamlopt -w +a-29 -o doc/coq2html str.cmxa doc/coq2html.ml
-
-doc/coq2html.ml: doc/coq2html.mll
-	ocamllex -q doc/coq2html.mll
 
 tools/ndfun: tools/ndfun.ml
 	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml
@@ -268,7 +261,6 @@ clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
 	rm -f $(patsubst %, %/.*.aux, $(DIRS))
 	rm -rf doc/html doc/*.glob
-	rm -f doc/coq2html.ml doc/coq2html doc/*.cm? doc/*.o
 	rm -f driver/Version.ml
 	rm -f compcert.ini
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr

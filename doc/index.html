@@ -69,73 +69,73 @@ following <A HREF="LICENSE">license</A>.
 <H3>General-purpose libraries, data structures and algorithms</H3>
 
 <UL>
-<LI> <A HREF="html/Coqlib.html">Coqlib</A>: addendum to the Coq standard library.
-<LI> <A HREF="html/Maps.html">Maps</A>: finite maps.
-<LI> <A HREF="html/Integers.html">Integers</A>: machine integers.
-<LI> <A HREF="html/Floats.html">Floats</A>: machine floating-point numbers.
-<LI> <A HREF="html/Iteration.html">Iteration</A>: various forms of "while" loops.
-<LI> <A HREF="html/Ordered.html">Ordered</A>: construction of
+<LI> <A HREF="html/compcert.lib.Coqlib.html">Coqlib</A>: addendum to the Coq standard library.
+<LI> <A HREF="html/compcert.lib.Maps.html">Maps</A>: finite maps.
+<LI> <A HREF="html/compcert.lib.Integers.html">Integers</A>: machine integers.
+<LI> <A HREF="html/compcert.lib.Floats.html">Floats</A>: machine floating-point numbers.
+<LI> <A HREF="html/compcert.lib.Iteration.html">Iteration</A>: various forms of "while" loops.
+<LI> <A HREF="html/compcert.lib.Ordered.html">Ordered</A>: construction of
 ordered types.
-<LI> <A HREF="html/Lattice.html">Lattice</A>: construction of
+<LI> <A HREF="html/compcert.lib.Lattice.html">Lattice</A>: construction of
 semi-lattices.
-<LI> <A HREF="html/Kildall.html">Kildall</A>: resolution of dataflow
+<LI> <A HREF="html/compcert.backend.Kildall.html">Kildall</A>: resolution of dataflow
 inequations by fixpoint iteration.
-<LI> <A HREF="html/UnionFind.html">UnionFind</A>: a persistent union-find data structure.
-<LI> <A HREF="html/Postorder.html">Postorder</A>: postorder numbering of a directed graph.
+<LI> <A HREF="html/compcert.lib.UnionFind.html">UnionFind</A>: a persistent union-find data structure.
+<LI> <A HREF="html/compcert.lib.Postorder.html">Postorder</A>: postorder numbering of a directed graph.
 </UL>
 
 <H3>Definitions and theorems used in many parts of the development</H3>
 
 <UL>
-<LI> <A HREF="html/Errors.html">Errors</A>: the Error monad.
-<LI> <A HREF="html/AST.html">AST</A>: identifiers, whole programs and other
+<LI> <A HREF="html/compcert.common.Errors.html">Errors</A>: the Error monad.
+<LI> <A HREF="html/compcert.common.AST.html">AST</A>: identifiers, whole programs and other
 common elements of abstract syntaxes.
-<LI> <A HREF="html/Linking.html">Linking</A>: generic framework to define syntactic linking over the CompCert languages.
-<LI> <A HREF="html/Values.html">Values</A>: run-time values.
-<LI> <A HREF="html/Events.html">Events</A>: observable events and traces.
-<LI> <A HREF="html/Memory.html">Memory</A>: memory model. <BR>
-See also: <A HREF="html/Memdata.html">Memdata</A> (in-memory representation of data).
-<LI> <A HREF="html/Globalenvs.html">Globalenvs</A>: global execution environments.
-<LI> <A HREF="html/Smallstep.html">Smallstep</A>: tools for small-step semantics.
-<LI> <A HREF="html/Behaviors.html">Behaviors</A>: from small-step semantics to observable behaviors of programs.
-<LI> <A HREF="html/Determinism.html">Determinism</A>: determinism properties of small-step semantics.
-<LI> <A HREF="html/Op.html"><I>Op</I></A>: operators, addressing modes and their
+<LI> <A HREF="html/compcert.common.Linking.html">Linking</A>: generic framework to define syntactic linking over the CompCert languages.
+<LI> <A HREF="html/compcert.common.Values.html">Values</A>: run-time values.
+<LI> <A HREF="html/compcert.common.Events.html">Events</A>: observable events and traces.
+<LI> <A HREF="html/compcert.common.Memory.html">Memory</A>: memory model. <BR>
+See also: <A HREF="html/compcert.common.Memdata.html">Memdata</A> (in-memory representation of data).
+<LI> <A HREF="html/compcert.common.Globalenvs.html">Globalenvs</A>: global execution environments.
+<LI> <A HREF="html/compcert.common.Smallstep.html">Smallstep</A>: tools for small-step semantics.
+<LI> <A HREF="html/compcert.common.Behaviors.html">Behaviors</A>: from small-step semantics to observable behaviors of programs.
+<LI> <A HREF="html/compcert.common.Determinism.html">Determinism</A>: determinism properties of small-step semantics.
+<LI> <A HREF="html/compcert.powerpc.Op.html"><I>Op</I></A>: operators, addressing modes and their
 semantics.
-<LI> <A HREF="html/Unityping.html">Unityping</A>: a solver for atomic unification constraints.
+<LI> <A HREF="html/compcert.common.Unityping.html">Unityping</A>: a solver for atomic unification constraints.
 </UL>
 
 <H3>Source, intermediate and target languages: syntax and semantics</H3>
 
 <UL>
 <LI> The CompCert C source language:
-<A HREF="html/Csyntax.html">syntax</A> and
-<A HREF="html/Csem.html">semantics</A> and
-<A HREF="html/Cstrategy.html">determinized semantics</A> and
-<A HREF="html/Ctyping.html">type system</A>.<BR>
-See also: <A HREF="html/Ctypes.html">type expressions</A> and
-<A HREF="html/Cop.html">operators (syntax and semantics)</A>.<BR>
-See also: <A HREF="html/Cexec.html">reference interpreter</A>.
-<LI> <A HREF="html/Clight.html">Clight</A>: a simpler version of CompCert C where expressions contain no side-effects.
-<LI> <A HREF="html/Csharpminor.html">Csharpminor</A>: low-level
+<A HREF="html/compcert.cfrontend.Csyntax.html">syntax</A> and
+<A HREF="html/compcert.cfrontend.Csem.html">semantics</A> and
+<A HREF="html/compcert.cfrontend.Cstrategy.html">determinized semantics</A> and
+<A HREF="html/compcert.cfrontend.Ctyping.html">type system</A>.<BR>
+See also: <A HREF="html/compcert.cfrontend.Ctypes.html">type expressions</A> and
+<A HREF="html/compcert.cfrontend.Cop.html">operators (syntax and semantics)</A>.<BR>
+See also: <A HREF="html/compcert.cfrontend.Cexec.html">reference interpreter</A>.
+<LI> <A HREF="html/compcert.cfrontend.Clight.html">Clight</A>: a simpler version of CompCert C where expressions contain no side-effects.
+<LI> <A HREF="html/compcert.cfrontend.Csharpminor.html">Csharpminor</A>: low-level
  structured language.
-<LI> <A HREF="html/Cminor.html">Cminor</A>: low-level structured
+<LI> <A HREF="html/compcert.backend.Cminor.html">Cminor</A>: low-level structured
 language, with explicit stack allocation of certain local variables.
-<LI> <A HREF="html/CminorSel.html">CminorSel</A>: like Cminor,
+<LI> <A HREF="html/compcert.backend.CminorSel.html">CminorSel</A>: like Cminor,
 with machine-specific operators and addressing modes.
-<LI> <A HREF="html/RTL.html">RTL</A>: register transfer language (3-address
+<LI> <A HREF="html/compcert.backend.RTL.html">RTL</A>: register transfer language (3-address
 code, control-flow graph, infinitely many pseudo-registers). <BR>
-See also: <A HREF="html/Registers.html">Registers</A> (representation of
+See also: <A HREF="html/compcert.backend.Registers.html">Registers</A> (representation of
 pseudo-registers).
-<LI> <A HREF="html/LTL.html">LTL</A>: location transfer language (3-address
+<LI> <A HREF="html/compcert.backend.LTL.html">LTL</A>: location transfer language (3-address
 code, control-flow graph of basic blocks, finitely many physical registers, infinitely
 many stack slots). <BR>
-See also: <A HREF="html/Locations.html">Locations</A> (representation of
-locations) and <A HREF="html/Machregs.html"><I>Machregs</I></A> (description of processor registers).
-<LI> <A HREF="html/Linear.html">Linear</A>: like LTL, but the CFG is
+See also: <A HREF="html/compcert.backend.Locations.html">Locations</A> (representation of
+locations) and <A HREF="html/compcert.powerpc.Machregs.html"><I>Machregs</I></A> (description of processor registers).
+<LI> <A HREF="html/compcert.backend.Linear.html">Linear</A>: like LTL, but the CFG is
 replaced by a linear list of instructions with explicit branches and labels.
-<LI> <A HREF="html/Mach.html">Mach</A>: like Linear, with a more concrete
+<LI> <A HREF="html/compcert.backend.Mach.html">Mach</A>: like Linear, with a more concrete
 view of the activation record.  
-<LI> <A HREF="html/Asm.html"><I>Asm</I></A>: abstract syntax for PowerPC assembly
+<LI> <A HREF="html/compcert.powerpc.Asm.html"><I>Asm</I></A>: abstract syntax for PowerPC assembly
 code.
 </UL>
 
@@ -153,170 +153,170 @@ code.
   <TD>Pulling side-effects out of expressions;<br>
       fixing an evaluation order</TD>
   <TD>CompCert C to Clight</TD>
-  <TD><A HREF="html/SimplExpr.html">SimplExpr</A></TD>
-  <TD><A HREF="html/SimplExprspec.html">SimplExprspec</A><br>
-      <A HREF="html/SimplExprproof.html">SimplExprproof</A></TD>
+  <TD><A HREF="html/compcert.cfrontend.SimplExpr.html">SimplExpr</A></TD>
+  <TD><A HREF="html/compcert.cfrontend.SimplExprspec.html">SimplExprspec</A><br>
+      <A HREF="html/compcert.cfrontend.SimplExprproof.html">SimplExprproof</A></TD>
 </TR>
 <TR valign="top">
   <TD>Pulling non-adressable scalar local variables out of memory</TD>
   <TD>Clight to Clight</TD>
-  <TD><A HREF="html/SimplLocals.html">SimplLocals</A></TD>
-  <TD><A HREF="html/SimplLocalsproof.html">SimplLocalsproof</A></TD>
+  <TD><A HREF="html/compcert.cfrontend.SimplLocals.html">SimplLocals</A></TD>
+  <TD><A HREF="html/compcert.cfrontend.SimplLocalsproof.html">SimplLocalsproof</A></TD>
 </TR>
 <TR valign="top">
   <TD>Simplification of control structures; <br>
       explication of type-dependent computations</TD>
   <TD>Clight to Csharpminor</TD>
-  <TD><A HREF="html/Cshmgen.html">Cshmgen</A></TD>
-  <TD><A HREF="html/Cshmgenproof.html">Cshmgenproof</A></TD>
+  <TD><A HREF="html/compcert.cfrontend.Cshmgen.html">Cshmgen</A></TD>
+  <TD><A HREF="html/compcert.cfrontend.Cshmgenproof.html">Cshmgenproof</A></TD>
 </TR>
 <TR valign="top">
   <TD>Stack allocation of local variables<br>
       whose address is taken;<br>
       simplification of switch statements</TD>
   <TD>Csharpminor to Cminor</TD>
-  <TD><A HREF="html/Cminorgen.html">Cminorgen</A></TD>
-  <TD><A HREF="html/Cminorgenproof.html">Cminorgenproof</A></TD>
+  <TD><A HREF="html/compcert.cfrontend.Cminorgen.html">Cminorgen</A></TD>
+  <TD><A HREF="html/compcert.cfrontend.Cminorgenproof.html">Cminorgenproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Recognition of operators<br>and addressing modes</TD>
   <TD>Cminor to CminorSel</TD>
-  <TD><A HREF="html/Selection.html">Selection</A><br>
-      <A HREF="html/SelectOp.html"><I>SelectOp</I></A><br>
-      <A HREF="html/SelectLong.html"><I>SelectLong</I></A><br>
-      <A HREF="html/SelectDiv.html">SelectDiv</A><br>
-      <A HREF="html/SplitLong.html">SplitLong</A></TD>
-  <TD><A HREF="html/Selectionproof.html">Selectionproof</A><br>
-      <A HREF="html/SelectOpproof.html"><I>SelectOpproof</I></A><br>
-      <A HREF="html/SelectLongproof.html"><I>SelectLongproof</I></A><br>
-      <A HREF="html/SelectDivproof.html">SelectDivproof</A><br>
-      <A HREF="html/SplitLongproof.html">SplitLongproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Selection.html">Selection</A><br>
+      <A HREF="html/Selectcompcert.powerpc.Op.html"><I>SelectOp</I></A><br>
+      <A HREF="html/compcert.powerpc.SelectLong.html"><I>SelectLong</I></A><br>
+      <A HREF="html/compcert.backend.SelectDiv.html">SelectDiv</A><br>
+      <A HREF="html/compcert.backend.SplitLong.html">SplitLong</A></TD>
+  <TD><A HREF="html/compcert.backend.Selectionproof.html">Selectionproof</A><br>
+      <A HREF="html/compcert.powerpc.SelectOpproof.html"><I>SelectOpproof</I></A><br>
+      <A HREF="html/compcert.powerpc.SelectLongproof.html"><I>SelectLongproof</I></A><br>
+      <A HREF="html/compcert.backend.SelectDivproof.html">SelectDivproof</A><br>
+      <A HREF="html/compcert.backend.SplitLongproof.html">SplitLongproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Construction of the CFG, <br>3-address code generation</TD>
   <TD>CminorSel to RTL</TD>
-  <TD><A HREF="html/RTLgen.html">RTLgen</A></TD>
-  <TD><A HREF="html/RTLgenspec.html">RTLgenspec</A><BR>
-      <A HREF="html/RTLgenproof.html">RTLgenproof</A></TD>
+  <TD><A HREF="html/compcert.backend.RTLgen.html">RTLgen</A></TD>
+  <TD><A HREF="html/compcert.backend.RTLgenspec.html">RTLgenspec</A><BR>
+      <A HREF="html/compcert.backend.RTLgenproof.html">RTLgenproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Recognition of tail calls</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="html/Tailcall.html">Tailcall</A></TD>
-  <TD><A HREF="html/Tailcallproof.html">Tailcallproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Tailcall.html">Tailcall</A></TD>
+  <TD><A HREF="html/compcert.backend.Tailcallproof.html">Tailcallproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Function inlining</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="html/Inlining.html">Inlining</A></TD>
-  <TD><A HREF="html/Inliningspec.html">Inliningspec</A><BR>
-      <A HREF="html/Inliningproof.html">Inliningproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Inlining.html">Inlining</A></TD>
+  <TD><A HREF="html/compcert.backend.Inliningspec.html">Inliningspec</A><BR>
+      <A HREF="html/compcert.backend.Inliningproof.html">Inliningproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Postorder renumbering of the CFG</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="html/Renumber.html">Renumber</A></TD>
-  <TD><A HREF="html/Renumberproof.html">Renumberproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Renumber.html">Renumber</A></TD>
+  <TD><A HREF="html/compcert.backend.Renumberproof.html">Renumberproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Constant propagation</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="html/Constprop.html">Constprop</A><br>
-      <A HREF="html/ConstpropOp.html"><I>ConstpropOp</I></A></TD>
-  <TD><A HREF="html/Constpropproof.html">Constpropproof</A><br>
-      <A HREF="html/ConstpropOpproof.html"><I>ConstproppOproof</I></A></TD>
+  <TD><A HREF="html/compcert.backend.Constprop.html">Constprop</A><br>
+      <A HREF="html/compcert.powerpc.Constpropcompcert.powerpc.Op.html"><I>ConstpropOp</I></A></TD>
+  <TD><A HREF="html/compcert.backend.Constpropproof.html">Constpropproof</A><br>
+      <A HREF="html/compcert.powerpc.ConstpropOpproof.html"><I>ConstproppOproof</I></A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Common subexpression elimination</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="html/CSE.html">CSE</A><BR>
-      <A HREF="html/CombineOp.html"><I>CombineOp</I></A></TD>
-  <TD><A HREF="html/CSEproof.html">CSEproof</A><BR>
-      <A HREF="html/CombineOpproof.html"><I>CombineOpproof</I></A></TD>
+  <TD><A HREF="html/compcert.backend.CSE.html">CSE</A><BR>
+      <A HREF="html/compcert.powerpc.Combinecompcert.powerpc.Op.html"><I>CombineOp</I></A></TD>
+  <TD><A HREF="html/compcert.backend.CSEproof.html">CSEproof</A><BR>
+      <A HREF="html/compcert.powerpc.CombineOpproof.html"><I>CombineOpproof</I></A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Redundancy elimination</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="html/Deadcode.html">Deadcode</A></TD>
-  <TD><A HREF="html/Deadcodeproof.html">Deadcodeproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Deadcode.html">Deadcode</A></TD>
+  <TD><A HREF="html/compcert.backend.Deadcodeproof.html">Deadcodeproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Removal of unused static globals</TD>
   <TD>RTL to RTL</TD>
-  <TD><A HREF="html/Unusedglob.html">Unusedglob</A></TD>
-  <TD><A HREF="html/Unusedglobproof.html">Unusedglobproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Unusedglob.html">Unusedglob</A></TD>
+  <TD><A HREF="html/compcert.backend.Unusedglobproof.html">Unusedglobproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Register allocation (validation a posteriori)</TD>
   <TD>RTL to LTL</TD>
-  <TD><A HREF="html/Allocation.html">Allocation</A></TD>
-  <TD><A HREF="html/Allocproof.html">Allocproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Allocation.html">Allocation</A></TD>
+  <TD><A HREF="html/compcert.backend.Allocproof.html">Allocproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Branch tunneling</TD>
   <TD>LTL to LTL</TD>
-  <TD><A HREF="html/Tunneling.html">Tunneling</A></TD>
-  <TD><A HREF="html/Tunnelingproof.html">Tunnelingproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Tunneling.html">Tunneling</A></TD>
+  <TD><A HREF="html/compcert.backend.Tunnelingproof.html">Tunnelingproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Linearization of the CFG</TD>
   <TD>LTL to Linear</TD>
-  <TD><A HREF="html/Linearize.html">Linearize</A></TD>
-  <TD><A HREF="html/Linearizeproof.html">Linearizeproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Linearize.html">Linearize</A></TD>
+  <TD><A HREF="html/compcert.backend.Linearizeproof.html">Linearizeproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Removal of unreferenced labels</TD>
   <TD>Linear to Linear</TD>
-  <TD><A HREF="html/CleanupLabels.html">CleanupLabels</A></TD>
-  <TD><A HREF="html/CleanupLabelsproof.html">CleanupLabelsproof</A></TD>
+  <TD><A HREF="html/compcert.backend.CleanupLabels.html">CleanupLabels</A></TD>
+  <TD><A HREF="html/compcert.backend.CleanupLabelsproof.html">CleanupLabelsproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Synthesis of debugging information</TD>
   <TD>Linear to Linear</TD>
-  <TD><A HREF="html/Debugvar.html">Debugvar</A></TD>
-  <TD><A HREF="html/Debugvarproof.html">Debugvarproof</A></TD>
+  <TD><A HREF="html/compcert.backend.Debugvar.html">Debugvar</A></TD>
+  <TD><A HREF="html/compcert.backend.Debugvarproof.html">Debugvarproof</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Laying out the activation records</TD>
   <TD>Linear to Mach</TD>
-  <TD><A HREF="html/Stacking.html">Stacking</A><BR>
-      <A HREF="html/Bounds.html">Bounds</A><BR>
-      <A HREF="html/Stacklayout.html"><I>Stacklayout</I></A></TD>
-  <TD><A HREF="html/Stackingproof.html">Stackingproof</A><br>
-      <A HREF="html/Separation.html">Separation</A></TD>
+  <TD><A HREF="html/compcert.backend.Stacking.html">Stacking</A><BR>
+      <A HREF="html/compcert.backend.Bounds.html">Bounds</A><BR>
+      <A HREF="html/compcert.powerpc.Stacklayout.html"><I>Stacklayout</I></A></TD>
+  <TD><A HREF="html/compcert.backend.Stackingproof.html">Stackingproof</A><br>
+      <A HREF="html/compcert.common.Separation.html">Separation</A></TD>
 </TR>
 
 <TR valign="top">
   <TD>Emission of assembly code</TD>
   <TD>Mach to Asm</TD>
-  <TD><A HREF="html/Asmgen.html"><I>Asmgen</I></A></TD>
-  <TD><A HREF="html/Asmgenproof0.html"><I>Asmgenproof0</I></A><BR>
-      <A HREF="html/Asmgenproof1.html"><I>Asmgenproof1</I></A><BR>
-      <A HREF="html/Asmgenproof.html"><I>Asmgenproof</I></A></TD>
+  <TD><A HREF="html/compcert.powerpc.Asmgen.html"><I>Asmgen</I></A></TD>
+  <TD><A HREF="html/compcert.backend.Asmgenproof0.html"><I>Asmgenproof0</I></A><BR>
+      <A HREF="html/compcert.powerpc.Asmgenproof1.html"><I>Asmgenproof1</I></A><BR>
+      <A HREF="html/compcert.powerpc.Asmgenproof.html"><I>Asmgenproof</I></A></TD>
 </TR>
 </TABLE>
 
 <H3>All together</H3>
 
 <UL>
-<LI> <A HREF="html/Compiler.html">Compiler</A>: composing the passes together;
+<LI> <A HREF="html/compcert.driver.Compiler.html">Compiler</A>: composing the passes together;
 whole-compiler semantic preservation theorems.
-<LI> <A HREF="html/Complements.html">Complements</A>: interesting consequences of the semantic preservation theorems.
+<LI> <A HREF="html/compcert.driver.Complements.html">Complements</A>: interesting consequences of the semantic preservation theorems.
 </UL>
 
 <H3>Static analyses</H3>
@@ -325,23 +325,23 @@ The following static analyses are performed over the RTL intermediate
 representation to support optimizations such as constant propagation,
 CSE, and dead code elimination.
 <UL>
-<LI> <A HREF="html/Liveness.html">Liveness</A>: liveness analysis</A>.
-<LI> <A HREF="html/ValueAnalysis.html">ValueAnalysis</A>: value and alias analysis</A> <BR>
-See also: <A HREF="html/ValueDomain.html">ValueDomain</A>: the abstract domain for value analysis.<BR>
-See also: <A HREF="html/ValueAOp.html"><I>ValueAOp</I></A>: processor-dependent parts of value analysis.
-<LI> <A HREF="html/Deadcode.html">Deadcode</A>: neededness analysis</A> <BR>
-See also: <A HREF="html/NeedDomain.html">NeedDomain</A>: the abstract domain for neededness analysis.<BR>
-See also: <A HREF="html/NeedOp.html"><I>NeedOp</I></A>: processor-dependent parts of neededness analysis.
+<LI> <A HREF="html/compcert.backend.Liveness.html">Liveness</A>: liveness analysis</A>.
+<LI> <A HREF="html/compcert.backend.ValueAnalysis.html">ValueAnalysis</A>: value and alias analysis</A> <BR>
+See also: <A HREF="html/compcert.backend.ValueDomain.html">ValueDomain</A>: the abstract domain for value analysis.<BR>
+See also: <A HREF="html/ValueAcompcert.powerpc.Op.html"><I>ValueAOp</I></A>: processor-dependent parts of value analysis.
+<LI> <A HREF="html/compcert.backend.Deadcode.html">Deadcode</A>: neededness analysis</A> <BR>
+See also: <A HREF="html/compcert.backend.NeedDomain.html">NeedDomain</A>: the abstract domain for neededness analysis.<BR>
+See also: <A HREF="html/compcert.powerpc.Needcompcert.powerpc.Op.html"><I>NeedOp</I></A>: processor-dependent parts of neededness analysis.
 </UL>
 
 <H3>Type systems</H3>
 
-The <A HREF="html/Ctyping.html">type system of CompCert C</A> is fully formalized.  For some intermediate languages of the back-end, simpler type systems are used to statically capture well-formedness conditions.
+The <A HREF="html/compcert.cfrontend.Ctyping.html">type system of CompCert C</A> is fully formalized.  For some intermediate languages of the back-end, simpler type systems are used to statically capture well-formedness conditions.
 <UL>
-<LI> <A HREF="html/Ctyping.html">RTLtyping</A>: typing for CompCert C + type-checking functions.
-<LI> <A HREF="html/RTLtyping.html">RTLtyping</A>: typing for RTL + type
+<LI> <A HREF="html/compcert.cfrontend.Ctyping.html">RTLtyping</A>: typing for CompCert C + type-checking functions.
+<LI> <A HREF="html/compcert.backend.RTLtyping.html">RTLtyping</A>: typing for RTL + type
 reconstruction.
-<LI> <A HREF="html/Lineartyping.html">Lineartyping</A>: typing for Linear.
+<LI> <A HREF="html/compcert.backend.Lineartyping.html">Lineartyping</A>: typing for Linear.
 </UL>
 
 <HR>
