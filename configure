@@ -540,6 +540,7 @@ else
 fi
 
 MENHIR_REQUIRED=20161201
+MENHIR_SWITCH=20180530
 echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
@@ -547,6 +548,12 @@ case "$menhir_ver" in
       if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
           echo "version $menhir_ver -- good!"
           menhir_includes="-I `menhir --suggest-menhirLib`"
+          if test "$menhir_ver" -ge $MENHIR_SWITCH; then
+            echo "version >= $MENHIR_SWITCH: activating --coq-lib-no-path"
+            menhir_compatibility=true
+          else
+            menhir_compatibility=false
+          fi
         else
           echo "version $menhir_ver -- UNSUPPORTED"
           echo "Error: CompCert requires Menhir version $MENHIR_REQUIRED or later."
@@ -637,6 +644,16 @@ OCAML_OPT_COMP=$ocaml_opt_comp
 MENHIR_INCLUDES=$menhir_includes
 COMPFLAGS=-bin-annot
 EOF
+
+if test "$menhir_compatibility" = true; then
+cat >> Makefile.config <<EOF
+MENHIR_SWITCH=--coq-lib-no-path
+EOF
+else
+cat >> Makefile.config <<EOF
+MENHIR_SWITCH=
+EOF
+fi
 
 if test "$target" != "manual"; then
 cat >> Makefile.config <<EOF
@@ -809,4 +826,3 @@ EOF
 fi
 
 fi
-
