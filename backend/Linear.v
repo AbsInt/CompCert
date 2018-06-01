@@ -239,7 +239,7 @@ Inductive step: state -> trace -> state -> Prop :=
       forall s ef args res rs1 rs2 m t m',
       args = map (fun p => Locmap.getpair p rs1) (loc_arguments (ef_sig ef)) ->
       external_call ef ge args m t res m' ->
-      rs2 = Locmap.setpair (loc_result (ef_sig ef)) res rs1 ->
+      rs2 = Locmap.setpair (loc_result (ef_sig ef)) res (undef_caller_save_regs rs1) ->
       step (Callstate s (External ef) rs1 m)
          t (Returnstate s rs2 m')
   | exec_return:

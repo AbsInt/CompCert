@@ -2476,7 +2476,8 @@ Proof.
   rewrite Locmap.gss. rewrite Locmap.gso by (red; auto). rewrite Locmap.gss.
   rewrite val_longofwords_eq_1 by auto. auto.
   red; intros. rewrite (AG l H0).
-  symmetry; apply Locmap.gpo.
+  rewrite Locmap.gpo. 
+  unfold undef_caller_save_regs. destruct l; auto. simpl in H0; rewrite H0; auto. 
   assert (X: forall r, is_callee_save r = false -> Loc.diff l (R r)).
   { intros. destruct l; simpl in *. congruence. auto. }
   generalize (loc_result_caller_save (ef_sig ef)). destruct (loc_result (ef_sig ef)); simpl; intuition auto.

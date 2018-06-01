@@ -666,6 +666,16 @@ Proof.
   apply agree_regs_set_reg; auto.
 Qed.
 
+Lemma agree_regs_undef_caller_save_regs:
+  forall j ls rs,
+  agree_regs j ls rs ->
+  agree_regs j (LTL.undef_caller_save_regs ls) (Mach.undef_caller_save_regs rs).
+Proof.
+  intros; red; intros. 
+  unfold LTL.undef_caller_save_regs, Mach.undef_caller_save_regs. 
+  destruct (is_callee_save r); auto. 
+Qed.
+
 (** Preservation under assignment of stack slot *)
 
 Lemma agree_regs_set_slot:
@@ -824,6 +834,16 @@ Lemma agree_callee_save_return_regs:
 Proof.
   intros; red; intros.
   unfold return_regs. destruct l; auto. rewrite H; auto.
+Qed.
+
+Lemma agree_callee_save_undef_caller_save_regs:
+  forall ls1 ls2,
+  agree_callee_save ls1 ls2 ->
+  agree_callee_save (LTL.undef_caller_save_regs ls1) ls2.
+Proof.
+  intros; red; intros. unfold LTL.undef_caller_save_regs. 
+  destruct l; auto.
+  rewrite H0; auto. 
 Qed.
 
 Lemma agree_callee_save_set_result:
@@ -2113,8 +2133,10 @@ Proof.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   eapply match_states_return with (j := j').
   eapply match_stacks_change_meminj; eauto.
-  apply agree_regs_set_pair. apply agree_regs_inject_incr with j; auto. auto.
-  apply agree_callee_save_set_result; auto.
+  apply agree_regs_set_pair. apply agree_regs_undef_caller_save_regs. 
+  apply agree_regs_inject_incr with j; auto.
+  auto.
+  apply agree_callee_save_set_result. apply agree_callee_save_undef_caller_save_regs. auto. 
   apply stack_contents_change_meminj with j; auto.
   rewrite sep_comm, sep_assoc; auto.
 

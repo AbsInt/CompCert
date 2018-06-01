@@ -316,6 +316,23 @@ Proof.
   intros. rewrite Pregmap.gso; auto.
 Qed.
 
+Lemma agree_undef_caller_save_regs:
+  forall ms sp rs,
+  agree ms sp rs ->
+  agree (Mach.undef_caller_save_regs ms) sp (Asm.undef_caller_save_regs rs).
+Proof.
+  intros. destruct H. unfold Mach.undef_caller_save_regs, Asm.undef_caller_save_regs; split.
+- unfold proj_sumbool; rewrite dec_eq_true. auto.
+- auto.
+- intros. unfold proj_sumbool. rewrite dec_eq_false by (apply preg_of_not_SP). 
+  destruct (in_dec preg_eq (preg_of r) (List.map preg_of (List.filter is_callee_save all_mregs))); simpl.
++ apply list_in_map_inv in i. destruct i as (mr & A & B). 
+  assert (r = mr) by (apply preg_of_injective; auto). subst mr; clear A.
+  apply List.filter_In in B. destruct B as [C D]. rewrite D. auto.
++ destruct (is_callee_save r) eqn:CS; auto.
+  elim n. apply List.in_map. apply List.filter_In. auto using all_mregs_complete. 
+Qed.
+
 Lemma agree_change_sp:
   forall ms sp rs sp',
   agree ms sp rs -> sp' <> Vundef ->

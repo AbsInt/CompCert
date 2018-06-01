@@ -149,6 +149,14 @@ Proof.
   unfold return_regs. destruct l; auto. destruct (is_callee_save r); auto.
 Qed.
 
+Lemma wt_undef_caller_save_regs:
+  forall ls, wt_locset ls -> wt_locset (undef_caller_save_regs ls).
+Proof.
+  intros; red; intros. unfold undef_caller_save_regs.
+  destruct l; auto.
+  destruct (is_callee_save r); auto; simpl; auto. 
+Qed.
+
 Lemma wt_init:
   wt_locset (Locmap.init Vundef).
 Proof.
@@ -339,8 +347,9 @@ Local Opaque mreg_type.
   econstructor. eauto. eauto. eauto.
   apply wt_undef_regs. apply wt_call_regs. auto.
 - (* external function *)
-  econstructor. auto. apply wt_setpair; auto.
+  econstructor. auto. apply wt_setpair. 
   eapply external_call_well_typed; eauto.
+  apply wt_undef_caller_save_regs; auto.
 - (* return *)
   inv WTSTK. econstructor; eauto.
 Qed.

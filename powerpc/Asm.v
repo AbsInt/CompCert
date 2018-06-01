@@ -1130,6 +1130,15 @@ Definition preg_of (r: mreg) : preg :=
   | F28 => FPR28 | F29 => FPR29 | F30 => FPR30 | F31 => FPR31
   end.
 
+(** Undefine all registers except SP and callee-save registers *)
+
+Definition undef_caller_save_regs (rs: regset) : regset :=
+  fun r =>
+    if preg_eq r SP
+    || In_dec preg_eq r (List.map preg_of (List.filter is_callee_save all_mregs))
+    then rs r
+    else Vundef.
+
 (** Extract the values of the arguments of an external call.
     We exploit the calling conventions from module [Conventions], except that
     we use PPC registers instead of locations. *)
@@ -1189,7 +1198,7 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge b = Some (External ef) ->
       external_call ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
-      rs' = (set_pair (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA) ->
+      rs' = (set_pair (loc_external_result (ef_sig ef)) res (undef_caller_save_regs rs)) #PC <- (rs RA) ->
       step (State rs m) t (State rs' m').
 
 End RELSEM.

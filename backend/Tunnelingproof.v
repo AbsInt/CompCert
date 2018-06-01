@@ -334,6 +334,14 @@ Proof.
   induction res; intros; simpl; auto using locmap_set_lessdef, Val.loword_lessdef, Val.hiword_lessdef.
 Qed.
 
+Lemma locmap_undef_caller_save_regs_lessdef:
+  forall ls1 ls2,
+  locmap_lessdef ls1 ls2 -> locmap_lessdef (undef_caller_save_regs ls1) (undef_caller_save_regs ls2).
+Proof.
+  intros; red; intros. unfold undef_caller_save_regs. 
+  destruct l; auto. destruct (Conventions1.is_callee_save r); auto.
+Qed.
+
 Lemma find_function_translated:
   forall ros ls tls fd,
   locmap_lessdef ls tls ->
@@ -516,7 +524,7 @@ Proof.
   left; simpl; econstructor; split.
   eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
-  simpl. econstructor; eauto using locmap_setpair_lessdef.
+  simpl. econstructor; eauto using locmap_setpair_lessdef, locmap_undef_caller_save_regs_lessdef.
 - (* return *)
   inv STK. inv H1.
   left; econstructor; split.
