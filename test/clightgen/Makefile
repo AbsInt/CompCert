@@ -26,13 +26,13 @@ all: $(SRC:.c=.vo)
 
 test:
 
-%.v: %.c $(CLIGHTGEN)
+%.v: %.c
 	$(CLIGHTGEN) $(CFLAGS) -o $@ $<
 
-%.v: ../c/%.c $(CLIGHTGEN)
+%.v: ../c/%.c
 	$(CLIGHTGEN) $(CFLAGS) -o $@ $<
 
-%.v: ../raytracer/%.c $(CLIGHTGEN)
+%.v: ../raytracer/%.c
 	$(CLIGHTGEN) -I../raytracer -fall $(CFLAGS) -o $@ $<
 
 %.vo: %.v
