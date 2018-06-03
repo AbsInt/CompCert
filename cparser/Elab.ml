@@ -1560,9 +1560,30 @@ let elab_initializer loc env root ty ie =
       (fixup_typ loc env ty init, Some init)
 
 
+(* Contexts for elaborating statements and expressions *)
+
+type elab_context = {
+  ctx_return_typ: typ;          (**r return type for the function *)
+  ctx_labels: StringSet.t;      (**r all labels defined in the function *)
+  ctx_break: bool;              (**r is 'break' allowed? *)
+  ctx_continue: bool;           (**r is 'continue' allowed? *)
+  ctx_in_switch: bool;          (**r are 'case' and 'default' allowed? *)
+  ctx_vararg: bool;             (**r is this a vararg function? *)
+}
+
+(* Context for evaluating compile-time constant expressions.
+   Only the [ctx_vararg] field matters. *)
+let ctx_constexp = {
+  ctx_return_typ = TVoid [];
+  ctx_labels = StringSet.empty;
+  ctx_break = false; ctx_continue = false; ctx_in_switch = false;
+  ctx_vararg = false
+}
+
+
 (* Elaboration of expressions *)
 
-let elab_expr vararg loc env a =
+let elab_expr ctx loc env a =
 
   let err fmt = error loc fmt in  (* non-fatal error *)
   let error fmt = fatal_error loc fmt in
@@ -1664,7 +1685,7 @@ let elab_expr vararg loc env a =
       (elaboration)   --> __builtin_va_arg(ap, sizeof(ty))
 *)
   | CALL((VARIABLE "__builtin_va_start" as a1), [a2; a3]) ->
-      if not vararg then
+      if not ctx.ctx_vararg then
         err "'va_start' used in function with fixed args";
       let b1,env = elab env a1 in
       let b2,env = elab env a2 in
@@ -2220,16 +2241,16 @@ let elab_expr vararg loc env a =
   in elab env a
 
 (* Filling in forward declaration *)
-let _ = elab_expr_f := (elab_expr false)
+let _ = elab_expr_f := (elab_expr ctx_constexp)
 
-let elab_opt_expr vararg loc env = function
+let elab_opt_expr ctx loc env = function
   | None -> None,env
-  | Some a -> let a,env = (elab_expr vararg loc env a) in
+  | Some a -> let a,env = (elab_expr ctx loc env a) in
     Some a,env
 
-let elab_for_expr vararg loc env = function
+let elab_for_expr ctx loc env = function
   | None -> { sdesc = Sskip; sloc = elab_loc loc },env
-  | Some a -> let a,env = elab_expr vararg loc env a in
+  | Some a -> let a,env = elab_expr ctx loc env a in
     { sdesc = Sdo a; sloc = elab_loc loc },env
 
 (* Handling of __func__ (section 6.4.2.2) *)
@@ -2613,16 +2634,7 @@ let elab_asm_operand vararg loc env (ASMOPERAND(label, wide, chars, e)) =
   (label, s, e'),env
 
 
-(* Contexts for elaborating statements *)
-
-type stmt_context = {
-  ctx_return_typ: typ;          (**r return type for the function *)
-  ctx_labels: StringSet.t;      (**r all labels defined in the function *)
-  ctx_break: bool;              (**r is 'break' allowed? *)
-  ctx_continue: bool;           (**r is 'continue' allowed? *)
-  ctx_in_switch: bool;          (**r are 'case' and 'default' allowed? *)
-  ctx_vararg: bool;             (**r is this a vararg function? *)
-}
+(* Operations over contexts *)
 
 let stmt_labels stmt =
   let lbls = ref StringSet.empty in
@@ -2699,7 +2711,7 @@ let rec elab_stmt env ctx s =
 (* 6.8.3 Expression statements *)
 
   | COMPUTATION(a, loc) ->
-      let a,env =  (elab_expr ctx.ctx_vararg loc env a) in
+      let a,env =  elab_expr ctx loc env a in
       { sdesc = Sdo a; sloc = elab_loc loc },env
 
 (* 6.8.1 Labeled statements *)
@@ -2711,7 +2723,7 @@ let rec elab_stmt env ctx s =
   | CASE(a, s1, loc) ->
       if not ctx.ctx_in_switch then
         error loc "'case' statement not in switch statement";
-      let a',env = elab_expr ctx.ctx_vararg loc env a in
+      let a',env = elab_expr ctx loc env a in
       let n =
         match Ceval.integer_expr env a' with
         | None ->
@@ -2734,7 +2746,7 @@ let rec elab_stmt env ctx s =
 (* 6.8.4 Conditional statements *)
 
   | If(a, s1, s2, loc) ->
-      let a',env = elab_expr ctx.ctx_vararg loc env a in
+      let a',env = elab_expr ctx loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "controlling expression of 'if' does not have scalar type (%a invalid)"
           (print_typ env) a'.etyp;
@@ -2749,7 +2761,7 @@ let rec elab_stmt env ctx s =
 (* 6.8.5 Iterative statements *)
 
   | WHILE(a, s1, loc) ->
-      let a',env = elab_expr ctx.ctx_vararg loc env a in
+      let a',env = elab_expr ctx loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "controlling expression of 'while' does not have scalar type (%a invalid)"
           (print_typ env) a'.etyp;
@@ -2758,7 +2770,7 @@ let rec elab_stmt env ctx s =
 
   | DOWHILE(a, s1, loc) ->
       let s1',env = elab_stmt env (ctx_loop ctx) s1 in
-      let a',env = elab_expr ctx.ctx_vararg loc env a in
+      let a',env = elab_expr ctx loc env a in
       if not (is_scalar_type env a'.etyp) then
         error loc "controlling expression of 'while' does not have scalar type (%a invalid)"
           (print_typ env) a'.etyp;
@@ -2768,10 +2780,10 @@ let rec elab_stmt env ctx s =
       let (a1', env_decls, decls') =
         match fc with
         | Some (FC_EXP a1) ->
-            let a1,env = elab_for_expr ctx.ctx_vararg loc env (Some a1) in
+            let a1,env = elab_for_expr ctx loc env (Some a1) in
             (a1, env, None)
         | None ->
-            let a1,env = elab_for_expr ctx.ctx_vararg loc env None in
+            let a1,env = elab_for_expr ctx loc env None in
             (a1, env, None)
         | Some (FC_DECL def) ->
             let (dcl, env') = elab_definition true true (Env.new_scope env) def in
@@ -2781,11 +2793,11 @@ let rec elab_stmt env ctx s =
       let a2',env_test =
         match a2 with
           | None -> intconst 1L IInt,env_decls
-          | Some a2 -> elab_expr ctx.ctx_vararg loc env_decls a2
+          | Some a2 -> elab_expr ctx loc env_decls a2
       in
       if not (is_scalar_type env_test a2'.etyp) then
         error loc "controlling expression of 'for' does not have scalar type (%a invalid)" (print_typ env) a2'.etyp;
-      let a3',env_for = elab_for_expr ctx.ctx_vararg loc env_test a3 in
+      let a3',env_for = elab_for_expr ctx loc env_test a3 in
       let s1',env_body = elab_stmt env_for (ctx_loop ctx) s1 in
       let sfor = { sdesc = Sfor(a1', a2', a3', s1'); sloc = elab_loc loc } in
       begin match decls' with
@@ -2795,7 +2807,7 @@ let rec elab_stmt env ctx s =
 
 (* 6.8.4 Switch statement *)
   | SWITCH(a, s1, loc) ->
-      let a',env = elab_expr ctx.ctx_vararg loc env a in
+      let a',env = elab_expr ctx loc env a in
       if not (is_integer_type env a'.etyp) then
         error loc "controlling expression of 'switch' does not have integer type (%a invalid)"
           (print_typ env) a'.etyp;
@@ -2815,7 +2827,7 @@ let rec elab_stmt env ctx s =
 
 (* 6.8.6 Return statements *)
   | RETURN(a, loc) ->
-      let a',env = elab_opt_expr ctx.ctx_vararg loc env a in
+      let a',env = elab_opt_expr ctx loc env a in
       begin match (unroll env ctx.ctx_return_typ, a') with
       | TVoid _, None -> ()
       | TVoid _, Some _ ->
@@ -2858,8 +2870,8 @@ let rec elab_stmt env ctx s =
   | ASM(cv_specs, wide, chars, outputs, inputs, flags, loc) ->
       let a = elab_cvspecs env cv_specs in
       let s = elab_simple_string loc wide chars in
-      let outputs,env = mmap (elab_asm_operand ctx.ctx_vararg loc) env outputs in
-      let inputs ,env= mmap (elab_asm_operand ctx.ctx_vararg loc) env inputs in
+      let outputs,env = mmap (elab_asm_operand ctx loc) env outputs in
+      let inputs ,env= mmap (elab_asm_operand ctx loc) env inputs in
       let flags = List.map (fun (w,c) -> elab_simple_string loc w c) flags in
       { sdesc = Sasm(a, s, outputs, inputs, flags);
         sloc = elab_loc loc },env
