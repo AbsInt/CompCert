@@ -517,6 +517,7 @@ let elab_attribute env = function
   | PACKED_ATTR (args, loc) ->
       [Attr("__packed__", List.map (elab_attr_arg loc env) args)]
   | ALIGNAS_ATTR ([a], loc) ->
+      warning loc Celeven_extension "'_Alignas' is a C11 extension";
       begin match elab_attr_arg loc env a with
       | AInt n ->
           if is_power_of_two n || n = 0L then
@@ -1783,8 +1784,9 @@ let elab_expr vararg loc env a =
 
   | TYPE_ALIGNOF (spec, dcl) ->
       let (ty, env') = elab_type loc env spec dcl in
+      warning Celeven_extension "'_Alignof' is a C11 extension";
       if wrap incomplete_type loc env' ty then
-        error "invalid application of 'alignof' to an incomplete type %a" (print_typ env) ty;
+        error "invalid application of '_Alignof' to an incomplete type %a" (print_typ env) ty;
       { edesc = EAlignof ty; etyp =  TInt(size_t_ikind(), []) },env'
 
   | BUILTIN_OFFSETOF ((spec,dcl), mem) ->
