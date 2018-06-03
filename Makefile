@@ -23,7 +23,7 @@ endif
 
 DIRS=lib common $(ARCHDIRS) backend cfrontend driver \
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
-  cparser cparser/validator
+  cparser cparser/MenhirLib
 
 RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser
 
@@ -227,7 +227,7 @@ driver/Version.ml: VERSION
 	>driver/Version.ml
 
 cparser/Parser.v: cparser/Parser.vy
-	$(MENHIR) --coq cparser/Parser.vy
+	$(MENHIR) --coq-lib-path compcert.cparser.MenhirLib --coq cparser/Parser.vy
 
 depend: $(GENERATED) depend1
 
