@@ -99,7 +99,6 @@ type warning_type =
 let active_warnings: warning_type list ref = ref [
   Unnamed;
   Unknown_attribute;
-  Celeven_extension;
   Gnu_empty_struct;
   Missing_declarations;
   Constant_conversion;
