@@ -94,6 +94,7 @@ type warning_type =
   | Unused_ais_parameter
   | Ignored_attributes
   | Extern_after_definition
+  | Static_in_inline
 
 (* List of active warnings *)
 let active_warnings: warning_type list ref = ref [
@@ -117,6 +118,7 @@ let active_warnings: warning_type list ref = ref [
   Unused_ais_parameter;
   Ignored_attributes;
   Extern_after_definition;
+  Static_in_inline;
 ]
 
 (* List of errors treated as warning *)
@@ -150,6 +152,7 @@ let string_of_warning = function
   | Unused_ais_parameter -> "unused-ais-parameter"
   | Ignored_attributes -> "ignored-attributes"
   | Extern_after_definition -> "extern-after-definition"
+  | Static_in_inline -> "static-in-inline"
 
 (* Activate the given warning *)
 let activate_warning w () =
@@ -199,6 +202,7 @@ let wall () =
     Wrong_ais_parameter;
     Ignored_attributes;
     Extern_after_definition;
+    Static_in_inline;
   ]
 
 let wnothing () =
@@ -232,6 +236,7 @@ let werror () =
     Unused_ais_parameter;
     Ignored_attributes;
     Extern_after_definition;
+    Static_in_inline;
   ]
 
 (* Generate the warning key for the message *)
@@ -412,6 +417,7 @@ let warning_options =
   error_option Unused_ais_parameter @
   error_option Ignored_attributes @
   error_option Extern_after_definition @
+  error_option Static_in_inline @
   [Exact ("-Wfatal-errors"), Set error_fatal;
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;

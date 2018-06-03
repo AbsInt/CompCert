@@ -261,8 +261,8 @@ let enter_or_refine_function loc env id sto ty =
 let elab_expr_f : (cabsloc -> Env.t -> Cabs.expression -> C.exp * Env.t) ref
   = ref (fun _ _ _ -> assert false)
 
-let elab_funbody_f : (C.typ -> bool -> Env.t -> statement -> C.stmt) ref
-  = ref (fun _ _ _ _ -> assert false)
+let elab_funbody_f : (C.typ -> bool -> bool -> Env.t -> statement -> C.stmt) ref
+  = ref (fun _ _ _ _ _ -> assert false)
 
 
 (** * Elaboration of constants - C99 section 6.4.4 *)
@@ -1569,15 +1569,16 @@ type elab_context = {
   ctx_continue: bool;           (**r is 'continue' allowed? *)
   ctx_in_switch: bool;          (**r are 'case' and 'default' allowed? *)
   ctx_vararg: bool;             (**r is this a vararg function? *)
+  ctx_nonstatic_inline: bool    (**r is this a nonstatic inline function? *)
 }
 
 (* Context for evaluating compile-time constant expressions.
-   Only the [ctx_vararg] field matters. *)
+   Only the [ctx_vararg] and [ctx_nonstatic_inline] fields matter. *)
 let ctx_constexp = {
   ctx_return_typ = TVoid [];
   ctx_labels = StringSet.empty;
   ctx_break = false; ctx_continue = false; ctx_in_switch = false;
-  ctx_vararg = false
+  ctx_vararg = false; ctx_nonstatic_inline = false
 }
 
 
@@ -1600,13 +1601,21 @@ let elab_expr ctx loc env a =
         err "arithmetic on a pointer to an incomplete type %a in binary '%c'" (print_typ env) ty s
   in
 
+  let check_static_var id sto ty =
+    if ctx.ctx_nonstatic_inline
+    && sto = Storage_static
+    && List.mem AConst (attributes_of_type env ty)
+    then warning Static_in_inline "static variable '%s' is used in an inline function with external linkage" id.C.name
+  in
+
   let rec elab env = function
 
 (* 6.5.1 Primary expressions *)
 
   | VARIABLE s ->
       begin match wrap Env.lookup_ident loc env s with
-      | (id, Env.II_ident(sto, ty)) ->
+        | (id, Env.II_ident(sto, ty)) ->
+          check_static_var id sto ty;
           { edesc = EVar id; etyp = ty },env
       | (id, Env.II_enum v) ->
           { edesc = EConst(CEnum(id, v)); etyp = TInt(enum_ikind, []) },env
@@ -2287,7 +2296,7 @@ let enter_typedefs loc env sto dl =
         emit_elab env loc (Gtypedef(id, ty));
         env') env dl
 
-let enter_decdefs local loc env sto dl =
+let enter_decdefs local nonstatic_inline loc env sto dl =
   (* Sanity checks on storage class *)
   if (sto = Storage_auto || sto = Storage_register) && not local then
     fatal_error loc "illegal storage class %s on file-scoped variable"
@@ -2331,6 +2340,11 @@ let enter_decdefs local loc env sto dl =
              && not isfun
              && wrap incomplete_type loc env ty' then
       error loc "variable has incomplete type %a" (print_typ env) ty';
+    (* check for static variables in nonstatic inline functions *)
+    if local && nonstatic_inline
+             && sto' = Storage_static
+             && not (List.mem AConst (attributes_of_type env ty')) then
+      warning loc Static_in_inline "non-constant static local variable '%s' in inline function may be different in different files" s;
     if local && not isfun && sto' <> Storage_extern && sto' <> Storage_static then
       (* Local definition *)
       ((sto', id, ty', init') :: decls, env2)
@@ -2539,7 +2553,8 @@ let elab_fundef genv spec name defs body loc =
   emit_elab ~debuginfo:false lenv loc
                   (Gdecl(Storage_static, func_id, func_ty, Some func_init));
   (* Elaborate function body *)
-  let body1 = !elab_funbody_f ty_ret vararg lenv body in
+  let body1 = !elab_funbody_f ty_ret vararg (inline && sto <> Storage_static)
+                              lenv body in
   (* Analyse it for returns *)
   let (can_return, can_fallthrough) = Cflow.function_returns lenv body1 in
   (* Special treatment of the "main" function. *)
@@ -2596,7 +2611,8 @@ let elab_fundef genv spec name defs body loc =
 
 (* Definitions *)
 
-let elab_definition (for_loop: bool) (local: bool) (env: Env.t) (def: Cabs.definition)
+let elab_definition (for_loop: bool) (local: bool) (nonstatic_inline: bool)
+                    (env: Env.t) (def: Cabs.definition)
                     : decl list * Env.t =
   match def with
   (* "int f(int x) { ... }" *)
@@ -2619,7 +2635,7 @@ let elab_definition (for_loop: bool) (local: bool) (env: Env.t) (def: Cabs.defin
         let env2 = enter_typedefs loc env1 sto dl
         in ([], env2)
       else
-        enter_decdefs local loc env1 sto dl
+        enter_decdefs local nonstatic_inline loc env1 sto dl
 
   (* pragma *)
   | PRAGMA(s, loc) ->
@@ -2628,9 +2644,9 @@ let elab_definition (for_loop: bool) (local: bool) (env: Env.t) (def: Cabs.defin
 
 (* Extended asm *)
 
-let elab_asm_operand vararg loc env (ASMOPERAND(label, wide, chars, e)) =
+let elab_asm_operand ctx loc env (ASMOPERAND(label, wide, chars, e)) =
   let s = elab_simple_string loc wide chars in
-  let e',env = elab_expr vararg loc env e in
+  let e',env = elab_expr ctx loc env e in
   (label, s, e'),env
 
 
@@ -2786,7 +2802,8 @@ let rec elab_stmt env ctx s =
             let a1,env = elab_for_expr ctx loc env None in
             (a1, env, None)
         | Some (FC_DECL def) ->
-            let (dcl, env') = elab_definition true true (Env.new_scope env) def in
+            let (dcl, env') = elab_definition true true ctx.ctx_nonstatic_inline
+                                              (Env.new_scope env) def in
             let loc = elab_loc (Cabshelper.get_definitionloc def) in
             (sskip, env',
              Some(List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl)) in
@@ -2890,7 +2907,8 @@ and elab_block_body env ctx sl =
   | [] ->
       [],env
   | DEFINITION def :: sl1 ->
-      let (dcl, env') = elab_definition false true env def in
+      let (dcl, env') =
+        elab_definition false true ctx.ctx_nonstatic_inline env def in
       let loc = elab_loc (Cabshelper.get_definitionloc def) in
       let dcl = List.map (fun ((sto,id,ty,_) as d) ->
         Debug.insert_local_declaration sto id ty loc;
@@ -2904,14 +2922,15 @@ and elab_block_body env ctx sl =
 
 (* Elaboration of a function body.  Return the corresponding C statement. *)
 
-let elab_funbody return_typ vararg env b =
+let elab_funbody return_typ vararg nonstatic_inline env b =
   let ctx =
     { ctx_return_typ = return_typ;
       ctx_labels = stmt_labels b;
       ctx_break = false;
       ctx_continue = false;
       ctx_in_switch = false;
-      ctx_vararg = vararg } in
+      ctx_vararg = vararg;
+      ctx_nonstatic_inline = nonstatic_inline } in
   (* The function body appears as a block in the AST but should not create
      a new scope.  Instead, the scope used for function parameters must be
      used for the body. *)
@@ -2931,7 +2950,7 @@ let _ = elab_funbody_f := elab_funbody
 let elab_file prog =
   reset();
   let env = Builtins.environment () in
-  let elab_def env d = snd (elab_definition false false env d) in
+  let elab_def env d = snd (elab_definition false false false env d) in
   ignore (List.fold_left elab_def env prog);
   let p = elaborated_program () in
   Checks.unused_variables p;
