@@ -2250,7 +2250,7 @@ let enter_typedefs loc env sto dl =
     if init <> NO_INIT then
       error loc "initializer in typedef";
     match previous_def Env.lookup_typedef env s with
-    | Some (s',ty') ->
+    | Some (s',ty') when Env.in_current_scope env s' ->
         if equal_types env ty ty' then begin
           warning loc Celeven_extension "redefinition of typedef '%s' is C11 extension" s;
           env
@@ -2259,7 +2259,7 @@ let enter_typedefs loc env sto dl =
             (print_typ env) ty (print_typ env) ty';
           env
         end
-    | None ->
+    | _ ->
         if redef Env.lookup_ident env s then
           error loc "redefinition of '%s' as different kind of symbol" s;
         let (id, env') = Env.enter_typedef env s ty in
