@@ -18,7 +18,7 @@ val parse_c_file: string -> string -> Csyntax.coq_function Ctypes.program
   (** From preprocessed C to Csyntax *)
 
 val prepro_actions: (Commandline.pattern * Commandline.action) list
-  (** Commandline optins affecting the frontend *)
+  (** Commandline options affecting the frontend *)
 
 val prepro_help: string
   (** Commandline help description *)

@@ -832,7 +832,7 @@ and elab_fundef_name env spec (Name (s, decl, attr, loc)) =
   if tydef then
     error loc "'typedef' is forbidden here";
   let id = Env.fresh_ident s in
-  let ((ty, kr_params), env'') = 
+  let ((ty, kr_params), env'') =
     elab_type_declarator ~fundef:true loc env' bty decl in
   let a = elab_attributes env attr in
   (id, sto, inl, noret, add_attributes_type a ty, kr_params, env', env'')
@@ -1020,7 +1020,7 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
   | Some(tag', ({Env.ci_sizeof = None} as ci)), Some members
     when Env.in_current_scope env tag' ->
       if ci.Env.ci_kind <> kind then
-        error loc "use of '%s' with tag type that does not match previous declaration" tag;
+        fatal_error loc "use of '%s' with tag type that does not match previous declaration" tag;
       (* finishing the definition of an incomplete struct or union *)
       let (ci', env') = elab_struct_or_union_info kind loc env members attrs in
       (* Emit a global definition for it *)
@@ -1075,7 +1075,7 @@ and elab_enum_item env ((s, exp), loc) nextval =
   if redef Env.lookup_typedef env s then
     error loc "'%s' redeclared as different kind of symbol" s;
   if not (int_representable v (8 * sizeof_ikind enum_ikind) (is_signed_ikind enum_ikind)) then
-    warning loc Constant_conversion "integer literal '%Ld' is too large to be represented in any integer type"
+    warning loc Constant_conversion "integer literal '%Ld' is too large to be represented in the enumeration integer type"
       v;
   let (id, env') = Env.enter_enum_item env s v in
   ((id, v, exp'), Int64.succ v, env')
@@ -1157,11 +1157,11 @@ let check_init_type loc env a ty =
   else if wrap2 valid_cast loc env a.etyp ty then
     if wrap2 int_pointer_conversion loc env a.etyp ty then
       warning loc Int_conversion
-        "incompatible integer-pointer conversion initializer has type %a instead of the expected type %a"
+        "incompatible integer-pointer conversion: initializer has type %a instead of the expected type %a"
          (print_typ env) a.etyp (print_typ env) ty
     else
       warning loc Unnamed
-        "incompatible conversion initializer has type %a instead of the expected type %a"
+        "incompatible conversion: initializer has type %a instead of the expected type %a"
         (print_typ env) a.etyp (print_typ env) ty
   else
     error loc
@@ -1586,19 +1586,18 @@ let ctx_constexp = {
 
 let elab_expr ctx loc env a =
 
-  let err fmt = error loc fmt in  (* non-fatal error *)
-  let error fmt = fatal_error loc fmt in
-  let warning t fmt =
-    warning loc t fmt in
+  let error fmt = error loc fmt in
+  let fatal_error fmt = fatal_error loc fmt in
+  let warning t fmt = warning loc t fmt in
 
   let check_ptr_arith env ty s =
     match unroll env ty with
     | TVoid _ ->
-        err "illegal arithmetic on a pointer to void in binary '%c'" s
+        error "illegal arithmetic on a pointer to void in binary '%c'" s
     | TFun _ ->
-        err "illegal arithmetic on a pointer to the function type %a in binary '%c'"  (print_typ env) ty s
+        error "illegal arithmetic on a pointer to the function type %a in binary '%c'" (print_typ env) ty s
     | _ -> if incomplete_type env ty then
-        err "arithmetic on a pointer to an incomplete type %a in binary '%c'" (print_typ env) ty s
+        error "arithmetic on a pointer to an incomplete type %a in binary '%c'" (print_typ env) ty s
   in
 
   let check_static_var id sto ty =
@@ -1634,7 +1633,7 @@ let elab_expr ctx loc env a =
         match (unroll env b1.etyp, unroll env b2.etyp) with
         | (TPtr(t, _) | TArray(t, _, _)), (TInt _ | TEnum _) -> t
         | (TInt _ | TEnum _), (TPtr(t, _) | TArray(t, _, _)) -> t
-        | t1, t2 -> error "subscripted value is neither an array nor pointer" in
+        | t1, t2 -> fatal_error "subscripted value is neither an array nor pointer" in
       { edesc = EBinop(Oindex, b1, b2, TPtr(tres, [])); etyp = tres },env
 
   | MEMBEROF(a1, fieldname) ->
@@ -1646,7 +1645,7 @@ let elab_expr ctx loc env a =
         | TUnion(id, attrs) ->
             (wrap Env.find_union_member loc env (id, fieldname), attrs)
         | _ ->
-            error "request for member '%s' in something not a structure or union" fieldname in
+            fatal_error "request for member '%s' in something not a structure or union" fieldname in
       (* A field of a const/volatile struct or union is itself const/volatile *)
       let rec access = function
          | [] -> b1
@@ -1668,10 +1667,10 @@ let elab_expr ctx loc env a =
             | TUnion(id, attrs) ->
                 (wrap Env.find_union_member loc env (id, fieldname), attrs)
             | _ ->
-                error "request for member '%s' in something not a structure or union" fieldname
+                fatal_error "request for member '%s' in something not a structure or union" fieldname
             end
         | _ ->
-            error "member reference type %a is not a pointer" (print_typ env) b1.etyp in
+            fatal_error "member reference type %a is not a pointer" (print_typ env) b1.etyp in
        let rec access =  function
          | [] -> assert false
          | [fld] ->
@@ -1695,7 +1694,7 @@ let elab_expr ctx loc env a =
 *)
   | CALL((VARIABLE "__builtin_va_start" as a1), [a2; a3]) ->
       if not ctx.ctx_vararg then
-        err "'va_start' used in function with fixed args";
+        error "'va_start' used in function with fixed args";
       let b1,env = elab env a1 in
       let b2,env = elab env a2 in
       let _b3,env = elab env a3 in
@@ -1740,9 +1739,9 @@ let elab_expr ctx loc env a =
         | TPtr(ty, a) ->
             begin match unroll env ty with
             | TFun(res, args, vararg, a) -> (res, args, vararg)
-            | _ -> error "called object type %a is neither a function nor function pointer" (print_typ env) b1.etyp
+            | _ -> fatal_error "called object type %a is neither a function nor function pointer" (print_typ env) b1.etyp
             end
-        | _ -> error "called object type %a is neither a function nor function pointer" (print_typ env) b1.etyp
+        | _ -> fatal_error "called object type %a is neither a function nor function pointer" (print_typ env) b1.etyp
       in
       (* Type-check the arguments against the prototype *)
       let bl',env =
@@ -1764,18 +1763,18 @@ let elab_expr ctx loc env a =
       if not (wrap2 valid_cast loc env b1.etyp ty) then
         begin match unroll env b1.etyp, unroll env ty with
         | _, (TStruct _|TUnion _ | TVoid _) ->
-            err "used type %a where arithmetic or pointer type is required"
+            error "used type %a where arithmetic or pointer type is required"
               (print_typ env) ty
         | (TStruct _| TUnion _ | TVoid _),_ ->
-            err "operand of type %a where arithmetic or pointer type is required"
+            error "operand of type %a where arithmetic or pointer type is required"
               (print_typ env) b1.etyp
         | TFloat _, TPtr _  ->
-            err "operand of type %a cannot be cast to a pointer type"
+            error "operand of type %a cannot be cast to a pointer type"
               (print_typ env) b1.etyp
         | TPtr _ , TFloat _ ->
-            err "pointer cannot be cast to type %a" (print_typ env) ty
+            error "pointer cannot be cast to type %a" (print_typ env) ty
         | _ ->
-            err "illegal cast from %a to %a" (print_typ env) b1.etyp (print_typ env) ty
+            error "illegal cast from %a to %a" (print_typ env) b1.etyp (print_typ env) ty
         end;
       { edesc = ECast(ty, b1); etyp = ty },env
 
@@ -1785,7 +1784,7 @@ let elab_expr ctx loc env a =
       let (ty, env) = elab_type loc env spec dcl in
       begin match elab_initializer loc env "<compound literal>" ty ie with
       | (ty', Some i) -> { edesc = ECompound(ty', i); etyp = ty' },env
-      | (ty', None)   -> error "ill-formed compound literal"
+      | (ty', None)   -> fatal_error "ill-formed compound literal"
       end
 
 (* 6.5.3 Unary expressions *)
@@ -1793,33 +1792,33 @@ let elab_expr ctx loc env a =
   | EXPR_SIZEOF a1 ->
       let b1,env = elab env a1 in
       if wrap incomplete_type loc env b1.etyp then
-        error "invalid application of 'sizeof' to an incomplete type %a" (print_typ env) b1.etyp;
+        fatal_error "invalid application of 'sizeof' to an incomplete type %a" (print_typ env) b1.etyp;
       if wrap is_bitfield loc env b1 then
-        error "invalid application of 'sizeof' to a bit-field";
+        fatal_error "invalid application of 'sizeof' to a bit-field";
       { edesc = ESizeof b1.etyp; etyp = TInt(size_t_ikind(), []) },env
 
   | TYPE_SIZEOF (spec, dcl) ->
       let (ty, env') = elab_type loc env spec dcl in
       if wrap incomplete_type loc env' ty then
-        error "invalid application of 'sizeof' to an incomplete type %a" (print_typ env) ty;
+        fatal_error "invalid application of 'sizeof' to an incomplete type %a" (print_typ env) ty;
       { edesc = ESizeof ty; etyp = TInt(size_t_ikind(), []) },env'
 
   | ALIGNOF (spec, dcl) ->
       let (ty, env') = elab_type loc env spec dcl in
       warning Celeven_extension "'_Alignof' is a C11 extension";
       if wrap incomplete_type loc env' ty then
-        error "invalid application of '_Alignof' to an incomplete type %a" (print_typ env) ty;
+        fatal_error "invalid application of 'alignof' to an incomplete type %a" (print_typ env) ty;
       { edesc = EAlignof ty; etyp =  TInt(size_t_ikind(), []) },env'
 
   | BUILTIN_OFFSETOF ((spec,dcl), mem) ->
     let (ty,env) = elab_type loc env spec dcl in
     if  incomplete_type env ty then
-      error "offsetof of incomplete type %a" (print_typ env) ty;
+      fatal_error "offsetof of incomplete type %a" (print_typ env) ty;
     let members env ty mem =
       match ty with
       | TStruct (id,_) -> wrap Env.find_struct_member loc env (id,mem)
       | TUnion (id,_) -> wrap Env.find_union_member loc env (id,mem)
-      | _ -> error "request for member '%s' in something not a structure or union" mem in
+      | _ -> fatal_error "request for member '%s' in something not a structure or union" mem in
     let rec offset_of_list acc env ty = function
       | [] -> acc,ty
       | fld::rest -> let off = offsetof env ty fld in
@@ -1834,16 +1833,16 @@ let elab_expr ctx loc env a =
       | ATINDEX_INIT e,TArray (sub_ty,_,_) ->
         let e,env = elab env e in
         let e = match Ceval.integer_expr env e with
-          | None -> error  "array element designator for is not an integer constant expression"
+          | None -> fatal_error "array element designator for is not an integer constant expression"
           | Some n-> n in
         let size = match sizeof env sub_ty with
           | None -> assert false (* We expect only complete types *)
           | Some s -> s in
         let off_accu = match cautious_mul e size with
-          | None -> error "'offsetof' overflows"
+          | None -> fatal_error "'offsetof' overflows"
           | Some s -> off_accu + s in
         env,off_accu,sub_ty
-      | ATINDEX_INIT _,_ -> error "subscripted value is not an array" in
+      | ATINDEX_INIT _,_ -> fatal_error "subscripted value is not an array" in
     let env,offset,_ = List.fold_left offset_of_member (env,0,ty) mem in
     let size_t = size_t_ikind () in
     let offset = Ceval.normalize_int (Int64.of_int offset) size_t in
@@ -1853,46 +1852,46 @@ let elab_expr ctx loc env a =
   | UNARY(PLUS, a1) ->
       let b1,env = elab env a1 in
       if not (is_arith_type env b1.etyp) then
-        error "invalid argument type %a to unary '+'" (print_typ env) b1.etyp;
+        fatal_error "invalid argument type %a to unary '+'" (print_typ env) b1.etyp;
       { edesc = EUnop(Oplus, b1); etyp = unary_conversion env b1.etyp },env
 
   | UNARY(MINUS, a1) ->
       let b1,env = elab env a1 in
       if not (is_arith_type env b1.etyp) then
-        error "invalid argument type %a to unary '-'" (print_typ env) b1.etyp;
+        fatal_error "invalid argument type %a to unary '-'" (print_typ env) b1.etyp;
       { edesc = EUnop(Ominus, b1); etyp = unary_conversion env b1.etyp },env
 
   | UNARY(BNOT, a1) ->
       let b1,env = elab env a1 in
       if not (is_integer_type env b1.etyp) then
-        error "invalid argument type %a to unary '~'" (print_typ env) b1.etyp;
+        fatal_error "invalid argument type %a to unary '~'" (print_typ env) b1.etyp;
       { edesc = EUnop(Onot, b1); etyp = unary_conversion env b1.etyp },env
 
   | UNARY(NOT, a1) ->
       let b1,env = elab env a1 in
       if not (is_scalar_type env b1.etyp) then
-        error "invalid argument type %a to unary '!'" (print_typ env) b1.etyp;
+        fatal_error "invalid argument type %a to unary '!'" (print_typ env) b1.etyp;
       { edesc = EUnop(Olognot, b1); etyp = TInt(IInt, []) },env
 
   | UNARY(ADDROF, a1) ->
       let b1,env = elab env a1 in
       if not (is_lvalue b1 || is_function_type env b1.etyp) then
-        err "argument of '&' is not an lvalue (invalid %a)" (print_typ env) b1.etyp;
+        error "argument of '&' is not an lvalue (invalid %a)" (print_typ env) b1.etyp;
       begin match b1.edesc with
       | EVar id ->
           begin match wrap Env.find_ident loc env id with
           | Env.II_ident(Storage_register, _) ->
-              err "address of register variable '%s' requested" id.C.name
+              error "address of register variable '%s' requested" id.C.name
           | _ -> ()
           end
       | EUnop(Odot f, b2) ->
           let fld = wrap2 field_of_dot_access loc env b2.etyp f in
           if fld.fld_bitfield <> None then
-            err "address of bit-field '%s' requested" f
+            error "address of bit-field '%s' requested" f
       | EUnop(Oarrow f, b2) ->
           let fld = wrap2 field_of_arrow_access loc env b2.etyp f in
           if fld.fld_bitfield <> None then
-            err "address of bit-field '%s' requested" f
+            error "address of bit-field '%s' requested" f
       | _ -> ()
       end;
       { edesc = EUnop(Oaddrof, b1); etyp = TPtr(b1.etyp, []) },env
@@ -1905,7 +1904,7 @@ let elab_expr ctx loc env a =
       | TPtr(ty, _) | TArray(ty, _, _) ->
           { edesc = EUnop(Oderef, b1); etyp = ty },env
       | _ ->
-          error "arguemnt of unary '*' is not a pointer (%a invalid)"
+          fatal_error "argument of unary '*' is not a pointer (%a invalid)"
             (print_typ env) b1.etyp
       end
 
@@ -1936,7 +1935,7 @@ let elab_expr ctx loc env a =
             match unroll env b1.etyp, unroll env b2.etyp with
             | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) -> ty
             | (TInt _ | TEnum _), (TPtr(ty, a) | TArray(ty, _, a)) -> ty
-            | _, _ -> error "invalid operands to binary '+' (%a and %a)"
+            | _, _ -> fatal_error "invalid operands to binary '+' (%a and %a)"
                   (print_typ env) b1.etyp (print_typ env) b2.etyp
           in
           check_ptr_arith env ty '+';
@@ -1955,19 +1954,19 @@ let elab_expr ctx loc env a =
           match wrap unroll loc env b1.etyp, wrap  unroll loc env b2.etyp with
           | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) ->
               if not (wrap pointer_arithmetic_ok loc env ty) then
-                err "illegal pointer arithmetic in binary '-'";
+                error "illegal pointer arithmetic in binary '-'";
               (TPtr(ty, []), TPtr(ty, []))
           | (TPtr(ty1, a1) | TArray(ty1, _, a1)),
             (TPtr(ty2, a2) | TArray(ty2, _, a2)) ->
               if not (compatible_types AttrIgnoreAll env ty1 ty2) then
-                err "%a and %a are not pointers to compatible types"
+                error "%a and %a are not pointers to compatible types"
                    (print_typ env) b1.etyp (print_typ env) b1.etyp;
               check_ptr_arith env ty1 '-';
               check_ptr_arith env ty2 '-';
               if wrap sizeof loc env ty1 = Some 0 then
-                err "subtraction between two pointers to zero-sized objects";
+                error "subtraction between two pointers to zero-sized objects";
               (TPtr(ty1, []), TInt(ptrdiff_t_ikind(), []))
-          | _, _ -> error "invalid operands to binary '-' (%a and %a)"
+          | _, _ -> fatal_error "invalid operands to binary '-' (%a and %a)"
                 (print_typ env) b1.etyp (print_typ env) b2.etyp
         end in
       { edesc = EBinop(Osub, b1, b2, tyop); etyp = tyres },env
@@ -2011,7 +2010,7 @@ let elab_expr ctx loc env a =
       let b2,env = elab env a2 in
       let b3,env = elab env a3 in
       if not (is_scalar_type env b1.etyp) then
-        err "first argument of '?:' is not a scalar type (invalid %a)"
+        error "first argument of '?:' is not a scalar type (invalid %a)"
            (print_typ env) b1.etyp;
       begin match pointer_decay env b2.etyp, pointer_decay env b3.etyp with
       | (TInt _ | TFloat _ | TEnum _), (TInt _ | TFloat _ | TEnum _) ->
@@ -2039,7 +2038,7 @@ let elab_expr ctx loc env a =
       | ty1, ty2 ->
           match combine_types AttrIgnoreAll env ty1 ty2 with
           | None ->
-              error "the second and third argument of '?:' incompatible types (%a and %a)"
+              fatal_error "the second and third argument of '?:' incompatible types (%a and %a)"
                  (print_typ env) ty1  (print_typ env) ty2
           | Some tyres ->
               { edesc = EConditional(b1, b2, b3); etyp = tyres },env
@@ -2051,9 +2050,9 @@ let elab_expr ctx loc env a =
       let b1,env = elab env a1 in
       let b2,env = elab env a2 in
       if List.mem AConst (attributes_of_type env b1.etyp) then
-        error "left-hand side of assignment has 'const' type";
+        fatal_error "left-hand side of assignment has 'const' type";
       if not (is_modifiable_lvalue env b1) then
-        err "expression is not assignable";
+        error "expression is not assignable";
       if not (wrap2 valid_assignment loc env b2 b1.etyp) then begin
         if wrap2 valid_cast loc env b2.etyp b1.etyp then
           if wrap2 int_pointer_conversion loc env b2.etyp b1.etyp then
@@ -2062,10 +2061,10 @@ let elab_expr ctx loc env a =
               (print_typ env) b1.etyp (print_typ env) b2.etyp
           else
             warning Unnamed
-              "incompatible conversion assigning to %a from %a"
+              "incompatible conversion: assigning to %a from %a"
                (print_typ env) b1.etyp (print_typ env) b2.etyp
         else
-          err "assigning to %a from incompatible type %a"
+          error "assigning to %a from incompatible type %a"
             (print_typ env) b1.etyp  (print_typ env) b2.etyp;
       end;
       { edesc = EBinop(Oassign, b1, b2, b1.etyp); etyp = b1.etyp },env
@@ -2089,9 +2088,9 @@ let elab_expr ctx loc env a =
       begin match elab env (BINARY(sop, a1, a2)) with
       | ({ edesc = EBinop(_, b1, b2, _); etyp = ty } as b),env  ->
           if List.mem AConst (attributes_of_type env b1.etyp) then
-            err "left-hand side of assignment has 'const' type";
+            error "left-hand side of assignment has 'const' type";
           if not (is_modifiable_lvalue env b1) then
-            err "expression is not assignable";
+            error "expression is not assignable";
           if not (wrap2 valid_assignment loc env b b1.etyp) then begin
             if wrap2 valid_cast loc env ty b1.etyp then
               if wrap2 int_pointer_conversion loc env ty b1.etyp then
@@ -2100,10 +2099,10 @@ let elab_expr ctx loc env a =
                    (print_typ env) b1.etyp  (print_typ env) ty
               else
                 warning Unnamed
-                  "incompatible conversion assigning to %a from %a"
+                  "incompatible conversion: assigning to %a from %a"
                   (print_typ env) b1.etyp (print_typ env) ty
             else
-              err "assigning to %a from incompatible type %a"
+              error "assigning to %a from incompatible type %a"
                  (print_typ env) b1.etyp (print_typ env) ty;
           end;
           { edesc = EBinop(top, b1, b2, ty); etyp = b1.etyp },env
@@ -2122,9 +2121,9 @@ let elab_expr ctx loc env a =
   and elab_pre_post_incr_decr op msg a1 =
     let b1,env = elab env a1 in
     if not (is_modifiable_lvalue env b1) then
-      err "expression is not assignable";
+      error "expression is not assignable";
     if not (is_scalar_type env b1.etyp) then
-      err "cannot %s value of type %a" msg (print_typ env) b1.etyp;
+      error "cannot %s value of type %a" msg (print_typ env) b1.etyp;
     { edesc = EUnop(op, b1); etyp = b1.etyp },env
 
 (* Elaboration of binary operators over integers *)
@@ -2132,7 +2131,7 @@ let elab_expr ctx loc env a =
     let b1,env = elab env a1 in
     let b2,env = elab env a2 in
     if not ((is_integer_type env b1.etyp) && (is_integer_type env b2.etyp)) then
-      error "invalid operands to binary '%s' (%a and %a)" msg
+      fatal_error "invalid operands to binary '%s' (%a and %a)" msg
         (print_typ env) b1.etyp (print_typ env) b2.etyp;
     let tyres = binary_conversion env b1.etyp b2.etyp in
     { edesc = EBinop(op, b1, b2, tyres); etyp = tyres },env
@@ -2142,7 +2141,7 @@ let elab_expr ctx loc env a =
     let b1,env = elab env a1 in
     let b2,env = elab env a2 in
     if not ((is_arith_type env b1.etyp) && (is_arith_type env b2.etyp)) then
-      error "invalid operands to binary '%s' (%a and %a)" msg
+      fatal_error "invalid operands to binary '%s' (%a and %a)" msg
         (print_typ env) b1.etyp (print_typ env) b2.etyp;
     let tyres = binary_conversion env b1.etyp b2.etyp in
     { edesc = EBinop(op, b1, b2, tyres); etyp = tyres },env
@@ -2152,7 +2151,7 @@ let elab_expr ctx loc env a =
     let b1,env = elab env a1 in
     let b2,env = elab env a2 in
     if not ((is_integer_type env b1.etyp) && (is_integer_type env b2.etyp)) then
-      error "invalid operands to '%s' (%a and %a)" msg
+      fatal_error "invalid operands to '%s' (%a and %a)" msg
         (print_typ env) b1.etyp (print_typ env) b2.etyp;
     let tyres = unary_conversion env b1.etyp in
     { edesc = EBinop(op, b1, b2, tyres); etyp = tyres },env
@@ -2190,7 +2189,7 @@ let elab_expr ctx loc env a =
               (print_typ env) b1.etyp (print_typ env) b2.etyp;
             EBinop(op, b1, b2, TPtr(TVoid [], []))
         | ty1, ty2 ->
-            error "illegal comparison between types@ %a@ and %a"
+            fatal_error "illegal comparison between types@ %a@ and %a"
               (print_typ env) b1.etyp (print_typ env) b2.etyp; in
       { edesc = resdesc; etyp = TInt(IInt, []) },env
 
@@ -2199,7 +2198,7 @@ let elab_expr ctx loc env a =
     let b1,env = elab env a1 in
     let b2,env = elab env a2 in
     if not ((is_scalar_type env b1.etyp) && (is_scalar_type env b2.etyp)) then
-      error "invalid operands to binary %s (%a and %a)" msg
+      fatal_error "invalid operands to binary '%s' (%a and %a)" msg
         (print_typ env) b1.etyp (print_typ env) b2.etyp;
     { edesc = EBinop(op, b1, b2, TInt(IInt, [])); etyp = TInt(IInt, []) },env
 
@@ -2211,14 +2210,14 @@ let elab_expr ctx loc env a =
        let found = argno - 1 in
        let expected = List.length params + found in
        let vararg = if vararg then "at least " else "" in
-       err "too few arguments to function call, expected %s%d, have %d" vararg expected found; [],env
+       error "too few arguments to function call, expected %s%d, have %d" vararg expected found; [],env
    | (_::_,env), [] ->
         if vararg
         then args
         else
           let expected = argno - 1 in
           let found = List.length (fst args) + expected in
-          (err "too many arguments to function call, expected %d, have %d" expected found; args)
+          (error "too many arguments to function call, expected %d, have %d" expected found; args)
     | (arg1 :: argl,env), (_, ty_p) :: paraml ->
         let ty_a = argument_conversion env arg1.etyp in
         if not (wrap2 valid_assignment loc env {arg1 with etyp = ty_a} ty_p)
@@ -2230,10 +2229,10 @@ let elab_expr ctx loc env a =
                 (print_typ env) ty_a argno (print_typ env) ty_p
             else
               warning Unnamed
-                "incompatible conversion passing %a to parameter %d of type %a"
+                "incompatible conversion: passing %a to parameter %d of type %a"
                 (print_typ env) ty_a argno (print_typ env) ty_p end
           else
-            err
+            error
               "passing %a to parameter %d of incompatible type %a"
               (print_typ env) ty_a argno (print_typ env) ty_p
         end;
@@ -2274,7 +2273,7 @@ let enter_typedefs loc env sto dl =
     match previous_def Env.lookup_typedef env s with
     | Some (s',ty') when Env.in_current_scope env s' ->
         if equal_types env ty ty' then begin
-          warning loc Celeven_extension "redefinition of typedef '%s' is C11 extension" s;
+          warning loc Celeven_extension "redefinition of typedef '%s' is a C11 extension" s;
           env
         end else begin
           error loc "typedef redefinition with different types (%a vs %a)"
@@ -2312,7 +2311,7 @@ let enter_decdefs local nonstatic_inline loc env sto dl =
        Local function declarations with default storage remain with
        default storage. *)
     let sto1 =
-      if local && sto = Storage_default && not isfun 
+      if local && sto = Storage_default && not isfun
       then Storage_auto
       else sto in
     (* enter ident in environment with declared type, because
@@ -2380,7 +2379,7 @@ let elab_KR_function_parameters env params defs loc =
   (* Check that the declarations only declare parameters *)
   let extract_name (Init_name(Name(s, dty, attrs, loc') as name, ie)) =
     if not (List.mem s params) then
-      error loc' "Declaration of '%s' which is not a function parameter" s;
+      error loc' "declaration of '%s' which is not a function parameter" s;
     if ie <> NO_INIT then
       error loc' "illegal initialization of parameter '%s'" s;
     name
@@ -2399,7 +2398,7 @@ let elab_KR_function_parameters env params defs loc =
       paramsenv
   | d -> (* Should never be produced by the parser *)
       fatal_error (Cabshelper.get_definitionloc d)
-                      "Illegal declaration of function parameter" in
+                      "illegal declaration of function parameter" in
   let kr_params_defs,paramsenv =
     let params,paramsenv = mmap elab_param_def env defs in
     List.concat params,paramsenv in
@@ -2855,7 +2854,7 @@ let rec elab_stmt env ctx s =
                   (print_typ env) b.etyp (print_typ env) ctx.ctx_return_typ
               else
                 warning loc Unnamed
-                  "incompatible conversion returning %a from a function with result type %a"
+                  "incompatible conversion: returning %a from a function with result type %a"
                   (print_typ env) b.etyp (print_typ env) ctx.ctx_return_typ
             else
               error loc

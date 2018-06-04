@@ -47,7 +47,7 @@ let command stdout args =
     match status with
     | Unix.WEXITED rc -> rc
     | Unix.WSIGNALED n | Unix.WSTOPPED n ->
-        error no_loc "Command '%s' killed on a signal." argv.(0); -1
+        error no_loc "command '%s' killed on a signal." argv.(0); -1
   with Unix.Unix_error(err, fn, param) ->
     error no_loc "executing '%s': %s: %s %s"
             argv.(0) fn (Unix.error_message err) param;

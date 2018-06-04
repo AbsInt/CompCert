@@ -12,10 +12,10 @@
 (* *********************************************************************)
 
 val linker: string -> string list -> unit
-  (** Link files into executbale *)
+  (** Link files into executable *)
 
 val linker_actions: (Commandline.pattern * Commandline.action) list
-  (** Commandline optins affecting the assembler *)
+  (** Commandline options affecting the assembler *)
 
 val linker_help: string
   (** Commandline help description *)

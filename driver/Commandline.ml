@@ -74,7 +74,7 @@ let parse_array spec argv first last =
         with Not_found -> find_action s inexact_cases in
       match optact with
       | None ->
-        let msg = sprintf "Unknown argument `%s'" s in
+        let msg = sprintf "unknown argument `%s'" s in
         raise (CmdError msg)
       | Some(Set r) ->
           r := true; parse (i+1)
@@ -86,7 +86,7 @@ let parse_array spec argv first last =
           if i + 1 <= last then begin
             fn argv.(i+1); parse (i+2)
           end else begin
-            let msg = sprintf "Option `%s' expects an argument" s in
+            let msg = sprintf "option `%s' expects an argument" s in
             raise (CmdError msg)
           end
       | Some(Integer fn) ->
@@ -95,19 +95,19 @@ let parse_array spec argv first last =
               try
                 int_of_string argv.(i+1)
               with Failure _ ->
-                let msg = sprintf "Argument to option `%s' must be an integer" s in
+                let msg = sprintf "argument to option `%s' must be an integer" s in
                 raise (CmdError msg)
             in
             fn n; parse (i+2)
           end else begin
-            let msg = sprintf  "Option `%s' expects an argument" s in
+            let msg = sprintf  "option `%s' expects an argument" s in
             raise (CmdError msg)
           end
       | Some (Ignore) ->
           if i + 1 <= last then begin
             parse (i+2)
           end else begin
-            let msg = sprintf "Option `%s' expects an argument" s in
+            let msg = sprintf "option `%s' expects an argument" s in
             raise (CmdError msg)
           end
       | Some (Unit f) -> f (); parse (i+1)
@@ -131,7 +131,7 @@ let long_int_action key s =
   try
     int_of_string s
   with Failure _ ->
-    let msg =  sprintf "Argument to option `%s' must be an integer" key in
+    let msg =  sprintf "argument to option `%s' must be an integer" key in
     raise (CmdError msg)
 
 let longopt_int key f =
