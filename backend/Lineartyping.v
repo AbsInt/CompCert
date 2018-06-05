@@ -431,8 +431,7 @@ Theorem wt_entry_point:
 Proof.
   induction 1. econstructor.
   constructor. constructor. admit. (* f0's code must be well-typed *) reflexivity. apply wt_build_from_arguments; auto.
-  unfold ge0 in H2. exploit Genv.find_funct_ptr_inversion; eauto.
-  intros [id IN]. eapply wt_prog; eauto.
+  unfold ge0 in H2. apply Genv.find_funct_ptr_inversion in H2 as [id IN]. eapply wt_prog; eauto.
   apply wt_build_from_arguments; auto.
 Admitted.
 
