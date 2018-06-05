@@ -26,6 +26,7 @@
 - [free]: invalidate a memory block.
 *)
 
+Require Import Eqdep_dec.
 Require Import Zwf.
 Require Import Axioms.
 Require Import Coqlib.
@@ -53,12 +54,23 @@ Definition perm_order' (po: option permission) (p: permission) :=
   | None => False
  end.
 
+Lemma perm_order'_irr p1 p2 (po1 po2: perm_order' p1 p2): po1 = po2.
+Proof.
+  destruct p1 as [p1|];[apply perm_order_irr|elim po1].
+Qed.
+
 Definition perm_order'' (po1 po2: option permission) :=
   match po1, po2 with
   | Some p1, Some p2 => perm_order p1 p2
   | _, None => True
   | None, Some _ => False
  end.
+
+Lemma perm_order''_irr p1 p2 (po1 po2: perm_order'' p1 p2): po1 = po2.
+Proof.
+  destruct p1 as [p1|];destruct p2 as [p2|]; try apply perm_order_irr;
+    destruct po1; destruct po2; reflexivity.
+Qed.
 
 Record mem' : Type := mkmem {
   mem_contents: PMap.t (ZMap.t memval);  (**r [block -> offset -> memval] *)
@@ -80,7 +92,10 @@ Lemma mkmem_ext:
   cont1=cont2 -> acc1=acc2 -> next1=next2 ->
   mkmem cont1 acc1 next1 a1 b1 c1 = mkmem cont2 acc2 next2 a2 b2 c2.
 Proof.
-  intros. subst. f_equal; apply proof_irr.
+  intros. subst. f_equal; repeat (apply functional_extensionality_dep; intro).
+  - apply perm_order''_irr.
+  - apply UIP_dec. repeat decide equality.
+  - apply UIP_dec. apply memval_dec.
 Qed.
 
 (** * Validity of blocks and accesses *)
@@ -2129,7 +2144,7 @@ Proof.
   intros.
   unfold drop_perm in DROP. destruct (range_perm_dec m b lo hi Cur Freeable); inv DROP.
   unfold perm. simpl. rewrite PMap.gss. unfold proj_sumbool.
-  rewrite zle_true. rewrite zlt_true. simpl. constructor.
+  rewrite zle_true. rewrite zlt_true. simpl. auto with mem.
   omega. omega.
 Qed.
 

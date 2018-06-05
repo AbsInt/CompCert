@@ -157,6 +157,17 @@ Inductive memval: Type :=
   | Byte: byte -> memval
   | Fragment: val -> quantity -> nat -> memval.
 
+Lemma memval_dec (a b: memval): {a = b} + {a <> b}.
+Proof.
+  repeat decide equality;
+    solve [apply Byte.eq_dec
+          |apply Int.eq_dec
+          |apply Int64.eq_dec
+          |apply Float.eq_dec
+          |apply Float32.eq_dec
+          |apply Ptrofs.eq_dec].
+Qed.
+
 (** * Encoding and decoding integers *)
 
 (** We define functions to convert between integers and lists of bytes

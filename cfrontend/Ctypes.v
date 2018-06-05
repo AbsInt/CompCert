@@ -15,6 +15,7 @@
 
 (** Type expressions for the Compcert C and Clight languages *)
 
+Require Import Eqdep_dec.
 Require Import Axioms Coqlib Maps Errors.
 Require Import AST Linking.
 Require Archi.
@@ -1256,9 +1257,20 @@ Lemma composite_eq:
   Build_composite su1 m1 a1 sz1 al1 r1 pos1 al2p1 szal1 = Build_composite su2 m2 a2 sz2 al2 r2 pos2 al2p2 szal2.
 Proof.
   intros. subst.
-  assert (pos1 = pos2) by apply proof_irr. 
-  assert (al2p1 = al2p2) by apply proof_irr.
-  assert (szal1 = szal2) by apply proof_irr.
+  assert (pos1 = pos2).
+   apply functional_extensionality. intros x. destruct (pos1 x).
+  assert (al2p1 = al2p2).
+   clear. destruct al2p1 as [n1 Hn1]. destruct al2p2 as [n2 Hn2].
+   generalize Hn2. replace n2 with n1. intros Hn2'. f_equal. apply UIP_dec. apply Z.eq_dec.
+   rewrite Hn1 in Hn2. rewrite !two_power_nat_equiv in Hn2. apply Nat2Z.inj.
+   refine (Z.pow_inj_r _ _ _ _ _ _ Hn2); auto with zarith.
+  assert (szal1 = szal2).
+   clear -al2p2. destruct szal1 as [n1 Hn1]. destruct szal2 as [n2 Hn2].
+   generalize Hn2. replace n2 with n1. intros Hn2'. f_equal. apply UIP_dec. apply Z.eq_dec.
+   rewrite Hn1 in Hn2. eapply Z.mul_reg_r;[|apply Hn2].
+   destruct al2p2 as [n ->].
+   assert (Hn := two_power_nat_pos n).
+   omega.
   subst. reflexivity.
 Qed.
 
