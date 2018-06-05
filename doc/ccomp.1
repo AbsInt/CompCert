@@ -379,8 +379,16 @@ Disabled by default.
 Dangerous conversion of constants, e.g. literals that are too large for the given type.
 Enabled by default.
 .sp
+\fIextern\-after\-definition\fP:
+Extern declarations after non-extern definitions.
+Enabled by default.
+.sp
 \fIgnu\-empty\-struct\fP:
 GNU extension for empty structs.
+Enabled by default.
+.sp
+\fignored\-attributes\fP:
+Attribute declarations after definitions.
 Enabled by default.
 .sp
 \fIimplicit\-function\-declaration\fP:
@@ -389,6 +397,10 @@ Enabled by default.
 .sp
 \fIimplicit\-int\fP:
 Type of parameter or return type is implicitly assumed to be int.
+Enabled by default.
+.sp
+\fIinline\-asm\-sdump\fP:
+Use of unsupported features in combination with dump of abstract syntax tree.
 Enabled by default.
 .sp
 \fIint\-conversion\fP:
@@ -407,6 +419,10 @@ Enabled by default.
 Wrong return type for main.
 Enabled by default.
 .sp
+\fImissing\-declarations\fP:
+Declations which do not declare anything.
+Enabled by default.
+.sp
 \fIpointer\-type\-mismatch\fP:
 Use of incompatible pointer types in conditional expressions.
 Enabled by default.
@@ -415,12 +431,24 @@ Enabled by default.
 Void-return statement in non-void function.
 Enabled by default.
 .sp
+\fIstatic\-in\-inline\fP:
+Static variable in non-static inline function.
+Enabled by default.
+.sp
 \fIunknown\-attributes\fP:
 Use of unsupported or unknown attributes.
 Enabled by default.
 .sp
 \fIunknown\-pragmas\fP:
 Use of unsupported or unknown pragmas.
+Disabled by default.
+.sp
+\fIunused_ais_parameter\fP:
+Use of unsupported or unknown pragmas.
+Enabled by default.
+.sp
+\fIunused\-variable\fP:
+Unused local variables.
 Disabled by default.
 .sp
 \fIvarargs\fP:
@@ -434,10 +462,6 @@ Enabled by default.
 \fIzero\-length\-array\fP:
 GNU extension for zero length arrays.
 Disabled by default.
-.sp
-\fIinline\-asm\-sdump\fP:
-Use of unsupported features in combination with dump of abstract syntax tree.
-Enabled by default.
 .
 .TP
 .B \-Wno-<warning>
