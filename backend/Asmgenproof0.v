@@ -393,27 +393,31 @@ Lemma make_arg_match:
   agree ms sp rs ->
   exists rs', Asm.make_arg rs m l v = Some (rs', m') /\ agree ms' sp rs'.
 Proof.
-  destruct l; auto; simpl; intros.
-  apply agree_set_mreg_parallel; auto.
+  destruct l; auto; unfold make_arg, Mach.make_arg; intros.
+  - inv H.
+    do 2 eexists; eauto.
+    apply agree_set_mreg_parallel; auto.
+  - unfold store_stack in H.
+    erewrite agree_sp by eauto.
+    destruct (Mem.storev _ _ _ _); inv H; eauto.
 Qed.
 
 Lemma make_arguments_match:
   forall ms ms' m m' sp rs ll vl,
   Mach.make_arguments ms m sp ll vl = Some (ms', m') ->
   agree ms sp rs ->
-  exists rs', Asm.set_arguments rs ll vl = Some rs' /\ agree ms' sp rs'.
+  exists rs', Asm.make_arguments rs m ll vl = Some (rs', m') /\ agree ms' sp rs'.
 Proof.
-  intros until ll; revert ms ms' rs; induction ll; simpl; intros.
-  - inv H; eauto.
+  intros until ll; revert ms ms' rs m'; induction ll; simpl; intros.
+  - destruct vl; inv H; eauto.
   - destruct vl; try discriminate.
-    { inv H; eauto. }
-    destruct (Mach.set_arguments _ _ _) eqn: Ha; try discriminate.
+    destruct (Mach.make_arguments _ _ _ _ _) as [[]|] eqn: Ha; try discriminate.
     eapply IHll in Ha as (? & -> & ?); auto.
     destruct a.
-    + inv H.
-      eexists; split; eauto; apply set_arg_match; auto.
-    + destruct v; inv H; eexists; split; eauto;
-        apply set_arg_match; auto; apply set_arg_match; auto.
+    + eapply make_arg_match; eauto.
+    + destruct (Mach.make_arg _ _ _ _ _) as [[]|] eqn: Ha; try discriminate.
+      eapply make_arg_match in Ha as (? & -> & ?); auto.
+      eapply make_arg_match; eauto.
 Qed.
 
 (** Translation of arguments and results to builtins. *)

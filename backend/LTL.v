@@ -344,14 +344,18 @@ Definition build_ls_from_arguments (fs: signature)(args:list val) :=
   setlist (loc_arguments fs) args (Locmap.init Vundef).
 
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f m0 args,
+  | entry_point_intro: forall b f b0 f0 m0 m1 stk args,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       Mem.arg_well_formed args m0 ->
       globals_not_fresh ge m0 ->
       Genv.find_funct_ptr ge b = Some f ->
       Val.has_type_list args (sig_args (funsig f)) ->
-      entry_point p m0 (Callstate nil f (build_ls_from_arguments (funsig f) args) m0) (Vptr b Ptrofs.zero) args.
+      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
+      tailcall_possible (fn_sig f0) ->
+      Mem.alloc m0 0 (fn_stacksize f0) = (m1, stk) ->
+      let ls := build_ls_from_arguments (funsig f) args in
+      entry_point p m0 (Callstate (Stackframe f0 (Vptr stk Ptrofs.zero) ls nil :: nil) f ls m1) (Vptr b Ptrofs.zero) args.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m retcode,

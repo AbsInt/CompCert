@@ -1161,18 +1161,9 @@ Fixpoint make_arguments (rs: regset) (m: mem) (al: list (rpair loc)) (lv: list v
       match a with
       | One l => make_arg rs' m' l v
       | Twolong hi lo =>
-        match v with
-        | Vlong v' =>
-          match make_arg rs' m' hi (Vint (Int64.hiword v')) with
-          | Some (rs'', m'') => make_arg rs'' m'' lo (Vint (Int64.loword v'))
-          | None => None
-          end
-        | Vundef =>
-          match make_arg rs' m' hi Vundef with
-          | Some (rs'', m'') => make_arg rs'' m'' lo Vundef
-          | None => None
-          end
-        | _ => None
+        match make_arg rs' m' hi (Val.hiword v) with
+        | Some (rs'', m'') => make_arg rs'' m'' lo (Val.loword v)
+        | None => None
         end
       end
     | _ => None
@@ -1183,15 +1174,18 @@ Fixpoint make_arguments (rs: regset) (m: mem) (al: list (rpair loc)) (lv: list v
 
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
-    forall f b rs m args,
+    forall f b b0 f0 rs m0 m1 m args,
+      Genv.find_funct_ptr ge b = Some f ->
+      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
+      Mem.mem_inj (Mem.flat_inj (Mem.nextblock m0)) m0 m1 ->
+      let stk := Mem.nextblock m0 in
       let rs0 :=
         (Pregmap.init Vundef)
         # PC <- (Vptr b Ptrofs.zero) 
         # RA <- Vnullptr
-        # RSP <- sp in
-      Genv.find_funct_ptr ge b = Some f ->
-      make_arguments rs0 m0 (loc_arguments (funsig f)) args = Some (rs, m) ->
-      entry_point ge m0 (State rs m) (Vptr b (Ptrofs.of_ints Int.zero)) args.
+        # RSP <- (Vptr stk Ptrofs.zero) in
+      make_arguments rs0 m1 (loc_arguments (funsig f)) args = Some (rs, m) ->
+      entry_point ge m0 (State rs m) (Vptr b Ptrofs.zero) args.
 
  Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=
  match l with
@@ -1353,15 +1347,14 @@ Ltac Equalities :=
   eapply external_call_trace_length; eauto.
 - (* initial cores *)
   inv H; inv H0.
-  rewrite H3 in H1; inv H1.
-  subst rs0 rs2. rewrite H6 in H2; congruence.
+  admit. (* need to know more about the initial caller and memory setup *)
 - (* final no step *)
   assert (NOTNULL: forall b ofs, Vnullptr <> Vptr b ofs).
   { intros; unfold Vnullptr; destruct Archi.ptr64; congruence. }
   inv H. red; intros; red; intros. inv H; rewrite H0 in *; eelim NOTNULL; eauto.
 - (* final states *)
   inv H; inv H0. congruence.
-Qed.
+Admitted.
 (** Classification functions for processor registers (used in Asmgenproof). *)
 
 Definition data_preg (r: preg) : bool :=

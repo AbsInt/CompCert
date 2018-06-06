@@ -528,18 +528,9 @@ Fixpoint make_arguments (rs: regset) (m: mem) sp (al: list (rpair loc)) (lv: lis
       match a with
       | One l => make_arg rs' m' sp l v
       | Twolong hi lo =>
-        match v with
-        | Vlong v' =>
-          match make_arg rs' m' sp hi (Vint (Int64.hiword v')) with
-          | Some (rs'', m'') => make_arg rs'' m'' sp lo (Vint (Int64.loword v'))
-          | None => None
-          end
-        | Vundef =>
-          match make_arg rs' m' sp hi Vundef with
-          | Some (rs'', m'') => make_arg rs'' m'' sp lo Vundef
-          | None => None
-          end
-        | _ => None
+        match make_arg rs' m' sp hi (Val.hiword v) with
+        | Some (rs'', m'') => make_arg rs'' m'' sp lo (Val.loword v)
+        | None => None
         end
       end
     | _ => None
@@ -556,10 +547,10 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       globals_not_fresh ge m0 ->
       Mem.arg_well_formed args m0 ->
       Genv.find_funct_ptr ge b = Some f ->
+      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
       Mem.mem_inj (Mem.flat_inj (Mem.nextblock m0)) m0 m1 ->
       let stk := Mem.nextblock m0 in
       make_arguments (Regmap.init Vundef) m1 (Vptr stk Ptrofs.zero) (loc_arguments (funsig f)) args = Some (rs, m) ->
-      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
       entry_point p m0 (Callstate (Stackframe b0 (Vptr stk Ptrofs.zero) Vnullptr nil :: nil) b rs m) (Vptr b (Ptrofs.zero)) args.
 
 Inductive final_state: state -> int -> Prop :=

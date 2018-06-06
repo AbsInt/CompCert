@@ -1144,7 +1144,14 @@ Proof.
   constructor. constructor. constructor. auto.
 Qed.
 
-Hint Resolve is_tail_refl is_tail_cons is_tail_in is_tail_cons_left: coqlib.
+Lemma is_tail_nil:
+  forall (A: Type) (l: list A),
+  is_tail nil l.
+Proof.
+  induction l; constructor; auto.
+Qed.
+
+Hint Resolve is_tail_refl is_tail_cons is_tail_in is_tail_cons_left is_tail_nil: coqlib.
 
 Lemma is_tail_incl:
   forall (A: Type) (l1 l2: list A), is_tail l1 l2 -> incl l1 l2.

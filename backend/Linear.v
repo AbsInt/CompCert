@@ -317,6 +317,8 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       Genv.find_funct_ptr ge b = Some f ->
       Val.has_type_list args (sig_args (funsig f)) ->
       Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
+      tailcall_possible (fn_sig f0) ->
+(*      size_arguments (funsig f) <= Z.max (max_over_instrs outgoing_space) (max_over_slots_of_funct outgoing_slot) ->*)
       Mem.alloc m0 0 (fn_stacksize f0) = (m1, stk) ->
       let ls := build_ls_from_arguments (funsig f) args in
       entry_point p m0 (Callstate (Stackframe f0 (Vptr stk Ptrofs.zero) ls nil :: nil) f ls m1) (Vptr b Ptrofs.zero) args.

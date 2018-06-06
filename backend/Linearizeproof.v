@@ -710,15 +710,23 @@ Lemma transf_entry_points:
   exists s2 : Linear.state, Linear.entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
+  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
+  destruct (transf_function f1) eqn: Hf1; inv B0.
   econstructor; split.
   - econstructor; eauto.
-    eapply globals_not_fresh_preserve; simpl in *; try eassumption.
-      eapply match_program_gen_len_defs in TRANSF; eauto.
-    erewrite sig_preserved; eauto.
-  - erewrite sig_preserved by eauto.
+    + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+        eapply match_program_gen_len_defs in TRANSF; eauto.
+    + erewrite sig_preserved; eauto.
+    + pose proof (sig_preserved (Internal f1) (Internal f)) as Heq.
+      simpl in Heq; rewrite Heq; auto.
+      rewrite Hf1; auto.
+    + erewrite stacksize_preserved; eauto.
+  - subst ls0; erewrite sig_preserved by eauto.
     econstructor; eauto.
-    constructor.
+    repeat constructor.
+    replace nil with (linearize_block nil nil) by auto; constructor; auto.
+    apply is_tail_nil.
 Qed.
 
 Lemma transf_initial_states:

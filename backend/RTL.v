@@ -371,15 +371,20 @@ Inductive initial_state (p: program): state -> Prop :=
       funsig f = signature_main ->
       initial_state p (Callstate nil f nil m0).
 
+Require Import Conventions.
+
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f m0 args,
+  | entry_point_intro: forall b f b0 f0 m0 m1 stk args,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       Mem.arg_well_formed args m0 ->
       globals_not_fresh ge m0 ->
       Genv.find_funct_ptr ge b = Some f ->
       Val.has_type_list args (sig_args (funsig f)) ->
-      entry_point p m0 (Callstate nil f args m0) (Vptr b Ptrofs.zero) args.
+      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
+      tailcall_possible (fn_sig f0) ->
+      Mem.alloc m0 0 (fn_stacksize f0) = (m1, stk) ->
+      entry_point p m0 (Callstate (Stackframe 1%positive f0 (Vptr stk Ptrofs.zero) 1%positive (Regmap.init Vundef) :: nil) f args m1) (Vptr b Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty call stack. *)
 

@@ -2516,22 +2516,47 @@ Proof.
 Qed.
 *)
 
+Lemma wt_prog: wt_program prog.
+Proof.
+  red; intros.
+  exploit list_forall2_in_left. eexact (proj1 TRANSF). eauto.
+  intros ([i' gd] & A & B & C). simpl in *; subst i'.
+  inv C. destruct f; simpl in *.
+- monadInv H2.
+  unfold transf_function in EQ.
+  destruct (type_function f) as [env|] eqn:TF; try discriminate.
+  econstructor. eapply type_function_correct; eauto.
+- constructor.
+Qed.
+
 Lemma transl_entry_points:
   forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
   RTL.entry_point prog m0 s1 f arg ->
   exists s2 : LTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
+  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
+  destruct (transf_function f1) eqn: Hf1; inv B0.
   econstructor; split.
-  - econstructor; eauto.
+  - destruct (transf_function_inv _ _ Hf1).
+    econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
     erewrite sig_function_translated; simpl; eauto.
+    replace (fn_sig f) with (RTL.fn_sig f1); auto.
+    replace (fn_stacksize f) with (RTL.fn_stacksize f1); eauto.
   - assert (Val.has_type_list arg (sig_args (funsig tf))).
     { erewrite sig_function_translated; simpl; eauto. }
     econstructor; eauto.
-    + constructor. 
+    + econstructor; eauto.
+      * constructor.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
+      * admit.
     + simpl.
       admit. (*ls contains all arguments. *)
     + simpl. intros ? ?.
@@ -2562,19 +2587,6 @@ Proof.
   admit. (* problem with return signature*)
   (* rewrite H; auto.*)
 Admitted.
-
-Lemma wt_prog: wt_program prog.
-Proof.
-  red; intros.
-  exploit list_forall2_in_left. eexact (proj1 TRANSF). eauto.
-  intros ([i' gd] & A & B & C). simpl in *; subst i'.
-  inv C. destruct f; simpl in *.
-- monadInv H2.
-  unfold transf_function in EQ.
-  destruct (type_function f) as [env|] eqn:TF; try discriminate.
-  econstructor. eapply type_function_correct; eauto.
-- constructor.
-Qed.
 
 Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (LTL.semantics tprog).

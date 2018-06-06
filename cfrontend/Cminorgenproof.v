@@ -2333,22 +2333,44 @@ Lemma transl_entry_point:
   exists j (s2 : state), entry_point tprog m0 s2 f arg /\ match_states j s1 s2.
 Proof.
   intros. inv H; subst ge0.
-  exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
+  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
+  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
+  monadInv B0.
   do 2 econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption;
       eapply match_program_gen_len_defs in TRANSL; eauto.
     erewrite sig_preserved; eauto.
-  - eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := PTree.empty Z).
+    unfold transl_function in EQ.
+    destruct (build_compilenv f1).
+    destruct (zle _ _); try discriminate.
+    erewrite sig_preserved_body; eauto.
+  - eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m2)) (cenv := PTree.empty Z).
     + auto.
-    + eapply Mem.neutral_inject; apply H0.
-    + apply mcs_nil with (Mem.nextblock m0); try reflexivity.
-      eapply match_globalenvs_not_fresh. eauto.
+    + eapply Mem.neutral_inject, Mem.alloc_inject_neutral; eauto.
+      admit.
+      apply Mem.nextblock_alloc in H7 as ->.
+      apply Plt_succ.
+    + eapply mcs_cons with (hi := Mem.nextblock m0) (sp := Mem.nextblock m0), mcs_nil with (Mem.nextblock m0).
+      * apply Mem.nextblock_alloc in H7 as ->.
+        apply Ple_succ.
+      * apply Mem.nextblock_alloc in H7 as ->.
+        apply Plt_succ.
+      * instantiate (1 := PTree.empty _); instantiate (1 := PTree.empty _).
+        repeat intro.
+        rewrite PTree.gempty in *; discriminate.
+      * admit.
+      * instantiate (1 := PTree.empty _); repeat intro.
+        rewrite PTree.gempty in *; discriminate.
+      * admit.
+      * admit.
+      * apply Ple_refl.
+      * apply Ple_refl.
     + apply flat_injection_full.
-    + constructor.
+    + admit.
     + red; auto.
-    + eauto.
-Qed.
+    + admit.
+Admitted.
 
 Lemma transl_initial_states':
     forall s1 : Smallstep.state (Csharpminor.semantics prog),

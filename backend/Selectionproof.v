@@ -1088,17 +1088,31 @@ Lemma sel_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
+  destruct (function_ptr_translated b f0) as (cu & tf & A & B & C); auto.
+  destruct (function_ptr_translated b0 (Internal f1)) as (cu0 & tf0 & A0 & B0 & C0); auto; simpl in B0.
+  destruct B0 as (? & ? & B0); simpl in B0.
+  monadInv B0.
+  exploit Mem.alloc_extends; eauto.
+  { apply Mem.extends_refl. }
+  { apply Z.le_refl. }
+  { instantiate (1 := fn_stackspace x0).
+    admit. }
+  intros (m2' & ? & ?).
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
     erewrite sig_function_translated; simpl; eauto.
-  - econstructor; eauto.
-    + constructor.
+    monadInv EQ; auto.
+  - econstructor; try apply B; auto.
+    + repeat intro.
+      assert (hf = x) by admit; subst.
+      econstructor; eauto.
+      * constructor.
+      * repeat intro.
+        rewrite PTree.gempty in *; discriminate.
     + clear. induction arg; auto.
-    + apply Mem.extends_refl.
-Qed.
+Admitted.
 
 Lemma sel_initial_states':
   forall s1 : Cminor.state,

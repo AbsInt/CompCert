@@ -1775,13 +1775,22 @@ Lemma transl_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H.
-  exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
+  destruct (function_ptr_translated fb f0) as (cu & tf & A & B & C); auto.
+  destruct (function_ptr_translated b0 (Internal f1)) as (cu0 & tf0 & A0 & B0 & C0); auto; simpl in B0.
+  inv B0.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption;
       eapply match_program_gen_len_defs; eauto.
     erewrite transl_fundef_sig2; simpl; eauto.
-  - econstructor; eauto. instantiate (1 := prog_comp_env cu). constructor; auto. exact I.
+    repeat intro; apply H8.
+    unfold loc_arguments', Conventions1.loc_arguments in *.
+    monadInv H10; auto.
+  - econstructor; try apply B; eauto.
+    + instantiate (1 := prog_comp_env cu). econstructor; eauto.
+      * apply match_env_empty.
+      * instantiate (1 := O); instantiate (1 := O); constructor.
+    + exact I.
 Qed.
 
 Lemma transl_initial_states':

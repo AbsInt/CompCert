@@ -1580,17 +1580,32 @@ Lemma transl_entry_points:
   exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
+  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
+  monadInv B0.
+  unfold transl_function in EQ.
+  destruct (reserve_labels _ _).
+  destruct (transl_fun _ _ _); inv EQ.
+  destruct p; inv H8.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSL; eauto.
     erewrite sig_transl_function; simpl; eauto.
   - econstructor; eauto.
-    + constructor.
+    + econstructor.
+      * apply init_mapping_wf.
+      * econstructor; eauto; simpl.
+        admit.
+      * apply match_env_empty; auto.
+      * constructor; intros [|]; try contradiction.
+        destruct H.
+        rewrite PTree.gempty in H; discriminate.
+      * repeat constructor; simpl.
+        admit.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
-Qed.
+Admitted.
 
 Lemma transl_initial_states':
   forall s1 : CminorSel.state,

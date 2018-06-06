@@ -1702,12 +1702,7 @@ Definition update_stackframe_pair cs l v :=
   match l with
   | One l => update_stackframe cs l v
   | Twolong l1 l2 =>
-      match v with
-      | Vundef => update_stackframe (update_stackframe cs l1 Vundef) l2 Vundef
-      | Vlong v' => update_stackframe
-          (update_stackframe cs l1 (Vint (Int64.hiword v'))) l2 (Vint (Int64.loword v'))
-      | _ => cs
-      end
+      update_stackframe (update_stackframe cs l1 (Val.hiword v)) l2 (Val.loword v)
   end.
 
 Fixpoint update_stackframe_list cs ll lv :=
@@ -1735,9 +1730,49 @@ Proof.
   destruct v; auto.
   destruct a; simpl.
   - apply update_stackframe_match; auto.
-  - destruct v; auto.
-    + apply update_stackframe_match, update_stackframe_match; auto.
-    + apply update_stackframe_match, update_stackframe_match; auto.
+  - apply update_stackframe_match, update_stackframe_match; auto.
+Qed.
+
+Definition set_outgoing l v ls :=
+  match l with
+  | S Outgoing _ _ => Locmap.set l v ls
+  | _ => ls
+  end.
+
+Definition set_outgoing_pair l v ls :=
+  match l with
+  | One l => set_outgoing l v ls
+  | Twolong l1 l2 =>
+      set_outgoing l2 (Val.loword v) (set_outgoing l1 (Val.hiword v) ls)
+  end.
+
+Fixpoint set_outgoing_list ll lv ls :=
+  match ll, lv with
+  | l :: ll', v :: lv' => set_outgoing_pair l v (set_outgoing_list ll' lv' ls)
+  | _, _ => ls
+  end.
+
+Lemma update_stackframe_eq: forall cs l v,
+  update_stackframe_list cs l v = match cs with nil => cs
+    | Linear.Stackframe f sp ls c :: rest =>
+      Linear.Stackframe f sp (set_outgoing_list l v ls) c :: rest
+    end.
+Proof.
+  intros ??; revert cs; induction l; simpl; intros.
+  - destruct cs; auto.
+    destruct s; auto.
+  - destruct v.
+    { destruct cs; auto.
+      destruct s; auto. }
+    rewrite IHl.
+    destruct a; simpl.
+    + destruct cs; auto.
+      destruct s; auto; simpl.
+      destruct r; auto.
+      destruct sl; auto.
+    + destruct cs; auto.
+      destruct s; auto; simpl.
+      destruct rhi; [|destruct sl]; simpl; destruct rlo; auto; destruct sl; auto.
 Qed.
 
 Lemma transl_make_arg:
@@ -1769,61 +1804,50 @@ Lemma transl_make_arguments_rec: forall rs m cs cs' locs args P
   (MS: match_stacks j cs cs' sg) (SEP : m |= stack_contents j cs cs' ** P),
   incl locs (loc_arguments sg) ->
   Val.inject_list j args args ->
-  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end) locs args ->
+  length locs = length args ->
   exists rs' m', make_arguments rs m (parent_sp cs') locs args = Some (rs', m') /\
     m' |= stack_contents j (update_stackframe_list cs locs args) cs' ** P.
 Proof.
-  intros.
-  induction H1; simpl; eauto 7; intros.
+  induction locs; destruct args; try discriminate; simpl; eauto; intros.
   inv H0.
-  destruct IHForall2 as (rs' & m' & Hargs & SEP'); auto.
+  edestruct IHlocs as (rs' & m' & Hargs & SEP'); eauto.
   { eapply incl_cons_inv; eauto. }
-  pose proof (update_stackframe_list_match _ _ l l' MS).
-  rewrite Hargs; destruct x; simpl.
+  pose proof (update_stackframe_list_match _ _ locs args MS).
+  rewrite Hargs; destruct a; simpl.
 - eapply transl_make_arg; eauto.
   eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto.
-- assert (In rhi (regs_of_rpairs (loc_arguments sg))).
+- edestruct transl_make_arg with (l := rhi) as (? & ? & -> & ?); eauto.
   { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-  assert (In rlo (regs_of_rpairs (loc_arguments sg))).
+  { apply Val.hiword_inject; auto. }
+  eapply transl_make_arg; eauto.
+  apply update_stackframe_match; auto.
   { eapply in_regs_of_rpairs, H; simpl; eauto; simpl; auto. }
-  destruct H1 as [|[]]; subst.
-  + edestruct transl_make_arg with (l := rhi) as (? & ? & -> & ?); eauto.
-    eapply transl_make_arg; eauto.
-    apply update_stackframe_match; auto.
-  + edestruct transl_make_arg with (l := rhi)(v := Vint (Int64.hiword x)) as (? & ? & -> & ?); eauto.
-    eapply transl_make_arg; eauto.
-    apply update_stackframe_match; auto.
+  { apply Val.loword_inject; auto. }
 Qed.
 
-Lemma has_type_locs_32 : forall lv lt a, Val.has_type_list lv lt -> Archi.ptr64 = false ->
-  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end)
-    (loc_arguments_32 lt a) lv.
+Lemma loc_arguments_32_length: forall ty a, length (loc_arguments_32 ty a) = length ty.
 Proof.
-  induction lv; destruct lt; try contradiction; simpl.
-  - constructor.
-  - intros ? [].
-    constructor; eauto.
-    destruct t; auto.
-    destruct a; try contradiction; eauto.
-    simpl in *; congruence.
+  induction ty; auto; simpl; intros.
+  rewrite IHty; auto.
 Qed.
 
-Lemma has_type_locs_64 : forall lv lt a b c, Val.has_type_list lv lt ->
-  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end)
-    (loc_arguments_64 lt a b c) lv.
+Lemma loc_arguments_64_length: forall ty a b c, length (loc_arguments_64 ty a b c) = length ty.
 Proof.
-  induction lv; destruct lt; try contradiction; unfold loc_arguments_64; fold loc_arguments_64.
-  - constructor.
-  - intros ??? [].
-    destruct t; destruct (list_nth_z _ _); constructor; eauto.
+  induction ty; auto; intros.
+  unfold loc_arguments_64.
+  destruct a; destruct (list_nth_z _ _); simpl; rewrite IHty; auto.
 Qed.
 
-Lemma has_type_sig_locs : forall lv sg, Val.has_type_list lv (sig_args sg) ->
-  Forall2 (fun l v => match l with Twolong _ _ => v = Vundef \/ exists i, v = Vlong i | _ => True end)
-    (loc_arguments sg) lv.
+Lemma loc_arguments_length: length (loc_arguments sg) = length (sig_args sg).
 Proof.
-  intros; unfold loc_arguments.
-  destruct Archi.ptr64 eqn: H64; [apply has_type_locs_64 | apply has_type_locs_32]; auto.
+  unfold loc_arguments.
+  destruct Archi.ptr64; [apply loc_arguments_64_length | apply loc_arguments_32_length].
+Qed.
+
+Lemma has_type_list_length: forall lv ty, Val.has_type_list lv ty -> length lv = length ty.
+Proof.
+  induction lv; destruct ty; auto; try contradiction; simpl; intros.
+  destruct H; auto.
 Qed.
 
 Lemma transl_make_arguments: forall rs m cs cs' args P
@@ -1835,7 +1859,8 @@ Lemma transl_make_arguments: forall rs m cs cs' args P
 Proof.
   intros; eapply transl_make_arguments_rec; eauto.
   - apply incl_refl.
-  - apply has_type_sig_locs; auto.
+  - rewrite loc_arguments_length.
+    symmetry; apply has_type_list_length; auto.
 Qed.
 
 End INIT_ARGUMENTS.
@@ -2319,7 +2344,7 @@ Proof.
   apply frame_contents_exten with rs0 (parent_locset s); auto.
 Qed.
 
-(*Lemma make_arg_inject : forall j ls rs m sp l v rs' m',
+Lemma make_arg_inject : forall j ls rs m sp l v rs' m',
   agree_regs j ls rs ->
   Val.inject j v v ->
   make_arg rs m (Vptr sp Ptrofs.zero) l v = Some (rs', m') ->
@@ -2346,25 +2371,21 @@ Proof.
     eapply IHsigs in Ha; eauto.
     destruct a; simpl.
     + eapply make_arg_inject; eauto.
-    + destruct v; try discriminate.
-      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
-        eapply make_arg_inject; eauto.
-        eapply make_arg_inject; eauto.
-      * destruct (make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
-        eapply make_arg_inject; eauto.
-        eapply make_arg_inject; eauto.
-        { apply Val.hiword_inject; auto. }
-        { apply Val.loword_inject; auto. }
+    + destruct (make_arg _ _ _ _ _) as [[]|] eqn: Hv; try discriminate.
+      eapply make_arg_inject; eauto.
+      eapply make_arg_inject; eauto.
+      { apply Val.hiword_inject; auto. }
+      { apply Val.loword_inject; auto. }
 Qed.
 
-Lemma make_arguments_inject : forall m sp sg args rs' m',
+Lemma make_arguments_inject : forall m m1 sp sg args rs' m',
   Mem.arg_well_formed args m ->
-  make_arguments (Regmap.init Vundef) m (Vptr sp Ptrofs.zero) (loc_arguments sg) args = Some (rs', m') ->
+  make_arguments (Regmap.init Vundef) m1 (Vptr sp Ptrofs.zero) (loc_arguments sg) args = Some (rs', m') ->
   agree_regs (Mem.flat_inj (Mem.nextblock m)) (build_ls_from_arguments sg args) rs'.
 Proof.
   intros; eapply make_arguments_inject_rec; eauto.
   intro; apply Val.val_inject_undef.
-Qed.*)
+Qed.
 
 Lemma setpair_gso : forall l v ls l', ~In l' (regs_of_rpair l) ->
   setpair l v ls l' = ls l' \/ setpair l v ls l' = Vundef.
@@ -2386,11 +2407,6 @@ Proof.
   destruct lv; auto.
   rewrite in_app in H.
   destruct (setpair_gso a v (setlist ll lv ls) l) as [-> | ->]; auto.
-Qed.
-
-Lemma is_tail_nil: forall {A} (c : list A), is_tail nil c.
-Proof.
-  induction c; constructor; auto.
 Qed.
 
 Lemma agree_locs_set_arg: forall f sg l v ls ls0,
@@ -2438,6 +2454,84 @@ Proof.
   intros; eapply agree_locs_setlist_args; apply incl_refl.
 Qed.
 
+Lemma alloc_inj:
+  forall m lo hi m' b, Mem.alloc m lo hi = (m', b) -> Mem.mem_wd m ->
+  Mem.mem_inj (Mem.flat_inj (Mem.nextblock m)) m m'.
+Proof.
+  intros; constructor.
+  - unfold Mem.flat_inj; intros.
+    destruct (plt _ _); inv H1.
+    rewrite Z.add_0_r.
+    eapply Mem.perm_alloc_1; eauto.
+  - unfold Mem.flat_inj; intros.
+    destruct (plt _ _); inv H1.
+    apply Z.divide_0_r.
+  - unfold Mem.flat_inj; intros.
+    destruct (plt _ _); inv H1.
+    Local Transparent Mem.alloc.
+    unfold Mem.alloc in H; inv H; simpl.
+    rewrite Maps.PMap.gso.
+    destruct H0.
+    apply mi_memval; auto.
+    unfold Mem.flat_inj.
+    destruct (plt _ _); auto; contradiction.
+    { intro; subst.
+      eapply Plt_strict; eauto. }
+Qed.
+
+Lemma build_arg_stack: forall sg l v sl ofs ty ls,
+  In l (regs_of_rpairs (loc_arguments sg)) ->
+  Locmap.set l v ls (S sl ofs ty) = set_outgoing l v ls (S sl ofs ty).
+Proof.
+  intros.
+  apply loc_arguments_acceptable_2 in H.
+  destruct l; auto.
+  destruct sl0; auto; contradiction.
+Qed.
+
+Lemma build_arguments_stack_rec: forall sg locs args sl ofs ty ls,
+  incl locs (loc_arguments sg) ->
+  setlist locs args ls (S sl ofs ty) =
+  set_outgoing_list locs args ls (S sl ofs ty).
+Proof.
+  induction locs; auto; simpl; intros.
+  destruct args; auto.
+  exploit IHlocs.
+  { eapply incl_cons_inv; eauto. }
+  intro IH.
+  assert (forall_rpair loc_argument_acceptable a).
+  { eapply loc_arguments_acceptable, H; simpl; auto. }
+  destruct a; simpl in *.
+  - destruct r; simpl in *.
+    { rewrite Locmap.gso; simpl; eauto. }
+    destruct sl0; try contradiction.
+    unfold Locmap.set.
+    destruct (Loc.eq _ _); auto.
+    destruct (Loc.diff_dec _ _); auto.
+  - assert (Locmap.set rhi (Val.hiword v) (setlist locs args ls) (S sl ofs ty) =
+      set_outgoing rhi (Val.hiword v) (set_outgoing_list locs args ls) (S sl ofs ty)).
+    { destruct rhi; simpl in *.
+      { rewrite Locmap.gso; simpl; auto. }
+      destruct sl0; try tauto.
+      unfold Locmap.set.
+      destruct (Loc.eq _ _); auto.
+      destruct (Loc.diff_dec _ _); auto. }
+    destruct rlo; simpl in *.
+    { rewrite Locmap.gso; simpl; auto. }
+    destruct sl0; try tauto.
+    unfold Locmap.set.
+    destruct (Loc.eq _ _); auto.
+    destruct (Loc.diff_dec _ _); auto.
+Qed.
+
+Lemma build_arguments_stack: forall sg args sl ofs ty,
+  build_ls_from_arguments sg args (S sl ofs ty) =
+  set_outgoing_list (loc_arguments sg) args (Locmap.init Vundef) (S sl ofs ty).
+Proof.
+  intros; eapply build_arguments_stack_rec.
+  apply incl_refl.
+Qed.
+
 Lemma transf_entry_points:
    forall (s1 : Linear.state) (f : val) (arg : list val) (m0 : mem),
   Linear.entry_point prog m0 s1 f arg ->
@@ -2475,32 +2569,55 @@ Proof.
   { econstructor; eauto.
     - apply is_tail_nil.
     - apply Val.Vnullptr_has_type.
-    - admit.
-    - constructor; auto.
-      admit. }
-  exploit (transl_make_arguments j); eauto.
+    - intros ???%loc_arguments_bounded; simpl.
+      etransitivity; eauto.
+      admit. (* This should probably be another hypothesis of entry_point, but the space taken
+                by a function is defined after Linear. *)
+    - constructor; auto. }
+    SearchAbout arg.
+  exploit (transl_make_arguments j); try apply MS.
   { simpl.
     rewrite (sep_comm (frame_contents _ _ _ _ _ _ _)), sep_assoc, sep_pure; eauto. }
-  { admit. }
+  { eapply val_inject_list_incr; eauto. }
+  { erewrite sig_preserved; eauto. }
   simpl; intros (rs' & m' & Hmake & Hm').
   pose proof (Mem.alloc_result _ _ _ _ _ Hstack); subst.
+  assert (Mem.mem_inj (Mem.flat_inj (Mem.nextblock m0)) m0 m5').
+  { destruct Hm as (_ & (Hm & _) & _); simpl in Hm.
+    replace (Mem.flat_inj _) with (compose_meminj (Mem.flat_inj (Mem.nextblock m0)) j).
+    eapply Mem.mem_inj_compose, Hm.
+    eapply alloc_inj; eauto.
+    { apply Axioms.extensionality; intro.
+      unfold compose_meminj, Mem.flat_inj.
+      destruct (plt _ _); auto.
+      specialize (Hj x x 0) as ->; auto.
+      unfold Mem.flat_inj.
+      destruct (plt _ _); auto; contradiction. } }
   exists j; eexists; split.
   - econstructor; try apply Hmake; eauto.
-    + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
-      eapply match_program_gen_len_defs in TRANSF; eauto.
-    + destruct Hm as (_ & (Hm & _) & _); simpl in Hm.
-      admit.
+    eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+    eapply match_program_gen_len_defs in TRANSF; eauto.
   - econstructor; eauto.
     + inv MS.
       econstructor; eauto.
       * apply agree_locs_build_args.
       * erewrite <- sig_preserved; eauto.
-    + (*eapply make_arguments_inject; eauto.*) admit.
+    + eapply agree_regs_inject_incr; eauto.
+      erewrite sig_preserved in Hmake by eauto.
+      eapply make_arguments_inject; eauto.
     + hnf; auto.
     + rewrite <- !sep_assoc, sep_comm, sep_pure in Hm'; destruct Hm' as [_ Hm'].
-      rewrite !sep_assoc in Hm'; simpl in *.
-      Check frame_contents_exten.
-      admit.
+      rewrite update_stackframe_eq in Hm'; simpl in *.
+      rewrite !sep_assoc in Hm'; rewrite sep_assoc.
+      eapply frame_contents_exten, Hm'; auto.
+      intros; subst ls0; rewrite build_arguments_stack.
+      erewrite sig_preserved by eauto; f_equal.
+      apply Axioms.extensionality.
+      intros [|].
+      * destruct (in_dec mreg_eq r destroyed_at_function_entry);
+          [rewrite LTL_undef_regs_same | rewrite LTL_undef_regs_others]; auto.
+      * rewrite LTL_undef_regs_slot; simpl.
+        destruct sl0; auto.
     + destruct Hm' as (_ & (? & _) & _); eauto.
     + eapply alloc_full; eauto.
       apply flat_injection_full.
