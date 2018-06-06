@@ -227,7 +227,7 @@ driver/Version.ml: VERSION
 	>driver/Version.ml
 
 cparser/Parser.v: cparser/Parser.vy
-	$(MENHIR) --coq-lib-path compcert.cparser.MenhirLib --coq cparser/Parser.vy
+	$(MENHIR) $(MENHIR_FLAGS) --coq cparser/Parser.vy
 
 depend: $(GENERATED) depend1
 

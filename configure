@@ -539,7 +539,9 @@ else
   ocaml_opt_comp=false
 fi
 
-MENHIR_REQUIRED=20180530
+MENHIR_REQUIRED=20161201
+MENHIR_NEW_API=20180530
+menhir_flags=''
 echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
@@ -547,11 +549,14 @@ case "$menhir_ver" in
       if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
           echo "version $menhir_ver -- good!"
           menhir_includes="-I `menhir --suggest-menhirLib`"
-        else
+          if test "$menhir_ver" -ge $MENHIR_NEW_API; then
+              menhir_flags="--coq-lib-path compcert.cparser.MenhirLib"
+          fi
+      else
           echo "version $menhir_ver -- UNSUPPORTED"
           echo "Error: CompCert requires Menhir version $MENHIR_REQUIRED or later."
           missingtools=true
-        fi;;
+      fi;;
   *)
         echo "NOT FOUND"
         echo "Error: make sure Menhir version $MENHIR_REQUIRED or later is installed."
@@ -635,6 +640,7 @@ SHAREDIR=$sharedir
 COQDEVDIR=$coqdevdir
 OCAML_OPT_COMP=$ocaml_opt_comp
 MENHIR_INCLUDES=$menhir_includes
+MENHIR_FLAGS=$menhir_flags
 COMPFLAGS=-bin-annot
 EOF
 
