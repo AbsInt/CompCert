@@ -65,3 +65,5 @@
 /doc/html/
 # MacOS metadata
 .DS_Store
+# Test generated data
+/test/clightgen/*.v
