@@ -1804,15 +1804,7 @@ let elab_expr ctx loc env a =
         error "invalid application of 'sizeof' to an incomplete type %a" (print_typ env) ty;
       { edesc = ESizeof ty; etyp = TInt(size_t_ikind(), []) },env'
 
-  | EXPR_ALIGNOF a1 ->
-      let b1,env = elab env a1 in
-      if wrap incomplete_type loc env b1.etyp then
-        error "invalid application of '_Alignof' to an incomplete type %a" (print_typ env) b1.etyp;
-      if wrap is_bitfield loc env b1 then
-        error "invalid application of '_Alignof' to a bit-field";
-      { edesc = EAlignof b1.etyp; etyp =  TInt(size_t_ikind(), []) },env
-
-  | TYPE_ALIGNOF (spec, dcl) ->
+  | ALIGNOF (spec, dcl) ->
       let (ty, env') = elab_type loc env spec dcl in
       warning Celeven_extension "'_Alignof' is a C11 extension";
       if wrap incomplete_type loc env' ty then
