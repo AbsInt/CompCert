@@ -212,6 +212,11 @@ Module Preg <: REGISTER_MODEL.
 
 End Preg.
 
+Lemma pc_type: subtype Tptr (Preg.type PC) = true.
+Proof.
+  simpl; auto.
+Qed.
+
 Module Pregmap := Regfile(Preg).
 
 (** Conventional names for stack pointer ([SP]) and return address ([RA]) *)

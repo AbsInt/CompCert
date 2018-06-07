@@ -80,12 +80,23 @@ Qed.
 
 Hint Resolve preg_of_not_SP preg_of_not_PC: asmgen.
 
+Lemma load_result_offset_pc:
+  forall ofs rs,
+  Val.load_result (Preg.chunk_of PC) (Val.offset_ptr (Pregmap.get PC rs) ofs) =
+  Val.offset_ptr (Pregmap.get PC rs) ofs.
+Proof.
+  intros.
+  rewrite Preg.chunk_of_reg_type, Val.load_result_same; auto.
+  apply Val.has_subtype with (ty1 := Tptr). apply pc_type.
+  destruct (Pregmap.get PC rs); simpl; auto.
+  unfold Tptr. destruct Archi.ptr64; auto.
+Qed.
+
 Lemma nextinstr_pc:
   forall rs, (nextinstr rs)#PC = Val.offset_ptr rs#PC Ptrofs.one.
 Proof.
   intros. unfold nextinstr. rewrite Pregmap.gss.
-  rewrite Preg.chunk_of_reg_type, Val.load_result_same; auto.
-  destruct (Pregmap.get PC rs); simpl; auto.
+  apply load_result_offset_pc.
 Qed.
 
 Lemma nextinstr_inv:
@@ -104,9 +115,8 @@ Lemma nextinstr_set_preg:
   forall rs m v,
   (nextinstr (rs#(preg_of m) <- v))#PC = Val.offset_ptr rs#PC Ptrofs.one.
 Proof.
-  intros. unfold nextinstr. rewrite Pregmap.gss.
-  rewrite Pregmap.gso, Preg.chunk_of_reg_type, Val.load_result_same; auto.
-  destruct (Pregmap.get PC rs); simpl; auto.
+  intros. unfold nextinstr. rewrite Pregmap.gss, Pregmap.gso.
+  apply load_result_offset_pc.
   auto using preg_of_not_PC.
 Qed.
 

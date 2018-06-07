@@ -53,6 +53,12 @@ Proof.
   destruct ty; reflexivity.
 Qed.
 
+Remark size_quantity_chunk:
+  forall q, size_chunk (chunk_of_quantity q) = size_quantity q.
+Proof.
+  destruct q; reflexivity.
+Qed.
+
 Lemma slot_outgoing_argument_valid:
   forall f ofs ty sg,
   In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments sg)) -> slot_valid f Outgoing ofs ty = true.
@@ -1242,6 +1248,7 @@ Local Opaque mreg_type.
   intros (v & LOAD & SPEC).
   exploit (IHl (ofs1 + sz) (rs#r <- v)).
     rewrite <- (typ_of_quantity_of_typ (mreg_type r) (mreg_type_cases r)) in H.
+    fold ty in H.
     eapply sep_proj2; eassumption.
     red; intros. rewrite Regmap.gso. auto. intuition congruence.
     eauto.
@@ -1750,7 +1757,7 @@ Local Opaque fe.
   destruct x as [r | [] ofs q]; try discriminate.
   + exists (rs # r); unfold Locmap.read. split. constructor. auto.
   + exploit frame_get_local; eauto. intros (v & A & B).
-    exists v; split; auto. constructor; auto.
+    exists v; split; auto. constructor; destruct q; auto.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.

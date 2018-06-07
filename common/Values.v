@@ -127,6 +127,12 @@ Proof.
   unfold has_type, Vnullptr, Tptr; destruct Archi.ptr64; reflexivity.
 Qed.
 
+Lemma has_type_Tany64:
+  forall v, has_type v Tany64.
+Proof.
+  destruct v; simpl; auto.
+Qed.
+
 Lemma has_subtype:
   forall ty1 ty2 v,
   subtype ty1 ty2 = true -> has_type v ty1 -> has_type v ty2.
@@ -978,6 +984,14 @@ Lemma load_result_same:
 Proof.
   unfold has_type, load_result; intros.
   destruct v; destruct ty; destruct Archi.ptr64; try contradiction; try discriminate; auto.
+Qed.
+
+Lemma load_result_add:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (add v1 v2) = add v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto.
 Qed.
 
 (** Theorems on arithmetic operations. *)

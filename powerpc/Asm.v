@@ -56,6 +56,30 @@ Proof. decide equality. Defined.
 Lemma freg_eq: forall (x y: freg), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
 
+Definition ireg_index (i: ireg): Z :=
+  2 + 2 * match i with
+  | GPR0  =>  0  | GPR1  =>  1  | GPR2  =>  2  | GPR3  =>  3
+  | GPR4  =>  4  | GPR5  =>  5  | GPR6  =>  6  | GPR7  =>  7
+  | GPR8  =>  8  | GPR9  =>  9  | GPR10 => 10  | GPR11 => 11
+  | GPR12 => 12  | GPR13 => 13  | GPR14 => 14  | GPR15 => 15
+  | GPR16 => 16  | GPR17 => 17  | GPR18 => 18  | GPR19 => 19
+  | GPR20 => 20  | GPR21 => 21  | GPR22 => 22  | GPR23 => 23
+  | GPR24 => 24  | GPR25 => 25  | GPR26 => 26  | GPR27 => 27
+  | GPR28 => 28  | GPR29 => 29  | GPR30 => 30  | GPR31 => 31
+  end.
+
+Definition freg_index (f: freg): Z :=
+  66 + 2 * match f with
+  | FPR0  =>  0  | FPR1  =>  1  | FPR2  =>  2  | FPR3  =>  3
+  | FPR4  =>  4  | FPR5  =>  5  | FPR6  =>  6  | FPR7  =>  7
+  | FPR8  =>  8  | FPR9  =>  9  | FPR10 => 10  | FPR11 => 11
+  | FPR12 => 12  | FPR13 => 13  | FPR14 => 14  | FPR15 => 15
+  | FPR16 => 16  | FPR17 => 17  | FPR18 => 18  | FPR19 => 19
+  | FPR20 => 20  | FPR21 => 21  | FPR22 => 22  | FPR23 => 23
+  | FPR24 => 24  | FPR25 => 25  | FPR26 => 26  | FPR27 => 27
+  | FPR28 => 28  | FPR29 => 29  | FPR30 => 30  | FPR31 => 31
+  end.
+
 (** The PowerPC has a great many registers, some general-purpose, some very
   specific.  We model only the following registers: *)
 
@@ -78,12 +102,156 @@ Coercion FR: freg >-> preg.
 Lemma preg_eq: forall (x y: preg), {x=y} + {x<>y}.
 Proof. decide equality. apply ireg_eq. apply freg_eq. Defined.
 
-Module PregEq.
-  Definition t := preg.
-  Definition eq := preg_eq.
-End PregEq.
+Definition preg_index (p: preg): Z :=
+  match p with
+  | IR i  => ireg_index i
+  | FR f  => freg_index f
+  | PC    => 132
+  | LR    => 134
+  | CTR   => 136
+  | CARRY => 138
+  | CR0_0 => 140
+  | CR0_1 => 142
+  | CR0_2 => 144
+  | CR0_3 => 146
+  | CR1_2 => 148
+  end.
 
-Module Pregmap := EMap(PregEq).
+Lemma preg_index_bounds:
+  forall p: preg,
+  match p with
+  | IR _ =>   0 < preg_index p /\ preg_index p <= 64
+  | FR _ =>  65 < preg_index p /\ preg_index p <= 128
+  | _    => 131 < preg_index p
+  end.
+Proof.
+  destruct p; unfold preg_index; try omega.
+  destruct i; unfold ireg_index; omega.
+  destruct f; unfold freg_index; omega.
+Qed.
+
+Module Preg <: REGISTER_MODEL.
+
+  Definition reg := preg.
+  Definition eq_dec := preg_eq.
+
+  Definition type p :=
+    match p with
+    | IR _ | PC | LR | CTR => if Archi.ppc64 then Tany64 else Tany32
+    | FR _ => Tany64
+    (* On PPC64 we sometimes want to write [Vlong] values into the carry
+       register, so type it accordingly. *)
+    | CARRY => if Archi.ppc64 then Tany64 else Tany32
+    | _ => Tany32  (* condition bits *)
+    end.
+
+  Definition quantity_of p :=
+    match p with
+    | IR _ | PC | LR | CTR => if Archi.ppc64 then Q64 else Q32
+    | FR _ => Q64
+    | CARRY => if Archi.ppc64 then Q64 else Q32
+    | _ => Q32
+    end.
+
+  Definition chunk_of p :=
+    match p with
+    | IR _ | PC | LR | CTR => if Archi.ppc64 then Many64 else Many32
+    | FR _ => Many64
+    | CARRY => if Archi.ppc64 then Many64 else Many32
+    | _ => Many32
+    end.
+
+  Lemma type_cases: forall r, type r = Tany32 \/ type r = Tany64.
+  Proof.
+    destruct r; simpl; auto; destruct Archi.ppc64; auto.
+  Qed.
+
+  Definition ofs (r: preg): Z :=
+    preg_index r.
+
+  (* A register's address: The index of its first byte. *)
+  Definition addr (r: preg): Z :=
+    preg_index r * 4.
+
+  (* The address one byte past the end of register [r]. The next nonoverlapping
+     register may start here. *)
+  Definition next_addr (r: preg): Z := addr r + AST.typesize (type r).
+
+  Remark addr_pos: forall p, addr p > 0.
+  Proof.
+    intros. unfold addr.
+    destruct p; simpl; try omega.
+    destruct i; simpl; omega.
+    destruct f; simpl; omega.
+  Qed.
+
+  Lemma addr_compat: forall p, FragBlock.addr (ofs p) = addr p.
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma size_compat:
+    forall p,
+    AST.typesize (type p) = FragBlock.quantity_size (quantity_of p).
+  Proof.
+    intros. unfold quantity_of.
+    destruct p; simpl; auto; destruct Archi.ppc64; auto.
+  Qed.
+
+  Lemma next_addr_compat: forall p, FragBlock.next_addr (ofs p) (quantity_of p) = next_addr p.
+  Proof.
+    unfold next_addr, addr, ofs, FragBlock.next_addr, FragBlock.addr; intros.
+    rewrite size_compat. auto.
+  Qed.
+
+  Lemma quantity_of_compat:
+    forall p,
+    quantity_of p = quantity_of_typ (type p).
+  Proof.
+    destruct p; simpl; destruct Archi.ppc64; reflexivity.
+  Qed.
+
+  Lemma chunk_of_reg_compat:
+    forall p,
+    chunk_of p = chunk_of_quantity (quantity_of p).
+  Proof.
+    destruct p; simpl; destruct Archi.ppc64; reflexivity.
+  Qed.
+
+  Lemma chunk_of_reg_type:
+    forall p,
+    chunk_of p = chunk_of_type (type p).
+  Proof.
+    destruct p; simpl; destruct Archi.ppc64; reflexivity.
+  Qed.
+
+  Lemma diff_outside_interval:
+    forall r s, r <> s -> next_addr r <= addr s \/ next_addr s <= addr r.
+  Proof.
+    intros.
+    unfold next_addr, addr.
+    assert (TS: forall p, AST.typesize (type p) = 4 \/ AST.typesize (type p) = 8).
+    { intro p. destruct (type_cases p) as [T | T]; rewrite T; auto. }
+    generalize (preg_index_bounds r), (preg_index_bounds s); intros RB SB.
+    destruct r eqn:R, s eqn:S;
+      try congruence;
+      try (destruct (TS r), (TS s); subst; omega);
+      simpl AST.typesize;
+      try (destruct Archi.ppc64; simpl; omega).
+    - (* two iregs *)
+      destruct Archi.ppc64; simpl; destruct i, i0; simpl; try omega; congruence.
+    - (* two fregs *)
+      destruct f, f0; simpl; try omega; congruence.
+  Qed.
+
+End Preg.
+
+Lemma pc_type: subtype Tptr (Preg.type PC) = true.
+Proof.
+  simpl; destruct Archi.ppc64; auto.
+Qed.
+
+Module Pregmap := Regfile(Preg).
 
 (** Conventional names for stack pointer ([SP]) and return address ([RA]) *)
 
@@ -434,11 +602,13 @@ Definition program := AST.program fundef unit.
   and boolean registers ([CARRY], [CR0_0], etc) to either
   [Vzero] or [Vone]. *)
 
-Definition regset := Pregmap.t val.
+Definition regset := Pregmap.t.
 Definition genv := Genv.t fundef unit.
 
-Notation "a # b" := (a b) (at level 1, only parsing) : asm.
+Notation "a # b" := (Pregmap.get b a) (at level 1, only parsing) : asm.
 Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level) : asm.
+
+Definition pregmap_read (rs: regset) := fun r => (Pregmap.get r rs).
 
 Open Scope asm.
 
@@ -447,8 +617,25 @@ Open Scope asm.
 Fixpoint undef_regs (l: list preg) (rs: regset) : regset :=
   match l with
   | nil => rs
-  | r :: l' => undef_regs l' (rs#r <- Vundef)
+  | r :: l' => (undef_regs l' rs)#r <- Vundef
   end.
+
+Lemma undef_regs_other:
+  forall r rl rs, ~In r rl -> (undef_regs rl rs) # r = rs # r.
+Proof.
+  induction rl; simpl; intros. auto. rewrite Pregmap.gso. apply IHrl. intuition. intuition.
+Qed.
+
+Lemma undef_regs_same:
+  forall r rl rs, In r rl -> (undef_regs rl rs) # r = Vundef.
+Proof.
+  induction rl; simpl; intros. tauto.
+  destruct H.
+  - subst a. rewrite Pregmap.gss. destruct (Preg.chunk_of r); auto.
+  - destruct (Preg.eq_dec r a).
+    + subst a. rewrite Pregmap.gss. destruct (Preg.chunk_of r); auto.
+    + rewrite Pregmap.gso; auto.
+Qed.
 
 (** Assigning a register pair *)
 
@@ -761,7 +948,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | _ => Stuck
       end
   | Pbtbl r tbl =>
-      match rs r with
+      match rs # r with
       | Vint n =>
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
@@ -1144,12 +1331,44 @@ Definition preg_of (r: mreg) : preg :=
 
 (** Undefine all registers except SP and callee-save registers *)
 
-Definition undef_caller_save_regs (rs: regset) : regset :=
+Definition undef_caller_save_regs_spec (rs: preg -> val) : preg -> val :=
   fun r =>
     if preg_eq r SP
     || In_dec preg_eq r (List.map preg_of (List.filter is_callee_save all_mregs))
     then rs r
     else Vundef.
+
+Definition pregs_destroyed_at_call :=
+  PC :: LR :: CTR :: CARRY :: CR0_0 :: CR0_1 :: CR0_2 :: CR0_3 :: CR1_2
+     :: IR GPR0 :: IR GPR2 :: IR GPR13
+     :: (map preg_of (filter (fun m => negb (is_callee_save m)) all_mregs)).
+
+Lemma pregs_destroyed_at_call_correct:
+  forall r,
+  preg_eq r SP
+  || In_dec preg_eq r (List.map preg_of (List.filter is_callee_save all_mregs))
+  =
+  negb (In_dec preg_eq r pregs_destroyed_at_call).
+Proof.
+  intros.
+  destruct r; auto.
+  destruct i; auto.
+  destruct f; auto.
+Qed.
+
+Definition undef_caller_save_regs (rs: regset) : regset :=
+  undef_regs pregs_destroyed_at_call rs.
+
+Lemma undef_caller_save_regs_correct:
+  forall rs r,
+  (undef_caller_save_regs rs) # r = undef_caller_save_regs_spec (fun r' => rs # r) r.
+Proof.
+  intros. unfold undef_caller_save_regs, undef_caller_save_regs_spec.
+  rewrite pregs_destroyed_at_call_correct.
+  destruct (In_dec preg_eq r pregs_destroyed_at_call) as [IN | NOTIN].
+  - rewrite undef_regs_same; auto.
+  - rewrite undef_regs_other; auto.
+Qed.
 
 (** Extract the values of the arguments of an external call.
     We exploit the calling conventions from module [Conventions], except that
@@ -1157,11 +1376,11 @@ Definition undef_caller_save_regs (rs: regset) : regset :=
 
 Inductive extcall_arg (rs: regset) (m: mem): loc -> val -> Prop :=
   | extcall_arg_reg: forall r,
-      extcall_arg rs m (R r) (rs (preg_of r))
+      extcall_arg rs m (R r) (rs # (preg_of r))
   | extcall_arg_stack: forall ofs q bofs v,
       bofs = Stacklayout.fe_ofs_arg + 4 * ofs ->
       Mem.loadv (chunk_of_quantity q) m
-                (Val.offset_ptr (rs (IR GPR1)) (Ptrofs.repr bofs)) = Some v ->
+                (Val.offset_ptr (rs # (IR GPR1)) (Ptrofs.repr bofs)) = Some v ->
       extcall_arg rs m (S Outgoing ofs q) v.
 
 Inductive extcall_arg_pair (rs: regset) (m: mem): rpair loc -> val -> Prop :=
@@ -1188,17 +1407,17 @@ Inductive state: Type :=
 Inductive step: state -> trace -> state -> Prop :=
   | exec_step_internal:
       forall b ofs f i rs m rs' m',
-      rs PC = Vptr b ofs ->
+      rs # PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some i ->
       exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
       forall b ofs f ef args res rs m vargs t vres rs' m',
-      rs PC = Vptr b ofs ->
+      rs # PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
-      eval_builtin_args ge rs (rs GPR1) m args vargs ->
+      eval_builtin_args ge (fun r => rs#r) (rs # GPR1) m args vargs ->
       external_call ef ge vargs m t vres m' ->
       rs' = nextinstr
               (set_res res vres
@@ -1206,11 +1425,11 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State rs m) t (State rs' m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
-      rs PC = Vptr b Ptrofs.zero ->
+      rs # PC = Vptr b Ptrofs.zero ->
       Genv.find_funct_ptr ge b = Some (External ef) ->
       external_call ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
-      rs' = (set_pair (loc_external_result (ef_sig ef)) res (undef_caller_save_regs rs)) #PC <- (rs RA) ->
+      rs' = (set_pair (loc_external_result (ef_sig ef)) res (undef_caller_save_regs rs)) #PC <- (rs#RA) ->
       step (State rs m) t (State rs' m').
 
 End RELSEM.
@@ -1222,7 +1441,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.init_mem p = Some m0 ->
       let ge := Genv.globalenv p in
       let rs0 :=
-        (Pregmap.init Vundef)
+        Pregmap.init
         # PC <- (Genv.symbol_address ge p.(prog_main) Ptrofs.zero)
         # LR <- Vnullptr
         # GPR1 <- Vnullptr in
