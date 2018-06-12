@@ -925,7 +925,10 @@ Proof.
     constructor; auto; discriminate. }
   intros (rs' & ? & ?).
   econstructor; split.
-  - econstructor; eauto.
+  - replace (fn_stacksize f1) with (3 * size_chunk Mptr) in * by admit.
+    replace (fn_link_ofs f1) with (Ptrofs.repr (2 * size_chunk Mptr)) in * by admit.
+    replace (fn_retaddr_ofs f1) with Ptrofs.zero in * by admit.
+    econstructor; eauto.
     erewrite sig_preserved; eauto.
   - eapply make_arguments_PC in H as [HPC HRA].
     econstructor; eauto.

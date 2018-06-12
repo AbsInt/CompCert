@@ -2574,7 +2574,6 @@ Proof.
       admit. (* This should probably be another hypothesis of entry_point, but the space taken
                 by a function is defined after Linear. *)
     - constructor; auto. }
-    SearchAbout arg.
   exploit (transl_make_arguments j); try apply MS.
   { simpl.
     rewrite (sep_comm (frame_contents _ _ _ _ _ _ _)), sep_assoc, sep_pure; eauto. }
@@ -2593,6 +2592,9 @@ Proof.
       specialize (Hj x x 0) as ->; auto.
       unfold Mem.flat_inj.
       destruct (plt _ _); auto; contradiction. } }
+  unfold save_callee_save in Hsave.
+  replace (fe_used_callee_save _) with (@nil mreg) in Hsave by admit.
+  inv Hsave.
   exists j; eexists; split.
   - econstructor; try apply Hmake; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
@@ -2621,6 +2623,7 @@ Proof.
     + destruct Hm' as (_ & (? & _) & _); eauto.
     + eapply alloc_full; eauto.
       apply flat_injection_full.
+  - inv H8.
 Admitted.
 
 Lemma transf_initial_states:

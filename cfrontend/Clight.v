@@ -782,7 +782,7 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
       (forall l, In l (regs_of_rpairs (loc_arguments' (map typ_of_type (map snd (fn_params f0))))) ->
         match l with Locations.R _ => True | Locations.S _ _ _ => False end) ->
       Mem.alloc m0 0 0 = (m1, stk) ->
-      entry_point ge m0 (Callstate f args (Kcall None f0 (PTree.empty _) (PTree.empty _) Kstop) m1) (Vptr fb Ptrofs.zero) args.
+      entry_point ge m0 (Callstate f args (Kcall None f0 empty_env (PTree.empty _) Kstop) m1) (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=

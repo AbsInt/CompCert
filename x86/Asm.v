@@ -1174,20 +1174,21 @@ Fixpoint make_arguments (rs: regset) (m: mem) (al: list (rpair loc)) (lv: list v
 
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
-    forall f b b0 f0 rs m0 m1 m args,
+    forall f b rs stk m0 m1 m2 m3 m args,
       Genv.find_funct_ptr ge b = Some f ->
-      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
-      Mem.mem_inj (Mem.flat_inj (Mem.nextblock m0)) m0 m1 ->
-      let stk := Mem.nextblock m0 in
+      Mem.alloc m0 0 (3 * size_chunk Mptr) = (m1, stk) ->
+      let sp := Vptr stk Ptrofs.zero in
+      Mem.storev Mptr m1 (Val.offset_ptr sp (Ptrofs.repr (2 * size_chunk Mptr))) Vnullptr = Some m2 ->
+      Mem.storev Mptr m2 (Val.offset_ptr sp Ptrofs.zero) Vnullptr = Some m3 ->
       let rs0 :=
         (Pregmap.init Vundef)
         # PC <- (Vptr b Ptrofs.zero) 
         # RA <- Vnullptr
-        # RSP <- (Vptr stk Ptrofs.zero) in
-      make_arguments rs0 m1 (loc_arguments (funsig f)) args = Some (rs, m) ->
+        # RSP <- sp in
+      make_arguments rs0 m3 (loc_arguments (funsig f)) args = Some (rs, m) ->
       entry_point ge m0 (State rs m) (Vptr b Ptrofs.zero) args.
 
- Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=
+Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=
  match l with
   | Locations.R r => Some (rs (preg_of r))
   | Locations.S Locations.Outgoing ofs ty => 
