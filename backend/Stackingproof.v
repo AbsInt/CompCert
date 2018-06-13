@@ -573,16 +573,6 @@ Record agree_locs (ls ls0: locset) : Prop :=
        ls (S Incoming ofs ty) = ls0 (S Outgoing ofs ty)
 }.
 
-(** Auxiliary predicate used at call points *)
-
-Definition agree_callee_save (ls ls0: locset) : Prop :=
-  forall l,
-  match l with
-  | R r => is_callee_save r = true
-  | S _ _ _ => True
-  end ->
-  ls l = ls0 l.
-
 (** ** Properties of [agree_regs]. *)
 
 (** Values of registers *)
