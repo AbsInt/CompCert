@@ -339,7 +339,9 @@ Lemma locmap_undef_caller_save_regs_lessdef:
   locmap_lessdef ls1 ls2 -> locmap_lessdef (undef_caller_save_regs ls1) (undef_caller_save_regs ls2).
 Proof.
   intros; red; intros. unfold undef_caller_save_regs. 
-  destruct l; auto. destruct (Conventions1.is_callee_save r); auto.
+  destruct l.
+- destruct (Conventions1.is_callee_save r); auto.
+- destruct sl; auto.
 Qed.
 
 Lemma find_function_translated:
@@ -371,7 +373,7 @@ Lemma return_regs_lessdef:
 Proof.
   intros; red; intros. destruct l; simpl.
 - destruct (Conventions1.is_callee_save r); auto.
-- auto.
+- destruct sl; auto.
 Qed. 
 
 (** To preserve non-terminating behaviours, we show that the transformed

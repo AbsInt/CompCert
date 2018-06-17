@@ -146,15 +146,18 @@ Lemma wt_return_regs:
   wt_locset caller -> wt_locset callee -> wt_locset (return_regs caller callee).
 Proof.
   intros; red; intros.
-  unfold return_regs. destruct l; auto. destruct (is_callee_save r); auto.
+  unfold return_regs. destruct l.
+- destruct (is_callee_save r); auto.
+- destruct sl; auto; red; auto.
 Qed.
 
 Lemma wt_undef_caller_save_regs:
   forall ls, wt_locset ls -> wt_locset (undef_caller_save_regs ls).
 Proof.
   intros; red; intros. unfold undef_caller_save_regs.
-  destruct l; auto.
-  destruct (is_callee_save r); auto; simpl; auto. 
+  destruct l.
+  destruct (is_callee_save r); auto; simpl; auto.
+  destruct sl; auto; red; auto. 
 Qed.
 
 Lemma wt_init:
@@ -205,6 +208,24 @@ Proof.
   auto.
 Qed.
 
+(** In addition to type preservation during evaluation, we also show
+  properties of the environment [ls] at call points and at return points.
+  These properties are used in the proof of the [Stacking] pass.
+  For call points, we have that the current environment [ls] and the
+  one from the top call stack agree on the [Outgoing] locations
+  used for parameter passing. *)
+
+Definition agree_outgoing_arguments (sg: signature) (ls pls: locset) : Prop :=
+  forall ty ofs,
+  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments sg)) ->
+  ls (S Outgoing ofs ty) = pls (S Outgoing ofs ty).
+
+(** For return points, we have that all [Outgoing] stack locations have
+  been set to [Vundef]. *)
+
+Definition outgoing_undef (ls: locset) : Prop :=
+  forall ty ofs, ls (S Outgoing ofs ty) = Vundef.
+
 (** Soundness of the type system *)
 
 Definition wt_fundef (fd: fundef) :=
@@ -241,11 +262,15 @@ Inductive wt_state: state -> Prop :=
   | wt_call_state: forall s fd rs m
         (WTSTK: wt_callstack s)
         (WTFD: wt_fundef fd)
-        (WTRS: wt_locset rs),
+        (WTRS: wt_locset rs)
+        (AGCS: agree_callee_save rs (parent_locset s))
+        (AGARGS: agree_outgoing_arguments (funsig fd) rs (parent_locset s)),
       wt_state (Callstate s fd rs m)
   | wt_return_state: forall s rs m
         (WTSTK: wt_callstack s)
-        (WTRS: wt_locset rs),
+        (WTRS: wt_locset rs)
+        (AGCS: agree_callee_save rs (parent_locset s))
+        (UOUT: outgoing_undef rs),
       wt_state (Returnstate s rs m).
 
 (** Preservation of state typing by transitions *)
@@ -315,11 +340,15 @@ Local Opaque mreg_type.
   simpl in *; InvBooleans.
   econstructor; eauto. econstructor; eauto.
   eapply wt_find_function; eauto.
+  red; simpl; auto.
+  red; simpl; auto.
 - (* tailcall *)
   simpl in *; InvBooleans.
   econstructor; eauto.
   eapply wt_find_function; eauto.
   apply wt_return_regs; auto. apply wt_parent_locset; auto.
+  red; simpl; intros. destruct l; simpl in *. rewrite H3; auto. destruct sl; auto; congruence.
+  red; simpl; intros. apply zero_size_arguments_tailcall_possible in H. apply H in H3. contradiction.
 - (* builtin *)
   simpl in *; InvBooleans.
   econstructor; eauto.
@@ -342,6 +371,8 @@ Local Opaque mreg_type.
   simpl in *. InvBooleans.
   econstructor; eauto.
   apply wt_return_regs; auto. apply wt_parent_locset; auto.
+  red; simpl; intros. destruct l; simpl in *. rewrite H0; auto. destruct sl; auto; congruence.
+  red; simpl; intros. auto.
 - (* internal function *)
   simpl in WTFD.
   econstructor. eauto. eauto. eauto.
@@ -350,6 +381,10 @@ Local Opaque mreg_type.
   econstructor. auto. apply wt_setpair. 
   eapply external_call_well_typed; eauto.
   apply wt_undef_caller_save_regs; auto.
+  red; simpl; intros. destruct l; simpl in *.
+  rewrite locmap_get_set_loc_result by auto. simpl. rewrite H; auto. 
+  rewrite locmap_get_set_loc_result by auto. simpl. destruct sl; auto; congruence.
+  red; simpl; intros. rewrite locmap_get_set_loc_result by auto. auto.
 - (* return *)
   inv WTSTK. econstructor; eauto.
 Qed.
@@ -361,6 +396,8 @@ Proof.
   unfold ge0 in H1. exploit Genv.find_funct_ptr_inversion; eauto.
   intros [id IN]. eapply wt_prog; eauto.
   apply wt_init.
+  red; auto.
+  red; auto.
 Qed.
 
 End SOUNDNESS.
@@ -405,4 +442,20 @@ Lemma wt_callstate_wt_regs:
   forall r, Val.has_type (rs (R r)) (mreg_type r).
 Proof.
   intros. inv H. apply WTRS.
+Qed.
+
+Lemma wt_callstate_agree:
+  forall s f rs m,
+  wt_state (Callstate s f rs m) ->
+  agree_callee_save rs (parent_locset s) /\ agree_outgoing_arguments (funsig f) rs (parent_locset s).
+Proof.
+  intros. inv H; auto.
+Qed.
+
+Lemma wt_returnstate_agree:
+  forall s rs m,
+  wt_state (Returnstate s rs m) ->
+  agree_callee_save rs (parent_locset s) /\ outgoing_undef rs.
+Proof.
+  intros. inv H; auto.
 Qed.
