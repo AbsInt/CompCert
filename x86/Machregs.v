@@ -68,7 +68,11 @@ Instance Finite_mreg : Finite mreg := {
 Definition mreg_type (r: mreg): typ :=
   match r with
   | AX | BX | CX | DX | SI | DI | BP => if Archi.ptr64 then Tany64 else Tany32
-  | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 => Tany64
+  (* These registers don't exist in 32-bit mode. When they do exist, they
+    are 64 bits wide. For some proofs it's nonetheless easier to pretend
+    that *if* they exist, they have the same type as the other integer
+    registers. *)
+  | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 => if Archi.ptr64 then Tany64 else Tany32
   | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 => Tany64
   | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15 => Tany64
   | FP0 => Tany64

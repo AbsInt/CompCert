@@ -280,6 +280,12 @@ Module Regfile(M: REGISTER_MODEL).
     destruct (M.type_cases r) as [T | T]; rewrite T; apply FragBlock.get_has_type.
   Qed.
 
+  Lemma get_load_result:
+    forall r rf, Val.load_result (M.chunk_of r) (get r rf) = get r rf.
+  Proof.
+    intros. rewrite M.chunk_of_reg_type, Val.load_result_same; auto using get_has_type.
+  Qed.
+
   Lemma get_bytes_compat:
     forall r rf, get r rf = decode_val (M.chunk_of r) (get_bytes r rf).
   Proof.

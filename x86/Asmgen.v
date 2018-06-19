@@ -41,7 +41,9 @@ Definition freg_of (r: mreg) : res freg :=
 
 Definition mk_mov (rd rs: preg) (k: code) : res code :=
   match rd, rs with
-  | IR rd, IR rs => OK (Pmov_rr rd rs :: k)
+  | IR rd, IR rs =>
+      assertion (subtype (Preg.type rs) (Preg.type rd));
+      OK (Pmov_rr rd rs :: k)
   | FR rd, FR rs => OK (Pmovsd_ff rd rs :: k)
   | _, _ => Error(msg "Asmgen.mk_mov")
   end.
@@ -54,6 +56,7 @@ Definition mk_shrximm (n: int) (k: code) : res code :=
       Psarl_ri RAX n :: k).
 
 Definition mk_shrxlimm (n: int) (k: code) : res code :=
+  assertion (Archi.ptr64);
   OK (if Int.eq n Int.zero then Pmov_rr RAX RAX :: k else
       Pcqto ::
       Pshrq_ri RDX (Int.sub (Int.repr 64) n) ::
@@ -311,6 +314,7 @@ Definition transl_op
       do r <- ireg_of res;
       OK ((if Int.eq_dec n Int.zero then Pxorl_r r else Pmovl_ri r n) :: k)
   | Olongconst n, nil =>
+      assertion Archi.ptr64;
       do r <- ireg_of res;
       OK ((if Int64.eq_dec n Int64.zero then Pxorq_r r else Pmovq_ri r n) :: k)
   | Ofloatconst f, nil =>
@@ -427,105 +431,135 @@ Definition transl_op
       OK (Pleal r (normalize_addrmode_32 am) :: k)
 (* 64-bit integer operations *)
   | Olowlong, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pmovls_rr r :: k)
   | Ocast32signed, a1 :: nil =>
+      assertion Archi.ptr64;
       do r1 <- ireg_of a1; do r <- ireg_of res; OK (Pmovsl_rr r r1 :: k)
   | Ocast32unsigned, a1 :: nil =>
+      assertion Archi.ptr64;
       do r1 <- ireg_of a1; do r <- ireg_of res; OK (Pmovzl_rr r r1 :: k)
   | Onegl, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pnegq r :: k)
   | Oaddlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Paddq_ri r n :: k)
   | Osubl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Psubq_rr r r2 :: k)
   | Omull, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Pimulq_rr r r2 :: k)
   | Omullimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pimulq_ri r n :: k)
   | Omullhs, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq res DX);
       do r2 <- ireg_of a2; OK (Pimulq_r r2 :: k)
   | Omullhu, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq res DX);
       do r2 <- ireg_of a2; OK (Pmulq_r r2 :: k)
   | Odivl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq a2 CX);
       assertion (mreg_eq res AX);
       OK(Pcqto :: Pidivq RCX :: k)
   | Odivlu, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq a2 CX);
       assertion (mreg_eq res AX);
       OK(Pxorq_r RDX :: Pdivq RCX :: k)
   | Omodl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq a2 CX);
       assertion (mreg_eq res DX);
       OK(Pcqto :: Pidivq RCX :: k)
   | Omodlu, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq a2 CX);
       assertion (mreg_eq res DX);
       OK(Pxorq_r RDX :: Pdivq RCX :: k)
   | Oandl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Pandq_rr r r2 :: k)
   | Oandlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pandq_ri r n :: k)
   | Oorl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Porq_rr r r2 :: k)
   | Oorlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Porq_ri r n :: k)
   | Oxorl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; do r2 <- ireg_of a2; OK (Pxorq_rr r r2 :: k)
   | Oxorlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pxorq_ri r n :: k)
   | Onotl, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pnotq r :: k)
   | Oshll, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       assertion (mreg_eq a2 CX);
       do r <- ireg_of res; OK (Psalq_rcl r :: k)
   | Oshllimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Psalq_ri r n :: k)
   | Oshrl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       assertion (mreg_eq a2 CX);
       do r <- ireg_of res; OK (Psarq_rcl r :: k)
   | Oshrlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Psarq_ri r n :: k)
   | Oshrxlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 AX);
       assertion (mreg_eq res AX);
       mk_shrxlimm n k
   | Oshrlu, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       assertion (mreg_eq a2 CX);
       do r <- ireg_of res; OK (Pshrq_rcl r :: k)
   | Oshrluimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Pshrq_ri r n :: k)
   | Ororlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       assertion (mreg_eq a1 res);
       do r <- ireg_of res; OK (Prorq_ri r n :: k)
   | Oleal addr, _ =>
+      assertion Archi.ptr64;
       do am <- transl_addressing addr args; do r <- ireg_of res;
       OK (match normalize_addrmode_64 am with
           | (am', None)       => Pleaq r am' :: k
@@ -581,10 +615,12 @@ Definition transl_op
   | Osingleofint, a1 :: nil =>
       do r <- freg_of res; do r1 <- ireg_of a1; OK (Pcvtsi2ss_fr r r1 :: k)
   | Olongoffloat, a1 :: nil =>
+      assertion Archi.ptr64;
       do r <- ireg_of res; do r1 <- freg_of a1; OK (Pcvttsd2sl_rf r r1 :: k)
   | Ofloatoflong, a1 :: nil =>
       do r <- freg_of res; do r1 <- ireg_of a1; OK (Pcvtsl2sd_fr r r1 :: k)
   | Olongofsingle, a1 :: nil =>
+      assertion Archi.ptr64;
       do r <- ireg_of res; do r1 <- freg_of a1; OK (Pcvttss2sl_rf r r1 :: k)
   | Osingleoflong, a1 :: nil =>
       do r <- freg_of res; do r1 <- ireg_of a1; OK (Pcvtsl2ss_fr r r1 :: k)
@@ -600,6 +636,7 @@ Definition transl_op
 Definition transl_load (chunk: memory_chunk)
                        (addr: addressing) (args: list mreg) (dest: mreg)
                        (k: code) : res code :=
+  assertion (subtype (type_of_chunk chunk) (Mreg.type dest));
   do am <- transl_addressing addr args;
   match chunk with
   | Mint8unsigned =>
@@ -694,8 +731,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
 
 Definition it1_is_parent (before: bool) (i: Mach.instruction) : bool :=
   match i with
-  | Msetstack src ofs ty => before
-  | Mgetparam ofs ty dst => negb (mreg_eq dst AX)
+  | Msetstack src ofs q => before
+  | Mgetparam ofs q dst => negb (mreg_eq dst AX)
   | _ => false
   end.
 

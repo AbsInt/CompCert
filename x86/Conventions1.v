@@ -314,10 +314,10 @@ Proof.
 Opaque list_nth_z.
   induction tyl; simpl loc_arguments_64; intros.
   elim H.
-  assert (A: forall ty, In p
+  assert (A: forall q, In p
       match list_nth_z int_param_regs ir with
       | Some ireg => One (R ireg) :: loc_arguments_64 tyl (ir + 1) fr ofs
-      | None => One (S Outgoing ofs ty) :: loc_arguments_64 tyl ir fr (ofs + 2)
+      | None => One (S Outgoing ofs q) :: loc_arguments_64 tyl ir fr (ofs + 2)
       end ->
       forall_rpair (loc_argument_64_charact ofs) p).
   { intros. destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H1.
@@ -325,10 +325,10 @@ Opaque list_nth_z.
     eapply IHtyl; eauto.
     subst. split. omega. assumption.
     eapply Y; eauto. omega. }
-  assert (B: forall ty, In p
+  assert (B: forall q, In p
       match list_nth_z float_param_regs fr with
       | Some ireg => One (R ireg) :: loc_arguments_64 tyl ir (fr + 1) ofs
-      | None => One (S Outgoing ofs ty) :: loc_arguments_64 tyl ir fr (ofs + 2)
+      | None => One (S Outgoing ofs q) :: loc_arguments_64 tyl ir fr (ofs + 2)
       end ->
       forall_rpair (loc_argument_64_charact ofs) p).
   { intros. destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H1.

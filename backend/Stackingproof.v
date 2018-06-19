@@ -969,7 +969,9 @@ Local Opaque mreg_type.
   set (rs1 := undef_regs (destroyed_by_setstack (quantity_of_typ (mreg_type r))) rs).
   assert (AG1: agree_regs j ls rs1).
   { red; intros. unfold rs1.
-    rewrite undef_regs_other by auto. apply AG. }
+    destruct (In_dec mreg_eq r0 (destroyed_by_setstack (quantity_of_typ (mreg_type r)))).
+    - erewrite ls_temp_undef; eauto.
+    - rewrite undef_regs_other by auto. apply AG. }
   rewrite sep_swap in SEP.
   exploit (IHl (pos1 + sz) rs1 m1); eauto.
   rewrite R_SZ in SEP; eauto.
@@ -1051,6 +1053,7 @@ Lemma save_callee_save_correct:
 Proof.
   intros until P; intros SEP TY AGCS AG; intros ls1 rs1.
   exploit (save_callee_save_rec_correct j cs fb sp ls1).
+- intros. unfold ls1. apply LTL_undef_regs_same. eapply destroyed_by_setstack_function_entry; eauto.
 - exact b.(used_callee_save_prop).
 - eexact SEP.
 - instantiate (1 := rs1). apply agree_regs_undef_regs. apply agree_regs_call_regs. auto.
@@ -1980,9 +1983,9 @@ Proof.
     apply Val.has_subtype with (ty1 := snd (type_of_operation op)); auto.
     apply type_of_operation_sound in A.
     assert (TOP: forall env, type_of_operation (transl_op env op) = type_of_operation op).
-    { intros. destruct op; simpl; auto. }
+    { intros. destruct op; simpl; auto; try (destruct a; simpl; auto). }
     rewrite TOP in A. auto.
-    destruct op; simpl; auto. congruence.
+    destruct op; simpl; auto. congruence. try congruence.
   apply agree_locs_set_reg; auto. apply agree_locs_undef_locs. auto. apply destroyed_by_op_caller_save.
   apply frame_set_reg. apply frame_undef_regs. exact SEP.
 

@@ -994,6 +994,52 @@ Proof.
   intros. destruct H; subst c; destruct v1, v2; auto.
 Qed.
 
+Lemma load_result_or:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (or v1 v2) = or v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto.
+Qed.
+
+Lemma load_result_and:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (and v1 v2) = and v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto.
+Qed.
+
+Lemma load_result_of_optbool:
+  forall c ob,
+  c = Many32 \/ c = Many64 ->
+  load_result c (of_optbool ob) = of_optbool ob.
+Proof.
+  intros. destruct H; subst c; destruct ob; try destruct b; auto.
+Qed.
+
+Lemma load_result_intoffloat:
+  forall v v',
+  Val.intoffloat v = Some v' ->
+  load_result Many32 (Val.maketotal (Val.intoffloat v)) = v'.
+Proof.
+  intros. destruct v; try inversion H.
+  rewrite H, <- H1.
+  destruct (Float.to_int f). simpl in *; congruence.
+  inversion H1.
+Qed.
+
+Lemma load_result_intofsingle:
+  forall v v',
+  Val.intofsingle v = Some v' ->
+  load_result Many32 (Val.maketotal (Val.intofsingle v)) = v'.
+Proof.
+  intros. destruct v; try inversion H.
+  rewrite H, <- H1.
+  destruct (Float32.to_int f). simpl in *; congruence.
+  inversion H1.
+Qed.
+
 (** Theorems on arithmetic operations. *)
 
 Theorem cast8unsigned_and:
@@ -2098,6 +2144,13 @@ Lemma offset_ptr_assoc:
   forall v d1 d2, offset_ptr (offset_ptr v d1) d2 = offset_ptr v (Ptrofs.add d1 d2).
 Proof.
   intros. destruct v; simpl; auto. f_equal. apply Ptrofs.add_assoc.
+Qed.
+
+Lemma offset_ptr_type:
+  forall v d, has_type (offset_ptr v d) Tptr.
+Proof.
+  intros. destruct v; simpl; auto.
+  unfold Tptr. destruct Archi.ptr64; auto.
 Qed.
 
 (** * Values and memory injections *)

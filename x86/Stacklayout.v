@@ -53,8 +53,8 @@ Lemma frame_env_separated:
   m |= range sp 0 (fe_stack_data fe) ** range sp (fe_stack_data fe + bound_stack_data b) (fe_size fe) ** P ->
   m |= range sp (fe_ofs_local fe) (fe_ofs_local fe + 4 * bound_local b)
        ** range sp fe_ofs_arg (fe_ofs_arg + 4 * bound_outgoing b)
-       ** range sp (fe_ofs_link fe) (fe_ofs_link fe + size_chunk Mptr)
-       ** range sp (fe_ofs_retaddr fe) (fe_ofs_retaddr fe + size_chunk Mptr)
+       ** range sp (fe_ofs_link fe) (fe_ofs_link fe + size_chunk Mptr_any)
+       ** range sp (fe_ofs_retaddr fe) (fe_ofs_retaddr fe + size_chunk Mptr_any)
        ** range sp (fe_ofs_callee_save fe) (size_callee_save_area b (fe_ofs_callee_save fe))
        ** P.
 Proof.
@@ -66,7 +66,7 @@ Local Opaque Z.add Z.mul sepconj range.
   set (ol :=  align (size_callee_save_area b ocs) 8).
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   set (oretaddr := align (ostkdata + b.(bound_stack_data)) w).
-  replace (size_chunk Mptr) with w by (rewrite size_chunk_Mptr; auto).
+  replace (size_chunk Mptr_any) with w by (rewrite size_chunk_Mptr_any; auto).
   assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
   generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
   assert (0 <= 4 * b.(bound_outgoing)) by omega.
@@ -139,6 +139,7 @@ Proof.
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   set (oretaddr := align (ostkdata + b.(bound_stack_data)) w).
   assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
+  rewrite align_chunk_Mptr_any.
   split. apply Z.divide_0_r.
   split. apply align_divides; omega.
   split. apply align_divides; omega.

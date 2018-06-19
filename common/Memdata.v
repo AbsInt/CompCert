@@ -73,6 +73,11 @@ Proof.
   unfold Mptr; destruct Archi.ptr64; auto.
 Qed.
 
+Lemma size_chunk_Mptr_any: size_chunk Mptr_any = if Archi.ptr64 then 8 else 4.
+Proof.
+  unfold Mptr_any; destruct Archi.ptr64; auto.
+Qed.
+
 (** Memory reads and writes must respect alignment constraints:
   the byte offset of the location being addressed should be an exact
   multiple of the natural alignment for the chunk being addressed.
@@ -106,6 +111,11 @@ Qed.
 Lemma align_chunk_Mptr: align_chunk Mptr = if Archi.ptr64 then 8 else 4.
 Proof.
   unfold Mptr; destruct Archi.ptr64; auto.
+Qed.
+
+Lemma align_chunk_Mptr_any: align_chunk Mptr_any = 4.
+Proof.
+  unfold Mptr_any; destruct Archi.ptr64; auto.
 Qed.
 
 Lemma align_size_chunk_divides:
