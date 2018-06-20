@@ -115,7 +115,7 @@ let gnu_prepro_actions = [
   Exact "-imacros", String (gnu_prepro_opt_key "-imacros");
   Exact "-idirafter", String (gnu_prepro_opt_key "-idirafter");
   Exact "-isystem", String (gnu_prepro_opt_key "-isystem");
-  Exact "-iquote", String (gnu_prepro_opt_key "-iquore");
+  Exact "-iquote", String (gnu_prepro_opt_key "-iquote");
   Exact "-P", Self gnu_prepro_opt;
   Exact "-C", Self gnu_prepro_opt;
   Exact "-CC", Self gnu_prepro_opt;]
