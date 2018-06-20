@@ -53,7 +53,8 @@ let compile_c_ast sourcename csyntax ofile =
   end;
   (* Print Clight in Coq syntax *)
   let oc = open_out ofile in
-  ExportClight.print_program (Format.formatter_of_out_channel oc) clight;
+  ExportClight.print_program (Format.formatter_of_out_channel oc)
+                             clight sourcename !option_normalize;
   close_out oc
 
 (* From C source to Clight *)

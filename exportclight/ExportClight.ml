@@ -487,8 +487,7 @@ let print_assertions p =
 let prologue = "\
 From Coq Require Import String List ZArith.\n\
 From compcert Require Import Coqlib Integers Floats AST Ctypes Cop Clight Clightdefs.\n\
-Local Open Scope Z_scope.\n\
-\n"
+Local Open Scope Z_scope.\n"
 
 (* Naming the compiler-generated temporaries occurring in the program *)
 
@@ -543,13 +542,30 @@ let name_globdef (id, g) =
 let name_program p =
   List.iter name_globdef p.Ctypes.prog_defs
 
+(* Information about this run of clightgen *)
+
+let print_clightgen_info p sourcefile normalized =
+  fprintf p "@[<v 2>Module Info.";
+  fprintf p "@ Definition version := %S%%string." Version.version;
+  fprintf p "@ Definition build_number := %S%%string." Version.buildnr;
+  fprintf p "@ Definition build_tag := %S%%string." Version.tag;
+  fprintf p "@ Definition arch := %S%%string." Configuration.arch;
+  fprintf p "@ Definition model := %S%%string." Configuration.model;
+  fprintf p "@ Definition abi := %S%%string." Configuration.abi;
+  fprintf p "@ Definition bitsize := %d." (if Archi.ptr64 then 64 else 32);
+  fprintf p "@ Definition big_endian := %B." Archi.big_endian;
+  fprintf p "@ Definition source_file := %S%%string." sourcefile;
+  fprintf p "@ Definition normalized := %B." normalized;
+  fprintf p "@]@ End Info.@ @ "  
+  
 (* All together *)
 
-let print_program p prog =
+let print_program p prog sourcefile normalized =
   Hashtbl.clear temp_names;
   name_program prog;
   fprintf p "@[<v 0>";
   fprintf p "%s" prologue;
+  print_clightgen_info p sourcefile normalized;
   define_idents p;
   List.iter (print_globdef p) prog.Ctypes.prog_defs;
   fprintf p "Definition composites : list composite_definition :=@ ";
