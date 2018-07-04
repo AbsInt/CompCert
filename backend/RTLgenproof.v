@@ -1586,7 +1586,7 @@ Proof.
   unfold transl_function in EQ.
   destruct (reserve_labels _ _).
   destruct (transl_fun _ _ _); inv EQ.
-  destruct p; inv H8.
+  destruct p; inv H7.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.

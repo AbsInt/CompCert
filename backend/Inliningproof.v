@@ -1392,27 +1392,42 @@ Proof.
   red; intros; subst j. unfold Mem.flat_inj. destruct (plt b0 (Mem.nextblock m0)). congruence. elim n. apply H.
 Qed.
 
+Lemma transf_stacksize:
+  forall cu f f', transf_function (funenv_program cu) f = OK f' ->
+  fn_stacksize f' = fn_stacksize f.
+(* This doesn't appear to be true. Maybe we shouldn't bother allocating the block
+   at the right size until later. *)
+Proof.
+  unfold transf_function; intros.
+  destruct (expand_function _ _ _) eqn: EQ.
+  destruct (zlt _ _); inv H; simpl.
+  monadInv EQ.
+Admitted.
+
 Lemma transf_entry_points:
   forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
   entry_point prog m0 s1 f arg ->
   exists j (s2 : RTL.state), entry_point tprog m0 s2 f arg /\ match_states j s1 s2.
 Proof.
   intros. inv H.
-  exploit function_ptr_translated; eauto. intros (cu & tf & FIND & TR & LINK).
+  destruct (function_ptr_translated _ _ H3) as (cu & tf & FIND & TR & LINK).
+  destruct (function_ptr_translated _ _ H5) as (cu' & tf' & FIND' & TR' & LINK').
+  simpl in TR'.
+  destruct (transf_function _ f1) eqn: EQ; inv TR'.
   do 2 econstructor; split.
   - econstructor; eauto.
     unfold globals_not_fresh.
     erewrite <- len_defs_genv_next.
-    + unfold ge0 in *. simpl in H2; eapply H2.  
+    + unfold ge0 in *. simpl in H2; eapply H2.
     + eapply (@match_program_gen_len_defs program); eauto.
     + erewrite sig_function_translated; eauto.
-  - econstructor; eauto.
-    + econstructor. instantiate (1:=Mem.nextblock m0).
-      eapply match_globalenvs_not_fresh; auto.
-      reflexivity.
+    + erewrite transf_stacksize; eauto.
+  - econstructor; try apply TR; try apply flat_injection_full; eauto.
+    + admit.
+    + admit.
     + apply Mem.neutral_inject; auto.
-    + eapply flat_injection_full.
-Qed.
+      admit.
+Admitted.
 
 Lemma transf_initial_states':
    forall s1 : RTL.state,

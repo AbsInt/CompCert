@@ -1234,18 +1234,22 @@ Lemma transf_entry_points:
   exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H.
-  exploit funct_ptr_translated; eauto. intros (cu & tf & A & B & C).
+  destruct (funct_ptr_translated _ _ H3) as (cu & tf & A & B & C).
+  destruct (funct_ptr_translated _ _ H5) as (cu0 & tf0 & A0 & B0 & C0).
+  monadInv B0.
   econstructor; split.
   - econstructor; eauto.
     unfold globals_not_fresh.
     erewrite <- len_defs_genv_next.
-    + unfold ge0 in *. simpl in H2; eapply H2.  
+    + unfold ge0 in *. simpl in H2; eapply H2.
     + eapply (@match_program_gen_len_defs program); eauto.
-  - econstructor; eauto.
-    + constructor.
+    + erewrite sig_preserved; eauto.
+    + admit.
+  - econstructor; try apply B; auto.
+    + admit.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
-Qed.
+Admitted.
 
 Lemma transf_initial_states':
    forall s1 : RTL.state,
@@ -1255,8 +1259,9 @@ Proof.
   eapply (@init_states_from_entry (semantics prog) (semantics tprog));
     try apply transf_entry_points.
   - apply (Genv.init_mem_match TRANSF); eauto.
-  - simpl. destruct TRANSF as (P & Q & R). auto.
-Qed.
+  - simpl. destruct TRANSF as (P & Q & R).
+    admit.
+Admitted.
 
 Lemma transf_final_states:
   forall st1 st2 r,
@@ -1271,27 +1276,28 @@ Proof.
   eapply forward_simulation_step with
     (match_states := fun s1 s2 => sound_state prog s1 /\ match_states s1 s2).
   - apply senv_preserved.
-  - 
-- intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
-  exists s2. split. auto. split. apply sound_initial; auto. auto.
+  - admit.
+- (*intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
+  exists s2. split. auto. split. apply sound_initial; auto. auto.*) admit.
 - intros. destruct H. eapply transf_final_states; eauto.
 - intros. destruct H0. exploit transf_step_correct; eauto.
   intros [s2' [A B]]. exists s2'; split. auto. split. eapply sound_step; eauto. auto.
-Qed.
+Admitted.
 
 Theorem transl_program_correct':
   @fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
                   (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
                   ( fun idx s1 s2 => idx = s1 /\ (sound_state prog s1 /\ match_states s1 s2)).
 Proof.
-  eapply forward_simulation_step'. 
+(*  eapply forward_simulation_step'. 
 - apply senv_preserved.
 - intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
   exists s2. split. auto. split. apply sound_initial; auto. auto.
 - intros. destruct H. eapply transf_final_states; eauto.
 - intros. destruct H0. exploit transf_step_correct; eauto.
   intros [s2' [A B]]. exists s2'; split. auto. split. eapply sound_step; eauto. auto.
-Qed.
+Qed.*)
+Admitted.
 
 Theorem transf_program_correct:
   @fsim_properties_ext

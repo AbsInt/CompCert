@@ -718,9 +718,9 @@ Proof.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
         eapply match_program_gen_len_defs in TRANSF; eauto.
     + erewrite sig_preserved; eauto.
-    + pose proof (sig_preserved (Internal f1) (Internal f)) as Heq.
+(*    + pose proof (sig_preserved (Internal f1) (Internal f)) as Heq.
       simpl in Heq; rewrite Heq; auto.
-      rewrite Hf1; auto.
+      rewrite Hf1; auto.*)
     + erewrite stacksize_preserved; eauto.
   - subst ls0; erewrite sig_preserved by eauto.
     econstructor; eauto.

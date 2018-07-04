@@ -2599,8 +2599,7 @@ Proof.
   exists st2; split; auto. split; auto.
   inv H; subst ge0.
   econstructor; eauto.
-  econstructor. admit. (*intial function must return int? *)
-  destruct f0; econstructor.
+  admit.
   admit. (*Initial function must be "well typed"*)
 - intros.
   exploit initial_states_simulation'; eauto. intros [st2 [A B]].
@@ -2630,8 +2629,7 @@ Proof.
   exists st2; split; auto. split; auto.
   inv H; subst ge0.
   econstructor; eauto.
-  econstructor. admit. (*intial function must return int? *)
-  destruct f0; econstructor.
+  admit.
   admit. (*Initial function must be "well typed"*)
 - intros.
   exploit initial_states_simulation'; eauto. intros [st2 [A B]].

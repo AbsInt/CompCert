@@ -2573,7 +2573,8 @@ Proof.
       etransitivity; eauto.
       admit. (* This should probably be another hypothesis of entry_point, but the space taken
                 by a function is defined after Linear. *)
-    - constructor; auto. }
+    - constructor; auto.
+      admit. (* remove tailcall_possible *) }
   exploit (transl_make_arguments j); try apply MS.
   { simpl.
     rewrite (sep_comm (frame_contents _ _ _ _ _ _ _)), sep_assoc, sep_pure; eauto. }

@@ -1348,14 +1348,19 @@ Ltac Equalities :=
   eapply external_call_trace_length; eauto.
 - (* initial cores *)
   inv H; inv H0.
-  admit. (* need to know more about the initial caller and memory setup *)
+  rewrite H7 in H2; inv H2.
+  subst sp sp0.
+  rewrite H8 in H3; inv H3.
+  rewrite H9 in H4; inv H4.
+  rewrite H6 in H1; inv H1.
+  subst rs0 rs2; congruence.
 - (* final no step *)
   assert (NOTNULL: forall b ofs, Vnullptr <> Vptr b ofs).
   { intros; unfold Vnullptr; destruct Archi.ptr64; congruence. }
   inv H. red; intros; red; intros. inv H; rewrite H0 in *; eelim NOTNULL; eauto.
 - (* final states *)
   inv H; inv H0. congruence.
-Admitted.
+Qed.
 (** Classification functions for processor registers (used in Asmgenproof). *)
 
 Definition data_preg (r: preg) : bool :=

@@ -382,7 +382,6 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       Genv.find_funct_ptr ge b = Some f ->
       Val.has_type_list args (sig_args (funsig f)) ->
       Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
-      tailcall_possible (fn_sig f0) ->
       Mem.alloc m0 0 (fn_stacksize f0) = (m1, stk) ->
       entry_point p m0 (Callstate (Stackframe 1%positive f0 (Vptr stk Ptrofs.zero) 1%positive (Regmap.init Vundef) :: nil) f args m1) (Vptr b Ptrofs.zero) args.
 

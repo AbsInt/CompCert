@@ -329,7 +329,8 @@ Lemma transf_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  exploit function_ptr_translated; eauto. intro A.
+  pose proof (function_ptr_translated _ _ H3) as A.
+  pose proof (function_ptr_translated _ _ H5) as A0.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
@@ -337,7 +338,8 @@ Proof.
     rewrite sig_function_translated; auto.
   - rewrite sig_function_translated.
     econstructor; eauto.
-    constructor.
+    repeat constructor.
+    intro; contradiction.
 Qed.
 
 Lemma transf_initial_states:
