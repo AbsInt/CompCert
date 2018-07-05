@@ -2341,20 +2341,20 @@ Proof.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption;
       eapply match_program_gen_len_defs in TRANSL; eauto.
     erewrite sig_preserved; eauto.
-    unfold transl_function in EQ.
+(*    unfold transl_function in EQ.
     destruct (build_compilenv f1).
     destruct (zle _ _); try discriminate.
-    erewrite sig_preserved_body; eauto.
+    erewrite sig_preserved_body; eauto.*)
   - eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m2)) (cenv := PTree.empty Z).
     + auto.
     + eapply Mem.neutral_inject, Mem.alloc_inject_neutral; eauto.
       admit.
-      apply Mem.nextblock_alloc in H7 as ->.
+      erewrite (Mem.nextblock_alloc _ _ _ m2) by eauto.
       apply Plt_succ.
     + eapply mcs_cons with (hi := Mem.nextblock m0) (sp := Mem.nextblock m0), mcs_nil with (Mem.nextblock m0).
-      * apply Mem.nextblock_alloc in H7 as ->.
+      * erewrite (Mem.nextblock_alloc _ _ _ m2) by eauto.
         apply Ple_succ.
-      * apply Mem.nextblock_alloc in H7 as ->.
+      * erewrite (Mem.nextblock_alloc _ _ _ m2) by eauto.
         apply Plt_succ.
       * instantiate (1 := PTree.empty _); instantiate (1 := PTree.empty _).
         repeat intro.

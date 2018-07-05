@@ -46,6 +46,12 @@ Local Open Scope error_monad_scope.
 
 Set Implicit Arguments.
 
+Fixpoint temp_bindings (i: positive) (vl: list val) :=
+ match vl with
+ | nil => PTree.empty val
+ | v::vl' => PTree.set i v (temp_bindings (i+1)%positive vl')
+ end.
+
 (** Auxiliary function for initialization of global variables. *)
 
 Function store_zeros (m: mem) (b: block) (p: Z) (n: Z) {wf (Zwf 0) n}: option mem :=

@@ -527,22 +527,31 @@ Proof.
   constructor; auto.
 Qed.
 
+Lemma stacksize_preserved: forall f f', transf_function f = OK f' ->
+  fn_stacksize f' = fn_stacksize f.
+Proof.
+Admitted.
+
 Lemma transf_entry_points:
    forall (s1 : state) (f : val) (arg : list val) (m0 : mem),
   entry_point prog m0 s1 f arg ->
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  destruct (function_ptr_translated _ _ H3) as (tf & A & B).
+  destruct (function_ptr_translated _ _ H5) as (tf0 & A0 & B0).
+  monadInv B0.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
     erewrite sig_preserved; eauto.
-  - erewrite <- sig_preserved by eauto.
+    erewrite stacksize_preserved; eauto.
+  - erewrite sig_preserved by eauto.
     econstructor; eauto.
-    constructor.
-Qed.
+    repeat constructor.
+    admit.
+Admitted.
 
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->

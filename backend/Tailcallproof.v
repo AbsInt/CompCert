@@ -588,17 +588,19 @@ Lemma transf_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H.
-  exploit funct_ptr_translated; eauto. intro FIND.
+  pose proof (funct_ptr_translated _ _ H3).
+  pose proof (funct_ptr_translated _ _ H5).
   econstructor; split.
   
   - econstructor; eauto.
-    unfold globals_not_fresh.
-    erewrite <- len_defs_genv_next.
-    + unfold ge0 in *. simpl in H2; eapply H2.  
-    + eapply (@match_program_gen_len_defs program); eauto.
+    + unfold globals_not_fresh.
+      erewrite <- len_defs_genv_next.
+      unfold ge0 in *. simpl in H2; eapply H2.
+      eapply (@match_program_gen_len_defs program); eauto.
     + rewrite sig_preserved; auto.
+    + rewrite stacksize_preserved; eauto.
   - econstructor; eauto.
-    + constructor.
+    + repeat constructor.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
 Qed.

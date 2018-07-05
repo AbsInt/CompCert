@@ -1103,7 +1103,6 @@ Proof.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
     erewrite sig_function_translated; simpl; eauto.
-    monadInv EQ; auto.
   - econstructor; try apply B; auto.
     + repeat intro.
       assert (hf = x) by admit; subst.

@@ -1783,9 +1783,9 @@ Proof.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption;
       eapply match_program_gen_len_defs; eauto.
     erewrite transl_fundef_sig2; simpl; eauto.
-    repeat intro; apply H8.
+(*    repeat intro; apply H8.
     unfold loc_arguments', Conventions1.loc_arguments in *.
-    monadInv H10; auto.
+    monadInv H10; auto.*)
   - econstructor; try apply B; eauto.
     + instantiate (1 := prog_comp_env cu). econstructor; eauto.
       * apply match_env_empty.

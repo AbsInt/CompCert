@@ -1106,6 +1106,32 @@ Ltac UseTransfer :=
   econstructor; eauto. apply mextends_agree; auto.
 Qed.
 
+Lemma transf_entry_points:
+  forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
+  entry_point prog m0 s1 f arg ->
+  exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+Proof.
+  intros. inv H.
+  destruct (function_ptr_translated _ _ H3) as (cu & tf & A & B & C).
+  destruct (function_ptr_translated _ _ H5) as (cu0 & tf0 & A0 & B0 & C0).
+  monadInv B0.
+  econstructor; split.
+  - econstructor; eauto.
+    unfold globals_not_fresh.
+    erewrite <- len_defs_genv_next.
+    + unfold ge0 in *. simpl in H2; eapply H2.
+    + eapply (@match_program_gen_len_defs program); eauto.
+    + erewrite sig_function_translated; eauto.
+    + erewrite stacksize_translated; eauto.
+  - econstructor; try apply B; auto.
+    + constructor; [|constructor].
+      econstructor; eauto.
+      * admit.
+      * admit.
+    + clear. induction arg; auto.
+    + apply Mem.extends_refl.
+Admitted.
+
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
@@ -1138,13 +1164,15 @@ Proof.
   apply forward_simulation_step with
      (match_states := fun s1 s2 => sound_state prog s1 /\ match_states s1 s2).
 - apply senv_preserved.
-- simpl; intros. exploit transf_initial_states; eauto. intros [st2 [A B]].
-  exists st2; intuition. eapply sound_initial; eauto.
+- simpl; intros. exploit transf_entry_points; eauto. intros [st2 [A B]].
+  exists st2; intuition. admit.
+- (*simpl; intros. exploit transf_initial_states; eauto. hnf in H. unfold semantics, Semantics in H. simpl in H. intros [st2 [A B]].
+  exists st2; intuition. eapply sound_initial; eauto.*) admit.
 - simpl; intros. destruct H. eapply transf_final_states; eauto.
 - simpl; intros. destruct H0.
   assert (sound_state prog s1') by (eapply sound_step; eauto).
   fold ge; fold tge. exploit step_simulation; eauto. intros [st2' [A B]].
   exists st2'; auto.
-Qed.
+Admitted.
 
 End PRESERVATION.
