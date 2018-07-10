@@ -20,7 +20,7 @@ open BinNums
 open BinNat
 open BinInt
 open BinPos
-open Floats
+open! Floats
 
 (* Coq's [nat] type and some of its operations *)
 
