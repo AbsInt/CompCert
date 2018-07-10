@@ -16,7 +16,7 @@
 open C
 
 open Camlcoq
-open Floats
+open! Floats
 open Values
 open Ctypes
 open Csyntax
