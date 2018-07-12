@@ -991,7 +991,7 @@ Lemma load_result_add:
   c = Many32 \/ c = Many64 ->
   load_result c (add v1 v2) = add v1 v2.
 Proof.
-  intros. destruct H; subst c; destruct v1, v2; auto.
+  intros. destruct H; subst c; destruct v1, v2; auto; simpl; destruct Archi.ptr64; auto.
 Qed.
 
 Lemma load_result_or:
@@ -1008,6 +1008,24 @@ Lemma load_result_and:
   load_result c (and v1 v2) = and v1 v2.
 Proof.
   intros. destruct H; subst c; destruct v1, v2; auto.
+Qed.
+
+Lemma load_result_shr:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (shr v1 v2) = shr v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto.
+  unfold shr. destruct (Int.ltu _ _); auto.
+Qed.
+
+Lemma load_result_shru:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (shru v1 v2) = shru v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto.
+  unfold shru. destruct (Int.ltu _ _); auto.
 Qed.
 
 Lemma load_result_of_optbool:

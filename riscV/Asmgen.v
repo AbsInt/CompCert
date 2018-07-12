@@ -358,15 +358,19 @@ Definition transl_cond_op
       do r1 <- ireg_of a1;
       OK (transl_condimm_int32u c rd r1 n k)
   | Ccompl c, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (transl_cond_int64s c rd r1 r2 k)
   | Ccomplu c, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (transl_cond_int64u c rd r1 r2 k)
   | Ccomplimm c n, a1 :: nil =>
+      assertion Archi.ptr64;
       do r1 <- ireg_of a1;
       OK (transl_condimm_int64s c rd r1 n k)
   | Ccompluimm c n, a1 :: nil =>
+      assertion Archi.ptr64;
       do r1 <- ireg_of a1;
       OK (transl_condimm_int64u c rd r1 n k)
   | Ccompf c, f1 :: f2 :: nil =>
@@ -405,6 +409,7 @@ Definition transl_op
       do rd <- ireg_of res;
       OK (loadimm32 rd n k)
   | Olongconst n, nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res;
       OK (loadimm64 rd n k)
   | Ofloatconst f, nil =>
@@ -514,83 +519,109 @@ Definition transl_op
       do rd <- ireg_of res; do rs <- ireg_of a1;
       OK (Pcvtl2w rd rs :: k)  
   | Ocast32signed, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- ireg_of a1;
       assertion (ireg_eq rd rs);
       OK (Pcvtw2l rd :: k)
   | Ocast32unsigned, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- ireg_of a1;
       assertion (ireg_eq rd rs);
       OK (Pcvtw2l rd :: Psllil rd rd (Int.repr 32) :: Psrlil rd rd (Int.repr 32) :: k)
   | Oaddl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Paddl rd rs1 rs2 :: k)
   | Oaddlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd  <- ireg_of res; do rs <- ireg_of a1;
       OK (addimm64 rd rs n k)
   | Onegl, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd  <- ireg_of res; do rs <- ireg_of a1;
       OK (Psubl rd X0 rs :: k)
   | Osubl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Psubl rd rs1 rs2 :: k)
   | Omull, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Pmull rd rs1 rs2 :: k)
   | Omullhs, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Pmulhl rd rs1 rs2 :: k)
   | Omullhu, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Pmulhul rd rs1 rs2 :: k)
   | Odivl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Pdivl rd rs1 rs2 :: k)
   | Odivlu, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Pdivul rd rs1 rs2 :: k)
   | Omodl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Preml rd rs1 rs2 :: k)
   | Omodlu, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Premul rd rs1 rs2 :: k)
   | Oandl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Pandl rd rs1 rs2 :: k)
   | Oandlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd  <- ireg_of res; do rs <- ireg_of a1;
       OK (andimm64 rd rs n k)
   | Oorl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Porl rd rs1 rs2 :: k)
   | Oorlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd  <- ireg_of res; do rs <- ireg_of a1;
       OK (orimm64 rd rs n k)
   | Oxorl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Pxorl rd rs1 rs2 :: k)
   | Oxorlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd  <- ireg_of res; do rs <- ireg_of a1;
       OK (xorimm64 rd rs n k)
   | Oshll, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Pslll rd rs1 rs2 :: k)
   | Oshllimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- ireg_of a1;
       OK (Psllil rd rs n :: k)
   | Oshrl, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Psral rd rs1 rs2 :: k)
   | Oshrlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- ireg_of a1;
       OK (Psrail rd rs n :: k)
   | Oshrlu, a1 :: a2 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
       OK (Psrll rd rs1 rs2 :: k)
   | Oshrluimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- ireg_of a1;
       OK (Psrlil rd rs n :: k)
   | Oshrxlimm n, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- ireg_of a1;
       OK (if Int.eq n Int.zero then Pmv rd rs :: k else
           Psrail X31 rs (Int.repr 63) ::
@@ -669,27 +700,35 @@ Definition transl_op
       OK (Pfcvtswu rd rs :: k)
 
   | Olongoffloat, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- freg_of a1;
       OK (Pfcvtld rd rs :: k)
   | Olonguoffloat, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- freg_of a1;
       OK (Pfcvtlud rd rs :: k)
   | Ofloatoflong, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- freg_of res; do rs <- ireg_of a1;
       OK (Pfcvtdl rd rs :: k)
   | Ofloatoflongu, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- freg_of res; do rs <- ireg_of a1;
       OK (Pfcvtdlu rd rs :: k)
   | Olongofsingle, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- freg_of a1;
       OK (Pfcvtls rd rs :: k)
   | Olonguofsingle, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- ireg_of res; do rs <- freg_of a1;
       OK (Pfcvtlus rd rs :: k)
   | Osingleoflong, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- freg_of res; do rs <- ireg_of a1;
       OK (Pfcvtsl rd rs :: k)
   | Osingleoflongu, a1 :: nil =>
+      assertion Archi.ptr64;
       do rd <- freg_of res; do rs <- ireg_of a1;
       OK (Pfcvtslu rd rs :: k)
 
@@ -724,12 +763,12 @@ Definition indexed_memory_access
     end.
 
 Definition loadind (base: ireg) (ofs: ptrofs) (q: quantity) (dst: mreg) (k: code) :=
-  match q, preg_of dst with
-  | Q32, IR rd => OK (indexed_memory_access (Plw_a rd) base ofs k)
-  | Q64, IR rd => OK (indexed_memory_access (Pld_a rd) base ofs k)
-  | Q32, FR rd => OK (indexed_memory_access (Pfls_a rd) base ofs k)
-  | Q64, FR rd => OK (indexed_memory_access (Pfld_a rd) base ofs k)
-  | _, _       => Error (msg "Asmgen.loadind")
+  match q, preg_of dst, Archi.ptr64 with
+  | Q32, IR rd, _    => OK (indexed_memory_access (Plw_a rd) base ofs k)
+  | Q64, IR rd, true => OK (indexed_memory_access (Pld_a rd) base ofs k)
+  | Q32, FR rd, _    => OK (indexed_memory_access (Pfls_a rd) base ofs k)
+  | Q64, FR rd, _    => OK (indexed_memory_access (Pfld_a rd) base ofs k)
+  | _, _, _          => Error (msg "Asmgen.loadind")
   end.
 
 Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (q: quantity) (k: code) :=
@@ -783,6 +822,7 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
       do r <- ireg_of dst;
       transl_memory_access (Plw r)  addr args k
   | Mint64 =>
+      assertion Archi.ptr64;
       do r <- ireg_of dst;
       transl_memory_access (Pld r)  addr args k
   | Mfloat32 =>
