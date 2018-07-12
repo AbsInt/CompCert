@@ -331,9 +331,17 @@ let expand_builtin_inline name args res =
      if a1 <> res then
        emit (Pmov_rr (res,a1));
      emit (Pbswap16 res)
-  | ("__builtin_clz"|"__builtin_clzl"), [BA(IR a1)], BR(IR res) ->
+  | "__builtin_clz", [BA(IR a1)], BR(IR res) ->
      emit (Pbsrl (res,a1));
      emit (Pxorl_ri(res,coqint_of_camlint 31l))
+  | "__builtin_clzl", [BA(IR a1)], BR(IR res) ->
+     if not(Archi.ptr64) then begin
+       emit (Pbsrl (res,a1));
+       emit (Pxorl_ri(res,coqint_of_camlint 31l))
+     end else begin
+       emit (Pbsrq (res,a1));
+       emit (Pxorl_ri(res,coqint_of_camlint 63l))
+     end
   | "__builtin_clzll", [BA(IR a1)], BR(IR res) ->
      emit (Pbsrq (res,a1));
      emit (Pxorl_ri(res,coqint_of_camlint 63l))
@@ -349,8 +357,13 @@ let expand_builtin_inline name args res =
      emit (Pbsrl(res, al));
      emit (Pxorl_ri(res, coqint_of_camlint 63l));
      emit (Plabel lbl2)
-  | ("__builtin_ctz" | "__builtin_ctzl"), [BA(IR a1)], BR(IR res) ->
+  | "__builtin_ctz", [BA(IR a1)], BR(IR res) ->
      emit (Pbsfl (res,a1))
+  | "__builtin_ctzl", [BA(IR a1)], BR(IR res) ->
+     if not(Archi.ptr64) then
+       emit (Pbsfl (res,a1))
+     else
+       emit (Pbsfq (res,a1))
   | "__builtin_ctzll", [BA(IR a1)], BR(IR res) ->
      emit (Pbsfq (res,a1))
   | "__builtin_ctzll", [BA_splitlong(BA (IR ah), BA (IR al))], BR(IR res) ->
