@@ -879,6 +879,7 @@ module Target (System : SYSTEM):TARGET =
       | Pbf(bit, lbl) -> 2
       | Pbt(bit, lbl) -> 2
       | Pbtbl(r, tbl) -> 5
+      | Pldi (r1,c) -> 2
       | Plfi(r1, c) -> 2
       | Plfis(r1, c) -> 2
       | Plabel lbl -> 0
