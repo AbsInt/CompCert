@@ -2519,9 +2519,13 @@ let elab_fundef genv spec name defs body loc =
   (* Take into account attributes from previous declarations of the function *)
   let attr = attributes_of_type genv new_ty in
   (* Additional checks on function parameters *)
-  let incomplete_param env ty =
+  let add_param env (id, ty) =
     if wrap incomplete_type loc env ty then
-      fatal_error loc "parameter has incomplete type" in
+      fatal_error loc "parameter has incomplete type";
+    if id.C.name = "" then
+      error loc "parameter name omitted";
+    Env.add_ident env id Storage_default ty
+  in
   (* Enter parameters and extra declarations in the local environment.
      For K&R functions this hasn't been done yet.
      For prototyped functions this has been done by [elab_fundef_name]
@@ -2531,9 +2535,7 @@ let elab_fundef genv spec name defs body loc =
      parameter [f] and not to the function [f] within the body of the
      function. *)
   let lenv =
-    List.fold_left (fun e (id, ty) -> incomplete_param e ty;
-      Env.add_ident e id Storage_default ty)
-                   lenv params in
+    List.fold_left add_param lenv params in
   let lenv =
     List.fold_left (fun e (sto, id, ty, init) -> Env.add_ident e id sto ty)
                    lenv extra_decls in
