@@ -610,9 +610,11 @@ let convertField env f =
   (intern_string f.fld_name, convertTyp env f.fld_typ)
 
 let convertCompositedef env su id attr members =
+  if Cutil.find_custom_attributes ["packed";"__packed__"] attr <> [] then
+    unsupported "packed struct (consider adding option -fpacked-structs)";
   let t = match su with
   | C.Struct ->
-      let layout = Cutil.struct_layout env members in
+      let layout = Cutil.struct_layout env attr members in
       List.iter (fun (a,b) -> Debug.set_member_offset id a b) layout;
       TStruct (id,attr)
   | C.Union -> TUnion (id,attr) in

@@ -495,36 +495,54 @@ let elab_gcc_attr loc env = function
 
 let is_power_of_two n = n > 0L && Int64.logand n (Int64.pred n) = 0L
 
-let extract_alignas loc a =
+(* Check alignment parameter *)
+let check_alignment loc n =
+  if not (is_power_of_two n || n = 0L) then begin
+    error loc "requested alignment %Ld is not a power of 2" n; false
+  end else
+  if n <> Int64.of_int (Int64.to_int n) then begin
+    error loc "requested alignment %Ld is too large" n; false
+  end else
+    true
+
+(* Process GCC attributes that have special significance.  Currently we
+   have two: "aligned" and "packed". *)
+let enter_gcc_attr loc a =
   match a with
   | Attr(("aligned"|"__aligned__"), args) ->
       begin match args with
-      | [AInt n] when is_power_of_two n || n = 0L  -> AAlignas (Int64.to_int n)
-      | [AInt n] -> error loc "requested alignment is not a power of 2"; a
-      | [_] -> error loc "requested alignment is not an integer constant"; a
-      | [] -> a (* Use the default alignment as the gcc does *)
-      | _ -> error loc "'aligned' attribute takes no more than 1 argument"; a
+      | [AInt n] ->
+          if check_alignment loc n then [AAlignas (Int64.to_int n)] else []
+      | [_] -> error loc "requested alignment is not an integer constant"; []
+      | [] -> [] (* Use default alignment, like gcc does *)
+      | _ -> error loc "'aligned' attribute takes no more than 1 argument"; []
       end
-  | _ -> a
+  | Attr(("packed"|"__packed__"), args) ->
+      begin match args with
+      | [] -> [a]
+      | [AInt n] -> if check_alignment loc n then [a] else []
+      | [AInt n; AInt p] ->
+          if check_alignment loc n && check_alignment loc p then [a] else []
+      | [AInt n; AInt p; AInt q] ->
+          if check_alignment loc n && check_alignment loc p then [a] else []
+      | _ -> error loc "ill-formed 'packed' attribute"; []
+      end
+  | _ -> [a]
 
 let elab_attribute env = function
   | GCC_ATTR (l, loc) ->
       List.fold_left add_attributes []
-        (List.map (fun attr -> [attr])
-           (List.map (extract_alignas loc)
-              (List.flatten
-                 (List.map (elab_gcc_attr loc env) l))))
+         (List.map (enter_gcc_attr loc)
+            (List.flatten
+               (List.map (elab_gcc_attr loc env) l)))
   | PACKED_ATTR (args, loc) ->
-      [Attr("__packed__", List.map (elab_attr_arg loc env) args)]
+      enter_gcc_attr loc 
+        (Attr("__packed__", List.map (elab_attr_arg loc env) args))
   | ALIGNAS_ATTR ([a], loc) ->
       warning loc Celeven_extension "'_Alignas' is a C11 extension";
       begin match elab_attr_arg loc env a with
       | AInt n ->
-          if is_power_of_two n || n = 0L then
-            [AAlignas (Int64.to_int n)]
-          else begin
-            error loc "requested alignment is not a power of 2"; []
-          end
+         if check_alignment loc n then [AAlignas (Int64.to_int n)] else []
       | _ -> error loc "requested alignment is not an integer constant"; []
       | exception Wrong_attr_arg -> error loc "bad _Alignas value"; []
       end

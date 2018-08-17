@@ -267,6 +267,18 @@ let alignas_attribute al =
   | a :: al -> alignas_attr accu al
   in alignas_attr 0 al
 
+(* Extracting struct packing parameters from a set of attributes.
+   Assume the parameters were checked earlier, e.g. alignments are
+   either 0 or powers of two. *)
+
+let packing_parameters al =
+  match find_custom_attributes ["packed";"__packed__"] al with
+  | [[]] -> (1, 0, false)
+  | [[AInt n]] -> (Int64.to_int n, 0, false)
+  | [[AInt n; AInt p]] -> (Int64.to_int n, Int64.to_int p, false)
+  | [[AInt n; AInt p; AInt q]] -> (Int64.to_int n, Int64.to_int p, q = 1L)
+  | _ -> (0, 0, false)
+
 (* Type compatibility *)
 
 exception Incompat
@@ -461,7 +473,10 @@ let rec alignof env t =
     let ci = Env.find_union env name in ci.ci_alignof
   | TEnum(_, _) -> Some(alignof_ikind enum_ikind)
 
-(* Compute the natural alignment of a struct or union. *)
+(* Compute the natural alignment of a struct or union.
+   Not done here but in composite_info_decl: taking into account
+   the packing parameters (max-field-alignment, min-struct-alignment)
+   and the alignas attributes. *)
 
 let alignof_struct_union env members =
   let rec align_rec al = function
@@ -530,7 +545,7 @@ let rec sizeof env t =
 
 (* Compute the size of a union.
    It is the size is the max of the sizes of fields.
-   Not done here but in composite_info_decl: rounding size to alignment. *)
+   Not done here but in composite_info_def: rounding size to alignment. *)
 
 let sizeof_union env members =
   let rec sizeof_rec sz = function
@@ -543,69 +558,66 @@ let sizeof_union env members =
       end
   in sizeof_rec 0 members
 
-(* Compute the size of a struct.
+(* Compute the size of a struct and the byte offset of the members.
    We lay out fields consecutively, inserting padding to preserve
    their alignment.
-   Not done here but in composite_info_decl: rounding size to alignment. *)
-let sizeof_struct env members =
-  let rec sizeof_rec ofs = function
+   The [ma] parameter is the maximal alignment for each member.
+   It is used for packed structs.  If [ma = 0], it is ignored.
+   Bitfields are taken into account for the size and offset computations
+   but not given an offset.
+   Not done here but in composite_info_def: rounding size to alignment. *)
+let sizeof_layout_struct env members ma =
+  let align_offset ofs a =
+    align ofs (if ma > 0 && a > ma then ma else a) in
+  let rec sizeof_rec ofs accu = function
   | [] ->
-      Some ofs
+      Some (ofs, accu)
   | [ { fld_typ = TArray(_, None, _) } as m ] ->
       (* C99: ty[] allowed as last field *)
       begin match alignof env m.fld_typ with
-      | Some a -> Some (align ofs a)
+      | Some a ->
+          let ofs = align_offset ofs a in
+          Some (ofs, (m.fld_name, ofs) :: accu)
       | None -> None
       end
   | m :: rem as ml ->
       if m.fld_bitfield = None then begin
         match alignof env m.fld_typ, sizeof env m.fld_typ with
-        | Some a, Some s -> sizeof_rec (align ofs a + s) rem
+        | Some a, Some s ->
+            let ofs = align_offset ofs a in
+            sizeof_rec (ofs + s) ((m.fld_name, ofs) :: accu) rem
         | _, _ -> None
       end else begin
         let (s, a, ml') = pack_bitfields ml in
-        sizeof_rec (align ofs a + s) ml'
+        sizeof_rec (align_offset ofs a + s) accu ml'
       end
-  in sizeof_rec 0 members
+  in sizeof_rec 0 [] members
+
+let sizeof_struct env members ma =
+  match sizeof_layout_struct env members ma with
+  | None -> None
+  | Some(sz, offsets) -> Some sz
+
+(* Compute the offsets of all non-bitfield members of a struct. *)
+let struct_layout env attrs members =
+  let (ma, _, _) = packing_parameters attrs in
+  match sizeof_layout_struct env members ma with
+  | Some(sz, offsets) -> offsets
+  | None -> []
 
 (* Compute the offset of a struct member *)
 let offsetof env ty field =
-  let rec sub acc name = function
-    | [] -> List.rev acc
-    | m::rem -> if m.fld_name = name then
-        List.rev acc
-      else
-        sub (m::acc) name rem in
   match unroll env ty with
-    | TStruct (id,_) ->
+  | TStruct (id, _) ->
       let str = Env.find_struct env id in
-      let pre = sub [] field.fld_name str.ci_members in
-      begin match sizeof_struct env pre, alignof env field.fld_typ with
-      | Some s, Some a ->
-        align s a
-      | _ -> assert false end
-    | TUnion _ -> 0
-    | _ -> assert false
-
-(* Simplified version to compute offsets on structs without bitfields *)
-let struct_layout env members =
-  let rec struct_layout_rec mem ofs = function
-    | [] ->
-        mem
-    | [ { fld_typ = TArray(_, None, _) } as m ] ->
-      (* C99: ty[] allowed as last field *)
-      begin match alignof env m.fld_typ with
-      | Some a -> ( m.fld_name,align ofs a)::mem
-      | None -> []
+      let offsets = struct_layout env str.ci_attr str.ci_members in
+      begin try
+        List.assoc field.fld_name offsets
+      with Not_found ->
+        raise (Env.Error(No_member(id.C.name, "struct", field.fld_name)))
       end
-    | m :: rem ->
-        match alignof env m.fld_typ, sizeof env m.fld_typ with
-        | Some a, Some s ->
-            let offset = align ofs a in
-            struct_layout_rec ((m.fld_name,offset)::mem) (offset + s) rem
-        | _, _ -> []
-  in struct_layout_rec [] 0 members
-
+  | TUnion _ -> 0
+  | _ -> assert false
 
 (* Determine whether a type is incomplete *)
 
@@ -625,12 +637,35 @@ let composite_info_decl su attr =
     ci_attr = attr }
 
 let composite_info_def env su attr m =
+  let (max_field_align, min_struct_align, swapped) = packing_parameters attr in
+  let attr_align = alignas_attribute attr in
+  let natural_align = alignof_struct_union env m in
   let al =
-    let a = alignas_attribute attr in
-    if a > 0 then Some a else alignof_struct_union env m
-  and sz =
+    (* alignas takes precedence over packing *)
+    if attr_align > 0 then Some attr_align
+    (* ignore packing on unions for compatibility with earlier versions *)
+    else if su = Union then natural_align
+    else begin
+      match natural_align with
+      | None -> None
+      | Some a ->
+          (* If max_field_align is given, reduce natural alignment a
+             to be at most max_field_align *)
+          let a =
+            if max_field_align > 0 && a > max_field_align
+            then max_field_align
+            else a in
+          (* If min_struct_align is given, increase alignment a
+             to be at least min_struct_align *)
+          let a =
+            if min_struct_align > 0 && a < min_struct_align
+            then min_struct_align
+            else a in
+          Some a
+      end in
+  let sz =
     match su with
-    | Struct -> sizeof_struct env m
+    | Struct -> sizeof_struct env m max_field_align
     | Union -> sizeof_union env m
   in
   { ci_kind = su; ci_members = m;

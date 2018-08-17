@@ -36,6 +36,11 @@ val incl_attributes : attributes -> attributes -> bool
 val alignas_attribute : attributes -> int
   (* Extract the value of the [_Alignas] attributes, if any.
      Return 0 if none, a (positive) power of two alignment if some. *)
+val packing_parameters : attributes -> int * int * bool
+  (* Extract the value of the [__packed__] attributes, if any.
+     Return a triple
+     (maximum field alignment, minimum struct alignment, byte swapping).
+     Alignments of 0 mean default alignment. *)
 val find_custom_attributes : string list -> attributes -> attr_arg list list
   (* Extract arguments of custom [Attr] attributes whose names appear
      in the given list of names. *)
@@ -127,7 +132,7 @@ val composite_info_decl:
 val composite_info_def:
   Env.t -> struct_or_union -> attributes -> field list -> Env.composite_info
 val struct_layout:
-  Env.t -> field list -> (string * int) list
+  Env.t -> attributes -> field list -> (string * int) list
 val offsetof:
   Env.t -> typ -> field -> int
 (* Compute the offset of a struct member *)
