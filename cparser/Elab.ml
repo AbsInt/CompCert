@@ -523,7 +523,7 @@ let enter_gcc_attr loc a =
       | [AInt n] -> if check_alignment loc n then [a] else []
       | [AInt n; AInt p] ->
           if check_alignment loc n && check_alignment loc p then [a] else []
-      | [AInt n; AInt p; AInt q] ->
+      | [AInt n; AInt p; AInt q] when q = 0L || q = 1L ->
           if check_alignment loc n && check_alignment loc p then [a] else []
       | _ -> error loc "ill-formed 'packed' attribute"; []
       end
