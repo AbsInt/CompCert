@@ -2879,6 +2879,11 @@ let rec elab_stmt env ctx s =
       let a = elab_cvspecs env cv_specs in
       let s = elab_simple_string loc wide chars in
       let outputs,env = mmap (elab_asm_operand ctx loc) env outputs in
+      List.iter
+        (fun (lbl, cst, e) ->
+           if not (is_modifiable_lvalue env e) then
+             error loc "asm output is not a modifiable l-value";)
+        outputs;
       let inputs ,env= mmap (elab_asm_operand ctx loc) env inputs in
       let flags = List.map (fun (w,c) -> elab_simple_string loc w c) flags in
       { sdesc = Sasm(a, s, outputs, inputs, flags);

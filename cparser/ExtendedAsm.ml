@@ -126,8 +126,6 @@ let transf_outputs loc env = function
   | [] ->
       (None, [], StringMap.empty, 0, 0)
   | [(lbl, cstr, e)] ->
-      if not (is_modifiable_lvalue env e) then
-        error loc "asm output is not a modifiable l-value";
       let valid = Str.string_match re_valid_output cstr 0 in
       if valid && String.contains cstr 'r' then
         if is_reg_pair env e.etyp then
