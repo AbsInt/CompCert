@@ -560,7 +560,7 @@ gcc_attribute:
 | w = gcc_attribute_word LPAREN RPAREN
     { GCC_ATTR_ARGS w [] }
 | w = gcc_attribute_word LPAREN args = argument_expression_list RPAREN
-    { GCC_ATTR_ARGS w args }
+    { GCC_ATTR_ARGS w (rev' args) }
 
 gcc_attribute_word:
 | i = OTHER_NAME
