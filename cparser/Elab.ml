@@ -1839,7 +1839,10 @@ let elab_expr ctx loc env a =
       | _ -> fatal_error "request for member '%s' in something not a structure or union" mem in
     let rec offset_of_list acc env ty = function
       | [] -> acc,ty
-      | fld::rest -> let off = offsetof env ty fld in
+      | fld::rest -> 
+        if fld.fld_bitfield <> None then
+          error "cannot compute offset of bit-field '%s'" fld.fld_name;
+        let off = offsetof env ty fld in
         offset_of_list (acc+off) env fld.fld_typ rest in
     let offset_of_member (env,off_accu,ty) mem =
       match mem,unroll env ty with
