@@ -511,8 +511,7 @@ let enter_gcc_attr loc a =
   match a with
   | Attr(("aligned"|"__aligned__"), args) ->
       begin match args with
-      | [AInt n] ->
-          if check_alignment loc n then [AAlignas (Int64.to_int n)] else []
+      | [AInt n] -> if check_alignment loc n then [a] else []
       | [_] -> error loc "requested alignment is not an integer constant"; []
       | [] -> [] (* Use default alignment, like gcc does *)
       | _ -> error loc "'aligned' attribute takes no more than 1 argument"; []

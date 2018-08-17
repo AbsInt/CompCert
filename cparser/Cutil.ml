@@ -264,6 +264,8 @@ let alignas_attribute al =
   let rec alignas_attr accu = function
   | [] -> accu
   | AAlignas n :: al -> alignas_attr (max n accu) al
+  | Attr(("aligned" | "__aligned__"), [AInt n]) :: al ->
+                        alignas_attr (max (Int64.to_int n) accu) al
   | a :: al -> alignas_attr accu al
   in alignas_attr 0 al
 
