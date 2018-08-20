@@ -43,6 +43,7 @@ type t = {
   wchar_signed: bool;
   sizeof_size_t: int;
   sizeof_ptrdiff_t: int;
+  sizeof_intreg: int;
   alignof_ptr: int;
   alignof_short: int;
   alignof_int: int;
@@ -78,6 +79,9 @@ val win64 : t
 val ppc_32_bigendian : t
 val ppc_32_diab_bigendian : t
 val ppc_32_linux_bigendian : t
+val ppc_32_r64_bigendian : t
+val ppc_32_r64_diab_bigendian : t
+val ppc_32_r64_linux_bigendian : t
 val arm_littleendian : t
 val arm_bigendian : t
 val rv32 : t

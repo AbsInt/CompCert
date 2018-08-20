@@ -44,6 +44,7 @@ type t = {
   wchar_signed: bool;
   sizeof_size_t: int;
   sizeof_ptrdiff_t: int;
+  sizeof_intreg: int;
   alignof_ptr: int;
   alignof_short: int;
   alignof_int: int;
@@ -78,6 +79,7 @@ let ilp32ll64 = {
   wchar_signed = true;
   sizeof_size_t = 4;
   sizeof_ptrdiff_t = 4;
+  sizeof_intreg = 4;
   alignof_ptr = 4;
   alignof_short = 2;
   alignof_int = 4;
@@ -112,6 +114,7 @@ let i32lpll64 = {
   wchar_signed = true;
   sizeof_size_t = 8;
   sizeof_ptrdiff_t = 8;
+  sizeof_intreg = 8;
   alignof_ptr = 8;
   alignof_short = 2;
   alignof_int = 4;
@@ -146,6 +149,7 @@ let il32pll64 = {
   wchar_signed = true;
   sizeof_size_t = 8;
   sizeof_ptrdiff_t = 8;
+  sizeof_intreg = 8;
   alignof_ptr = 8;
   alignof_short = 2;
   alignof_int = 4;
@@ -202,10 +206,19 @@ let ppc_32_bigendian =
                    struct_passing_style = SP_ref_caller;
                    struct_return_style =  SR_int1to8; }
 
+let ppc_32_r64_bigendian =
+  { ppc_32_bigendian with sizeof_intreg = 8;}
+
 let ppc_32_diab_bigendian =
   { ppc_32_bigendian with sizeof_wchar = 2; wchar_signed = false }
 
+let ppc_32_r64_diab_bigendian =
+  { ppc_32_diab_bigendian with sizeof_intreg = 8;}
+
 let ppc_32_linux_bigendian = {ppc_32_bigendian with struct_return_style = SR_ref;}
+
+let ppc_32_r64_linux_bigendian =
+  { ppc_32_linux_bigendian with sizeof_intreg = 8;}
 
 let arm_littleendian =
   { ilp32ll64 with name = "arm"; struct_passing_style = SP_split_args;
@@ -254,6 +267,7 @@ let undef = {
   wchar_signed = true;
   sizeof_size_t = 0;
   sizeof_ptrdiff_t = 0;
+  sizeof_intreg = 0;
   alignof_ptr = 0;
   alignof_short = 0;
   alignof_int = 0;

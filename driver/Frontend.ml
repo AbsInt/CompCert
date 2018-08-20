@@ -73,10 +73,12 @@ let parse_c_file sourcename ifile =
 let init () =
   Machine.config:=
     begin match Configuration.arch with
-    | "powerpc" -> if Configuration.gnu_toolchain
-                   then if Configuration.abi = "linux"
-                   then Machine.ppc_32_linux_bigendian
-                   else Machine.ppc_32_bigendian
+    | "powerpc" -> if Configuration.model = "e5500" || Configuration.model = "ppc64"
+                   then if Configuration.abi = "linux" then Machine.ppc_32_r64_linux_bigendian
+                   else if Configuration.gnu_toolchain then Machine.ppc_32_r64_bigendian
+                   else Machine.ppc_32_r64_diab_bigendian
+                   else if Configuration.abi = "linux" then Machine.ppc_32_linux_bigendian
+                   else if Configuration.gnu_toolchain then Machine.ppc_32_bigendian
                    else Machine.ppc_32_diab_bigendian
     | "arm"     -> if Configuration.is_big_endian
                    then Machine.arm_bigendian

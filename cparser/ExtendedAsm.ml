@@ -73,7 +73,7 @@ let set_label_const lbl pos n subst =
 
 let is_reg_pair env ty =
   match unroll env ty with
-  | TInt(ik, _) -> sizeof_ikind ik > !config.sizeof_ptr
+  | TInt(ik, _) -> sizeof_ikind ik > !config.sizeof_intreg
   | _ -> false
 
 (* Transform the input operands:
