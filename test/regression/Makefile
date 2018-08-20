@@ -1,7 +1,9 @@
 include ../../Makefile.config
 
 CCOMP=../../ccomp
-CCOMPFLAGS=$(CCOMPOPTS) -stdlib ../../runtime -dparse -dc -dclight -dasm -fall
+CCOMPFLAGS=$(CCOMPOPTS) -stdlib ../../runtime \
+ -dparse -dc -dclight -dasm -fall \
+ -DCOMPCERT_ARCH=$(ARCH) -DCOMPCERT_MODEL=$(MODEL)
 INTERPFLAGS=-stdlib ../../runtime -interp -quiet -fall
 LIBS=$(LIBMATH)
 
