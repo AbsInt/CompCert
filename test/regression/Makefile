@@ -3,7 +3,7 @@ include ../../Makefile.config
 CCOMP=../../ccomp
 CCOMPFLAGS=$(CCOMPOPTS) -stdlib ../../runtime \
  -dparse -dc -dclight -dasm -fall \
- -DCOMPCERT_ARCH=$(ARCH) -DCOMPCERT_MODEL=$(MODEL)
+ -DARCH_$(ARCH) -DMODEL_$(MODEL)
 INTERPFLAGS=-stdlib ../../runtime -interp -quiet -fall
 LIBS=$(LIBMATH)
 
