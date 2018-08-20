@@ -824,6 +824,15 @@ let float_rank = function
   | FDouble -> 2
   | FLongDouble -> 3
 
+(* Test for qualified array types *)
+
+let rec is_qualified_array = function
+  | TArray (ty, _, attr) ->
+    List.exists attr_is_standard attr || is_qualified_array ty
+  | TPtr (ty, _) -> is_qualified_array ty
+  | TFun(ty_ret, _, _, _) -> is_qualified_array ty_ret
+  | _ -> false
+
 (* Array and function types "decay" to pointer types in many cases *)
 
 let pointer_decay env t =
@@ -901,7 +910,7 @@ let argument_conversion env t =
   (* Arrays and functions degrade automatically to pointers *)
   (* Other types are not changed *)
   match unroll env t with
-  | TArray(ty, _, _) -> TPtr(ty, [])
+  | TArray(ty, _, attr) -> TPtr(ty, attr)
   | TFun _ as ty -> TPtr(ty, [])
   | _ -> t (* preserve typedefs *)
 

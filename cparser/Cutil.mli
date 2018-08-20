@@ -175,6 +175,8 @@ val integer_rank : ikind -> int
   (* Order integer kinds from smaller to bigger *)
 val float_rank : fkind -> int
   (* Order float kinds from smaller to bigger *)
+val is_qualified_array : typ -> bool
+  (* Does the type contain a qualified array type (e.g. int[const 5])? *)
 
 (* Usual conversions over types *)
 

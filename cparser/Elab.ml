@@ -835,6 +835,8 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
     error loc "redefinition of parameter '%s'" id;
   (* replace array and function types by pointer types *)
   let ty1 = argument_conversion env1 ty in
+  if is_qualified_array ty1 then
+    error loc "type qualifier used in non-outermost array type derivation";
   let (id', env2) = Env.enter_ident env1 id sto ty1 in
   ( (id', ty1) , env2)
 
@@ -953,6 +955,8 @@ and elab_field_group env (Field_group (spec, fieldlist, loc)) =
                 error loc "bit-field '%a' width not an integer constant" pp_field id;
                 None,env
           end in
+    if is_qualified_array ty then
+      error loc "type qualifier used in array declarator outside of function prototype";
     let anon_composite = is_anonymous_composite ty in
     if id = "" && not anon_composite && optbitsize = None  then
       warning loc Missing_declarations "declaration does not declare anything";
@@ -2334,6 +2338,8 @@ let enter_decdefs local nonstatic_inline loc env sto dl =
                     (name_of_storage_class sto)
       | _ -> ()
     end;
+    if is_qualified_array ty then
+      error loc "type qualifier used in array declarator outside of function prototype";
     (* Local variable declarations with default storage are treated as 'auto'.
        Local function declarations with default storage remain with
        default storage. *)
