@@ -96,6 +96,7 @@ type warning_type =
   | Extern_after_definition
   | Static_in_inline
   | Flexible_array_extensions
+  | Tentative_incomplete_static
 
 (* List of active warnings *)
 let active_warnings: warning_type list ref = ref [
@@ -155,6 +156,7 @@ let string_of_warning = function
   | Extern_after_definition -> "extern-after-definition"
   | Static_in_inline -> "static-in-inline"
   | Flexible_array_extensions -> "flexible-array-extensions"
+  | Tentative_incomplete_static -> "tentative-incomplete-static"
 
 (* Activate the given warning *)
 let activate_warning w () =
@@ -206,6 +208,7 @@ let wall () =
     Extern_after_definition;
     Static_in_inline;
     Flexible_array_extensions;
+    Tentative_incomplete_static;
   ]
 
 let wnothing () =
@@ -241,6 +244,7 @@ let werror () =
     Extern_after_definition;
     Static_in_inline;
     Flexible_array_extensions;
+    Tentative_incomplete_static;
   ]
 
 (* Generate the warning key for the message *)
@@ -423,6 +427,7 @@ let warning_options =
   error_option Extern_after_definition @
   error_option Static_in_inline @
   error_option Flexible_array_extensions @
+  error_option Tentative_incomplete_static @
   [Exact ("-Wfatal-errors"), Set error_fatal;
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;

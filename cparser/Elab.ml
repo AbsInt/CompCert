@@ -2354,10 +2354,11 @@ let enter_decdefs local nonstatic_inline loc env sto dl =
     (* update environment with refined type *)
     let env2 = Env.add_ident env1 id sto' ty' in
     (* check for incomplete type *)
-    if local && sto' <> Storage_extern
-             && not isfun
-             && wrap incomplete_type loc env ty' then
-      error loc "variable has incomplete type %a" (print_typ env) ty';
+    if not isfun && wrap incomplete_type loc env ty' then
+      if not local && sto' = Storage_static then begin
+        warning loc Tentative_incomplete_static "tentative static definition with incomplete type";
+      end else if local && sto' <> Storage_extern then
+        error loc "variable has incomplete type %a" (print_typ env) ty';
     (* check for static variables in nonstatic inline functions *)
     if local && nonstatic_inline
              && sto' = Storage_static
