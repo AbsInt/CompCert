@@ -2539,12 +2539,14 @@ let elab_fundef genv spec name defs body loc =
   let lenv = Env.add_ident lenv fun_id sto new_ty in
   (* Take into account attributes from previous declarations of the function *)
   let attr = attributes_of_type genv new_ty in
-  (* Additional checks on function parameters *)
+  (* Additional checks on function parameters. They should have a complete type
+     and additionally they should have an identifier. In both cases a fatal
+     error is raised in order to avoid problems at later places. *)
   let add_param env (id, ty) =
     if wrap incomplete_type loc env ty then
       fatal_error loc "parameter has incomplete type";
     if id.C.name = "" then
-      error loc "parameter name omitted";
+      fatal_error loc "parameter name omitted";
     Env.add_ident env id Storage_default ty
   in
   (* Enter parameters and extra declarations in the local environment.
