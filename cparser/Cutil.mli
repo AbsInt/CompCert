@@ -250,6 +250,8 @@ val is_volatile_variable: Env.t -> exp -> bool
   (* Test whether the expression is an access to a volatile variable *)
 val is_bitfield: Env.t -> exp -> bool
   (* Test whether the expression is a bit-field *)
+val contains_flex_array_mem : Env.t  -> typ -> bool
+  (* Is this a struct with a flexible array member *)
 
 (* Constructors *)
 

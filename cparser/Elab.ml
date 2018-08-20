@@ -752,6 +752,8 @@ and elab_type_declarator ?(fundef = false) loc env ty = function
       let a = add_attributes a (elab_cvspecs env cv_specs) in
       if wrap incomplete_type loc env ty then
         error loc "array type has incomplete element type %a" (print_typ env) ty;
+      if wrap contains_flex_array_mem loc env ty then
+        warning loc Flexible_array_extensions "%a may not be used as an array element due to flexible array member" (print_typ env) ty;
       let sz' =
         match sz with
         | None ->
@@ -992,16 +994,20 @@ and elab_struct_or_union_info kind loc env members attrs =
          duplicate acc rest in
   duplicate [] m;
   (* Check for incomplete types *)
-  let rec check_incomplete = function
+  let rec check_incomplete only = function
   | [] -> ()
-  | [ { fld_typ = TArray(ty_elt, None, _) } ] when kind = Struct -> ()
-        (* C99: ty[] allowed as last field of a struct *)
+  | [ { fld_typ = TArray(ty_elt, None, _) ; fld_name = name } ] when kind = Struct ->
+    (* C99: ty[] allowed as last field of a struct, provided this is not the only field *)
+    if only then
+      error loc "flexible array member '%a' not allowed in otherwise empty struct" pp_field name;
   | fld :: rem ->
       if wrap incomplete_type loc env' fld.fld_typ then
         (* Must be fatal otherwise we get problems constructing the init *)
         fatal_error loc "member '%a' has incomplete type" pp_field fld.fld_name;
-      check_incomplete rem in
-  check_incomplete m;
+      if wrap contains_flex_array_mem loc env' fld.fld_typ && kind = Struct then
+        warning loc Flexible_array_extensions "%a may not be used as a struct member due to flexible array member" (print_typ env) fld.fld_typ;
+      check_incomplete false rem in
+  check_incomplete true m;
   (* Warn for empty structs or unions *)
   if m = [] then
     if kind = Struct then begin

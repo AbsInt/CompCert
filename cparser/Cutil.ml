@@ -1048,6 +1048,17 @@ let is_bitfield env e =
     fld.fld_bitfield <> None
   | _ -> false
 
+let contains_flex_array_mem env ty =
+  match unroll env ty with
+  | TStruct (id,_) ->
+    let ci = Env.find_struct env id in
+    let rec check_mem = function
+      | [] -> false
+      | [ { fld_typ = TArray(ty_elt, None, _) } ] -> true
+      | _::rem -> check_mem rem in
+    check_mem ci.ci_members
+  | _ -> false
+
 (* Assignment compatibility check over attributes.
    Standard attributes ("const", "volatile", "restrict") can safely
    be added (to the rhs type to get the lhs type) but must not be dropped.

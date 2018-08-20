@@ -95,6 +95,7 @@ type warning_type =
   | Ignored_attributes
   | Extern_after_definition
   | Static_in_inline
+  | Flexible_array_extensions
 
 (* List of active warnings *)
 let active_warnings: warning_type list ref = ref [
@@ -153,6 +154,7 @@ let string_of_warning = function
   | Ignored_attributes -> "ignored-attributes"
   | Extern_after_definition -> "extern-after-definition"
   | Static_in_inline -> "static-in-inline"
+  | Flexible_array_extensions -> "flexible-array-extensions"
 
 (* Activate the given warning *)
 let activate_warning w () =
@@ -203,6 +205,7 @@ let wall () =
     Ignored_attributes;
     Extern_after_definition;
     Static_in_inline;
+    Flexible_array_extensions;
   ]
 
 let wnothing () =
@@ -237,6 +240,7 @@ let werror () =
     Ignored_attributes;
     Extern_after_definition;
     Static_in_inline;
+    Flexible_array_extensions;
   ]
 
 (* Generate the warning key for the message *)
@@ -418,6 +422,7 @@ let warning_options =
   error_option Ignored_attributes @
   error_option Extern_after_definition @
   error_option Static_in_inline @
+  error_option Flexible_array_extensions @
   [Exact ("-Wfatal-errors"), Set error_fatal;
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;

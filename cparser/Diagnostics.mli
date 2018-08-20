@@ -52,6 +52,7 @@ type warning_type =
   | Ignored_attributes             (** attributes declarations after definition *)
   | Extern_after_definition        (** extern declaration after non-extern definition *)
   | Static_in_inline               (** static variable in non-static inline function *)
+  | Flexible_array_extensions      (** usange of structs with flexible arrays in structs and arrays *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 (** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to
