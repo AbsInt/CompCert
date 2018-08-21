@@ -86,4 +86,4 @@ let linker_actions =
       push_linker_arg s);
     Prefix "-Wl,", Self push_linker_arg;
     Prefix "-WUl,", Self (fun s -> List.iter push_linker_arg (explode_comma_option s));
-    Exact "-u", Self push_linker_arg;]
+    Exact "-u", String (fun s -> push_linker_arg "-u"; push_linker_arg s);]
