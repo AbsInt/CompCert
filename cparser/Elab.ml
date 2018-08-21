@@ -951,6 +951,9 @@ and elab_field_group env (Field_group (spec, fieldlist, loc)) =
             error loc
               "the type of bit-field '%a' must be an integer type no bigger than 'int'" pp_field id;
             None,env
+          end else if has_std_alignas (attributes_of_type env' ty) then begin
+            error loc "alignment specified for bit-field '%a'" pp_field id;
+            None, env
           end else begin
             let expr,env' =(!elab_expr_f loc env sz) in
             match Ceval.integer_expr env' expr with
@@ -2319,6 +2322,8 @@ let enter_typedefs loc env sto dl =
   List.fold_left (fun env (s, ty, init) ->
     if init <> NO_INIT then
       error loc "initializer in typedef";
+    if has_std_alignas (attributes_of_type env ty) then
+      error loc "alignment specified for typedef '%s'" s;
     match previous_def Env.lookup_typedef env s with
     | Some (s',ty') when Env.in_current_scope env s' ->
         if equal_types env ty ty' then begin
@@ -2345,6 +2350,8 @@ let enter_decdefs local nonstatic_inline loc env sto dl =
     warning loc Missing_declarations "declaration does not declare anything";
   let enter_decdef (decls, env) (s, ty, init) =
     let isfun = is_function_type env ty in
+    if sto = Storage_register && has_std_alignas (attributes_of_type env ty) then
+      error loc "alignment specified for 'register' object '%s'" s;
     if sto = Storage_extern && init <> NO_INIT then
       error loc "'extern' declaration variable has an initializer";
     if local && isfun then begin
@@ -2557,6 +2564,8 @@ let elab_fundef genv spec name defs body loc =
   let (ty_ret, params, vararg, attr) =
     match ty with
     | TFun(ty_ret, Some params, vararg, attr) ->
+         if has_std_alignas (attr @ (attributes_of_type genv ty_ret)) then
+           error loc "alignment specified for function '%s'" s;
          if wrap incomplete_type loc genv ty_ret && not (is_void_type genv ty_ret) then
            fatal_error loc "incomplete result type %a in function definition"
              (print_typ genv) ty_ret;
@@ -2578,6 +2587,8 @@ let elab_fundef genv spec name defs body loc =
       fatal_error loc "parameter has incomplete type";
     if id.C.name = "" then
       fatal_error loc "parameter name omitted";
+    if has_std_alignas (attributes_of_type env ty) then
+      error loc "alignment specified for parameter '%s'" id.C.name;
     Env.add_ident env id Storage_default ty
   in
   (* Enter parameters and extra declarations in the local environment.
