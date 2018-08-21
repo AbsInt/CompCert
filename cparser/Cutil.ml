@@ -257,6 +257,10 @@ let strip_last_attribute typ  =
   | TEnum (n,at) -> let l,r = hd_opt at in
     l,TEnum(n,r)
 
+(* Check whether the attributes contain _Alignas attribute *)
+let has_std_alignas attr =
+  List.exists (function | AAlignas _ -> true | _ -> false) attr
+
 (* Extracting alignment value from a set of attributes.  Return 0 if none. *)
 
 let alignas_attribute al =
