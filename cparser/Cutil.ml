@@ -124,9 +124,8 @@ let attr_is_standard = function
 (* Is an attribute applicable to a whole array (true) or only to
    array elements (false)? *)
 
-let attr_array_applicable = function
-  | AConst | AVolatile | ARestrict | AAlignas _ -> false
-  | Attr _ -> true
+let attr_array_applicable a =
+  class_of_attribute a <> Attr_type
 
 (* Is an attribute of a composite type applicable to members of this type
   when they are accessed? *)
