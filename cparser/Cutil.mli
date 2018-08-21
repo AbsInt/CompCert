@@ -158,8 +158,12 @@ val is_composite_type : Env.t -> typ -> bool
   (* Is type a struct or union? *)
 val is_function_type : Env.t -> typ -> bool
   (* Is type a function type? (not pointer to function) *)
+val is_function_pointer_type : Env.t -> typ -> bool
+  (* Is type a pointer to function type? *)
 val is_anonymous_composite : typ -> bool
- (* Is type an anonymous composite? *)
+  (* Is type an anonymous composite? *)
+val is_qualified_array : typ -> bool
+  (* Does the type contain a qualified array type (e.g. int[const 5])? *)
 val pointer_arithmetic_ok : Env.t -> typ -> bool
   (* Is the type [*ty] appropriate for pointer arithmetic?
      [ty] must not be void, nor a function type, nor an incomplete type. *)
@@ -175,8 +179,6 @@ val integer_rank : ikind -> int
   (* Order integer kinds from smaller to bigger *)
 val float_rank : fkind -> int
   (* Order float kinds from smaller to bigger *)
-val is_qualified_array : typ -> bool
-  (* Does the type contain a qualified array type (e.g. int[const 5])? *)
 
 (* Usual conversions over types *)
 

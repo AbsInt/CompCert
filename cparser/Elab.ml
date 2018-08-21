@@ -599,12 +599,14 @@ let rec elab_specifier ?(only = false) loc env specifier =
   let sto = ref Storage_default
   and inline = ref false
   and noreturn = ref false
+  and restrict = ref false
   and attr = ref []
   and tyspecs = ref []
   and typedef = ref false in
 
   let do_specifier = function
   | SpecCV cv ->
+      restrict := cv = CV_RESTRICT;
       attr := add_attributes (elab_cvspec env cv) !attr
   | SpecStorage st ->
       if !sto <> Storage_default && st <> TYPEDEF then
@@ -623,9 +625,18 @@ let rec elab_specifier ?(only = false) loc env specifier =
   | SpecFunction NORETURN -> noreturn := true
   | SpecType tys -> tyspecs := tys :: !tyspecs in
 
+  let restrict_check ty =
+    if !restrict then
+      if not (is_pointer_type env ty) then
+        error loc "restrict requires a pointer type (%a is invalid)" (print_typ env) ty
+      else if is_function_pointer_type env ty then
+        error loc "pointer to function type %a may not be 'restrict' qualified" (print_typ env) ty in
+
   List.iter do_specifier specifier;
 
-  let simple ty = (!sto, !inline, !noreturn ,!typedef, add_attributes_type !attr ty, env) in
+  let simple ty =
+    restrict_check ty;
+    (!sto, !inline, !noreturn ,!typedef, add_attributes_type !attr ty, env) in
 
   (* As done in CIL, partition !attr into struct-related attributes,
      which are returned, and other attributes, which are left in !attr.
@@ -697,21 +708,27 @@ let rec elab_specifier ?(only = false) loc env specifier =
           add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union only Struct loc id optmembers a' env in
-        (!sto, !inline, !noreturn, !typedef, TStruct(id', !attr), env')
+        let ty =  TStruct(id', !attr) in
+        restrict_check ty;
+        (!sto, !inline, !noreturn, !typedef, ty, env')
 
     | [Cabs.Tstruct_union(UNION, id, optmembers, a)] ->
         let a' =
           add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union only Union loc id optmembers a' env in
-        (!sto, !inline, !noreturn, !typedef, TUnion(id', !attr), env')
+        let ty =  TUnion(id', !attr) in
+        restrict_check ty;
+        (!sto, !inline, !noreturn, !typedef, ty, env')
 
     | [Cabs.Tenum(id, optmembers, a)] ->
         let a' =
           add_attributes (get_struct_attrs()) (elab_attributes env a) in
         let (id', env') =
           elab_enum only loc id optmembers a' env in
-        (!sto, !inline, !noreturn, !typedef, TEnum(id', !attr), env')
+        let ty = TEnum (id', !attr) in
+        restrict_check ty;
+        (!sto, !inline, !noreturn, !typedef, ty, env')
 
     (* Specifier doesn't make sense *)
     | _ ->
@@ -774,6 +791,8 @@ and elab_type_declarator ?(fundef = false) loc env ty = function
   | Cabs.PTR(cv_specs, d) ->
       let (ty, a) = get_nontype_attrs env ty in
       let a = add_attributes a (elab_cvspecs env cv_specs) in
+      if is_function_type env ty && incl_attributes [ARestrict] a then
+        error loc "pointer to function type %a may not be 'restrict' qualified" (print_typ env) ty;
       elab_type_declarator ~fundef loc env (TPtr(ty, a)) d
   | Cabs.PROTO(d, (params, vararg)) ->
       elab_return_type loc env ty;
