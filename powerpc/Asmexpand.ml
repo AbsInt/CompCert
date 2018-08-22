@@ -582,7 +582,7 @@ let expand_builtin_inline name args res =
       if not (mo = _0 || mo = _1) then
         raise (Error "the argument of __builtin_mbar must be 0 or 1");
       emit (Pmbar mo)
-  | "__builin_mbar", _, _ ->
+  | "__builtin_mbar", _, _ ->
       raise (Error "the argument of __builtin_mbar must be a constant");
   | "__builtin_trap", [], _ ->
       emit (Ptrap)
