@@ -12,6 +12,7 @@
 
 (** Compile-time evaluation of initializers for global C variables. *)
 
+Require Import Coq.Strings.String.
 Require Import Coqlib Maps Errors.
 Require Import Integers Floats Values AST Memory Globalenvs.
 Require Import Ctypes Cop Csyntax.

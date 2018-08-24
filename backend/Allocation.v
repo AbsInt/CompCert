@@ -12,6 +12,7 @@
 
 (** Register allocation by external oracle and a posteriori validation. *)
 
+Require Import Coq.Strings.String.
 Require Import FSets FSetAVLplus.
 Require Import Coqlib Ordered Maps Errors Integers Floats.
 Require Import AST Lattice Kildall Memdata.

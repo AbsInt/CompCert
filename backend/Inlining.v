@@ -12,6 +12,7 @@
 
 (** RTL function inlining *)
 
+Require Import Coq.Strings.String.
 Require Import Coqlib Wfsimpl Maps Errors Integers.
 Require Import AST Linking.
 Require Import Op Registers RTL.

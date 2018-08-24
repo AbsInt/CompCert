@@ -13,6 +13,7 @@
 (** Computation of live ranges for local variables that carry
     debugging information. *)
 
+Require Import Coq.Strings.String.
 Require Import Axioms Coqlib Maps Iteration Errors.
 Require Import Integers Floats AST.
 Require Import Machregs Locations Conventions Linear.

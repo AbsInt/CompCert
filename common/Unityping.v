@@ -15,6 +15,7 @@
 
 (* A solver for unification constraints. *)
 
+Require Import Coq.Strings.String.
 Require Import Recdef Coqlib Maps Errors.
 
 Local Open Scope nat_scope.
