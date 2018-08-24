@@ -34,7 +34,8 @@ val remove_attributes : attributes -> attributes -> attributes
 val incl_attributes : attributes -> attributes -> bool
   (* Check that first set of attributes is a subset of second set. *)
 val alignas_attribute : attributes -> int
-  (* Extract the value of the [_Alignas] attributes, if any.
+  (* Extract the value of the [_Alignas] and [attribute((aligned(N)))]
+     attributes, if any.
      Return 0 if none, a (positive) power of two alignment if some. *)
 val packing_parameters : attributes -> int * int * bool
   (* Extract the value of the [__packed__] attributes, if any.
@@ -58,7 +59,7 @@ val erase_attributes_type : Env.t -> typ -> typ
 val change_attributes_type : Env.t -> (attributes -> attributes) -> typ -> typ
   (* Apply the given function to the top-level attributes of the given type *)
 val has_std_alignas : attributes -> bool
-  (* Do the attributes contain the C11 _Alignas *)
+  (* Do the attributes contain the C11 _Alignas attribute *)
 
 type attribute_class =
   | Attr_name           (* Attribute applies to the names being declared  *)
