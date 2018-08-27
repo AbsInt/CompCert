@@ -26,6 +26,7 @@ Require Import Csyntax.
 Require Import Clight.
 
 Local Open Scope string_scope.
+Local Open Scope list_scope.
 
 (** State and error monad for generating fresh identifiers. *)
 
