@@ -12,6 +12,7 @@
 
 (** Translation from CminorSel to RTL. *)
 
+Require Import Coq.Strings.String.
 Require Import Coqlib.
 Require Errors.
 Require Import Maps.

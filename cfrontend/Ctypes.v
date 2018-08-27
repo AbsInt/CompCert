@@ -15,6 +15,7 @@
 
 (** Type expressions for the Compcert C and Clight languages *)
 
+Require Import Coq.Strings.String.
 Require Import Axioms Coqlib Maps Errors.
 Require Import AST Linking.
 Require Archi.

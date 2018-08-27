@@ -22,6 +22,7 @@
   Instruction selection proceeds by bottom-up rewriting over expressions.
   The source language is Cminor and the target language is CminorSel. *)
 
+Require Import Coq.Strings.String.
 Require String.
 Require Import Coqlib Maps.
 Require Import AST Errors Integers Globalenvs Switch.

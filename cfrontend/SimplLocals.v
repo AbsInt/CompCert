@@ -13,6 +13,7 @@
 (** Pulling local scalar variables whose address is not taken
   into temporary variables. *)
 
+Require Import Coq.Strings.String.
 Require Import FSets.
 Require FSetAVL.
 Require Import Coqlib Ordered Errors.
@@ -22,6 +23,7 @@ Require Compopts.
 
 Open Scope error_monad_scope.
 Open Scope string_scope.
+Open Scope list_scope.
 
 Module VSet := FSetAVL.Make(OrderedPositive).
 

@@ -12,6 +12,7 @@
 
 (** Layout of activation records; translation from Linear to Mach. *)
 
+Require Import Coq.Strings.String.
 Require Import Coqlib Errors.
 Require Import Integers AST.
 Require Import Op Locations Linear Mach.

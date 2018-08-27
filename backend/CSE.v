@@ -13,6 +13,7 @@
 (** Common subexpression elimination over RTL.  This optimization
   proceeds by value numbering over extended basic blocks. *)
 
+Require Import Coq.Strings.String.
 Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
 Require Import AST Linking.
 Require Import Values Memory.

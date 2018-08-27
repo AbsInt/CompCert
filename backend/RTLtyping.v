@@ -12,6 +12,7 @@
 
 (** Typing rules and a type inference algorithm for RTL. *)
 
+Require Import Coq.Strings.String.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Unityping.

@@ -12,6 +12,7 @@
 
 (** Elimination of unreferenced static definitions *)
 
+Require Import Coq.Strings.String.
 Require Import FSets Coqlib Maps Ordered Iteration Errors.
 Require Import AST Linking.
 Require Import Op Registers RTL.

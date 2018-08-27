@@ -12,6 +12,7 @@
 
 (** Translation from Mach to IA32 assembly language *)
 
+Require Import Coq.Strings.String.
 Require Import Coqlib Errors.
 Require Import AST Integers Floats Memdata.
 Require Import Op Locations Mach Asm.

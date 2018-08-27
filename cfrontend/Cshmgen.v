@@ -20,6 +20,7 @@
    Csharpminor's simpler control structures.
 *)
 
+Require Import Coq.Strings.String.
 Require Import Coqlib Maps Errors Integers Floats.
 Require Import AST Linking.
 Require Import Ctypes Cop Clight Cminor Csharpminor.

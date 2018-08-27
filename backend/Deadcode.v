@@ -12,6 +12,7 @@
 
 (** Elimination of unneeded computations over RTL. *)
 
+Require Import Coq.Strings.String.
 Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
 Require Import AST Linking.
 Require Import Memory Registers Op RTL.
