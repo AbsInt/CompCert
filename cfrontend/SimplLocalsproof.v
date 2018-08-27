@@ -28,7 +28,7 @@ Definition match_prog (p tp: program) : Prop :=
 Lemma match_transf_program:
   forall p tp, transf_program p = OK tp -> match_prog p tp.
 Proof.
-  unfold transf_program; intros. monadInv H. 
+  unfold transf_program; intros. monadInv H.
   split; auto. apply match_transform_partial_program. rewrite EQ. destruct x; auto.
 Qed.
 
@@ -196,7 +196,7 @@ Proof.
 - inv H0; auto.
 - inv H0; auto.
 - inv H0; auto.
-- inv H0. unfold Mptr, Val.load_result; destruct Archi.ptr64; auto. 
+- inv H0. unfold Mptr, Val.load_result; destruct Archi.ptr64; auto.
 - inv H0. unfold Mptr, Val.load_result; rewrite H1; auto.
 - inv H0. unfold Val.load_result; rewrite H1; auto.
 - inv H0. unfold Mptr, Val.load_result; rewrite H1; auto.
@@ -1053,7 +1053,7 @@ Proof.
   assert (RPSRC: Mem.range_perm m bsrc (Ptrofs.unsigned osrc) (Ptrofs.unsigned osrc + sizeof tge ty) Cur Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
   assert (RPDST: Mem.range_perm m bdst (Ptrofs.unsigned odst) (Ptrofs.unsigned odst + sizeof tge ty) Cur Nonempty).
-    replace (sizeof tge ty) with (Z.of_nat (length bytes)).
+    replace (sizeof tge ty) with (Z.of_nat (List.length bytes)).
     eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
     rewrite LEN. apply nat_of_Z_eq. omega.
   assert (PSRC: Mem.perm m bsrc (Ptrofs.unsigned osrc) Cur Nonempty).
@@ -2248,7 +2248,7 @@ Proof.
   econstructor; split.
   econstructor.
   eapply (Genv.init_mem_transf_partial (proj1 TRANSF)). eauto.
-  replace (prog_main tprog) with (prog_main prog). 
+  replace (prog_main tprog) with (prog_main prog).
   instantiate (1 := b). rewrite <- H1. apply symbols_preserved.
   generalize (match_program_main (proj1 TRANSF)). simpl; auto.
   eauto.
@@ -2292,7 +2292,7 @@ End PRESERVATION.
 
 Instance TransfSimplLocalsLink : TransfLink match_prog.
 Proof.
-  red; intros. eapply Ctypes.link_match_program; eauto. 
+  red; intros. eapply Ctypes.link_match_program; eauto.
 - intros.
 Local Transparent Linker_fundef.
   simpl in *; unfold link_fundef in *.
@@ -2301,5 +2301,5 @@ Local Transparent Linker_fundef.
   destruct e; inv H2. exists (Internal x); split; auto. simpl; rewrite EQ; auto.
   destruct (external_function_eq e e0 && typelist_eq t t1 &&
             type_eq t0 t2 && calling_convention_eq c c0); inv H2.
-  econstructor; split; eauto. 
+  econstructor; split; eauto.
 Qed.
