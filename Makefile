@@ -227,7 +227,9 @@ driver/Version.ml: VERSION
 	>driver/Version.ml
 
 cparser/Parser.v: cparser/Parser.vy
+	@rm -f $@
 	$(MENHIR) $(MENHIR_FLAGS) --coq cparser/Parser.vy
+	@chmod a-w $@
 
 depend: $(GENERATED) depend1
 
