@@ -86,6 +86,10 @@ Options:
   -ignore-coq-version  Accept to use experimental or unsupported versions of Coq
 '
 
+#
+# Remove Leftover Makefile.config (if any)  (GPR#244)
+#
+rm -f Makefile.config
 
 #
 # Parse Command-Line Arguments
