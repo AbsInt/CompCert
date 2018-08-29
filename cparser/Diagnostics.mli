@@ -54,6 +54,7 @@ type warning_type =
   | Static_in_inline               (** static variable in non-static inline function *)
   | Flexible_array_extensions      (** usange of structs with flexible arrays in structs and arrays *)
   | Tentative_incomplete_static    (** static tentative definition with incomplete type *)
+  | Reduced_alignment              (** alignment reduction *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 (** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to

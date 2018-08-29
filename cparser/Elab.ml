@@ -551,6 +551,22 @@ let elab_attribute env = function
 let elab_attributes env al =
   List.fold_left add_attributes [] (List.map (elab_attribute env) al)
 
+(* Warning for alignment requests that reduce the alignment below the
+   natural alignment. *)
+
+let warn_if_reduced_alignment loc ~actual ~natural =
+  match actual, natural with
+  | Some act, Some nat when act < nat ->
+      warning loc Reduced_alignment
+         "requested alignment (%d) is less than natural alignment (%d)"
+         act nat
+  | _, _ -> ()
+
+let check_reduced_alignment loc env typ =
+  warn_if_reduced_alignment loc
+    ~actual: (wrap alignof loc env typ)
+    ~natural: (wrap alignof loc env (erase_attributes_type env typ))
+
 (* Auxiliary for typespec elaboration *)
 
 let typespec_rank = function (* Don't change this *)
@@ -1021,16 +1037,18 @@ and elab_struct_or_union_info kind loc env members attrs =
   (* Check for incomplete types *)
   let rec check_incomplete only = function
   | [] -> ()
-  | [ { fld_typ = TArray(ty_elt, None, _) ; fld_name = name } ] when kind = Struct ->
+  | [ { fld_typ = TArray(ty_elt, None, _) as typ; fld_name = name } ] when kind = Struct ->
     (* C99: ty[] allowed as last field of a struct, provided this is not the only field *)
-    if only then
-      error loc "flexible array member '%a' not allowed in otherwise empty struct" pp_field name;
+      if only then
+        error loc "flexible array member '%a' not allowed in otherwise empty struct" pp_field name;
+      check_reduced_alignment loc env' typ
   | fld :: rem ->
       if wrap incomplete_type loc env' fld.fld_typ then
         (* Must be fatal otherwise we get problems constructing the init *)
         fatal_error loc "member '%a' has incomplete type" pp_field fld.fld_name;
       if wrap contains_flex_array_mem loc env' fld.fld_typ && kind = Struct then
         warning loc Flexible_array_extensions "%a may not be used as a struct member due to flexible array member" (print_typ env) fld.fld_typ;
+      check_reduced_alignment loc env' fld.fld_typ;
       check_incomplete false rem in
   check_incomplete true m;
   (* Warn for empty structs or unions *)
@@ -1040,6 +1058,14 @@ and elab_struct_or_union_info kind loc env members attrs =
     end else begin
       fatal_error loc "empty union is a GNU extension"
     end;
+  let ci = composite_info_def env' kind attrs m in
+  (* Warn for reduced alignment *)
+  if attrs <> [] then begin
+    let ci_nat = composite_info_def env' kind [] m in
+    warn_if_reduced_alignment loc
+           ~actual:ci.Env.ci_alignof ~natural:ci_nat.Env.ci_alignof
+  end;
+  (* Final result *)
   (composite_info_def env' kind attrs m, env')
 
 and elab_struct_or_union only kind loc tag optmembers attrs env =
@@ -2338,6 +2364,7 @@ let enter_typedefs loc env sto dl =
         if redef Env.lookup_ident env s then
           error loc "redefinition of '%s' as different kind of symbol" s;
         let (id, env') = Env.enter_typedef env s ty in
+        check_reduced_alignment loc env' ty;
         emit_elab env loc (Gtypedef(id, ty));
         env') env dl
 
@@ -2390,6 +2417,8 @@ let enter_decdefs local nonstatic_inline loc env sto dl =
         warning loc Tentative_incomplete_static "tentative static definition with incomplete type";
       end else if local && sto' <> Storage_extern then
         error loc "variable has incomplete type %a" (print_typ env) ty';
+    (* check if alignment is reduced *)
+    check_reduced_alignment loc env ty';
     (* check for static variables in nonstatic inline functions *)
     if local && nonstatic_inline
              && sto' = Storage_static
