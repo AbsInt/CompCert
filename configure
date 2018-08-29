@@ -29,6 +29,10 @@ responsefile="gnu"
 ignore_coq_version=false
 
 usage='Usage: ./configure [options] target
+For help on options and targets, do: ./configure -help
+'
+
+help='Usage: ./configure [options] target
 
 Supported targets:
   ppc-eabi             (PowerPC, EABI with GNU/Unix tools)
@@ -86,6 +90,10 @@ Options:
   -ignore-coq-version  Accept to use experimental or unsupported versions of Coq
 '
 
+#
+# Remove Leftover Makefile.config (if any)  (GPR#244)
+#
+rm -f Makefile.config
 
 #
 # Parse Command-Line Arguments
@@ -115,6 +123,12 @@ while : ; do
         ignore_coq_version=true;;
     -install-coqdev|--install-coqdev|-install-coq-dev|--install-coq-dev)
         install_coqdev=true;;
+    -help|--help)
+        echo "$help"; exit 0;;
+    -*)
+        echo "Error: unknown option '$1'." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
