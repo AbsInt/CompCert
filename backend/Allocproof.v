@@ -209,7 +209,7 @@ Ltac MonadInv :=
 
 Remark expand_moves_cons:
   forall m accu b,
-  expand_moves (rev (m :: accu)) b = expand_moves (rev accu) (expand_move m :: b).
+  expand_moves (List.rev (m :: accu)) b = expand_moves (List.rev accu) (expand_move m :: b).
 Proof.
   unfold expand_moves; intros. simpl. rewrite map_app. rewrite app_ass. auto.
 Qed.
