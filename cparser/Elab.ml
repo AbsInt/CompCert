@@ -871,6 +871,12 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
   let ty1 = argument_conversion env1 ty in
   if is_qualified_array ty1 then
     error loc "type qualifier used in non-outermost array type derivation";
+  if has_std_alignas (attributes_of_type env ty) then begin
+    if id <> "" then
+      error loc "alignment specified for parameter '%s'" id
+    else
+      error loc "alignment specified for unnamed parameter"
+  end;
   let (id', env2) = Env.enter_ident env1 id sto ty1 in
   ( (id', ty1) , env2)
 
@@ -2616,8 +2622,6 @@ let elab_fundef genv spec name defs body loc =
       fatal_error loc "parameter has incomplete type";
     if id.C.name = "" then
       fatal_error loc "parameter name omitted";
-    if has_std_alignas (attributes_of_type env ty) then
-      error loc "alignment specified for parameter '%s'" id.C.name;
     Env.add_ident env id Storage_default ty
   in
   (* Enter parameters and extra declarations in the local environment.
