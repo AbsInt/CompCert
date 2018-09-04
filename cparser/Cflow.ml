@@ -135,7 +135,7 @@ let catch_continue (s: flow) : flow = fun i ->
   let o = s i in
   { o with onormal = o.onormal || o.ocontinue; ocontinue = false}
 
-(* Convert "continue" into "fallthrough".  Typically applied to a loop. *)
+(* Convert "break" into "fallthrough".  Typically applied to a loop. *)
 
 let catch_break (s: flow) : flow = fun i ->
   let o = s i in
