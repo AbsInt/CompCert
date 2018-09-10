@@ -7,7 +7,7 @@
 #endif
 
 #if  __STDC_VERSION__ < 201100 && defined(__GNUC__)
-#define _Alignas(x) __attribute__((aligned(x)))
+#define _Alignas(x) __attribute((aligned(x)))
 #endif
 
 /* Base type */
@@ -20,10 +20,9 @@ _Alignas(16) int b[3];
 typedef int int3[3];
 _Alignas(16) int3 bb;
 
-#if 0
-typedef _Alignas(16) int int16;
+/* _Alignas is not allowed in typedefs but the "aligned" attribute is */
+typedef __attribute((aligned(16))) int int16;
 int16 bbb[3];
-#endif
 
 char filler2;
 
@@ -74,10 +73,8 @@ int main()
          (unsigned) sizeof(b), ((unsigned) &b) & 0xF);
   printf("bb: size = %u, address mod 16 = %u\n",
          (unsigned) sizeof(bb), ((unsigned) &bb) & 0xF);
-#if 0
   printf("bbb: size = %u, address mod 16 = %u\n",
          (unsigned) sizeof(bbb), ((unsigned) &bbb) & 0xF);
-#endif
   printf("c: size = %u, address mod 16 = %u\n",
          (unsigned) sizeof(c), ((unsigned) &c) & 0xF);
   printf("d: size = %u, address mod 64 = %u\n",

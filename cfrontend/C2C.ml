@@ -307,14 +307,14 @@ let builtins =
 (** ** The known attributes *)
 
 let attributes = [
-  (* type-related *)
-  ("aligned", Cutil.Attr_type);
+  (* type-related -- currently none *)
   (* struct-related *)
   ("packed", Cutil.Attr_struct);
   (* function-related *)
   ("noreturn", Cutil.Attr_function);
   ("noinline",Cutil.Attr_function);
   (* name-related *)
+  ("aligned", Cutil.Attr_name);
   ("section", Cutil.Attr_name);
   ("unused", Cutil.Attr_name)
 ]

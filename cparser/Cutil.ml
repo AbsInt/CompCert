@@ -110,7 +110,8 @@ let declare_attributes l =
   List.iter (fun (n,c) -> declare_attribute n c) l
 
 let class_of_attribute = function
-  | AConst | AVolatile | ARestrict | AAlignas _ -> Attr_type
+  | AConst | AVolatile | ARestrict -> Attr_type
+  | AAlignas _ -> Attr_name
   | Attr(name, args) ->
       try Hashtbl.find attr_class (normalize_attrname name)
       with Not_found -> Attr_unknown
@@ -258,8 +259,8 @@ let strip_last_attribute typ  =
     l,TEnum(n,r)
 
 (* Check whether the attributes contain _Alignas attribute *)
-let has_std_alignas attr =
-  List.exists (function | AAlignas _ -> true | _ -> false) attr
+let has_std_alignas env typ  =
+  List.exists (function | AAlignas _ -> true | _ -> false) (attributes_of_type env typ)
 
 (* Extracting alignment value from a set of attributes.  Return 0 if none. *)
 

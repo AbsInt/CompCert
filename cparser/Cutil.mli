@@ -58,8 +58,8 @@ val erase_attributes_type : Env.t -> typ -> typ
   (* Erase the attributes of the given type. *)
 val change_attributes_type : Env.t -> (attributes -> attributes) -> typ -> typ
   (* Apply the given function to the top-level attributes of the given type *)
-val has_std_alignas : attributes -> bool
-  (* Do the attributes contain the C11 _Alignas attribute *)
+val has_std_alignas :  Env.t -> typ -> bool
+  (* Do the attributes of the type contain the C11 _Alignas attribute *)
 
 type attribute_class =
   | Attr_name           (* Attribute applies to the names being declared  *)

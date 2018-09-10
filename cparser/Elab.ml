@@ -871,7 +871,7 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
   let ty1 = argument_conversion env1 ty in
   if is_qualified_array ty1 then
     error loc "type qualifier used in non-outermost array type derivation";
-  if has_std_alignas (attributes_of_type env ty) then begin
+  if has_std_alignas env ty then begin
     if id <> "" then
       error loc "alignment specified for parameter '%s'" id
     else
@@ -928,15 +928,18 @@ and elab_init_name_group loc env (spec, namelist) =
     let ((ty, _), env1) =
       elab_type_declarator loc env bty decl in
     let a = elab_attributes env attr in
-    if inl && not (is_function_type env ty) then
+    let has_fun_typ = is_function_type env ty in
+    if inl && not has_fun_typ then
       error loc "'inline' can only appear on functions";
     let a' =
       if noret then begin
         warning loc Celeven_extension "_Noreturn functions are a C11 extension";
-        if not (is_function_type env ty) then
+        if not has_fun_typ then
           error loc "'_Noreturn' can only appear on functions";
         add_attributes [Attr("noreturn",[])] a
       end else a in
+    if has_std_alignas env ty && has_fun_typ then
+      error loc "alignment specified for function '%s'" id;
     ((id, add_attributes_type a' ty, init), env1) in
   (mmap elab_one_name env' namelist, sto, tydef)
 
@@ -973,7 +976,7 @@ and elab_field_group env (Field_group (spec, fieldlist, loc)) =
             error loc
               "the type of bit-field '%a' must be an integer type no bigger than 'int'" pp_field id;
             None,env
-          end else if has_std_alignas (attributes_of_type env' ty) then begin
+          end else if has_std_alignas env' ty then begin
             error loc "alignment specified for bit-field '%a'" pp_field id;
             None, env
           end else begin
@@ -2354,7 +2357,7 @@ let enter_typedefs loc env sto dl =
   List.fold_left (fun env (s, ty, init) ->
     if init <> NO_INIT then
       error loc "initializer in typedef";
-    if has_std_alignas (attributes_of_type env ty) then
+    if has_std_alignas env ty then
       error loc "alignment specified for typedef '%s'" s;
     match previous_def Env.lookup_typedef env s with
     | Some (s',ty') when Env.in_current_scope env s' ->
@@ -2383,7 +2386,7 @@ let enter_decdefs local nonstatic_inline loc env sto dl =
     warning loc Missing_declarations "declaration does not declare anything";
   let enter_decdef (decls, env) (s, ty, init) =
     let isfun = is_function_type env ty in
-    if sto = Storage_register && has_std_alignas (attributes_of_type env ty) then
+    if sto = Storage_register && has_std_alignas env ty then
       error loc "alignment specified for 'register' object '%s'" s;
     if sto = Storage_extern && init <> NO_INIT then
       error loc "'extern' declaration variable has an initializer";
@@ -2599,7 +2602,7 @@ let elab_fundef genv spec name defs body loc =
   let (ty_ret, params, vararg, attr) =
     match ty with
     | TFun(ty_ret, Some params, vararg, attr) ->
-         if has_std_alignas (attr @ (attributes_of_type genv ty_ret)) then
+         if has_std_alignas genv ty then
            error loc "alignment specified for function '%s'" s;
          if wrap incomplete_type loc genv ty_ret && not (is_void_type genv ty_ret) then
            fatal_error loc "incomplete result type %a in function definition"
