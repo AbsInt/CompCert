@@ -404,6 +404,8 @@ let expand_builtin_inline name args res =
   (* Vararg stuff *)
   | "__builtin_va_start", [BA(IR a)], _ ->
      expand_builtin_va_start a
+  | "__builtin_nop", [], _ ->
+     emit Pnop
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))
@@ -665,10 +667,7 @@ let expand_function id fn =
   try
     set_current_function fn;
     fixup_arguments Incoming fn.fn_sig;
-    if !Clflags.option_g then
-      expand_debug id 13 preg_to_dwarf expand_instruction fn.fn_code
-    else
-      List.iter expand_instruction fn.fn_code;
+    expand id 13 preg_to_dwarf expand_instruction fn.fn_code;
     let fn = get_current_function () in
     let fn = Constantexpand.expand_constants fn in
     Errors.OK fn

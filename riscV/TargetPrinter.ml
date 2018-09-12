@@ -564,6 +564,8 @@ module Target : TARGET =
          fprintf oc "	jr	x5\n";
          jumptables := (lbl, tbl) :: !jumptables;
          fprintf oc "%s end pseudoinstr btbl\n" comment
+      | Pnop ->
+        fprintf oc "	nop\n"
       | Pbuiltin(ef, args, res) ->
          begin match ef with
            | EF_annot(kind,txt, targs) ->
@@ -571,7 +573,7 @@ module Target : TARGET =
                | 1 -> let annot = annot_text preg_annot "x2" (camlstring_of_coqstring txt) args  in
                  fprintf oc "%s annotation: %S\n" comment annot
                | 2 -> let lbl = new_label () in
-                 fprintf oc "%a: " label lbl;
+                 fprintf oc "%a:\n" label lbl;
                  add_ais_annot lbl preg_annot "x2" (camlstring_of_coqstring txt) args
                | _ -> assert false
              end

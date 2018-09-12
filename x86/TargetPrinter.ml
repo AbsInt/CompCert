@@ -791,6 +791,8 @@ module Target(System: SYSTEM):TARGET =
 	 fprintf oc "	movsw\n";
       | Pmovw_rm (rd, a) ->
           fprintf oc "	movw	%a, %a\n" addressing a ireg16 rd
+      | Pnop ->
+          fprintf oc "	nop\n"
       | Prep_movsl ->
 	 fprintf oc "	rep	movsl\n"
       | Psbbl_rr (res,a1) ->
@@ -814,7 +816,7 @@ module Target(System: SYSTEM):TARGET =
                   | 1 ->  let annot = annot_text preg_annot "esp" (camlstring_of_coqstring txt) args in
                     fprintf oc "%s annotation: %S\n" comment annot
                   | 2 -> let lbl = new_label () in
-                    fprintf oc "%a: \n" label lbl;
+                    fprintf oc "%a:\n" label lbl;
                     let sp = if Archi.ptr64 then "rsp" else "esp" in
                     add_ais_annot lbl preg_ais_annot sp (camlstring_of_coqstring txt) args
                   | _ -> assert false

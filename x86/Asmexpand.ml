@@ -475,7 +475,7 @@ let expand_builtin_inline name args res =
      ()
   (* no operation *)
   | "__builtin_nop", [], _ ->
-     emit (Pmov_rr (RAX,RAX))
+     emit Pnop
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
@@ -632,10 +632,7 @@ let preg_to_dwarf = function
 let expand_function id fn =
   try
     set_current_function fn;
-    if !Clflags.option_g then
-      expand_debug id (int_reg_to_dwarf RSP) preg_to_dwarf expand_instruction fn.fn_code
-    else
-      List.iter expand_instruction fn.fn_code;
+    expand id (int_reg_to_dwarf RSP) preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))

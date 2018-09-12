@@ -95,6 +95,16 @@ let translate_annot sp preg_to_dwarf annot =
   | [] -> None
   | a::_ -> aux a)
 
+let builtin_nop =
+  let signature ={sig_args = []; sig_res = None; sig_cc = cc_default} in
+  let name = coqstring_of_camlstring "__builtin_nop" in
+  Pbuiltin(EF_builtin(name,signature),[],BR_none)
+
+let rec lbl_follows = function
+  | Pbuiltin (EF_debug _, _, _):: rest ->
+    lbl_follows rest
+  | Plabel _ :: _ -> true
+  | _ -> false
 
 let expand_debug id sp preg simple l =
   let get_lbl = function
@@ -142,6 +152,11 @@ let expand_debug id sp preg simple l =
           | _ ->
               aux None scopes rest
         end
+    | (Pbuiltin(EF_annot (kind, _, _),_,_) as annot)::rest ->
+      if P.to_int kind = 2 && lbl_follows rest then begin
+        simple annot; simple builtin_nop; aux None scopes rest
+      end else
+        simple annot; aux None scopes rest
     | (Plabel lbl)::rest -> simple (Plabel lbl); aux (Some lbl) scopes rest
     | i::rest -> simple i; aux None scopes rest in
   (* We need to move all closing debug annotations before the last real statement *)
@@ -155,3 +170,20 @@ let expand_debug id sp preg simple l =
     | b::rest -> List.rev ((List.rev (b::bcc)@List.rev acc)@rest) (* We found the first non debug location *)
     | [] -> List.rev acc (* This actually can never happen *) in
   aux None [] (move_debug [] [] (List.rev l))
+
+let expand_simple simple l =
+  let rec aux = function
+   | (Pbuiltin(EF_annot (kind, _, _),_,_) as annot)::rest ->
+      if P.to_int kind = 2 && lbl_follows rest then begin
+        simple annot; simple builtin_nop; aux rest
+      end else
+        simple annot; aux rest
+   | i::rest -> simple i; aux rest
+   | [] -> () in
+  aux l
+
+let expand id sp preg simple l =
+  if !Clflags.option_g then
+    expand_debug id sp preg simple l
+  else
+    expand_simple simple l
