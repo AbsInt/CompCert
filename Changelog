@@ -1,3 +1,65 @@
+Release 3.4,
+=======================
+
+Bug fixing:
+- Redefinition of a typedef in a different scope was wrongly rejected.
+- Attach `_Alignas(N)` and `__attribute((aligned(N)))` to names
+  instead of types, so that `_Alignas(16) int * p` means
+  "16-aligned pointer to int", not "pointer to 16-aligned int".
+- For packed structs, fix a discrepancy between the size and alignment
+  computed during elaboration and those computed by the verified front-end
+  after expansion.
+- Honor qualified array types in function parameters: if a parameter is
+  declared as e.g. `int t[const 4]`, it is now treated as `int * const t`
+  in the function body, not `int * t` like before.
+- Reject `__builtin_offsetof(struct s, f)` if `f` is a bit-field.
+- Wrong parsing of attributes having multiple arguments such as
+  `__attribute((packed(A,B,C)))`.
+- If `__builtin_ais_annot` is followed immediately by a label (e.g. a
+  loop head), add a nop instruction to separate the annotation from
+  the label.
+- Wrong parsing of the command-line options `-u <symbol>` and `-iquote`.
+- PowerPC in hybrid 32/64 bit mode: reject %Q and %R register specifications
+  in inline assembly code.
+
+New checks for ISO C conformance:
+- Removed support for `_Alignof(expr)`, which is not C11;
+  only `_Alignof(ty)` is part of C11.
+- Reject occurrences of `_Alignas` in places that are not allowed by C11,
+  e.g. in `typedef`.  `__attribute((aligned(N)))` can be used instead.
+- Reject occurrences of `restrict` in places that are not allowed by
+  C99 and C11.
+- Reject structs composed of a single flexible array `struct { ty []; }`.
+- Check that qualified array types such as `int t[const 4]` occur only
+  as function parameters, but nowhere else.
+- In function definitions, reject function parameters that have no names.
+
+New warnings:
+- Warn for flexible array types `ty[]` in places where they do not make sense.
+- Warn for inline (not static inline) functions that declare
+  non-constant static variables.
+- Optionally warn if the alignment of an object is reduced below its
+  natural alignment because of a _Alignas qualifier or an aligned attribute,
+  or a packed attribute.
+- Warn for tentative static definitions with an incomplete type, e.g.
+  `static int x[];`.
+- The warning about uses of C11 features is now off by default.
+
+Semantic preservation proof:
+- Model the fact that external functions can destroy caller-save registers
+  and Outgoing stack slots; adapt the proofs accordingly.
+
+Coq and OCaml development:
+- Support Coq version 8.8.1.
+- Support OCaml versions 8.7.0 and up.
+- Support Menhir versions 20180530 and up.
+
+Others:
+- Improved error handling in "configure" script (issue #244)
+- clightgen adds configuration information to the generated .v file (issue #226)
+
+
+
 Release 3.3, 2018-05-30
 =======================
 
