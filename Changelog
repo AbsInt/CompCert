@@ -51,7 +51,7 @@ Semantic preservation proof:
 
 Coq and OCaml development:
 - Support Coq version 8.8.1.
-- Support OCaml versions 8.7.0 and up.
+- Support OCaml versions 4.7.0 and up.
 - Support Menhir versions 20180530 and up.
 
 Others:
