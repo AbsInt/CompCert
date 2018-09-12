@@ -153,10 +153,10 @@ let expand_debug id sp preg simple l =
               aux None scopes rest
         end
     | (Pbuiltin(EF_annot (kind, _, _),_,_) as annot)::rest ->
-      if P.to_int kind = 2 && lbl_follows rest then begin
-        simple annot; simple builtin_nop; aux None scopes rest
-      end else
-        simple annot; aux None scopes rest
+      simple annot;
+      if P.to_int kind = 2 && lbl_follows rest then
+        simple builtin_nop;
+      aux None scopes rest
     | (Plabel lbl)::rest -> simple (Plabel lbl); aux (Some lbl) scopes rest
     | i::rest -> simple i; aux None scopes rest in
   (* We need to move all closing debug annotations before the last real statement *)
@@ -174,10 +174,10 @@ let expand_debug id sp preg simple l =
 let expand_simple simple l =
   let rec aux = function
    | (Pbuiltin(EF_annot (kind, _, _),_,_) as annot)::rest ->
-      if P.to_int kind = 2 && lbl_follows rest then begin
-        simple annot; simple builtin_nop; aux rest
-      end else
-        simple annot; aux rest
+     simple annot;
+     if P.to_int kind = 2 && lbl_follows rest then
+       simple builtin_nop;
+     aux rest
    | i::rest -> simple i; aux rest
    | [] -> () in
   aux l
