@@ -1907,7 +1907,7 @@ let elab_expr ctx loc env a =
       | [] -> acc,ty
       | fld::rest -> 
         if fld.fld_bitfield <> None then
-          error "cannot compute offset of bit-field '%s'" fld.fld_name;
+          fatal_error "cannot compute offset of bit-field '%s'" fld.fld_name;
         let off = offsetof env ty fld in
         offset_of_list (acc+off) env fld.fld_typ rest in
     let offset_of_member (env,off_accu,ty) mem =
