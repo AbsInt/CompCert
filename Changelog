@@ -20,7 +20,10 @@ Bug fixing:
   the label.
 - Wrong parsing of the command-line options `-u <symbol>` and `-iquote`.
 - PowerPC in hybrid 32/64 bit mode: reject %Q and %R register specifications
-  in inline assembly code.
+  in inline assembly code, since 64-bit integer arguments are not split
+  in two registers.
+- x86 64-bit mode: wrong expansion of __builtin_clzl and builtin_ctzl
+  (issue #127).
 
 New checks for ISO C conformance:
 - Removed support for `_Alignof(expr)`, which is not C11;
@@ -50,7 +53,7 @@ Semantic preservation proof:
   and Outgoing stack slots; adapt the proofs accordingly.
 
 Coq and OCaml development:
-- Support Coq version 8.8.1.
+- Support Coq versions 8.8.1 and 8.8.2.
 - Support OCaml versions 4.7.0 and up.
 - Support Menhir versions 20180530 and up.
 
