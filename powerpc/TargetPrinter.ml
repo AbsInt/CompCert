@@ -605,7 +605,7 @@ module Target (System : SYSTEM):TARGET =
       | Pisel (r1,r2,r3,cr) ->
           fprintf oc "	isel	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 crbit cr
       | Picbi (r1,r2) ->
-          fprintf oc "	icbi	%a,%a\n" ireg r1 ireg r2
+          fprintf oc "	icbi	%a, %a\n" ireg r1 ireg r2
       | Picbtls (n,r1,r2) ->
           fprintf oc "	icbtls	%ld, %a, %a\n" (camlint_of_coqint n) ireg r1 ireg r2
       | Pisync ->

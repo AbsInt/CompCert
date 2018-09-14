@@ -2664,7 +2664,7 @@ translation_unit_file: INT LPAREN PRE_NAME VAR_NAME SEMICOLON
 ## In state 261, spurious reduction of production declarator -> declarator_noattrend attribute_specifier_list 
 ##
 
-Up to this point, a declarator have been recognized:
+Up to this point, a declarator has been recognized:
   $0
 If this declarator is complete,
 then at this point, a closing parenthesis ')' is expected.

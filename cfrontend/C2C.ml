@@ -318,7 +318,7 @@ let attributes = [
   ("section", Cutil.Attr_name);
   ("unused", Cutil.Attr_name)
 ]
-  
+
 
 (** ** Functions used to handle string literals *)
 
@@ -546,14 +546,14 @@ let convertFkind k a : coq_type =
 let checkFunctionType env tres targs =
   if not !Clflags.option_fstruct_passing then begin
     if Cutil.is_composite_type env tres then
-      unsupported "function returning a struct or union (consider adding option -fstruct-passing)";
+      unsupported "function returning a struct or union (consider adding option [-fstruct-passing])";
     begin match targs with
     | None -> ()
     | Some l ->
         List.iter
           (fun (id, ty) ->
             if Cutil.is_composite_type env ty then
-              unsupported "function parameter of struct or union type (consider adding option -fstruct-passing)")
+              unsupported "function parameter of struct or union type (consider adding option [-fstruct-passing])")
           l
     end
   end
@@ -606,12 +606,12 @@ let rec convertTypArgs env tl el =
 
 let convertField env f =
   if f.fld_bitfield <> None then
-    unsupported "bit field in struct or union (consider adding option -fbitfields)";
+    unsupported "bit field in struct or union (consider adding option [-fbitfields])";
   (intern_string f.fld_name, convertTyp env f.fld_typ)
 
 let convertCompositedef env su id attr members =
   if Cutil.find_custom_attributes ["packed";"__packed__"] attr <> [] then
-    unsupported "packed struct (consider adding option -fpacked-structs)";
+    unsupported "packed struct (consider adding option [-fpacked-structs])";
   let t = match su with
   | C.Struct ->
       let layout = Cutil.struct_layout env attr members in
@@ -829,10 +829,10 @@ let rec convertExpr env e =
   | C.ECompound(ty1, ie) ->
       unsupported "compound literals"; ezero
 
+  | C.ECall({edesc = C.EVar {name = "__builtin_debug"}}, args) when List.length args < 2 ->
+      error "too few arguments to function call, expected at least 2, have 0";
+      ezero
   | C.ECall({edesc = C.EVar {name = "__builtin_debug"}}, args) ->
-      let len = List.length args in
-      if len < 2 then
-        error "too few arguments to function call, expected at least 2, have 0";
       let (kind, args1) =
         match args with
         | {edesc = C.EConst(CInt(n,_,_))} :: args1 when n <> 0L-> (n, args1)

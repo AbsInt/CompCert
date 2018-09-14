@@ -135,7 +135,7 @@ let error lb fmt =
 
 let warning lb fmt =
   Diagnostics.warning
-      (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) Diagnostics.Unnamed ("warning: " ^^ fmt)
+      (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) Diagnostics.Unnamed fmt
 
 (* Simple character escapes *)
 

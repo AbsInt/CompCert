@@ -160,7 +160,7 @@ let combine_toplevel_definitions loc env s old_sto old_ty sto ty =
     let old_attrs = attributes_of_type env old_ty
     and new_attrs = attributes_of_type env ty in
     if not (Cutil.incl_attributes new_attrs old_attrs) then
-      warning loc  Ignored_attributes "attribute declaration must precede definition"
+      warning loc Ignored_attributes "attribute declaration must precede definition"
   end;
   let new_sto =
     (* The only case not allowed is removing static *)
@@ -1080,7 +1080,7 @@ and elab_struct_or_union_info kind loc env members attrs =
 and elab_struct_or_union only kind loc tag optmembers attrs env =
   let warn_attrs () =
     if attrs <> [] then
-      warning loc Unnamed "attribute declaration must precede definition" in
+      warning loc Ignored_attributes "attribute declaration must precede definition" in
   let optbinding, tag =
     match tag with
       | None -> None, ""
@@ -1920,7 +1920,7 @@ let elab_expr ctx loc env a =
       | ATINDEX_INIT e,TArray (sub_ty,_,_) ->
         let e,env = elab env e in
         let e = match Ceval.integer_expr env e with
-          | None -> fatal_error "array element designator for is not an integer constant expression"
+          | None -> fatal_error "array element designator is not an integer constant expression"
           | Some n-> n in
         let size = match sizeof env sub_ty with
           | None -> assert false (* We expect only complete types *)
@@ -2137,7 +2137,7 @@ let elab_expr ctx loc env a =
       let b1,env = elab env a1 in
       let b2,env = elab env a2 in
       if List.mem AConst (attributes_of_type env b1.etyp) then
-        fatal_error "left-hand side of assignment has 'const' type";
+        error "left-hand side of assignment has 'const' type";
       if not (is_modifiable_lvalue env b1) then
         error "expression is not assignable";
       if not (wrap2 valid_assignment loc env b2 b1.etyp) then begin
