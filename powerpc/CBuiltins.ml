@@ -142,6 +142,15 @@ let builtins = {
     (* uisel *)
     "__builtin_uisel",
       (TInt (IUInt, []),[TInt(IBool, []);TInt(IUInt, []);TInt(IUInt, [])],false);
+    (* isel64 *)
+    "__builtin_isel64",
+      (TInt (ILongLong, []),[TInt(IBool, []);TInt(ILongLong, []);TInt(ILongLong, [])],false);
+    (* uisel *)
+    "__builtin_uisel64",
+      (TInt (IULongLong, []),[TInt(IBool, []);TInt(IULongLong, []);TInt(IULongLong, [])],false);
+    (* bsel *)
+    "__builtin_bsel",
+      (TInt (IBool, []),[TInt(IBool, []);TInt(IBool, []);TInt(IBool, [])],false);
     (* no operation *)
     "__builtin_nop",
       (TVoid [], [], false);

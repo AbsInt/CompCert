@@ -669,7 +669,7 @@ let expand_builtin_inline name args res =
   | "__builtin_return_address",_,BR (IR res) ->
       emit (Plwz (res, Cint! retaddr_offset,GPR1))
   (* Integer selection *)
-  | ("__builtin_isel" | "__builtin_uisel"), [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
+  | ("__builtin_bsel" | "__builtin_isel" | "__builtin_uisel"), [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
       if eref then begin
         emit (Pcmpwi (a1,Cint (Int.zero)));
         emit (Pisel (res,a3,a2,CRbit_2))
@@ -688,6 +688,12 @@ let expand_builtin_inline name args res =
         end;
         emit (Por (res, res, GPR0))
       end
+  | ("__builtin_isel64" | "__builtin_uisel64"), [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
+    if eref && Archi.ppc64 then begin
+      emit (Pcmpwi (a1,Cint (Int.zero)));
+      emit (Pisel (res,a3,a2,CRbit_2))
+    end else
+      raise (Error (name ^" is only supported for PPC64 targets"))
   (* no operation *)
   | "__builtin_nop", [], _ ->
       emit (Pori (GPR0, GPR0, Cint _0))
