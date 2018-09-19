@@ -415,12 +415,12 @@ let expand_int64_arith conflict rl fn =
    and with 64-bit integer registers. *)
 
 let expand_integer_cond_move a1 a2 a3 res =
-  if eref then begin
+  if a2 = a3 then
+    emit (Pmr (res, a2))
+  else if eref then begin
     emit (Pcmpwi (a1,Cint (Int.zero)));
     emit (Pisel (res,a3,a2,CRbit_2))
-  end else if a2 = a3 then
-    emit (Pmr (res, a2))
-  else begin
+  end else begin
     (* a1 has type _Bool, hence it is 0 or 1 *)
     emit (Psubfic (GPR0, a1, Cint _0));
     (* r0 = -1 (all ones) if a1 is true, r0 = 0 if a1 is false *)
