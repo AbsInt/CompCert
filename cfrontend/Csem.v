@@ -786,7 +786,7 @@ Inductive final_state: state -> int -> Prop :=
 (** Wrapping up these definitions in a small-step semantics. *)
 
 Definition semantics (p: program) :=
-  Semantics_gen step (initial_state p) final_state (globalenv p) (globalenv p).
+  Semantics_gen (step (globalenv p)) (initial_state p) final_state (globalenv p).
 
 (** This semantics has the single-event property. *)
 

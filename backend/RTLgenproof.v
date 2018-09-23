@@ -416,7 +416,7 @@ Lemma tr_move_correct:
   forall r1 ns r2 nd cs f sp rs m,
   tr_move f.(fn_code) ns r1 nd r2 ->
   exists rs',
-  star step tge (State cs f sp ns rs m) E0 (State cs f sp nd rs' m) /\
+  star (step tge) (State cs f sp ns rs m) E0 (State cs f sp nd rs' m) /\
   rs'#r2 = rs#r1 /\
   (forall r, r <> r2 -> rs'#r = rs#r).
 Proof.
@@ -474,7 +474,7 @@ Definition transl_expr_prop
     (ME: match_env map e le rs)
     (EXT: Mem.extends m tm),
   exists rs', exists tm',
-     star step tge (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
+     star (step tge) (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
   /\ match_env map (set_optvar dst v e) le rs'
   /\ Val.lessdef v rs'#rd
   /\ (forall r, In r pr -> rs'#r = rs#r)
@@ -488,7 +488,7 @@ Definition transl_exprlist_prop
     (ME: match_env map e le rs)
     (EXT: Mem.extends m tm),
   exists rs', exists tm',
-     star step tge (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
+     star (step tge) (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
   /\ match_env map e le rs'
   /\ Val.lessdef_list vl rs'##rl
   /\ (forall r, In r pr -> rs'#r = rs#r)
@@ -502,7 +502,7 @@ Definition transl_condexpr_prop
     (ME: match_env map e le rs)
     (EXT: Mem.extends m tm),
   exists rs', exists tm',
-     plus step tge (State cs f sp ns rs tm) E0 (State cs f sp (if v then ntrue else nfalse) rs' tm')
+     plus (step tge) (State cs f sp ns rs tm) E0 (State cs f sp (if v then ntrue else nfalse) rs' tm')
   /\ match_env map e le rs'
   /\ (forall r, In r pr -> rs'#r = rs#r)
   /\ Mem.extends m tm'.
@@ -947,7 +947,7 @@ Definition transl_exitexpr_prop
     (ME: match_env map e le rs)
     (EXT: Mem.extends m tm),
   exists nd, exists rs', exists tm',
-     star step tge (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
+     star (step tge) (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
   /\ nth_error nexits x = Some nd
   /\ match_env map e le rs'
   /\ Mem.extends m tm'.
@@ -1298,7 +1298,7 @@ Theorem transl_step_correct:
   forall S1 t S2, CminorSel.step ge S1 t S2 ->
   forall R1, match_states S1 R1 ->
   exists R2,
-  (plus RTL.step tge R1 t R2 \/ (star RTL.step tge R1 t R2 /\ lt_state S2 S1))
+  (plus (RTL.step tge) R1 t R2 \/ (star (RTL.step tge) R1 t R2 /\ lt_state S2 S1))
   /\ match_states S2 R2.
 Proof.
   induction 1; intros R1 MSTATE; inv MSTATE.

@@ -1318,7 +1318,7 @@ Inductive match_transl: stmt -> cont -> stmt -> cont -> Prop :=
 Lemma match_transl_step:
   forall ts tk ts' tk' f te le m,
   match_transl (Sblock ts) tk ts' tk' ->
-  star step tge (State f ts' tk' te le m) E0 (State f ts (Kblock tk) te le m).
+  star (step tge) (State f ts' tk' te le m) E0 (State f ts (Kblock tk) te le m).
 Proof.
   intros. inv H.
   apply star_one. constructor.
@@ -1525,7 +1525,7 @@ Qed.
 Lemma transl_step:
   forall S1 t S2, Clight.step2 ge S1 t S2 ->
   forall T1, match_states S1 T1 ->
-  exists T2, plus step tge T1 t T2 /\ match_states S2 T2.
+  exists T2, plus (step tge) T1 t T2 /\ match_states S2 T2.
 Proof.
   induction 1; intros T1 MST; inv MST.
 

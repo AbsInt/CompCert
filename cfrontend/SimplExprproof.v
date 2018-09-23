@@ -813,8 +813,8 @@ Lemma step_makeif:
   forall f a s1 s2 k e le m v1 b,
   eval_expr tge e le m a v1 ->
   bool_val v1 (typeof a) m = Some b ->
-  star step1 tge (State f (makeif a s1 s2) k e le m)
-             E0 (State f (if b then s1 else s2) k e le m).
+  star (step1 tge) (State f (makeif a s1 s2) k e le m)
+                E0 (State f (if b then s1 else s2) k e le m).
 Proof.
   intros. functional induction (makeif a s1 s2).
 - exploit eval_simpl_expr_sound; eauto. rewrite e0. intro EQ; subst v.
@@ -883,8 +883,8 @@ Qed.
 
 Lemma push_seq:
   forall f sl k e le m,
-  star step1 tge (State f (makeseq sl) k e le m)
-              E0 (State f Sskip (Kseqlist sl k) e le m).
+  star (step1 tge) (State f (makeseq sl) k e le m)
+                E0 (State f Sskip (Kseqlist sl k) e le m).
 Proof.
   intros. unfold makeseq. generalize Sskip. revert sl k.
   induction sl; simpl; intros.
@@ -899,8 +899,8 @@ Lemma step_tr_rvalof:
   tr_rvalof ty a sl a' tmp ->
   typeof a = ty ->
   exists le',
-    star step1 tge (State f Sskip (Kseqlist sl k) e le m)
-                 t (State f Sskip k e le' m)
+    star (step1 tge) (State f Sskip (Kseqlist sl k) e le m)
+                   t (State f Sskip k e le' m)
   /\ eval_expr tge e le' m a' v
   /\ typeof a' = typeof a
   /\ forall x, ~In x tmp -> le'!x = le!x.
@@ -1430,8 +1430,8 @@ Lemma estep_simulation:
   forall S1 t S2, Cstrategy.estep ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
   exists S2',
-     (plus step1 tge S1' t S2' \/
-       (star step1 tge S1' t S2' /\ measure S2 < measure S1)%nat)
+     (plus (step1 tge) S1' t S2' \/
+       (star (step1 tge) S1' t S2' /\ measure S2 < measure S1)%nat)
   /\ match_states S2 S2'.
 Proof.
   induction 1; intros; inv MS.
@@ -1999,8 +1999,8 @@ Lemma sstep_simulation:
   forall S1 t S2, Csem.sstep ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
   exists S2',
-     (plus step1 tge S1' t S2' \/
-       (star step1 tge S1' t S2' /\ measure S2 < measure S1)%nat)
+     (plus (step1 tge) S1' t S2' \/
+       (star (step1 tge) S1' t S2' /\ measure S2 < measure S1)%nat)
   /\ match_states S2 S2'.
 Proof.
   induction 1; intros; inv MS.
@@ -2273,8 +2273,8 @@ Theorem simulation:
   forall S1 t S2, Cstrategy.step ge S1 t S2 ->
   forall S1' (MS: match_states S1 S1'),
   exists S2',
-     (plus step1 tge S1' t S2' \/
-       (star step1 tge S1' t S2' /\ measure S2 < measure S1)%nat)
+     (plus (step1 tge) S1' t S2' \/
+       (star (step1 tge) S1' t S2' /\ measure S2 < measure S1)%nat)
   /\ match_states S2 S2'.
 Proof.
   intros S1 t S2 STEP. destruct STEP.
