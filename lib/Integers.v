@@ -85,6 +85,16 @@ Proof.
   rewrite modulus_power. apply two_p_gt_ZERO. generalize wordsize_pos; omega.
 Qed.
 
+Remark modulus_gt_one: modulus > 1.
+Proof.
+  rewrite modulus_power.
+  replace 1 with (two_p 0) by reflexivity.
+  apply Z.lt_gt.
+  apply two_p_monotone_strict.
+  generalize wordsize_pos.
+  omega.
+Qed.
+
 (** * Representation of machine integers *)
 
 (** A machine integer (type [int]) is represented as a Coq arbitrary-precision
