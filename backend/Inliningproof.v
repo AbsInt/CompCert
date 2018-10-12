@@ -1421,12 +1421,36 @@ Proof.
     + unfold ge0 in *. simpl in H2; eapply H2.
     + eapply (@match_program_gen_len_defs program); eauto.
     + erewrite sig_function_translated; eauto.
+      (*
     + erewrite transf_stacksize; eauto.
   - econstructor; try apply TR; try apply flat_injection_full; eauto.
     + admit.
     + admit.
+=======
+  eapply function_ptr_translated in H3. destruct H3 as (cu & tf & FIND & TR & LINK).
+  eapply function_ptr_translated in H5. destruct H5 as (cu0 & tf0 & FIND0 & TR0 & LINK0).
+  (* exploit function_ptr_translated; eauto. intros (cu & tf & FIND & TR & LINK). *)
+  simpl in TR0. destruct (transf_function (funenv_program cu0) f1); try discriminate.
+  simpl in TR0; inversion TR0. subst tf0.
+  do 2 econstructor; split.
+  - econstructor. eauto.
+    + unfold globals_not_fresh.
+      erewrite <- len_defs_genv_next.
+      unfold ge0 in *.
+      * simpl in H2; eapply H2.  
+      * eapply (@match_program_gen_len_defs program); eauto.
+    + erewrite sig_function_translated; eauto.
+    + fold tge. erewrite FIND0.
+      
+
+      
+  - econstructor; eauto.
+    + econstructor. instantiate (1:=Mem.nextblock m0).
+      eapply match_globalenvs_not_fresh; auto.
+      reflexivity.
+>>>>>>> Adding the simulation of at_external
     + apply Mem.neutral_inject; auto.
-      admit.
+      admit. *)
 Admitted.
 
 Lemma transf_initial_states':

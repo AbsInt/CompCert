@@ -219,6 +219,8 @@ Section ExposingMemory.
         Injfsim_match_full: forall i f s1 s2,
             Injmatch_states i f s1 s2 ->
             injection_full f (get_mem1 s1);
+        (* This uses the same memory and we should consider how the memory 
+           changes when compiling -> arguments passed on memory *)
         Injfsim_match_entry_points:
           forall s1 f arg m0, entry_point L1 m0 s1 f arg  ->
                          exists i j s2, entry_point L2 m0 s2 f arg /\ Injmatch_states i j s1 s2;

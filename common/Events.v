@@ -61,17 +61,81 @@ Inductive eventval: Type :=
   | EVsingle: float32 -> eventval
   | EVptr_global: ident -> ptrofs -> eventval.
 
-Notation access_map := (Maps.PMap.t (Z -> option permission)).
-Notation delta_map := (Maps.PTree.t (Z -> option (option permission))).
+
+(*
+  Delta Permission Maps:
+  A change in memory permissions.
+  - They have the same shape as the memories
+  - they return [None], if the permission doesn't change at that location
+  - return [Some perm], if the new permission is [perm].
+*)
+Notation delta_perm_map := (Maps.PTree.t (Z -> option (option permission))).
+Inductive inject_Z_map {A} (delt: Z) (f1 f2: (Z -> A)): Prop:=
+| InjectZ: (forall ofs x, f1 ofs = x ->
+                     f2 (ofs+ delt) = x) ->
+           inject_Z_map delt f1 f2.
+    
+                            
+Record inject_delta_map (mu: meminj)(dpm1 dpm2: delta_perm_map): Prop:=
+  { DPM_image: forall b1 b2 delt f1,
+      mu b1 = Some (b2, delt) ->
+      (Maps.PTree.get b1 dpm1) = Some f1 ->
+      exists f2, Maps.PTree.get b2 dpm2 = Some f2 /\
+            inject_Z_map delt f1 f2
+    ;DPM_preimage:
+       forall b2 ofs2 f2 p, Maps.PTree.get b2 dpm2 = Some f2 ->
+                     f2 ofs2 = p ->
+                     exists b1 f1 ofs1 delt,
+                       mu b1 = Some(b2, delt) /\
+                       Maps.PTree.get b1 dpm1 = Some f1 /\
+                       f1 ofs1 = p /\
+                       ofs2 = ofs1+delt
+  }.
+
+(* New memory events:
+   * These events are injectable
+   * They can indicate changes to memory with an mem_effect
+   * or changes to permissions with a delta_map.
+*)
+Inductive mem_effect :=
+  Write : forall (b : block) (ofs : Z) (bytes : list memval), mem_effect
+| Alloc: forall (lo hi:Z), mem_effect
+| Free: forall (l: list (block * Z * Z)), mem_effect.
+
+Inductive list_map_rel {A} (r:A-> A -> Prop): list A -> list A-> Prop:=
+| list_rel_nil:
+    list_map_rel r nil nil
+| list_rel_cons: forall a b l1 l2,
+                   r a b ->
+                   list_map_rel r (l1) (l2)->
+                   list_map_rel r (a::l1) (b::l2).
+Definition list_memval_inject mu:= list_map_rel (memval_inject mu). 
+Inductive inject_hi_low (mu:meminj): (block * Z * Z) -> (block * Z * Z) -> Prop:=
+| HiLow: forall b1 b2 hi low delt,
+    mu b1 = Some(b2, delt) ->
+    inject_hi_low mu (b1, hi, low) (b2, hi+delt, low+delt).
+Definition list_inject_hi_low mu := list_map_rel (inject_hi_low mu).
+  
+Inductive inject_mem_effect (mu: meminj): mem_effect -> mem_effect -> Prop :=
+| InjectWrites: forall b1 b2 ofs1 delt vals1 vals2,
+    mu b1 = Some (b2, delt) ->
+    list_memval_inject mu vals1 vals2 ->
+    inject_mem_effect mu (Write b1 ofs1 vals1) (Write b2 (ofs1 + delt) vals2)
+| InjectAlloc: forall lo hi,
+    inject_mem_effect mu (Alloc hi lo) (Alloc hi lo)
+| InjectFree: forall l1 l2,
+    list_inject_hi_low mu l1 l2 ->
+    inject_mem_effect mu (Free l1) (Free l2).
+Definition list_inject_mem_effect (mu:meminj):= list_map_rel (inject_mem_effect mu).
+
 
 Inductive event: Type :=
   | Event_syscall: string -> list eventval -> eventval -> event
   | Event_vload: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_vstore: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_annot: string -> list eventval -> event
-  | Event_acq: val -> mem -> event
-  | Event_rel: val -> delta_map -> event
-  | Event_spawn: val -> delta_map -> delta_map -> event.
+  | Event_acq_rel: list mem_effect -> delta_perm_map -> event
+  | Event_spawn: val -> delta_perm_map -> delta_perm_map -> event.
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -622,21 +686,15 @@ Definition inject_separated (f f': meminj) (m1 m2: mem): Prop :=
   f b1 = None -> f' b1 = Some(b2, delta) ->
   ~Mem.valid_block m1 b1 /\ ~Mem.valid_block m2 b2.
 
-Parameter inject_delta_map: meminj -> delta_map -> delta_map -> Prop. 
-Parameter inject_access_map: meminj -> access_map -> access_map -> Prop.
 Inductive inject_event: meminj -> event -> event -> Prop :=
   | INJ_syscall: forall f s t v, inject_event f (Event_syscall s t v) (Event_syscall s t v)
   | INJ_vload : forall f mc id n v, inject_event f (Event_vload mc id n v) (Event_vload mc id n v)
   | INJ_vstore : forall f mc id n v, inject_event f (Event_vstore mc id n v) (Event_vstore mc id n v)
   | INJ_annot : forall f st t, inject_event f (Event_annot st t) (Event_annot st t)
-  | INJ_acq : forall f v dm v' dm',
-      Val.inject f v v ->
-      Mem.inject f dm dm' ->
-      inject_event f (Event_acq v dm) (Event_acq v' dm')
-  | INJ_rel : forall f v dm v' dm',
-      Val.inject f v v -> 
-      inject_delta_map f dm dm' ->
-      inject_event f (Event_rel v dm) (Event_rel v' dm')
+  | INJ_acq : forall f ls1 ls2 dpm1 dpm2,
+      list_inject_mem_effect f ls1 ls2 ->
+      inject_delta_map f dpm1 dpm2 ->
+      inject_event f (Event_acq_rel ls1 dpm1) (Event_acq_rel ls2 dpm2)
   | INJ_spawn : forall f v dm1 dm2 v' dm1' dm2',
       Val.inject f v v -> 
       inject_delta_map f dm1 dm1' ->

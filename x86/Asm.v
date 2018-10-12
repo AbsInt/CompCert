@@ -1256,14 +1256,14 @@ Definition after_external_regset (ge:genv)(vret: option val) (rs: regset) : opti
       | Some res => 
           Some ((set_pair (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA))
       | None => 
-          Some ( rs #PC <- (rs RA))
+          Some ( rs#(IR RAX) <- Vundef #PC <- (rs RA))
      end
     | _ => None
    end
    else None
  | _ => None
  end.
-
+  
 Definition after_external (ge:genv)(vret: option val)(c:state)(m:mem): option state:=
   match c with
     State rs m' =>
