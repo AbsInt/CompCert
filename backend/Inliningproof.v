@@ -1392,6 +1392,7 @@ Proof.
   red; intros; subst j. unfold Mem.flat_inj. destruct (plt b0 (Mem.nextblock m0)). congruence. elim n. apply H.
 Qed.
 
+(* sounds false: inlining increases stack size!
 Lemma transf_stacksize:
   forall cu f f', transf_function (funenv_program cu) f = OK f' ->
   fn_stacksize f' = fn_stacksize f.
@@ -1403,6 +1404,7 @@ Proof.
   destruct (zlt _ _); inv H; simpl.
   monadInv EQ.
 Admitted.
+*)
 
 Lemma transf_entry_points:
   forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
@@ -1421,7 +1423,9 @@ Proof.
     + unfold ge0 in *. simpl in H2; eapply H2.
     + eapply (@match_program_gen_len_defs program); eauto.
     + erewrite sig_function_translated; eauto.
-      (*
+    + 
+ 
+(*     
     + erewrite transf_stacksize; eauto.
   - econstructor; try apply TR; try apply flat_injection_full; eauto.
     + admit.
