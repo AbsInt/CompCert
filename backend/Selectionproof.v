@@ -893,6 +893,48 @@ Definition measure (s: Cminor.state) : nat :=
   | Cminor.Returnstate _ _ _ => 2%nat
   end.
 
+Lemma external_call_diagram:
+  forall (k : Cminor.cont) (m : mem) (f : external_function) (args : list val) 
+    (t : trace) (s1' : Cminor.state),
+    Cminor.step (Genv.globalenv prog) (Cminor.Callstate (External f) args k m) t s1' ->
+    forall s2 : state,
+      match_states (Cminor.Callstate (External f) args k m) s2 ->
+      exists (i' : Cminor.state) (s2' : state),
+        step (Genv.globalenv tprog) s2 t s2' /\ i' = s1' /\ match_states s1' s2'.
+Proof.
+  intros k m f args t s1' STEP s2 MATCH.
+  inversion STEP; subst.
+  inv MATCH.
+  
+  - (* regular external call *)
+    destruct TF as (hf & HF & TF).
+    monadInv TF.
+    exploit external_call_mem_extends; eauto.
+    intros [vres' [m2 [A [B [C D]]]]].
+    do 2 eexists; split.
+    econstructor. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+    econstructor; eauto.
+    econstructor; eauto.
+  - exploit external_call_mem_extends; eauto.
+    intros [vres' [m2 [A [B [C D]]]]].
+    do 2 eexists; split.
+    econstructor. eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+    econstructor; eauto.
+    econstructor; eauto.
+Qed.
+
+Lemma simulation_atx:
+  @simulation_atx _ (Cminor.semantics prog) (CminorSel.semantics tprog)
+                  (fun (idx s1 : Cminor.state) (s2 : state) => idx = s1 /\ match_states s1 s2).
+Proof.
+  unfold simulation_atx; simpl; intros.
+  destruct H1 as (?&MATCH); subst.
+  destruct s1; simpl in H; try discriminate.
+  destruct f0; try discriminate.
+  inversion H; subst. clear H.
+  eapply external_call_diagram; eauto.
+Qed.
+
 Lemma sel_step_correct:
   forall S1 t S2, Cminor.step ge S1 t S2 ->
   forall T1, match_states S1 T1 ->
@@ -1043,19 +1085,15 @@ Proof.
   econstructor; simpl; eauto.
   econstructor; simpl; eauto. apply set_locals_lessdef. apply set_params_lessdef; auto.
 - (* external call *)
-  destruct TF as (hf & HF & TF).
-  monadInv TF.
-  exploit external_call_mem_extends; eauto.
-  intros [vres' [m2 [A [B [C D]]]]].
-  left; econstructor; split.
-  econstructor. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
-  econstructor; eauto.
+  exploit external_call_diagram;
+    try solve[econstructor; eauto].
+  intros (?&?&?&?&?); subst.
+  repeat first[eauto|econstructor].
 - (* external call turned into a Sbuiltin *)
-  exploit external_call_mem_extends; eauto.
-  intros [vres' [m2 [A [B [C D]]]]].
-  left; econstructor; split.
-  econstructor. eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
-  econstructor; eauto.
+  exploit external_call_diagram;
+    try solve[econstructor; eauto].
+  intros (?&?&?&?&?); subst.
+  repeat first[eauto|econstructor].
 - (* return *)
   apply match_call_cont_cont in MC. destruct MC as (cunit0 & hf0 & MC).
   inv MC.
@@ -1164,7 +1202,29 @@ Theorem transf_program_correct:
                       (Cminor.get_mem) (CminorSel.get_mem).
 Proof.
   eapply sim_extSim; try eapply transf_program_correct'.
-  simpl; intros ? ? ? [? ?]; subst; inversion H0; eauto.
+  - eapply simulation_atx.
+  - Lemma preserves_atx_proof:
+      preserves_atx
+        (fun (idx : Cminor.state) (s1 : Smallstep.state (Cminor.semantics prog))
+             (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
+    Proof.
+      unfold preserves_atx.
+      intros. destruct H; subst.
+      destruct s1; try discriminate. simpl in H0.
+      destruct f0; try discriminate.
+      inversion H0; subst.
+      inversion H1; subst.
+      - (* real external function *)
+        simpl.
+        inversion TF. destruct H. inversion H2.
+        (* arguments are not equal. 
+           They are less defined! *)
+        admit.
+      - admit.
+    Admitted.
+    apply preserves_atx_proof.
+  - simpl; intros ? ? ? [? ?]; subst; inversion H0; eauto.
+  
 Qed.
 End PRESERVATION.
 

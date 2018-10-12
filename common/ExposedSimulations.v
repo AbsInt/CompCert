@@ -27,10 +27,18 @@ Require Import Globalenvs.
 Require Import Integers.
 Require Import Smallstep.
 
-Require Import Values. (*for me
-minj, compose_meminj,...*)
+
+(*Require Import compcert.lib.Coqlib.
+Require Import compcert.common.Events.
+Require Import compcert.common.Globalenvs.
+Require Import compcert.lib.Integers.
+Require Import compcert.common.Smallstep.
+*)
+
+Require Import compcert.common.Values. (*for meminj, compose_meminj,...*)
 
 Set Implicit Arguments.
+
 
 (** * Transition semantics *)
 
@@ -43,6 +51,23 @@ Section ExposingMemory.
   Variable get_mem1: state L1 -> mem.
   Variable get_mem2: state L2 -> mem.
 
+  Definition preserves_atx {index:Type} {L1 L2} match_states
+    :=
+      forall (i:index) s1 s2,
+        match_states i s1 s2 ->
+        forall f args,
+          @at_external L1 s1 = Some (f,args) -> 
+          @at_external L2 s2 = Some (f,args).
+
+  Definition simulation_atx {index:Type} {L1 L2} (match_states: index -> _ -> _ -> Prop)
+    :=
+        forall s1 f args,
+          @at_external L1 s1 = Some (f,args) -> 
+          forall t s1', Step L1 s1 t s1' ->
+                  forall i s2, match_states i s1 s2 ->
+                          exists i', exists s2', Step L2 s2 t s2' /\
+                                       match_states i' s1' s2'.
+  
   (** *Equality Phases*)
   Section Equality.
     Record fsim_properties_eq: Type :=
@@ -52,9 +77,9 @@ Section ExposingMemory.
         Eqmatch_states: Eqindex -> state L1 -> state L2 -> Prop;  
         Eqfsim_order_wf: well_founded Eqorder;
         Eqfsim_match_meminj: forall i s1 s2, Eqmatch_states i s1 s2 ->  (get_mem1 s1) = (get_mem2 s2);
-        Eqfsim_match_entry_points:
-          forall s1 f arg m0, entry_point L1 m0 s1 f arg  ->
-                         exists i s2, entry_point L2 m0 s2 f arg /\ Eqmatch_states i s1 s2;
+        (*    fsim_match_initial_states:
+      forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
+      exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
         Eqfsim_match_initial_states:
           forall s1, initial_state L1 s1 -> 
                 exists i s2, initial_state L2 s2 /\ Eqmatch_states i s1 s2;
@@ -67,20 +92,29 @@ Section ExposingMemory.
                               exists i', exists s2',
                                   (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ Eqorder i' i))
                                   /\ Eqmatch_states i' s1' s2';
+        Eqfsim_simulation_atx:
+          simulation_atx Eqmatch_states;
+        Eqfsim_atx:
+          preserves_atx Eqmatch_states;
         Eqfsim_public_preserved:
           forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
       }.
   
+
+        
     
     Lemma sim_eqSim':
       forall index order (match_states:index -> state L1 -> state L2 -> Prop),
+        (simulation_atx match_states) ->
+        (preserves_atx match_states) ->
       (forall i s1 s2, match_states i s1 s2 ->  (get_mem1 s1) = (get_mem2 s2)) ->
       fsim_properties L1 L2 index order match_states ->
       fsim_properties_eq.
     Proof.
-      intros ? ? ? H HH; inv HH.
+      intros ? ? ? ? ? H HH; inv HH.
       econstructor; eauto.
     Qed.
+    
   End Equality.
 
   
@@ -94,9 +128,9 @@ Section ExposingMemory.
     Extmatch_states: Extindex -> state L1 -> state L2 -> Prop;  
     Extfsim_order_wf: well_founded Extorder;
     Extfsim_match_meminj: forall i s1 s2, Extmatch_states i s1 s2 ->  Mem.extends (get_mem1 s1) (get_mem2 s2);
-    Extfsim_match_entry_points:
-      forall s1 f arg m0, entry_point L1 m0 s1 f arg  ->
-                     exists i s2, entry_point L2 m0 s2 f arg /\ Extmatch_states i s1 s2;
+(*    fsim_match_initial_states:
+      forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
+      exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
     Extfsim_match_initial_states:
       forall s1, initial_state L1 s1 -> 
                exists i s2, initial_state L2 s2 /\ Extmatch_states i s1 s2;
@@ -109,6 +143,10 @@ Section ExposingMemory.
       exists i', exists s2',
          (Plus L2 s2 t s2' \/ (Star L2 s2 t s2' /\ Extorder i' i))
          /\ Extmatch_states i' s1' s2';
+    Extfsim_simulation_atx:
+          simulation_atx Extmatch_states;
+    Extfsim_atx:
+          preserves_atx Extmatch_states;
     Extfsim_public_preserved:
       forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
   }.
@@ -198,32 +236,54 @@ Section ExposingMemory.
 
     Lemma sim_extSim:
       forall index order (match_states:index -> state L1 -> state L2 -> Prop),
+        (simulation_atx match_states) ->
+        (preserves_atx match_states) ->
       (forall i s1 s2, match_states i s1 s2 ->  Mem.extends (get_mem1 s1) (get_mem2 s2)) ->
       fsim_properties L1 L2 index order match_states ->
       fsim_properties_ext.
     Proof.
-      intros ? ? ? H HH; inv HH.
+      intros ? ? ? ? ? H HH; inv HH.
       econstructor; eauto.
     Qed.
-
+    
   End Extensions.
 
-  (** *Extension Phases*)
+  (** *Injection Phases*)
   Section Injection.
+
+    Definition preserves_atx_inj {index:Type} {L1 L2} match_states
+        :=
+          forall (i:index)(j:meminj) s1 s2,
+            match_states i j s1 s2 ->
+            forall f args,
+              @at_external L1 s1 = Some (f,args) ->
+          exists args',
+            @at_external L2 s2 = Some (f,args') /\
+            Val.inject_list j args args'.
+
+    Definition simulation_atx_inj {index:Type} {L1 L2}
+               (match_states: index -> meminj -> _ -> _ -> Prop)
+      :=
+        forall s1 f args,
+          @at_external L1 s1 = Some (f,args) -> 
+          forall t s1', Step L1 s1 t s1' ->
+                    forall i f s2, match_states i f s1 s2 ->
+                              exists i', exists s2' f' t',
+                                  Step L2 s2 t' s2' /\
+                                  match_states i' f' s1' s2' /\
+                                  Values.inject_incr f f' /\
+                                  inject_trace f' t t'.
+    
     Record fsim_properties_inj: Type :=
       {  Injindex: Type;
         Injorder: Injindex -> Injindex -> Prop;
         Injmatch_states: Injindex -> meminj -> state L1 -> state L2 -> Prop;  
         Injfsim_order_wf: well_founded Injorder;
         Injfsim_match_meminj: forall i f s1 s2, Injmatch_states i f s1 s2 ->  Mem.inject f (get_mem1 s1) (get_mem2 s2);
-        Injfsim_match_full: forall i f s1 s2,
-            Injmatch_states i f s1 s2 ->
-            injection_full f (get_mem1 s1);
-        (* This uses the same memory and we should consider how the memory 
-           changes when compiling -> arguments passed on memory *)
-        Injfsim_match_entry_points:
-          forall s1 f arg m0, entry_point L1 m0 s1 f arg  ->
-                         exists i j s2, entry_point L2 m0 s2 f arg /\ Injmatch_states i j s1 s2;
+        Injfsim_match_full: forall i f s1 s2, Injmatch_states i f s1 s2 ->  injection_full f (get_mem1 s1);
+        (*    fsim_match_initial_states:
+      forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
+      exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
         Injfsim_match_initial_states:
           forall s1, initial_state L1 s1 -> 
                 exists i f s2, initial_state L2 s2 /\ Injmatch_states i f s1 s2;
@@ -238,6 +298,10 @@ Section ExposingMemory.
                                     /\ Injmatch_states i' f' s1' s2' /\
                                     Values.inject_incr f f' /\
                                     inject_trace f' t t';
+        Injsim_simulation_atx:
+          simulation_atx_inj Injmatch_states;
+        Injsim_atx:
+            preserves_atx_inj Injmatch_states;
         Injfsim_public_preserved:
           forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
       }.
@@ -407,10 +471,6 @@ Section Composition.
 - (* Full *)
   intros ? ? ? ? [s2' [MATCH12 MATCH23]] b VALID.
   eapply SIM12; eauto.
-- (* entry point *)
-  intros. exploit (Injfsim_match_entry_points SIM12); eauto. intros [i [ j [s2 [A B]]]].
-  exploit (Extfsim_match_entry_points SIM23); eauto. intros [i' [s3 [C D]]].
-  exists (i', i); exists j; exists s3; split; auto. exists s2; auto.
 - (* initial states *)
   intros. exploit (Injfsim_match_initial_states SIM12); eauto. intros [i [ f [s2 [A B]]]].
   exploit (Extfsim_match_initial_states SIM23); eauto. intros [i' [s3 [C D]]].
@@ -437,6 +497,26 @@ Section Composition.
   right; split. subst t; apply star_refl. right. auto.
   exists s3; auto.
   subst t; constructor.
+- (*simulation at_external*)
+  unfold simulation_atx_inj; intros.
+  destruct H1 as [s3 [A B]]. destruct i as [i2 i1]; simpl in *.
+  exploit (Injsim_simulation_atx SIM12); eauto.
+  intros [i1' [s2'[ f' [t' [C [D [E F]]]]]]].
+  eapply Injsim_atx in H; eauto.
+  destruct H as (?&?&?).
+  exploit (Extfsim_simulation_atx); eauto.
+  intros [i2' [s3' [P Q]]].
+  exists (i2', i1'); exists s3'; exists f', t'. repeat (split; auto).
+  exists s2'; auto.
+    
+- (*match_states preserves at_external *)
+  unfold preserves_atx_inj; intros.
+  destruct H as (?&?&?).
+  eapply Injsim_atx in H0; try apply H.
+  destruct H0 as (args'&Hatx&Hinj).
+  exists args'. split; auto.
+  eapply SIM23; eauto.
+      
 - (* symbols *)
   intros. transitivity (Senv.public_symbol (symbolenv L2) id);
             [eapply Extfsim_public_preserved|eapply Injfsim_public_preserved]; eauto.
@@ -478,10 +558,7 @@ Section Composition.
   eapply SIM23; eauto.
   eapply Extfsim_match_meminj in MATCH12; eauto.
   inv MATCH12. unfold Mem.valid_block; rewrite <- mext_next; auto.
-- (* entry points *)
-  intros. exploit (Extfsim_match_entry_points SIM12); eauto. intros [i [s2 [A B]]].
-  exploit (Injfsim_match_entry_points SIM23); eauto. intros [i' [j [s3 [C D]]]].
-  exists (i', i); exists j; exists s3; split; auto. exists s2; auto.
+  
 - (* initial states *)
   intros. exploit (Extfsim_match_initial_states SIM12); eauto. intros [i [s2 [A B]]].
   exploit (Injfsim_match_initial_states SIM23); eauto. intros [i' [f [s3 [C D]]]].
@@ -510,6 +587,21 @@ Section Composition.
   right; split. subst t; apply star_refl. right. auto.
   exists s3; auto.
   subst t; constructor.
+- (*simulation at_external*)
+  unfold simulation_atx_inj; intros.
+  destruct H1 as [s3 [A B]]. destruct i as [i2 i1]; simpl in *.
+  exploit (Extfsim_simulation_atx); eauto.
+  intros [i1' [s2' [P Q]]].
+  eapply Extfsim_atx in H; eauto.
+  exploit (Injsim_simulation_atx SIM23); eauto.
+  intros [i2' [s3'[ f' [t' [C [D [E F]]]]]]].
+  exists (i2', i1'); exists s3'; exists f', t'. repeat (split; auto).
+  exists s2'; auto.
+- (*match_states preserves at_external *)
+  unfold preserves_atx_inj; intros.
+  destruct H as (?&?&?).
+  eapply Extfsim_atx in H0; eauto.
+  eapply Injsim_atx in H0; eauto.
 - (* symbols *)
   intros. transitivity (Senv.public_symbol (symbolenv L2) id);
             [eapply Injfsim_public_preserved|eapply Extfsim_public_preserved]; eauto.
@@ -582,12 +674,6 @@ Section Composition.
   eapply SIM23 in VALID2; try (exact MATCH23).
   intros HH. apply VALID2. destruct (f23 b0); inversion HH; auto.
   destruct p. inversion HH.
-- (* entry points *)
-  intros. exploit (Injfsim_match_entry_points SIM12); eauto.
-  intros [i [ f12 [s2 [A B]]]].
-  exploit (Injfsim_match_entry_points SIM23); eauto. intros [i' [f23 [s3 [C D]]]].
-  exists (i', i); exists (compose_meminj f12 f23); exists s3; split; auto. exists s2; auto.
-  exists f12, f23; repeat (split; auto). 
 - (* initial states *)
   intros. exploit (Injfsim_match_initial_states SIM12); eauto.
   intros [i [ f12 [s2 [A B]]]].
@@ -630,10 +716,69 @@ Section Composition.
   subst f.
   eapply compose_inject_incr; eauto.
   subst t; constructor.
+- (*simulation at_external*)
+  unfold simulation_atx_inj; intros.
+  destruct H1 as [s3 [f12 [f23 [A [B C]]]]]. destruct i as [i2 i1]; simpl in *.
+  
+  exploit (Injsim_simulation_atx SIM12); eauto.
+  intros [i1' [s2'[ f12' [t2' [? [? [? ?]]]]]]].
+  
+  eapply Injsim_atx in H; eauto.
+  destruct H as (?&?&?).
+  exploit (Injsim_simulation_atx SIM23); eauto.
+  intros [i2' [s3'[ f23' [t3' [? [? [? ?]]]]]]].
+  exists (i2', i1'); exists s3'; exists (compose_meminj f12' f23'), t3'. repeat (split; auto).
+  + exists s2',f12', f23'; auto.
+  + subst; eapply compose_inject_incr; auto.
+  + subst; eapply inject_trace_compose; eauto.
+  
+- (*match_states preserves at_external *)
+  unfold preserves_atx_inj; intros.
+  destruct H as (?&?&?&?&?&?). 
+  eapply Injsim_atx in H0; try eapply H.
+  destruct H0 as (?&?&?).
+  eapply Injsim_atx in H0; eauto.
+  destruct H0 as (args'&Hatx&Hinj).
+  exists args'.
+  split; eauto.
+  Lemma inject_compose_meminj:
+    forall v1 v2 v3 j12 j23 j13,
+      Val.inject j12 v1 v2 ->
+      Val.inject j23 v2 v3 ->
+      j13 = compose_meminj j12 j23 ->
+      Val.inject j13 v1 v3.
+  Proof.
+  Admitted.
+  Lemma inject_list_compose_meminj:
+    forall lv1 lv2 lv3 j12 j23 j13,
+      Val.inject_list j12 lv1 lv2 ->
+      Val.inject_list j23 lv2 lv3 ->
+      j13 = compose_meminj j12 j23 ->
+      Val.inject_list j13 lv1 lv3.
+  Proof.
+    induction lv1.
+    - intros. inversion H; subst; inversion H0; constructor.
+    - intros. inversion H; subst; inversion H0; subst; constructor.
+      + eapply inject_compose_meminj; eauto.
+      + eapply IHlv1; eauto.
+  Qed.
+  eapply inject_list_compose_meminj; eassumption.
+  
 - (* symbols *)
   intros. transitivity (Senv.public_symbol (symbolenv L2) id);
             [eapply Injfsim_public_preserved|eapply Injfsim_public_preserved]; eauto.
   Qed.
 
+  
+  (* Lemma injection_injection_composition:
+    forward_injection L1 L2 get_mem1 get_mem2 ->
+    forward_injection L2 L3 get_mem2 get_mem3 ->
+    forward_injection L1 L3 get_mem1 get_mem3.
+  Proof.
+    intros S12 S23.
+    inv S12; inv S23.
+    econstructor.
+    eapply injection_injection_composition'; eauto.
+  Qed. *)
   
   End Composition.

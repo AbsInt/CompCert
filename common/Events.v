@@ -83,13 +83,14 @@ Record inject_delta_map (mu: meminj)(dpm1 dpm2: delta_perm_map): Prop:=
       exists f2, Maps.PTree.get b2 dpm2 = Some f2 /\
             inject_Z_map delt f1 f2
     ;DPM_preimage:
-       forall b2 ofs2 f2 p, Maps.PTree.get b2 dpm2 = Some f2 ->
-                     f2 ofs2 = p ->
-                     exists b1 f1 ofs1 delt,
-                       mu b1 = Some(b2, delt) /\
-                       Maps.PTree.get b1 dpm1 = Some f1 /\
-                       f1 ofs1 = p /\
-                       ofs2 = ofs1+delt
+       forall b2 ofs2 f2 p,
+         Maps.PTree.get b2 dpm2 = Some f2 ->
+         f2 ofs2 = p ->
+         exists b1 f1 ofs1 delt,
+           mu b1 = Some(b2, delt) /\
+           Maps.PTree.get b1 dpm1 = Some f1 /\
+           f1 ofs1 = p /\
+           ofs2 = ofs1 + delt
   }.
 
 (* New memory events:
