@@ -56,8 +56,10 @@ Section ExposingMemory.
       forall (i:index) s1 s2,
         match_states i s1 s2 ->
         forall f args,
-          @at_external L1 s1 = Some (f,args) -> 
-          @at_external L2 s2 = Some (f,args).
+          @at_external L1 s1 = Some (f,args) ->
+          exists args',
+            @at_external L2 s2 = Some (f,args') /\
+            Val.lessdef_list args args'.
 
   Definition simulation_atx {index:Type} {L1 L2} (match_states: index -> _ -> _ -> Prop)
     :=
@@ -512,10 +514,26 @@ Section Composition.
 - (*match_states preserves at_external *)
   unfold preserves_atx_inj; intros.
   destruct H as (?&?&?).
+  assert (Hat_ext:=H0).
   eapply Injsim_atx in H0; try apply H.
   destruct H0 as (args'&Hatx&Hinj).
-  exists args'. split; auto.
-  eapply SIM23; eauto.
+  eapply Extfsim_atx in Hatx; eauto.
+  destruct Hatx as (args''&Hatx''&Hless_def).
+  
+  exists args''. split; auto.
+  Lemma list_val_inject_lessdef_compose
+     : forall (f : meminj) (v1 v2 v3 : list val),
+      Val.inject_list f v1 v2 -> Val.lessdef_list v2 v3 -> Val.inject_list f v1 v3.
+  Proof.
+    induction v1; intros.
+    - inversion H; subst; inversion H0. constructor.
+    - inversion H; subst; inversion H0; subst.
+      constructor; auto.
+      eapply Mem.val_inject_lessdef_compose; eauto.
+      eapply IHv1; eauto.
+  Qed.
+
+  eapply list_val_inject_lessdef_compose; eauto.
       
 - (* symbols *)
   intros. transitivity (Senv.public_symbol (symbolenv L2) id);
@@ -593,6 +611,7 @@ Section Composition.
   exploit (Extfsim_simulation_atx); eauto.
   intros [i1' [s2' [P Q]]].
   eapply Extfsim_atx in H; eauto.
+  destruct H as (args'&Hatx2&Hlessdef).
   exploit (Injsim_simulation_atx SIM23); eauto.
   intros [i2' [s3'[ f' [t' [C [D [E F]]]]]]].
   exists (i2', i1'); exists s3'; exists f', t'. repeat (split; auto).
@@ -601,7 +620,22 @@ Section Composition.
   unfold preserves_atx_inj; intros.
   destruct H as (?&?&?).
   eapply Extfsim_atx in H0; eauto.
-  eapply Injsim_atx in H0; eauto.
+  destruct H0 as (args2&Hatx2&Hlessdef2).
+  eapply Injsim_atx in Hatx2; eauto.
+  destruct Hatx2 as (args3&Hatx3&Hlessdef3).
+  exists args3; split; eauto.
+  Lemma list_lessdef_val_inject_compose
+     : forall (f : meminj) (v1 v2 v3 : list val),
+      Val.lessdef_list v1 v2 ->  Val.inject_list f v2 v3 -> Val.inject_list f v1 v3.
+  Proof.
+    induction v1; intros.
+    - inversion H; subst; inversion H0. constructor.
+    - inversion H; subst; inversion H0; subst.
+      constructor; auto.
+      eapply Mem.val_lessdef_inject_compose; eauto.
+      eapply IHv1; eauto.
+  Qed.
+  eapply list_lessdef_val_inject_compose; eauto.
 - (* symbols *)
   intros. transitivity (Senv.public_symbol (symbolenv L2) id);
             [eapply Injfsim_public_preserved|eapply Extfsim_public_preserved]; eauto.

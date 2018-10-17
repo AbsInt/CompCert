@@ -268,7 +268,9 @@ Definition at_external (c: state) : option (external_function * list val) :=
       match fd with
         Internal f => None
       | External ef => 
-          Some (ef, args)
+        (* If it is a built_in, it is not at external *)
+        if ef_inline ef
+        then None else Some (ef, args)
       end
   | Returnstate _ _ _ => None
  end.

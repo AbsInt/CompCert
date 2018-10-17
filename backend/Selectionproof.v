@@ -1212,16 +1212,17 @@ Proof.
       intros. destruct H; subst.
       destruct s1; try discriminate. simpl in H0.
       destruct f0; try discriminate.
+      destruct (ef_inline e) eqn:HH; try discriminate.
       inversion H0; subst.
       inversion H1; subst.
       - (* real external function *)
         simpl.
         inversion TF. destruct H. inversion H2.
-        (* arguments are not equal. 
-           They are less defined! *)
-        admit.
-      - admit.
-    Admitted.
+        eexists; split; eauto.
+      - simpl.
+        inversion TF. destruct H. inversion H2.
+        eexists; split; eauto.
+    Qed.
     apply preserves_atx_proof.
   - simpl; intros ? ? ? [? ?]; subst; inversion H0; eauto.
   
