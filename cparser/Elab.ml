@@ -535,8 +535,11 @@ let elab_attribute env = function
             (List.flatten
                (List.map (elab_gcc_attr loc env) l)))
   | PACKED_ATTR (args, loc) ->
-      enter_gcc_attr loc 
+    begin try
+      enter_gcc_attr loc
         (Attr("__packed__", List.map (elab_attr_arg loc env) args))
+      with Wrong_attr_arg -> error loc "ill-formed 'packed' attribute"; []
+    end
   | ALIGNAS_ATTR ([a], loc) ->
       warning loc Celeven_extension "'_Alignas' is a C11 extension";
       begin match elab_attr_arg loc env a with
