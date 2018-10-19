@@ -19,7 +19,11 @@ Require Import Maps.
 Require Import Ordered.
 Require Import AST.
 Require Import Values.
+Require Import Memory.
+Require Export Memdata.
+Require Export FragmentBlock.
 Require Export Machregs.
+Require Export Registerfile.
 
 (** * Representation of locations *)
 
@@ -54,9 +58,9 @@ slots of its caller function.
 
 The type of a slot indicates how it will be accessed later once mapped to
 actual memory locations inside a memory-allocated activation record:
-as 32-bit integers/pointers (type [Tint]) or as 64-bit floats (type [Tfloat]).
+as 32-bit or 64-bit quantities ([Q32] or [Q64]).
 
-The offset of a slot, combined with its type and its kind, identifies
+The offset of a slot, combined with its quantity and its kind, identifies
 uniquely the slot and will determine later where it resides within the
 memory-allocated activation record.  Offsets are always positive.
 *)
@@ -106,6 +110,20 @@ Proof.
   intros. exists (typesize ty / typealign ty); destruct ty; reflexivity.
 Qed.
 
+Definition quantity_align (q: quantity) : Z := 1.
+
+Lemma quantity_align_pos:
+  forall (q: quantity), quantity_align q > 0.
+Proof.
+  destruct q; compute; auto.
+Qed.
+
+Lemma quantity_align_typesize:
+  forall (q: quantity), (quantity_align q | typesize (typ_of_quantity q)).
+Proof.
+  intros. destruct q; simpl. exists 1; eauto. exists 2; eauto.
+Qed.
+
 (** ** Locations *)
 
 (** Locations are just the disjoint union of machine registers and
@@ -113,21 +131,27 @@ Qed.
 
 Inductive loc : Type :=
   | R (r: mreg)
-  | S (sl: slot) (pos: Z) (ty: typ).
+  | S (sl: slot) (pos: Z) (q: quantity).
 
 Module Loc.
 
   Definition type (l: loc) : typ :=
     match l with
     | R r => mreg_type r
-    | S sl pos ty => ty
+    | S sl pos q => typ_of_quantity q
+    end.
+
+  Definition quantity (l: loc) : quantity :=
+    match l with
+    | R r => quantity_of_mreg r
+    | S sl pos q => q
     end.
 
   Lemma eq: forall (p q: loc), {p = q} + {p <> q}.
   Proof.
     decide equality.
     apply mreg_eq.
-    apply typ_eq.
+    apply quantity_eq.
     apply zeq.
     apply slot_eq.
   Defined.
@@ -147,8 +171,8 @@ Module Loc.
     match l1, l2 with
     | R r1, R r2 =>
         r1 <> r2
-    | S s1 d1 t1, S s2 d2 t2 =>
-        s1 <> s2 \/ d1 + typesize t1 <= d2 \/ d2 + typesize t2 <= d1
+    | S s1 d1 q1, S s2 d2 q2 =>
+        s1 <> s2 \/ d1 + typesize (typ_of_quantity q1) <= d2 \/ d2 + typesize (typ_of_quantity q2) <= d1
     | _, _ =>
         True
     end.
@@ -157,7 +181,7 @@ Module Loc.
     forall l, ~(diff l l).
   Proof.
     destruct l; unfold diff; auto.
-    red; intros. destruct H; auto. generalize (typesize_pos ty); omega.
+    red; intros. destruct H; auto. generalize (typesize_pos (typ_of_quantity q)); omega.
   Qed.
 
   Lemma diff_not_eq:
@@ -180,9 +204,9 @@ Module Loc.
   - left; auto.
   - left; auto.
   - destruct (slot_eq sl sl0).
-    destruct (zle (pos + typesize ty) pos0).
+    destruct (zle (pos + typesize (typ_of_quantity q)) pos0).
     left; auto.
-    destruct (zle (pos0 + typesize ty0) pos).
+    destruct (zle (pos0 + typesize (typ_of_quantity q0)) pos).
     left; auto.
     right; red; intros [P | [P | P]]. congruence. omega. omega.
     left; auto.
@@ -298,6 +322,143 @@ Module Loc.
 
 End Loc.
 
+(** * Representation of the stack frame *)
+
+(** The [Stack] module defines mappings from stack slots to values,
+  represented as a mapping from addresses to bytes. The stack frame is
+  represented as three distinct such mappings, one for each kind of slot; a
+  stack slot [S sl ofs q] is accessed in the mapping for its kind [sl] at an
+  address computed from its offset [ofs], using [q] to inform how many bytes to
+  access and how to encode/decode them. *)
+
+Module Stack.
+
+  Definition t := slot -> FragBlock.t.
+
+  Definition init : t := fun _ => FragBlock.init.
+
+  (* A slot's address: The index of its first byte. *)
+  Definition addr (ofs: Z) : Z := FragBlock.addr ofs.
+
+  (* The address one byte past the end of a slot with [ofs] and [q]. The next
+     nonoverlapping slot may start here. *)
+  Definition next_addr (ofs: Z) (q: quantity) : Z := FragBlock.next_addr ofs q.
+
+  Definition get_bytes sl ofs q (stack: t) : list memval :=
+    FragBlock.get_bytes ofs q (stack sl).
+
+  Definition get sl ofs q (stack: t) : val :=
+    FragBlock.get ofs q (stack sl).
+
+  Definition set_bytes sl ofs q (bytes: list memval) (stack: t) : t :=
+    fun slot =>
+      if slot_eq slot sl then
+        FragBlock.set_bytes ofs q bytes (stack sl)
+      else
+        stack slot.
+
+  Definition set sl ofs q (v: val) (stack: t) : t :=
+    fun slot =>
+      if slot_eq slot sl then
+        FragBlock.set ofs q v (stack sl)
+      else
+        stack slot.
+
+  (* The [Loc.diff] predicate on stack slots is compatible with [FragBlock]'s
+    notion of non-overlapping accesses. *)
+  Lemma diff_compat:
+    forall sl ofs q ofs' q',
+    Loc.diff (S sl ofs q) (S sl ofs' q') ->
+    FragBlock.next_addr ofs q <= FragBlock.addr ofs' \/
+    FragBlock.next_addr ofs' q' <= FragBlock.addr ofs.
+  Proof.
+    intros.
+    unfold Loc.diff in H. destruct H; try contradiction.
+    unfold FragBlock.next_addr, FragBlock.addr, FragBlock.quantity_size.
+    destruct q, q'; simpl in *; omega.
+  Qed.
+
+  Lemma gss:
+    forall sl ofs q v stack,
+    get sl ofs q (set sl ofs q v stack) = Val.load_result (chunk_of_quantity q) v.
+  Proof.
+    intros. unfold get, set. rewrite dec_eq_true, FragBlock.gss; auto.
+  Qed.
+
+  Lemma gso:
+    forall sl ofs q sl' ofs' q' v stack,
+    Loc.diff (S sl ofs q) (S sl' ofs' q') ->
+    get sl ofs q (set sl' ofs' q' v stack) = get sl ofs q stack.
+  Proof.
+    intros. unfold get, set.
+    destruct (slot_eq sl sl'); subst; auto.
+    apply FragBlock.gso. eauto using diff_compat.
+  Qed.
+
+  Lemma gss_bytes:
+    forall sl ofs q bs rf,
+    length bs = size_quantity_nat q ->
+    get_bytes sl ofs q (set_bytes sl ofs q bs rf) = bs.
+  Proof.
+    intros. unfold get_bytes, set_bytes.
+    rewrite dec_eq_true, FragBlock.gss_bytes; auto.
+  Qed.
+
+  Lemma gso_bytes:
+    forall sl ofs q sl' ofs' q' bs stack,
+    length bs = size_quantity_nat q' ->
+    Loc.diff (S sl ofs q) (S sl' ofs' q') ->
+    get_bytes sl ofs q (set_bytes sl' ofs' q' bs stack) = get_bytes sl ofs q stack.
+  Proof.
+    intros. unfold get_bytes, set_bytes.
+    destruct (slot_eq sl sl'); subst; auto.
+    apply FragBlock.gso_bytes; auto.
+    eauto using diff_compat.
+  Qed.
+
+  Lemma gu_overlap:
+    forall sl ofs q sl' ofs' q' v stack,
+    S sl ofs q <> S sl' ofs' q' ->
+    ~ Loc.diff (S sl ofs q) (S sl' ofs' q') ->
+    get sl ofs q (set sl' ofs' q' v stack) = Vundef.
+  Proof.
+    intros. unfold get, set.
+    simpl in H0. apply Decidable.not_or in H0. destruct H0.
+    assert (sl = sl'). { destruct (slot_eq sl sl'). auto. contradiction. } subst sl'. clear H0.
+    apply Decidable.not_or in H1. destruct H1.
+    apply Z.nle_gt in H0. apply Z.nle_gt in H1.
+    rewrite pred_dec_true by auto.
+    apply FragBlock.gu_overlap.
+    congruence.
+    unfold FragBlock.next_addr, FragBlock.addr, FragBlock.quantity_size.
+    destruct q, q'; simpl in *; omega.
+    unfold FragBlock.next_addr, FragBlock.addr, FragBlock.quantity_size.
+    destruct q, q'; simpl in *; omega.
+  Qed.
+
+  Lemma get_has_type:
+    forall sl ofs q stack,
+    Val.has_type (get sl ofs q stack) (Loc.type (S sl ofs q)).
+  Proof.
+    intros. unfold get. apply FragBlock.get_has_type.
+  Qed.
+
+  Lemma get_bytes_compat:
+    forall sl ofs q stack,
+    get sl ofs q stack = decode_val (chunk_of_quantity q) (get_bytes sl ofs q stack).
+  Proof.
+    reflexivity.
+  Qed.
+
+  Lemma set_bytes_compat:
+    forall sl ofs q v stack,
+    set sl ofs q v stack = set_bytes sl ofs q (encode_val (chunk_of_quantity q) v) stack.
+  Proof.
+    reflexivity.
+  Qed.
+
+End Stack.
+
 (** * Mappings from locations to values *)
 
 (** The [Locmap] module defines mappings from locations to values,
@@ -308,11 +469,30 @@ Set Implicit Arguments.
 
 Module Locmap.
 
-  Definition t := loc -> val.
+  Module Regfile := Regfile(Mreg).
 
-  Definition init (x: val) : t := fun (_: loc) => x.
+  Definition t := (Regfile.t * Stack.t)%type.
 
-  Definition get (l: loc) (m: t) : val := m l.
+  Definition chunk_of_loc (l: loc) : memory_chunk :=
+    chunk_of_type (Loc.type l).
+
+  Lemma chunk_of_loc_charact:
+    forall l,
+    chunk_of_loc l = chunk_of_type (Loc.type l).
+  Proof.
+    destruct l; auto.
+  Qed.
+
+  Definition init : t := (Regfile.init, Stack.init).
+
+  Definition get (l: loc) (m: t) : val :=
+    match l, m with
+    | R r, (rf, stack) => Regfile.get r rf
+    | S sl ofs q, (rf, stack) => Stack.get sl ofs q stack
+    end.
+
+  (* Auxiliary for some places where a function of type [loc -> val] is expected. *)
+  Definition read (m: t) : loc -> val := fun (l: loc) => get l m.
 
   (** The [set] operation over location mappings reflects the overlapping
       properties of locations: changing the value of a location [l]
@@ -329,36 +509,39 @@ Module Locmap.
       are normalized according to the type of the slot. *)
 
   Definition set (l: loc) (v: val) (m: t) : t :=
-    fun (p: loc) =>
-      if Loc.eq l p then
-        match l with R r => v | S sl ofs ty => Val.load_result (chunk_of_type ty) v end
-      else if Loc.diff_dec l p then
-        m p
-      else Vundef.
+    match l, m with
+    | R r, (rf, stack) => (Regfile.set r v rf, stack)
+    | S sl ofs q, (rf, stack) => (rf, Stack.set sl ofs q v stack)
+    end.
 
   Lemma gss: forall l v m,
-    (set l v m) l =
-    match l with R r => v | S sl ofs ty => Val.load_result (chunk_of_type ty) v end.
+    get l (set l v m) = Val.load_result (chunk_of_type (Loc.type l)) v.
   Proof.
-    intros. unfold set. apply dec_eq_true.
+    intros.
+    destruct l, m. apply Regfile.gss.
+    unfold get, set. simpl. destruct q; apply Stack.gss.
   Qed.
 
-  Lemma gss_reg: forall r v m, (set (R r) v m) (R r) = v.
+  Lemma gss_reg: forall r v m, Val.has_type v (mreg_type r) -> get (R r) (set (R r) v m) = v.
   Proof.
-    intros. unfold set. rewrite dec_eq_true. auto.
+    intros. rewrite gss. apply Val.load_result_same; auto.
   Qed.
 
-  Lemma gss_typed: forall l v m, Val.has_type v (Loc.type l) -> (set l v m) l = v.
+  Lemma gss_typed: forall l v m, Val.has_type v (Loc.type l) -> get l (set l v m) = v.
   Proof.
-    intros. rewrite gss. destruct l. auto. apply Val.load_result_same; auto.
+    intros. rewrite gss. destruct l; simpl. apply Val.load_result_same; auto.
+    replace (chunk_of_quantity q) with (chunk_of_type (Loc.type (S sl pos q))) by (destruct q; auto).
+    apply Val.load_result_same; auto.
   Qed.
 
-  Lemma gso: forall l v m p, Loc.diff l p -> (set l v m) p = m p.
+  Lemma gso: forall l v m p, Loc.diff l p -> get p (set l v m) = get p m.
   Proof.
-    intros. unfold set. destruct (Loc.eq l p).
-    subst p. elim (Loc.same_not_diff _ H).
-    destruct (Loc.diff_dec l p).
-    auto.
+    intros.
+    destruct l, m.
+    destruct p; simpl in H; auto. apply Regfile.gso; auto.
+    unfold get, set.
+    destruct (Loc.diff_dec (S sl pos q) p).
+    destruct p; auto using Stack.gso, Loc.diff_sym.
     contradiction.
   Qed.
 
@@ -368,28 +551,46 @@ Module Locmap.
     | l1 :: ll' => undef ll' (set l1 Vundef m)
     end.
 
-  Lemma guo: forall ll l m, Loc.notin l ll -> (undef ll m) l = m l.
+  Lemma guo: forall ll l m, Loc.notin l ll -> get l (undef ll m) = get l m.
   Proof.
     induction ll; simpl; intros. auto.
     destruct H. rewrite IHll; auto. apply gso. apply Loc.diff_sym; auto.
   Qed.
 
-  Lemma gus: forall ll l m, In l ll -> (undef ll m) l = Vundef.
+  Lemma gus: forall ll l m, In l ll -> get l (undef ll m) = Vundef.
   Proof.
-    assert (P: forall ll l m, m l = Vundef -> (undef ll m) l = Vundef).
-      induction ll; simpl; intros. auto. apply IHll.
-      unfold set. destruct (Loc.eq a l).
-      destruct a. auto. destruct ty; reflexivity.
-      destruct (Loc.diff_dec a l); auto.
+    assert (P: forall ll l m, get l m = Vundef -> get l (undef ll m) = Vundef).
+    { induction ll; simpl; intros. auto. apply IHll.
+      destruct (Loc.eq a l). subst; apply gss_typed. simpl; auto.
+      destruct a, l, m; simpl in n.
+      simpl. rewrite Regfile.gso; auto; congruence.
+      rewrite gso; simpl; auto.
+      rewrite gso; simpl; auto.
+      unfold get, set. simpl in H. (*rewrite dec_eq_false; auto.*)
+      destruct (Loc.diff_dec (S sl0 pos0 q0) (S sl pos q)).
+      rewrite Stack.gso; auto.
+      apply Stack.gu_overlap; auto. }
     induction ll; simpl; intros. contradiction.
     destruct H. apply P. subst a. apply gss_typed. exact I.
     auto.
   Qed.
 
+  Lemma gu_overlap:
+    forall l l' v m,
+    l <> l' ->
+    ~ Loc.diff l l' ->
+    get l (set l' v m) = Vundef.
+  Proof.
+    intros.
+    destruct l, l'; try (simpl in H0; contradict H0; auto; congruence).
+    destruct m as [rf stack]; simpl.
+    auto using Stack.gu_overlap.
+  Qed.
+
   Definition getpair (p: rpair loc) (m: t) : val :=
     match p with
-    | One l => m l
-    | Twolong l1 l2 => Val.longofwords (m l1) (m l2)
+    | One l => get l m
+    | Twolong l1 l2 => Val.longofwords (get l1 m) (get l2 m)
     end.
 
   Definition setpair (p: rpair mreg) (v: val) (m: t) : t :=
@@ -400,7 +601,7 @@ Module Locmap.
 
   Lemma getpair_exten:
     forall p ls1 ls2,
-    (forall l, In l (regs_of_rpair p) -> ls2 l = ls1 l) ->
+    (forall l, In l (regs_of_rpair p) -> get l ls2 = get l ls1) ->
     getpair p ls2 = getpair p ls1.
   Proof.
     intros. destruct p; simpl.
@@ -410,22 +611,33 @@ Module Locmap.
 
   Lemma gpo:
     forall p v m l,
-    forall_rpair (fun r => Loc.diff l (R r)) p -> setpair p v m l = m l.
+    forall_rpair (fun r => Loc.diff l (R r)) p -> get l (setpair p v m) = get l m.
   Proof.
-    intros; destruct p; simpl in *.
+    intros; destruct p; unfold setpair.
   - apply gso. apply Loc.diff_sym; auto.
   - destruct H. rewrite ! gso by (apply Loc.diff_sym; auto). auto.
   Qed.
 
-  Fixpoint setres (res: builtin_res mreg) (v: val) (m: t) : t :=
+  Definition setres (res: builtin_res mreg) (v: val) (m: t) : t :=
     match res with
     | BR r => set (R r) v m
     | BR_none => m
     | BR_splitlong hi lo =>
-        setres lo (Val.loword v) (setres hi (Val.hiword v) m)
+        set (R lo) (Val.loword v) (set (R hi) (Val.hiword v) m)
     end.
 
+  Lemma get_has_type:
+    forall l m, Val.has_type (get l m) (Loc.type l).
+  Proof.
+    intros.
+    destruct m as [rf stack], l.
+    - apply Regfile.get_has_type.
+    - apply Stack.get_has_type.
+  Qed.
+
 End Locmap.
+
+Notation "a @ b" := (Locmap.get b a) (at level 1) : ltl.
 
 (** * Total ordering over locations *)
 
@@ -447,6 +659,20 @@ End IndexedTyp.
 
 Module OrderedTyp := OrderedIndexed(IndexedTyp).
 
+Module IndexedQuantity <: INDEXED_TYPE.
+  Definition t := quantity.
+  Definition index (q: t) :=
+    match q with
+    | Q32 => 1%positive
+    | Q64 => 2%positive
+    end.
+  Lemma index_inj: forall x y, index x = index y -> x = y.
+  Proof. destruct x, y; simpl; congruence. Qed.
+  Definition eq := quantity_eq.
+End IndexedQuantity.
+
+Module OrderedQuantity := OrderedIndexed(IndexedQuantity).
+
 Module IndexedSlot <: INDEXED_TYPE.
   Definition t := slot.
   Definition index (x: t) :=
@@ -466,9 +692,9 @@ Module OrderedLoc <: OrderedType.
     | R r1, R r2 => Plt (IndexedMreg.index r1) (IndexedMreg.index r2)
     | R _, S _ _ _ => True
     | S _ _ _, R _ => False
-    | S sl1 ofs1 ty1, S sl2 ofs2 ty2 =>
+    | S sl1 ofs1 q1, S sl2 ofs2 q2 =>
         OrderedSlot.lt sl1 sl2 \/ (sl1 = sl2 /\
-        (ofs1 < ofs2 \/ (ofs1 = ofs2 /\ OrderedTyp.lt ty1 ty2)))
+        (ofs1 < ofs2 \/ (ofs1 = ofs2 /\ OrderedQuantity.lt q1 q2)))
     end.
   Lemma eq_refl : forall x : t, eq x x.
   Proof (@eq_refl t).
@@ -489,7 +715,7 @@ Module OrderedLoc <: OrderedType.
     destruct H.
     right.  split. auto.
     intuition.
-    right; split. congruence. eapply OrderedTyp.lt_trans; eauto.
+    right; split. congruence. eapply OrderedQuantity.lt_trans; eauto.
   Qed.
   Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
   Proof.
@@ -498,7 +724,7 @@ Module OrderedLoc <: OrderedType.
     eelim Plt_strict; eauto.
     destruct H. eelim OrderedSlot.lt_not_eq; eauto. red; auto.
     destruct H. destruct H0. omega.
-    destruct H0. eelim OrderedTyp.lt_not_eq; eauto. red; auto.
+    destruct H0. eelim OrderedQuantity.lt_not_eq; eauto. red; auto.
   Qed.
   Definition compare : forall x y : t, Compare lt eq x y.
   Proof.
@@ -513,9 +739,9 @@ Module OrderedLoc <: OrderedType.
     + apply LT. red; auto.
     + destruct (OrderedZ.compare pos pos0).
       * apply LT. red. auto.
-      * destruct (OrderedTyp.compare ty ty0).
+      * destruct (OrderedQuantity.compare q q0).
         apply LT. red; auto.
-        apply EQ. red; red in e; red in e0; red in e1. congruence.
+        apply EQ. congruence.
         apply GT. red; auto.
       * apply GT. red. auto.
     + apply GT. red; auto.
@@ -527,44 +753,44 @@ Module OrderedLoc <: OrderedType.
   Definition diff_low_bound (l: loc) : loc :=
     match l with
     | R mr => l
-    | S sl ofs ty => S sl (ofs - 1) Tany64
+    | S sl ofs q => S sl (ofs - 1) Q64
     end.
 
   Definition diff_high_bound (l: loc) : loc :=
     match l with
     | R mr => l
-    | S sl ofs ty => S sl (ofs + typesize ty - 1) Tlong
+    | S sl ofs q => S sl (ofs + typesize (typ_of_quantity q) - 1) Q64
     end.
 
   Lemma outside_interval_diff:
     forall l l', lt l' (diff_low_bound l) \/ lt (diff_high_bound l) l' -> Loc.diff l l'.
   Proof.
     intros.
-    destruct l as [mr | sl ofs ty]; destruct l' as [mr' | sl' ofs' ty']; simpl in *; auto.
+    destruct l as [mr | sl ofs q]; destruct l' as [mr' | sl' ofs' q']; simpl in *; auto.
     - assert (IndexedMreg.index mr <> IndexedMreg.index mr').
       { destruct H. apply not_eq_sym. apply Plt_ne; auto. apply Plt_ne; auto. }
       congruence.
-    - assert (RANGE: forall ty, 1 <= typesize ty <= 2).
-      { intros; unfold typesize. destruct ty0; omega.  }
+    - assert (RANGE: forall q, 1 <= typesize q <= 2).
+      { intros; unfold typesize. destruct q0; omega.  }
       destruct H.
       + destruct H. left. apply not_eq_sym. apply OrderedSlot.lt_not_eq; auto.
         destruct H. right.
-        destruct H0. right. generalize (RANGE ty'); omega.
+        destruct H0. right. generalize (RANGE (typ_of_quantity q')); omega.
         destruct H0.
-        assert (ty' = Tint \/ ty' = Tsingle \/ ty' = Tany32).
-        { unfold OrderedTyp.lt in H1. destruct ty'; auto; compute in H1; congruence. }
-        right. destruct H2 as [E|[E|E]]; subst ty'; simpl typesize; omega.
+        assert (typ_of_quantity q' = Tany32).
+        { unfold OrderedTyp.lt in H1. destruct q'; auto; compute in H1; congruence. }
+        right. rewrite H2; simpl typesize; omega.
       + destruct H. left. apply OrderedSlot.lt_not_eq; auto.
         destruct H. right.
         destruct H0. left; omega.
-        destruct H0. exfalso. destruct ty'; compute in H1; congruence.
+        destruct H0. exfalso. destruct q'; compute in H1; congruence.
   Qed.
 
   Lemma diff_outside_interval:
     forall l l', Loc.diff l l' -> lt l' (diff_low_bound l) \/ lt (diff_high_bound l) l'.
   Proof.
     intros.
-    destruct l as [mr | sl ofs ty]; destruct l' as [mr' | sl' ofs' ty']; simpl in *; auto.
+    destruct l as [mr | sl ofs q]; destruct l' as [mr' | sl' ofs' q']; simpl in *; auto.
     - unfold Plt, Pos.lt. destruct (Pos.compare (IndexedMreg.index mr) (IndexedMreg.index mr')) eqn:C.
       elim H. apply IndexedMreg.index_inj. apply Pos.compare_eq_iff. auto.
       auto.
@@ -574,11 +800,8 @@ Module OrderedLoc <: OrderedType.
       destruct H.
       right; right; split; auto. left; omega.
       left; right; split; auto.
-      assert (EITHER: typesize ty' = 1 /\ OrderedTyp.lt ty' Tany64 \/ typesize ty' = 2).
-      { destruct ty'; compute; auto. }
-      destruct (zlt ofs' (ofs - 1)). left; auto.
-      destruct EITHER as [[P Q] | P].
-      right; split; auto. omega.
+      destruct q'; simpl in H. destruct (zlt ofs' (ofs - 1)).
+      left; auto. right; split. omega. compute; auto.
       left; omega.
   Qed.
 

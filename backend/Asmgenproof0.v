@@ -80,10 +80,23 @@ Qed.
 
 Hint Resolve preg_of_not_SP preg_of_not_PC: asmgen.
 
+Lemma load_result_offset_pc:
+  forall ofs rs,
+  Val.load_result (Preg.chunk_of PC) (Val.offset_ptr (Pregmap.get PC rs) ofs) =
+  Val.offset_ptr (Pregmap.get PC rs) ofs.
+Proof.
+  intros.
+  rewrite Preg.chunk_of_reg_type, Val.load_result_same; auto.
+  apply Val.has_subtype with (ty1 := Tptr). apply pc_type.
+  destruct (Pregmap.get PC rs); simpl; auto.
+  unfold Tptr. destruct Archi.ptr64; auto.
+Qed.
+
 Lemma nextinstr_pc:
   forall rs, (nextinstr rs)#PC = Val.offset_ptr rs#PC Ptrofs.one.
 Proof.
-  intros. apply Pregmap.gss.
+  intros. unfold nextinstr. rewrite Pregmap.gss.
+  apply load_result_offset_pc.
 Qed.
 
 Lemma nextinstr_inv:
@@ -102,17 +115,9 @@ Lemma nextinstr_set_preg:
   forall rs m v,
   (nextinstr (rs#(preg_of m) <- v))#PC = Val.offset_ptr rs#PC Ptrofs.one.
 Proof.
-  intros. unfold nextinstr. rewrite Pregmap.gss.
-  rewrite Pregmap.gso. auto. apply not_eq_sym. apply preg_of_not_PC.
-Qed.
-
-Lemma undef_regs_other:
-  forall r rl rs,
-  (forall r', In r' rl -> r <> r') ->
-  undef_regs rl rs r = rs r.
-Proof.
-  induction rl; simpl; intros. auto.
-  rewrite IHrl by auto. rewrite Pregmap.gso; auto.
+  intros. unfold nextinstr. rewrite Pregmap.gss, Pregmap.gso.
+  apply load_result_offset_pc.
+  auto using preg_of_not_PC.
 Qed.
 
 Fixpoint preg_notin (r: preg) (rl: list mreg) : Prop :=
@@ -138,11 +143,12 @@ Qed.
 Lemma undef_regs_other_2:
   forall r rl rs,
   preg_notin r rl ->
-  undef_regs (map preg_of rl) rs r = rs r.
+  (undef_regs (map preg_of rl) rs) # r = rs # r.
 Proof.
-  intros. apply undef_regs_other. intros.
+  intros. apply undef_regs_other.
+  unfold not; intro.
   exploit list_in_map_inv; eauto. intros [mr [A B]]. subst.
-  rewrite preg_notin_charact in H. auto.
+  rewrite preg_notin_charact in H. eapply H; eauto.
 Qed.
 
 (** * Agreement between Mach registers and processor registers *)
@@ -150,18 +156,19 @@ Qed.
 Record agree (ms: Mach.regset) (sp: val) (rs: Asm.regset) : Prop := mkagree {
   agree_sp: rs#SP = sp;
   agree_sp_def: sp <> Vundef;
-  agree_mregs: forall r: mreg, Val.lessdef (ms r) (rs#(preg_of r))
+  agree_sp_type: Val.has_type sp Tptr;
+  agree_mregs: forall r: mreg, Val.lessdef (regmap_get r ms) (rs#(preg_of r))
 }.
 
 Lemma preg_val:
-  forall ms sp rs r, agree ms sp rs -> Val.lessdef (ms r) rs#(preg_of r).
+  forall ms sp rs r, agree ms sp rs -> Val.lessdef (regmap_get r ms) rs#(preg_of r).
 Proof.
   intros. destruct H. auto.
 Qed.
 
 Lemma preg_vals:
   forall ms sp rs, agree ms sp rs ->
-  forall l, Val.lessdef_list (map ms l) (map rs (map preg_of l)).
+  forall l, Val.lessdef_list (map (regmap_read ms) l) (map (pregmap_read rs) (map preg_of l)).
 Proof.
   induction l; simpl. constructor. constructor. eapply preg_val; eauto. auto.
 Qed.
@@ -176,7 +183,7 @@ Lemma ireg_val:
   forall ms sp rs r r',
   agree ms sp rs ->
   ireg_of r = OK r' ->
-  Val.lessdef (ms r) rs#r'.
+  Val.lessdef (regmap_get r ms) rs#r'.
 Proof.
   intros. rewrite <- (ireg_of_eq _ _ H0). eapply preg_val; eauto.
 Qed.
@@ -185,7 +192,7 @@ Lemma freg_val:
   forall ms sp rs r r',
   agree ms sp rs ->
   freg_of r = OK r' ->
-  Val.lessdef (ms r) (rs#r').
+  Val.lessdef (regmap_get r ms) (rs#r').
 Proof.
   intros. rewrite <- (freg_of_eq _ _ H0). eapply preg_val; eauto.
 Qed.
@@ -203,27 +210,54 @@ Qed.
 
 (** Preservation of register agreement under various assignments. *)
 
+Remark preg_of_type:
+  forall r, Preg.type (preg_of r) = Mreg.type r.
+Proof.
+  destruct r; auto.
+Qed.
+
+Remark has_type_lessdef:
+  forall v v' t,
+  Val.lessdef v v' ->
+  Val.has_type v' t ->
+  Val.has_type v t.
+Proof.
+  intros. inversion H; subst; simpl; auto.
+Qed.
+
 Lemma agree_set_mreg:
   forall ms sp rs r v rs',
   agree ms sp rs ->
   Val.lessdef v (rs'#(preg_of r)) ->
-  (forall r', data_preg r' = true -> r' <> preg_of r -> rs'#r' = rs#r') ->
+  (forall r', data_preg r' = true -> r' <> (preg_of r) -> rs'#r' = rs#r') ->
   agree (Regmap.set r v ms) sp rs'.
 Proof.
   intros. destruct H. split; auto.
-  rewrite H1; auto. apply not_eq_sym. apply preg_of_not_SP.
-  intros. unfold Regmap.set. destruct (RegEq.eq r0 r). congruence.
-  rewrite H1. auto. apply preg_of_data.
-  red; intros; elim n. eapply preg_of_injective; eauto.
+  rewrite H1; auto using preg_of_not_SP.
+  intros. destruct (Mreg.eq_dec r0 r).
+  - subst. rewrite Regmap.gss.
+    assert (Val.has_type v (Mreg.type r)).
+    { generalize (Pregmap.get_has_type (preg_of r) rs'); intro.
+      rewrite <- preg_of_type.
+      eapply has_type_lessdef; eauto. }
+    rewrite Mreg.chunk_of_reg_type.
+    rewrite Val.load_result_same; auto.
+  - rewrite Regmap.gso by auto.
+    rewrite H1; auto using preg_of_injective, preg_of_data.
 Qed.
 
 Corollary agree_set_mreg_parallel:
   forall ms sp rs r v v',
   agree ms sp rs ->
   Val.lessdef v v' ->
+  Val.has_type v' (mreg_type r) ->
   agree (Regmap.set r v ms) sp (Pregmap.set (preg_of r) v' rs).
 Proof.
-  intros. eapply agree_set_mreg; eauto. rewrite Pregmap.gss; auto. intros; apply Pregmap.gso; auto.
+  intros. eapply agree_set_mreg; eauto.
+  rewrite Pregmap.gss; auto.
+  rewrite Preg.chunk_of_reg_type, Val.load_result_same; auto.
+  destruct r; auto.
+  intros; apply Pregmap.gso; auto.
 Qed.
 
 Lemma agree_set_other:
@@ -233,7 +267,8 @@ Lemma agree_set_other:
   agree ms sp (rs#r <- v).
 Proof.
   intros. apply agree_exten with rs. auto.
-  intros. apply Pregmap.gso. congruence.
+  intros. apply Pregmap.gso.
+  auto using data_diff.
 Qed.
 
 Lemma agree_nextinstr:
@@ -247,12 +282,14 @@ Lemma agree_set_pair:
   forall sp p v v' ms rs,
   agree ms sp rs ->
   Val.lessdef v v' ->
+  Val.has_type v' (typ_rpair mreg_type p) ->
   agree (Mach.set_pair p v ms) sp (set_pair (map_rpair preg_of p) v' rs).
 Proof.
   intros. destruct p; simpl.
 - apply agree_set_mreg_parallel; auto.
-- apply agree_set_mreg_parallel. apply agree_set_mreg_parallel; auto.
-  apply Val.hiword_lessdef; auto. apply Val.loword_lessdef; auto.
+- repeat apply agree_set_mreg_parallel; auto using Val.hiword_lessdef, Val.loword_lessdef.
+  destruct (mreg_type_cases rhi) as [T | T], v'; rewrite T; simpl; auto.
+  destruct (mreg_type_cases rlo) as [T | T], v'; rewrite T; simpl; auto.
 Qed.
 
 Lemma agree_undef_nondata_regs:
@@ -262,10 +299,14 @@ Lemma agree_undef_nondata_regs:
   agree ms sp (undef_regs rl rs).
 Proof.
   induction rl; simpl; intros. auto.
-  apply IHrl. apply agree_exten with rs; auto.
-  intros. apply Pregmap.gso. red; intros; subst.
-  assert (data_preg a = false) by auto. congruence.
-  intros. apply H0; auto.
+  apply agree_exten with rs; auto.
+  intros.
+  assert (data_preg a = false) by auto.
+  rewrite Pregmap.gso by congruence.
+  rewrite undef_regs_other; auto.
+  red; intros.
+  assert (data_preg r = false) by auto.
+  congruence.
 Qed.
 
 Lemma agree_undef_regs:
@@ -309,10 +350,13 @@ Lemma agree_set_undef_mreg:
   (forall r', data_preg r' = true -> r' <> preg_of r -> preg_notin r' rl -> rs'#r' = rs#r') ->
   agree (Regmap.set r v (Mach.undef_regs rl ms)) sp rs'.
 Proof.
-  intros. apply agree_set_mreg with (rs'#(preg_of r) <- (rs#(preg_of r))); auto.
-  apply agree_undef_regs with rs; auto.
-  intros. unfold Pregmap.set. destruct (PregEq.eq r' (preg_of r)).
-  congruence. auto.
+  intros.
+  apply agree_set_mreg with (rs'#(preg_of r) <- (rs#(preg_of r))); auto.
+  apply agree_undef_regs with rs; auto. intros.
+  destruct (Preg.eq_dec r' (preg_of r)).
+  subst. rewrite Pregmap.gss, Preg.chunk_of_reg_type, Val.load_result_same; auto.
+  apply Pregmap.get_has_type.
+  rewrite Pregmap.gso; auto.
   intros. rewrite Pregmap.gso; auto.
 Qed.
 
@@ -321,24 +365,33 @@ Lemma agree_undef_caller_save_regs:
   agree ms sp rs ->
   agree (Mach.undef_caller_save_regs ms) sp (Asm.undef_caller_save_regs rs).
 Proof.
-  intros. destruct H. unfold Mach.undef_caller_save_regs, Asm.undef_caller_save_regs; split.
-- unfold proj_sumbool; rewrite dec_eq_true. auto.
+  intros. destruct H. split.
+- rewrite undef_caller_save_regs_correct. unfold undef_caller_save_regs_spec.
+  unfold proj_sumbool; rewrite dec_eq_true. auto.
 - auto.
-- intros. unfold proj_sumbool. rewrite dec_eq_false by (apply preg_of_not_SP). 
-  destruct (in_dec preg_eq (preg_of r) (List.map preg_of (List.filter is_callee_save all_mregs))); simpl.
+- auto.
+- intros.
+  rewrite Mach.undef_caller_save_regs_correct. unfold Mach.undef_caller_save_regs_spec.
+  rewrite undef_caller_save_regs_correct. unfold undef_caller_save_regs_spec.
+  unfold proj_sumbool. rewrite dec_eq_false by (apply preg_of_not_SP).
+  destruct (in_dec preg_eq (preg_of r) (List.map preg_of (List.filter is_callee_save all_mregs))).
 + apply list_in_map_inv in i. destruct i as (mr & A & B). 
   assert (r = mr) by (apply preg_of_injective; auto). subst mr; clear A.
-  apply List.filter_In in B. destruct B as [C D]. rewrite D. auto.
+  apply List.filter_In in B. destruct B as [C D]. rewrite D. simpl. auto.
 + destruct (is_callee_save r) eqn:CS; auto.
   elim n. apply List.in_map. apply List.filter_In. auto using all_mregs_complete. 
 Qed.
 
 Lemma agree_change_sp:
   forall ms sp rs sp',
-  agree ms sp rs -> sp' <> Vundef ->
+  agree ms sp rs ->
+  sp' <> Vundef ->
+  Val.has_type sp' Tptr ->
+  Val.has_type sp' (Preg.type SP) ->
   agree ms sp' (rs#SP <- sp').
 Proof.
   intros. inv H. split; auto.
+  rewrite Pregmap.gss, Preg.chunk_of_reg_type, Val.load_result_same; auto.
   intros. rewrite Pregmap.gso; auto with asmgen.
 Qed.
 
@@ -401,22 +454,22 @@ Qed.
 (** Translation of arguments and results to builtins. *)
 
 Remark builtin_arg_match:
-  forall ge (rs: regset) sp m a v,
-  eval_builtin_arg ge (fun r => rs (preg_of r)) sp m a v ->
-  eval_builtin_arg ge rs sp m (map_builtin_arg preg_of a) v.
+  forall ge rs sp m a v,
+  eval_builtin_arg ge (fun r => rs # (preg_of r)) sp m a v ->
+  eval_builtin_arg ge (pregmap_read rs) sp m (map_builtin_arg preg_of a) v.
 Proof.
-  induction 1; simpl; eauto with barg.
+  induction 1; simpl; eauto with barg. econstructor.
 Qed.
 
 Lemma builtin_args_match:
   forall ge ms sp rs m m', agree ms sp rs -> Mem.extends m m' ->
-  forall al vl, eval_builtin_args ge ms sp m al vl ->
-  exists vl', eval_builtin_args ge rs sp m' (map (map_builtin_arg preg_of) al) vl'
+  forall al vl, eval_builtin_args ge (fun r => Regmap.get r ms) sp m al vl ->
+  exists vl', eval_builtin_args ge (pregmap_read rs) sp m' (map (map_builtin_arg preg_of) al) vl'
            /\ Val.lessdef_list vl vl'.
 Proof.
   induction 3; intros; simpl.
   exists (@nil val); split; constructor.
-  exploit (@eval_builtin_arg_lessdef _ ge ms (fun r => rs (preg_of r))); eauto.
+  exploit (@eval_builtin_arg_lessdef _ ge (fun r => Regmap.get r ms) (fun r => rs # (preg_of r))); eauto.
   intros; eapply preg_val; eauto.
   intros (v1' & A & B).
   destruct IHlist_forall2 as [vl' [C D]].
@@ -427,26 +480,37 @@ Lemma agree_set_res:
   forall res ms sp rs v v',
   agree ms sp rs ->
   Val.lessdef v v' ->
+  Val.has_type_builtin_res v' res Val.loword Val.hiword mreg_type ->
   agree (Mach.set_res res v ms) sp (Asm.set_res (map_builtin_res preg_of res) v' rs).
 Proof.
   induction res; simpl; intros.
-- eapply agree_set_mreg; eauto. rewrite Pregmap.gss. auto.
+- eapply agree_set_mreg; eauto.
+  rewrite Pregmap.gss, Preg.chunk_of_reg_type, Val.load_result_same; auto.
+  rewrite preg_of_type; auto.
   intros. apply Pregmap.gso; auto.
 - auto.
-- apply IHres2. apply IHres1. auto.
-  apply Val.hiword_lessdef; auto.
-  apply Val.loword_lessdef; auto.
+- apply agree_set_mreg with (rs := rs # (preg_of hi) <- (Val.hiword v')).
+  apply agree_set_mreg with (rs := rs).
+  auto.
+  rewrite Pregmap.gss, Preg.chunk_of_reg_type, Val.load_result_same; auto using Val.hiword_lessdef.
+  rewrite preg_of_type; tauto.
+  intros. apply Pregmap.gso; auto.
+  rewrite Pregmap.gss, Preg.chunk_of_reg_type, Val.load_result_same; auto using Val.loword_lessdef.
+  rewrite preg_of_type; tauto.
+  intros. apply Pregmap.gso; auto.
 Qed.
 
 Lemma set_res_other:
   forall r res v rs,
   data_preg r = false ->
-  set_res (map_builtin_res preg_of res) v rs r = rs r.
+  (set_res (map_builtin_res preg_of res) v rs) # r = rs # r.
 Proof.
   induction res; simpl; intros.
 - apply Pregmap.gso. red; intros; subst r. rewrite preg_of_data in H; discriminate.
 - auto.
-- rewrite IHres2, IHres1; auto.
+- rewrite !Pregmap.gso; auto.
+  red; intros; subst r. rewrite preg_of_data in H; discriminate.
+  red; intros; subst r. rewrite preg_of_data in H; discriminate.
 Qed.
 
 (** * Correspondence between Mach code and Asm code *)
@@ -912,6 +976,7 @@ Inductive match_stack: list Mach.stackframe -> Prop :=
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       transl_code_at_pc ge ra fb f c false tf tc ->
       sp <> Vundef ->
+      Val.has_type sp Tptr ->
       match_stack s ->
       match_stack (Stackframe fb sp ra c :: s).
 
@@ -922,11 +987,25 @@ Proof.
   auto.
 Qed.
 
+Lemma parent_sp_type: forall s, match_stack s -> Val.has_type (parent_sp s) Tptr.
+Proof.
+  induction 1; simpl.
+  unfold Vnullptr, Tptr; destruct Archi.ptr64; simpl; auto.
+  auto.
+Qed.
+
 Lemma parent_ra_def: forall s, match_stack s -> parent_ra s <> Vundef.
 Proof.
   induction 1; simpl.
   unfold Vnullptr; destruct Archi.ptr64; congruence.
   inv H0. congruence.
+Qed.
+
+Lemma parent_ra_type: forall s, match_stack s -> Val.has_type (parent_ra s) Tptr.
+Proof.
+  induction 1; simpl.
+  unfold Vnullptr, Tptr; destruct Archi.ptr64; simpl; auto.
+  inv H0. apply Val.Vptr_has_type.
 Qed.
 
 Lemma lessdef_parent_sp:

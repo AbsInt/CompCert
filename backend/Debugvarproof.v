@@ -344,7 +344,7 @@ Qed.
 
 Lemma can_eval_safe_arg:
   forall (rs: locset) sp m (a: builtin_arg loc),
-  safe_builtin_arg a -> exists v, eval_builtin_arg tge rs sp m a v.
+  safe_builtin_arg a -> exists v, eval_builtin_arg tge (Locmap.read rs) sp m a v.
 Proof.
   induction a; simpl; intros; try contradiction;
   try (econstructor; now eauto with barg).
@@ -369,13 +369,13 @@ Proof.
   econstructor.
   constructor. eexact E1. constructor.
   simpl; constructor.
-  simpl; auto.
+  destruct rs; simpl; auto.
   traceEq.
 - eapply star_step; eauto.
   econstructor.
   constructor.
   simpl; constructor.
-  simpl; auto.
+  destruct rs; simpl; auto.
   traceEq.
 Qed.
 
@@ -533,7 +533,7 @@ Lemma transf_initial_states:
 Proof.
   intros. inversion H.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
-  exists (Callstate nil tf (Locmap.init Vundef) m0); split.
+  exists (Callstate nil tf Locmap.init m0); split.
   econstructor; eauto. eapply (Genv.init_mem_transf_partial TRANSF); eauto.
   rewrite (match_program_main TRANSF), symbols_preserved. auto.
   rewrite <- H3. apply sig_preserved. auto.

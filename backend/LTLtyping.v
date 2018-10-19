@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Type-checking Linear code. *)
+(** Type-checking LTL code, adapted with tiny changes from [Lineartyping]. *)
 
 Require Import Coqlib.
 Require Import AST.
@@ -24,7 +24,6 @@ Require Import Machregs.
 Require Import Locations.
 Require Import Conventions.
 Require Import LTL.
-Require Import Linear.
 
 (** The rules are presented as boolean-valued functions so that we
   get an executable type-checker for free. *)
@@ -89,11 +88,23 @@ Definition wt_instr (i: instruction) : bool :=
 
 End WT_INSTR.
 
-Definition wt_code (f: function) (c: code) : bool :=
-  forallb (wt_instr f) c.
+Definition wt_bblock (f: function) (b: bblock) : bool :=
+  forallb (wt_instr f) b.
 
 Definition wt_function (f: function) : bool :=
-  wt_code f f.(fn_code).
+  let bs := map snd (Maps.PTree.elements f.(fn_code)) in
+  forallb (wt_bblock f) bs.
+
+Lemma wt_function_wt_bblock:
+  forall f pc b,
+  wt_function f = true ->
+  Maps.PTree.get pc (fn_code f) = Some b ->
+  wt_bblock f b = true.
+Proof.
+  intros. apply Maps.PTree.elements_correct in H0.
+  unfold wt_function, wt_bblock in *. eapply forallb_forall in H; eauto.
+  change b with (snd (pc, b)). apply in_map; auto.
+Qed.
 
 (** Typing the run-time state. *)
 
@@ -106,37 +117,6 @@ Proof.
   unfold wt_locset. intros. apply Locmap.get_has_type.
 Qed.
 
-Lemma wt_find_label:
-  forall f lbl c,
-  wt_function f = true ->
-  find_label lbl f.(fn_code) = Some c ->
-  wt_code f c = true.
-Proof.
-  unfold wt_function; intros until c. generalize (fn_code f). induction c0; simpl; intros.
-  discriminate.
-  InvBooleans. destruct (is_label lbl a).
-  congruence.
-  auto.
-Qed.
-
-(** In addition to type preservation during evaluation, we also show
-  properties of the environment [ls] at call points and at return points.
-  These properties are used in the proof of the [Stacking] pass.
-  For call points, we have that the current environment [ls] and the
-  one from the top call stack agree on the [Outgoing] locations
-  used for parameter passing. *)
-
-Definition agree_outgoing_arguments (sg: signature) (ls pls: locset) : Prop :=
-  forall ty ofs,
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments sg)) ->
-  ls @ (S Outgoing ofs ty) = pls @ (S Outgoing ofs ty).
-
-(** For return points, we have that all [Outgoing] stack locations have
-  been set to [Vundef]. *)
-
-Definition outgoing_undef (ls: locset) : Prop :=
-  forall ty ofs, ls @ (S Outgoing ofs ty) = Vundef.
-
 (** Soundness of the type system *)
 
 Definition wt_fundef (fd: fundef) :=
@@ -145,31 +125,34 @@ Definition wt_fundef (fd: fundef) :=
   | External ef => True
   end.
 
+Definition wt_program (prog: program): Prop :=
+  forall i fd, In (i, Gfun fd) prog.(prog_defs) -> wt_fundef fd.
+
 Inductive wt_callstack: list stackframe -> Prop :=
   | wt_callstack_nil:
       wt_callstack nil
-  | wt_callstack_cons: forall f sp rs c s
+  | wt_callstack_cons: forall f sp rs b s
         (WTSTK: wt_callstack s)
         (WTF: wt_function f = true)
-        (WTC: wt_code f c = true),
-      wt_callstack (Stackframe f sp rs c :: s).
+        (WTB: wt_bblock f b = true),
+      wt_callstack (Stackframe f sp rs b :: s).
 
 Inductive wt_state: state -> Prop :=
-  | wt_regular_state: forall s f sp c rs m
+  | wt_branch_state: forall s f sp n rs m
+        (WTSTK: wt_callstack s )
+        (WTF: wt_function f = true),
+      wt_state (State s f sp n rs m)
+  | wt_regular_state: forall s f sp b rs m
         (WTSTK: wt_callstack s )
         (WTF: wt_function f = true)
-        (WTC: wt_code f c = true),
-      wt_state (State s f sp c rs m)
+        (WTB: wt_bblock f b = true),
+      wt_state (Block s f sp b rs m)
   | wt_call_state: forall s fd rs m
         (WTSTK: wt_callstack s)
-        (WTFD: wt_fundef fd)
-        (AGCS: agree_callee_save rs (parent_locset s))
-        (AGARGS: agree_outgoing_arguments (funsig fd) rs (parent_locset s)),
+        (WTFD: wt_fundef fd),
       wt_state (Callstate s fd rs m)
   | wt_return_state: forall s rs m
-        (WTSTK: wt_callstack s)
-        (AGCS: agree_callee_save rs (parent_locset s))
-        (UOUT: outgoing_undef rs),
+        (WTSTK: wt_callstack s),
       wt_state (Returnstate s rs m).
 
 (** Preservation of state typing by transitions *)
@@ -179,8 +162,7 @@ Section SOUNDNESS.
 Variable prog: program.
 Let ge := Genv.globalenv prog.
 
-Hypothesis wt_prog:
-  forall i fd, In (i, Gfun fd) prog.(prog_defs) -> wt_fundef fd.
+Hypothesis wt_prog: wt_program prog.
 
 Lemma wt_find_function:
   forall ros rs f, find_function ge ros rs = Some f -> wt_fundef f.
@@ -201,12 +183,11 @@ Theorem step_type_preservation:
 Proof.
 Local Opaque mreg_type.
   induction 1; intros WTS; inv WTS.
-- (* getstack *)
-  simpl in *; InvBooleans.
+- (* startblock *)
   econstructor; eauto.
-- (* setstack *)
-  simpl in *; InvBooleans.
-  econstructor; eauto.
+  apply Maps.PTree.elements_correct in H.
+  unfold wt_function in WTF. eapply forallb_forall in WTF; eauto.
+  change bb with (snd (pc, bb)). apply in_map; auto.
 - (* op *)
   simpl in *. destruct (is_move_operation op args) as [src | ] eqn:ISMOVE.
   + (* move *)
@@ -219,6 +200,12 @@ Local Opaque mreg_type.
 - (* load *)
   simpl in *; InvBooleans.
   econstructor; eauto.
+- (* getstack *)
+  simpl in *; InvBooleans.
+  econstructor; eauto.
+- (* setstack *)
+  simpl in *; InvBooleans.
+  econstructor; eauto.
 - (* store *)
   simpl in *; InvBooleans.
   econstructor. eauto. eauto. eauto.
@@ -226,53 +213,27 @@ Local Opaque mreg_type.
   simpl in *; InvBooleans.
   econstructor; eauto. econstructor; eauto.
   eapply wt_find_function; eauto.
-  red; simpl; auto.
-  red; simpl; auto.
 - (* tailcall *)
   simpl in *; InvBooleans.
   econstructor; eauto.
   eapply wt_find_function; eauto.
-  red; simpl; intros.
-  rewrite return_regs_correct. unfold Locmap.get.
-  destruct l; simpl in *. rewrite H3; auto. destruct sl; auto; congruence.
-  red; simpl; intros. apply zero_size_arguments_tailcall_possible in H. apply H in H3. contradiction.
 - (* builtin *)
   simpl in *; InvBooleans.
   econstructor; eauto.
-- (* label *)
+- (* branch *)
   simpl in *. econstructor; eauto.
-- (* goto *)
-  simpl in *. econstructor; eauto. eapply wt_find_label; eauto.
-- (* cond branch, taken *)
-  simpl in *. econstructor. auto. auto. eapply wt_find_label; eauto.
-- (* cond branch, not taken *)
-  simpl in *. econstructor. auto. auto. auto.
+- (* cond branch *)
+  simpl in *. econstructor; auto.
 - (* jumptable *)
-  simpl in *. econstructor. auto. auto. eapply wt_find_label; eauto.
+  simpl in *. econstructor; auto.
 - (* return *)
   simpl in *. InvBooleans.
   econstructor; eauto.
-  red; simpl; intros.
-  rewrite return_regs_correct. unfold Locmap.get.
-  destruct l; simpl in *. rewrite H0; auto. destruct sl; auto; congruence.
-  red; intros.
-  rewrite return_regs_correct. unfold Locmap.get, return_regs_spec. auto.
 - (* internal function *)
   simpl in WTFD.
-  econstructor. eauto. eauto. eauto.
+  econstructor. eauto. eauto.
 - (* external function *)
   econstructor. auto.
-  red; simpl; intros. destruct l.
-  rewrite locmap_get_set_loc_result by auto.
-  rewrite undef_caller_save_regs_correct. unfold undef_caller_save_regs_spec. rewrite H; auto.
-  apply AGCS; auto.
-  rewrite locmap_get_set_loc_result by auto.
-  rewrite undef_caller_save_regs_correct. unfold undef_caller_save_regs_spec.
-  destruct sl; try apply AGCS; auto.
-  simpl in H; contradiction.
-  red; intros. rewrite locmap_get_set_loc_result by auto.
-  rewrite undef_caller_save_regs_correct.
-  unfold Locmap.get, undef_caller_save_regs_spec. auto.
 - (* return *)
   inv WTSTK. econstructor; eauto.
 Qed.
@@ -283,44 +244,42 @@ Proof.
   induction 1. econstructor. constructor.
   unfold ge0 in H1. exploit Genv.find_funct_ptr_inversion; eauto.
   intros [id IN]. eapply wt_prog; eauto.
-  red; auto.
-  red; auto.
 Qed.
 
 End SOUNDNESS.
 
-(** Properties of well-typed states that are used in [Stackingproof]. *)
+(** Properties of well-typed states that are used in [Allocproof]. *)
 
 Lemma wt_state_getstack:
   forall s f sp sl ofs q rd c rs m,
-  wt_state (State s f sp (Lgetstack sl ofs q rd :: c) rs m) ->
+  wt_state (Block s f sp (Lgetstack sl ofs q rd :: c) rs m) ->
   slot_valid f sl ofs q = true.
 Proof.
-  intros. inv H. simpl in WTC; InvBooleans. auto.
+  intros. inv H. simpl in WTB; InvBooleans. auto.
 Qed.
 
 Lemma wt_state_setstack:
   forall s f sp sl ofs q r c rs m,
-  wt_state (State s f sp (Lsetstack r sl ofs q :: c) rs m) ->
+  wt_state (Block s f sp (Lsetstack r sl ofs q :: c) rs m) ->
   slot_valid f sl ofs q = true /\ slot_writable sl = true.
 Proof.
-  intros. inv H. simpl in WTC; InvBooleans. intuition.
+  intros. inv H. simpl in WTB; InvBooleans. intuition.
 Qed.
 
 Lemma wt_state_tailcall:
   forall s f sp sg ros c rs m,
-  wt_state (State s f sp (Ltailcall sg ros :: c) rs m) ->
+  wt_state (Block s f sp (Ltailcall sg ros :: c) rs m) ->
   size_arguments sg = 0.
 Proof.
-  intros. inv H. simpl in WTC; InvBooleans. auto.
+  intros. inv H. simpl in WTB; InvBooleans. auto.
 Qed.
 
 Lemma wt_state_builtin:
   forall s f sp ef args res c rs m,
-  wt_state (State s f sp (Lbuiltin ef args res :: c) rs m) ->
+  wt_state (Block s f sp (Lbuiltin ef args res :: c) rs m) ->
   forallb (loc_valid f) (params_of_builtin_args args) = true.
 Proof.
-  intros. inv H. simpl in WTC; InvBooleans. auto.
+  intros. inv H. simpl in WTB; InvBooleans. auto.
 Qed.
 
 Lemma wt_callstate_wt_regs:
@@ -329,20 +288,4 @@ Lemma wt_callstate_wt_regs:
   forall r, Val.has_type (rs @ (R r)) (mreg_type r).
 Proof.
   intros. apply well_typed_locset.
-Qed.
-
-Lemma wt_callstate_agree:
-  forall s f rs m,
-  wt_state (Callstate s f rs m) ->
-  agree_callee_save rs (parent_locset s) /\ agree_outgoing_arguments (funsig f) rs (parent_locset s).
-Proof.
-  intros. inv H; auto.
-Qed.
-
-Lemma wt_returnstate_agree:
-  forall s rs m,
-  wt_state (Returnstate s rs m) ->
-  agree_callee_save rs (parent_locset s) /\ outgoing_undef rs.
-Proof.
-  intros. inv H; auto.
 Qed.

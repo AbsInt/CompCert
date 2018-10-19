@@ -89,6 +89,19 @@ Definition has_type (v: val) (t: typ) : Prop :=
   | _, _ => False
   end.
 
+Definition has_type_rpair {A} (v: val) (p: rpair A) (lof hif: val -> val) (tf: A -> typ) : Prop :=
+  match p with
+  | One r => has_type v (tf r)
+  | Twolong hi lo => has_type (lof v) (tf lo) /\ has_type (hif v) (tf hi)
+  end.
+
+Definition has_type_builtin_res {A} (v: val) (r: builtin_res A) (lof hif: val -> val) (tf: A -> typ) : Prop :=
+  match r with
+  | BR_none => True
+  | BR r => has_type v (tf r)
+  | BR_splitlong hi lo => has_type (lof v) (tf lo) /\ has_type (hif v) (tf hi)
+  end.
+
 Fixpoint has_type_list (vl: list val) (tl: list typ) {struct vl} : Prop :=
   match vl, tl with
   | nil, nil => True
@@ -114,6 +127,12 @@ Proof.
   unfold has_type, Vnullptr, Tptr; destruct Archi.ptr64; reflexivity.
 Qed.
 
+Lemma has_type_Tany64:
+  forall v, has_type v Tany64.
+Proof.
+  destruct v; simpl; auto.
+Qed.
+
 Lemma has_subtype:
   forall ty1 ty2 v,
   subtype ty1 ty2 = true -> has_type v ty1 -> has_type v ty2.
@@ -130,6 +149,35 @@ Proof.
   induction tyl1; intros; destruct tyl2; try discriminate; destruct vl; try contradiction.
   red; auto.
   simpl in *. InvBooleans. destruct H0. split; auto. eapply has_subtype; eauto.
+Qed.
+
+Definition has_type_b (v: val) (t: typ) : bool :=
+  match v, t with
+  | Vundef, _ => true
+  | Vint _, Tint => true
+  | Vlong _, Tlong => true
+  | Vfloat _, Tfloat => true
+  | Vsingle _, Tsingle => true
+  | Vptr _ _, Tint => negb Archi.ptr64
+  | Vptr _ _, Tlong => Archi.ptr64
+  | (Vint _ | Vsingle _), Tany32 => true
+  | Vptr _ _, Tany32 => negb Archi.ptr64
+  | _, Tany64 => true
+  | _, _ => false
+  end.
+
+Program Definition has_type_dec (v: val) (t: typ) : {has_type v t} + {~ has_type v t} :=
+  match has_type_b v t with
+  | true => left _
+  | false => right _
+  end.
+Next Obligation.
+  destruct v, t; simpl in *; auto; try congruence; destruct Archi.ptr64; auto.
+Qed.
+Next Obligation.
+  destruct v, t; simpl in *; auto; try congruence.
+  apply eq_sym, negb_false_iff in Heq_anonymous. congruence.
+  apply eq_sym, negb_false_iff in Heq_anonymous. congruence.
 Qed.
 
 (** Truth values.  Non-zero integers are treated as [True].
@@ -936,6 +984,78 @@ Lemma load_result_same:
 Proof.
   unfold has_type, load_result; intros.
   destruct v; destruct ty; destruct Archi.ptr64; try contradiction; try discriminate; auto.
+Qed.
+
+Lemma load_result_add:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (add v1 v2) = add v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto; simpl; destruct Archi.ptr64; auto.
+Qed.
+
+Lemma load_result_or:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (or v1 v2) = or v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto.
+Qed.
+
+Lemma load_result_and:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (and v1 v2) = and v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto.
+Qed.
+
+Lemma load_result_shr:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (shr v1 v2) = shr v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto.
+  unfold shr. destruct (Int.ltu _ _); auto.
+Qed.
+
+Lemma load_result_shru:
+  forall c v1 v2,
+  c = Many32 \/ c = Many64 ->
+  load_result c (shru v1 v2) = shru v1 v2.
+Proof.
+  intros. destruct H; subst c; destruct v1, v2; auto.
+  unfold shru. destruct (Int.ltu _ _); auto.
+Qed.
+
+Lemma load_result_of_optbool:
+  forall c ob,
+  c = Many32 \/ c = Many64 ->
+  load_result c (of_optbool ob) = of_optbool ob.
+Proof.
+  intros. destruct H; subst c; destruct ob; try destruct b; auto.
+Qed.
+
+Lemma load_result_intoffloat:
+  forall v v',
+  Val.intoffloat v = Some v' ->
+  load_result Many32 (Val.maketotal (Val.intoffloat v)) = v'.
+Proof.
+  intros. destruct v; try inversion H.
+  rewrite H, <- H1.
+  destruct (Float.to_int f). simpl in *; congruence.
+  inversion H1.
+Qed.
+
+Lemma load_result_intofsingle:
+  forall v v',
+  Val.intofsingle v = Some v' ->
+  load_result Many32 (Val.maketotal (Val.intofsingle v)) = v'.
+Proof.
+  intros. destruct v; try inversion H.
+  rewrite H, <- H1.
+  destruct (Float32.to_int f). simpl in *; congruence.
+  inversion H1.
 Qed.
 
 (** Theorems on arithmetic operations. *)
@@ -2042,6 +2162,13 @@ Lemma offset_ptr_assoc:
   forall v d1 d2, offset_ptr (offset_ptr v d1) d2 = offset_ptr v (Ptrofs.add d1 d2).
 Proof.
   intros. destruct v; simpl; auto. f_equal. apply Ptrofs.add_assoc.
+Qed.
+
+Lemma offset_ptr_type:
+  forall v d, has_type (offset_ptr v d) Tptr.
+Proof.
+  intros. destruct v; simpl; auto.
+  unfold Tptr. destruct Archi.ptr64; auto.
 Qed.
 
 (** * Values and memory injections *)

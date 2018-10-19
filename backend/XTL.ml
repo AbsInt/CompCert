@@ -142,10 +142,10 @@ let rec type_builtin_args al tyl =
   | a :: al, ty :: tyl -> type_builtin_arg a ty; type_builtin_args al tyl
   | _, _ -> raise Type_error
 
-let rec type_builtin_res a ty =
+let type_builtin_res a ty =
   match a with
   | BR v -> set_var_type v ty
-  | BR_splitlong(a1, a2) -> type_builtin_res a1 Tint; type_builtin_res a2 Tint
+  | BR_splitlong(a1, a2) -> set_var_type a1 Tint; set_var_type a2 Tint
   | _ -> ()
 
 let type_instr = function

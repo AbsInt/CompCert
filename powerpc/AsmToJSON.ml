@@ -243,8 +243,10 @@ let pp_instructions pp ic =
   | Plfd_a (fr,c,ir) -> instruction pp "Plfd" [Freg fr; Constant c; Ireg ir]
   | Plfdx (fr,ir1,ir2)
   | Plfdx_a (fr,ir1,ir2) -> instruction pp "Plfdx" [Freg fr; Ireg ir1; Ireg ir2]
-  | Plfs (fr,c,ir) -> instruction pp "Plfs" [Freg fr; Constant c; Ireg ir]
-  | Plfsx  (fr,ir1,ir2) -> instruction pp "Plfsx" [Freg fr; Ireg ir1; Ireg ir2]
+  | Plfs (fr,c,ir)
+  | Plfs_a (fr,c,ir) -> instruction pp "Plfs" [Freg fr; Constant c; Ireg ir]
+  | Plfsx (fr,ir1,ir2)
+  | Plfsx_a (fr,ir1,ir2) -> instruction pp "Plfsx" [Freg fr; Ireg ir1; Ireg ir2]
   | Plha (ir1,c,ir2) -> instruction pp "Plha" [Ireg ir1; Constant c; Ireg ir2]
   | Plhax (ir1,ir2,ir3) -> instruction pp "Plhax" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Plhbrx (ir1,ir2,ir3) -> instruction pp "Plhbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
@@ -315,8 +317,10 @@ let pp_instructions pp ic =
   | Pstfdu (fr,c,ir) -> instruction pp "Pstfdu" [Freg fr; Constant c; Ireg ir]
   | Pstfdx (fr,ir1,ir2)
   | Pstfdx_a (fr,ir1,ir2) -> instruction pp "Pstfdx" [Freg fr; Ireg ir1; Ireg ir2]
-  | Pstfs (fr,c,ir) -> instruction pp "Pstfs" [Freg fr; Constant c; Ireg ir]
-  | Pstfsx (fr,ir1,ir2) -> instruction pp "Pstfsx" [Freg fr; Ireg ir1; Ireg ir2]
+  | Pstfs (fr,c,ir)
+  | Pstfs_a (fr,c,ir) -> instruction pp "Pstfs" [Freg fr; Constant c; Ireg ir]
+  | Pstfsx (fr,ir1,ir2)
+  | Pstfsx_a (fr,ir1,ir2) -> instruction pp "Pstfsx" [Freg fr; Ireg ir1; Ireg ir2]
   | Psth (ir1,c,ir2) -> instruction pp "Psth"  [Ireg ir1; Constant c; Ireg ir2]
   | Psthx (ir1,ir2,ir3) -> instruction pp "Psthx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Psthbrx (ir1,ir2,ir3) -> instruction pp "Psthbrx" [Ireg ir1; Ireg ir2; Ireg ir3]

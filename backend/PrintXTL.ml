@@ -17,6 +17,7 @@ open Camlcoq
 open Datatypes
 open Maps
 open AST
+open Memdata
 open PrintAST
 open PrintOp
 open XTL
@@ -34,14 +35,18 @@ let short_name_of_type = function
   | Tany32 -> 'w'
   | Tany64 -> 'd'
 
+let short_name_of_quantity = function
+  | Q32 -> 'w'  (* "word" *)
+  | Q64 -> 'd'  (* "doubleword" *)
+
 let loc pp = function
   | Locations.R r -> mreg pp r
-  | Locations.S(Locations.Local, ofs, ty) ->
-      fprintf pp "L%c%ld" (short_name_of_type ty) (camlint_of_coqint ofs)
-  | Locations.S(Locations.Incoming, ofs, ty) ->
-      fprintf pp "I%c%ld" (short_name_of_type ty) (camlint_of_coqint ofs)
-  | Locations.S(Locations.Outgoing, ofs, ty) ->
-      fprintf pp "O%c%ld" (short_name_of_type ty) (camlint_of_coqint ofs)
+  | Locations.S(Locations.Local, ofs, q) ->
+      fprintf pp "L%c%ld" (short_name_of_quantity q) (camlint_of_coqint ofs)
+  | Locations.S(Locations.Incoming, ofs, q) ->
+      fprintf pp "I%c%ld" (short_name_of_quantity q) (camlint_of_coqint ofs)
+  | Locations.S(Locations.Outgoing, ofs, q) ->
+      fprintf pp "O%c%ld" (short_name_of_quantity q) (camlint_of_coqint ofs)
 
 let current_alloc = ref (None: (var -> Locations.loc) option)
 let current_liveness = ref (None: VSet.t PMap.t option)

@@ -16,6 +16,7 @@
 Require Import Coqlib.
 Require Import Decidableplus.
 Require Import AST.
+Require Import Values.
 Require Import Events.
 Require Import Locations.
 Require Archi.
@@ -122,6 +123,17 @@ Proof.
   intros. unfold proj_sig_res, loc_result. destruct (sig_res sig) as [[]|]; destruct Archi.big_endian; auto.
 Qed.
 
+Lemma loc_result_has_type:
+  forall res sig,
+  Val.has_type res (proj_sig_res sig) ->
+  Val.has_type_rpair res (loc_result sig) Val.loword Val.hiword mreg_type.
+Proof.
+  intros. unfold Val.has_type_rpair, loc_result, proj_sig_res in *.
+  destruct sig; simpl. destruct sig_res; simpl in H.
+  destruct t, res, Archi.big_endian; simpl; auto.
+  destruct res; simpl; auto.
+Qed.
+
 (** The result locations are caller-save registers *)
 
 Lemma loc_result_caller_save:
@@ -195,16 +207,16 @@ Fixpoint loc_arguments_hf
   | (Tint | Tany32) as ty :: tys =>
       if zlt ir 4
       then One (R (ireg_param ir)) :: loc_arguments_hf tys (ir + 1) fr ofs
-      else One (S Outgoing ofs ty) :: loc_arguments_hf tys ir fr (ofs + 1)
+      else One (S Outgoing ofs Q32) :: loc_arguments_hf tys ir fr (ofs + 1)
   | (Tfloat | Tany64) as ty :: tys =>
       if zlt fr 8
       then One (R (freg_param fr)) :: loc_arguments_hf tys ir (fr + 1) ofs
       else let ofs := align ofs 2 in
-           One (S Outgoing ofs ty) :: loc_arguments_hf tys ir fr (ofs + 2)
+           One (S Outgoing ofs Q64) :: loc_arguments_hf tys ir fr (ofs + 2)
   | Tsingle :: tys =>
       if zlt fr 8
       then One (R (freg_param fr)) :: loc_arguments_hf tys ir (fr + 1) ofs
-      else One (S Outgoing ofs Tsingle) :: loc_arguments_hf tys ir fr (ofs + 1)
+      else One (S Outgoing ofs Q32) :: loc_arguments_hf tys ir fr (ofs + 1)
   | Tlong :: tys =>
       let ohi := if Archi.big_endian then 0 else 1 in
       let olo := if Archi.big_endian then 1 else 0 in
@@ -212,7 +224,7 @@ Fixpoint loc_arguments_hf
       if zlt ir 4
       then Twolong (R (ireg_param (ir + ohi))) (R (ireg_param (ir + olo))) :: loc_arguments_hf tys (ir + 2) fr ofs
       else let ofs := align ofs 2 in
-           Twolong (S Outgoing (ofs + ohi) Tint) (S Outgoing (ofs + olo) Tint) :: loc_arguments_hf tys ir fr (ofs + 2)
+           Twolong (S Outgoing (ofs + ohi) Q32) (S Outgoing (ofs + olo) Q32) :: loc_arguments_hf tys ir fr (ofs + 2)
   end.
 
 (** For the "softfloat" configuration, as well as for variable-argument functions
@@ -240,21 +252,21 @@ Fixpoint loc_arguments_sf
   match tyl with
   | nil => nil
   | (Tint|Tany32) as ty :: tys =>
-      One (if zlt ofs 0 then R (ireg_param (ofs + 4)) else S Outgoing ofs ty)
+      One (if zlt ofs 0 then R (ireg_param (ofs + 4)) else S Outgoing ofs Q32)
       :: loc_arguments_sf tys (ofs + 1)
   | (Tfloat|Tany64) as ty :: tys =>
       let ofs := align ofs 2 in
-      One (if zlt ofs 0 then R (freg_param (ofs + 4)) else S Outgoing ofs ty)
+      One (if zlt ofs 0 then R (freg_param (ofs + 4)) else S Outgoing ofs Q64)
       :: loc_arguments_sf tys (ofs + 2)
   | Tsingle :: tys =>
-      One (if zlt ofs 0 then R (freg_param (ofs + 4)) else S Outgoing ofs Tsingle)
+      One (if zlt ofs 0 then R (freg_param (ofs + 4)) else S Outgoing ofs Q32)
       :: loc_arguments_sf tys (ofs + 1)
   | Tlong :: tys =>
       let ohi := if Archi.big_endian then 0 else 1 in
       let olo := if Archi.big_endian then 1 else 0 in
       let ofs := align ofs 2 in
-      Twolong (if zlt ofs 0 then R (ireg_param (ofs+ohi+4)) else S Outgoing (ofs+ohi) Tint)
-              (if zlt ofs 0 then R (ireg_param (ofs+olo+4)) else S Outgoing (ofs+olo) Tint)
+      Twolong (if zlt ofs 0 then R (ireg_param (ofs+ohi+4)) else S Outgoing (ofs+ohi) Q32)
+              (if zlt ofs 0 then R (ireg_param (ofs+olo+4)) else S Outgoing (ofs+olo) Q32)
       :: loc_arguments_sf tys (ofs + 2)
   end.
 
@@ -319,14 +331,14 @@ Definition size_arguments (s: signature) : Z :=
 Definition loc_argument_acceptable (l: loc) : Prop :=
   match l with
   | R r => is_callee_save r = false
-  | S Outgoing ofs ty => ofs >= 0 /\ (typealign ty | ofs)
+  | S Outgoing ofs q => ofs >= 0 /\ (quantity_align q | ofs)
   | _ => False
   end.
 
 Definition loc_argument_charact (ofs: Z) (l: loc) : Prop :=
   match l with
   | R r => is_callee_save r = false
-  | S Outgoing ofs' ty => ofs' >= ofs /\ typealign ty = 1
+  | S Outgoing ofs' q => ofs' >= ofs /\ quantity_align q = 1
   | _ => False
   end.
 
@@ -525,9 +537,9 @@ Proof.
 Qed.
 
 Lemma loc_arguments_hf_bounded:
-  forall ofs ty tyl ir fr ofs0,
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_hf tyl ir fr ofs0)) ->
-  ofs + typesize ty <= size_arguments_hf tyl ir fr ofs0.
+  forall ofs q tyl ir fr ofs0,
+  In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments_hf tyl ir fr ofs0)) ->
+  ofs + typesize (typ_of_quantity q) <= size_arguments_hf tyl ir fr ofs0.
 Proof.
   induction tyl; simpl; intros.
   elim H.
@@ -579,9 +591,9 @@ Proof.
 Qed.
 
 Lemma loc_arguments_sf_bounded:
-  forall ofs ty tyl ofs0,
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_sf tyl ofs0)) ->
-  Z.max 0 (ofs + typesize ty) <= size_arguments_sf tyl ofs0.
+  forall ofs q tyl ofs0,
+  In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments_sf tyl ofs0)) ->
+  Z.max 0 (ofs + typesize (typ_of_quantity q)) <= size_arguments_sf tyl ofs0.
 Proof.
   induction tyl; simpl; intros.
   elim H.
@@ -623,16 +635,16 @@ Proof.
 Qed.
 
 Lemma loc_arguments_bounded:
-  forall (s: signature) (ofs: Z) (ty: typ),
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments s)) ->
-  ofs + typesize ty <= size_arguments s.
+  forall (s: signature) (ofs: Z) (q: quantity),
+  In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments s)) ->
+  ofs + typesize (typ_of_quantity q) <= size_arguments s.
 Proof.
   unfold loc_arguments, size_arguments; intros.
-  assert (In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_sf (sig_args s) (-4))) ->
-          ofs + typesize ty <= size_arguments_sf (sig_args s) (-4)).
+  assert (In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments_sf (sig_args s) (-4))) ->
+          ofs + typesize (typ_of_quantity q) <= size_arguments_sf (sig_args s) (-4)).
   { intros. eapply Z.le_trans. 2: eapply loc_arguments_sf_bounded; eauto. xomega. }
-  assert (In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_hf (sig_args s) 0 0 0)) ->
-          ofs + typesize ty <= size_arguments_hf (sig_args s) 0 0 0).
+  assert (In (S Outgoing ofs q) (regs_of_rpairs (loc_arguments_hf (sig_args s) 0 0 0)) ->
+          ofs + typesize (typ_of_quantity q) <= size_arguments_hf (sig_args s) 0 0 0).
   { intros. eapply loc_arguments_hf_bounded; eauto. }
   destruct Archi.abi; [ | destruct (cc_vararg (sig_cc s)) ]; eauto.
 Qed.

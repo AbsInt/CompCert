@@ -17,6 +17,7 @@ Require Import Maps.
 Require Import AST.
 Require Import Integers.
 Require Import Op.
+Require Import Memdata.
 
 (** ** Machine registers *)
 
@@ -67,11 +68,20 @@ Instance Finite_mreg : Finite mreg := {
 Definition mreg_type (r: mreg): typ :=
   match r with
   | AX | BX | CX | DX | SI | DI | BP => if Archi.ptr64 then Tany64 else Tany32
-  | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 => Tany64
+  (* These registers don't exist in 32-bit mode. When they do exist, they
+    are 64 bits wide. For some proofs it's nonetheless easier to pretend
+    that *if* they exist, they have the same type as the other integer
+    registers. *)
+  | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 => if Archi.ptr64 then Tany64 else Tany32
   | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 => Tany64
   | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15 => Tany64
   | FP0 => Tany64
   end.
+
+Lemma mreg_type_cases: forall r, mreg_type r = Tany32 \/ mreg_type r = Tany64.
+Proof.
+  destruct r; simpl; auto.
+Qed.
 
 Local Open Scope positive_scope.
 
@@ -80,16 +90,35 @@ Module IndexedMreg <: INDEXED_TYPE.
   Definition eq := mreg_eq.
   Definition index (r: mreg): positive :=
     match r with
-    | AX => 1 | BX => 2 | CX => 3 | DX => 4 | SI => 5 | DI => 6 | BP => 7
-    | R8 => 8 | R9 => 9 | R10 => 10 | R11 => 11 | R12 => 12 | R13 => 13 | R14 => 14 | R15 => 15
-    | X0 => 16 | X1 => 17 | X2 => 18 | X3 => 19 | X4 => 20 | X5 => 21 | X6 => 22 | X7 => 23
-    | X8 => 24 | X9 => 25 | X10 => 26 | X11 => 27 | X12 => 28 | X13 => 29 | X14 => 30 | X15 => 31
-    | FP0 => 32
+    | AX =>  2 | BX =>  4 | CX  =>  6 | DX  =>  8 | SI  => 10 | DI  => 12 | BP  => 14
+    | R8 => 16 | R9 => 18 | R10 => 20 | R11 => 22 | R12 => 24 | R13 => 26 | R14 => 28 | R15 => 30
+    | X0 => 32 | X1 => 34 | X2  => 36 | X3  => 38 | X4  => 40 | X5  => 42 | X6  => 44 | X7 => 46
+    | X8 => 48 | X9 => 50 | X10 => 52 | X11 => 54 | X12 => 56 | X13 => 58 | X14 => 60 | X15 => 62
+    | FP0 => 64
     end.
   Lemma index_inj:
     forall r1 r2, index r1 = index r2 -> r1 = r2.
   Proof.
     decide_goal.
+  Qed.
+
+  Open Scope Z_scope.
+
+  Lemma scaled_index_with_size_aux:
+    forall r1 r2, Zpos (index r1) < Zpos (index r2) -> Zpos (index r1) + 2 <= Zpos (index r2).
+  Proof.
+    decide_goal.
+  Qed.
+
+  Lemma scaled_index_with_size:
+    forall r1 r2,
+    Zpos (index r1) < Zpos (index r2) ->
+    Zpos (index r1) * 4 + AST.typesize (mreg_type r1) <= Zpos (index r2) * 4.
+  Proof.
+    intros.
+    generalize (scaled_index_with_size_aux r1 r2); intro.
+    assert (AST.typesize (mreg_type r1) <= 8) by (destruct (mreg_type r1); simpl; omega).
+    omega.
   Qed.
 End IndexedMreg.
 
@@ -189,11 +218,7 @@ Definition destroyed_at_function_entry: list mreg :=
   (* must include [destroyed_by_setstack ty] *)
   AX :: FP0 :: nil.
 
-Definition destroyed_by_setstack (ty: typ): list mreg :=
-  match ty with
-  | Tfloat | Tsingle => FP0 :: nil
-  | _ => nil
-  end.
+Definition destroyed_by_setstack (q: quantity): list mreg := FP0 :: nil.
 
 Definition destroyed_at_indirect_call: list mreg :=
   AX :: nil.

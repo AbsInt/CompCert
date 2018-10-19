@@ -33,6 +33,7 @@ open Datatypes
 open Coqlib
 open Maps
 open AST
+open Memdata
 open Kildall
 open Op
 open Machregs
@@ -174,7 +175,7 @@ let convert_builtin_res tyenv = function
   | BR r ->
       let ty = tyenv r in
       if Archi.splitlong && ty = Tlong
-      then BR_splitlong(BR(V(r, Tint)), BR(V(twin_reg r, Tint)))
+      then BR_splitlong(V(r, Tint), V(twin_reg r, Tint))
       else BR(V(r, ty))
   | BR_none -> BR_none
   | BR_splitlong _ -> assert false
@@ -201,15 +202,22 @@ let rec constrain_builtin_args al cl =
       let (al', cl2) = constrain_builtin_args al cl1 in
       (a' :: al', cl2)
 
-let rec constrain_builtin_res a cl =
-  match a, cl with
-  | BR x, None :: cl' -> (a, cl')
-  | BR x, Some mr :: cl' -> (BR (L(R mr)), cl')
-  | BR_splitlong(hi, lo), _ ->
-      let (hi', cl1) = constrain_builtin_res hi cl in
-      let (lo', cl2) = constrain_builtin_res lo cl1 in
+let constrain_builtin_res_var x cl =
+  match cl with
+  | None :: cl' -> (x, cl')
+  | Some mr :: cl' -> (L(R mr), cl')
+  | _ -> (x, cl)
+
+let constrain_builtin_res a cl =
+  match a with
+  | BR x ->
+      let (v, cl') = constrain_builtin_res_var x cl in
+      (BR v, cl')
+  | BR_splitlong(hi, lo) ->
+      let (hi', cl1) = constrain_builtin_res_var hi cl in
+      let (lo', cl2) = constrain_builtin_res_var lo cl1 in
       (BR_splitlong(hi', lo'), cl2)
-  | _, _ -> (a, cl)
+  | _ -> (a, cl)
 
 (* Return the XTL basic block corresponding to the given RTL instruction.
    Move and parallel move instructions are introduced to honor calling
@@ -346,11 +354,11 @@ let rec vset_addarg a after =
 
 let vset_addargs al after = List.fold_right vset_addarg al after
 
-let rec vset_removeres r after =
+let vset_removeres r after =
   match r with
   | BR v -> VSet.remove v after
   | BR_none -> after
-  | BR_splitlong(hi, lo) -> vset_removeres hi (vset_removeres lo after)
+  | BR_splitlong(hi, lo) -> VSet.remove hi (VSet.remove lo after)
 
 let live_before instr after =
   match instr with
@@ -883,15 +891,15 @@ let save_var tospill eqs v =
     (t, [Xspill(t, v)], add v t (kill v eqs))
   end
 
-let rec save_res tospill eqs = function
+let save_res tospill eqs = function
   | BR v ->
       let (t, c1, eqs1) = save_var tospill eqs v in
       (BR t, c1, eqs1)
   | BR_none ->
       (BR_none, [], eqs)
   | BR_splitlong(hi, lo) ->
-      let (hi', c1, eqs1) = save_res tospill eqs hi in
-      let (lo', c2, eqs2) = save_res tospill eqs1 lo in
+      let (hi', c1, eqs1) = save_var tospill eqs hi in
+      let (lo', c2, eqs2) = save_var tospill eqs1 lo in
       (BR_splitlong(hi', lo'), c1 @ c2, eqs2)
 
 (* Trimming equations when we have too many or when they are too old.
@@ -1055,22 +1063,24 @@ let make_parmove srcs dsts itmp ftmp k =
   let n = Array.length src in
   assert (Array.length dst = n);
   let status = Array.make n To_move in
-  let temp_for cls =
+  let temp_for_cls cls =
     match cls with 0 -> itmp | 1 -> ftmp | _ -> assert false in
+  let temp_for_q q =
+    match q with Q32 -> itmp | Q64 -> ftmp in
   let code = ref [] in
   let add_move s d =
     match s, d with
     | R rs, R rd ->
         code := LTL.Lop(Omove, [rs], rd) :: !code
-    | R rs, Locations.S(sl, ofs, ty) ->
-        code := LTL.Lsetstack(rs, sl, ofs, ty) :: !code
-    | Locations.S(sl, ofs, ty), R rd ->
-        code := LTL.Lgetstack(sl, ofs, ty, rd) :: !code
-    | Locations.S(sls, ofss, tys), Locations.S(sld, ofsd, tyd) ->
-        let tmp = temp_for (class_of_type tys) in
+    | R rs, Locations.S(sl, ofs, q) ->
+        code := LTL.Lsetstack(rs, sl, ofs, q) :: !code
+    | Locations.S(sl, ofs, q), R rd ->
+        code := LTL.Lgetstack(sl, ofs, q, rd) :: !code
+    | Locations.S(sls, ofss, qs), Locations.S(sld, ofsd, qd) ->
+        let tmp = temp_for_q qs in
         (* code will be reversed at the end *)
-        code := LTL.Lsetstack(tmp, sld, ofsd, tyd) ::
-                LTL.Lgetstack(sls, ofss, tys, tmp) :: !code
+        code := LTL.Lsetstack(tmp, sld, ofsd, qd) ::
+                LTL.Lgetstack(sls, ofss, qs, tmp) :: !code
     in
   let rec move_one i =
     if src.(i) <> dst.(i) then begin
@@ -1081,7 +1091,7 @@ let make_parmove srcs dsts itmp ftmp k =
           | To_move ->
               move_one j
           | Being_moved ->
-              let tmp = R (temp_for (class_of_loc src.(j))) in
+              let tmp = R (temp_for_cls (class_of_loc src.(j))) in
               add_move src.(j) tmp;
               src.(j) <- tmp
           | Moved ->

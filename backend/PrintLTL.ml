@@ -31,19 +31,19 @@ let rec mregs pp = function
   | [r] -> mreg pp r
   | r1::rl -> fprintf pp "%a, %a" mreg r1 mregs rl
 
-let slot pp (sl, ofs, ty) =
+let slot pp (sl, ofs, q) =
   match sl with
   | Locations.Local ->
-      fprintf pp "local(%ld,%s)" (camlint_of_coqint ofs) (name_of_type ty)
+      fprintf pp "local(%ld,%s)" (camlint_of_coqint ofs) (name_of_quantity q)
   | Locations.Incoming ->
-      fprintf pp "incoming(%ld,%s)" (camlint_of_coqint ofs) (name_of_type ty)
+      fprintf pp "incoming(%ld,%s)" (camlint_of_coqint ofs) (name_of_quantity q)
   | Locations.Outgoing ->
-      fprintf pp "outgoing(%ld,%s)" (camlint_of_coqint ofs) (name_of_type ty)
+      fprintf pp "outgoing(%ld,%s)" (camlint_of_coqint ofs) (name_of_quantity q)
 
 let loc pp l =
   match l with
   | Locations.R r -> mreg pp r
-  | Locations.S(sl, ofs, ty) -> slot pp (sl, ofs, ty)
+  | Locations.S(sl, ofs, q) -> slot pp (sl, ofs, q)
 
 let rec locs pp = function
   | [] -> ()

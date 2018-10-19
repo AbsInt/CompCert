@@ -111,11 +111,11 @@ Fixpoint arg_no_overlap (a: builtin_arg loc) (l: loc) : bool :=
 Definition kill (l: loc) (s: avail) : avail :=
   List.filter (fun vi => arg_no_overlap (proj1_sig (snd vi)) l) s.
 
-Fixpoint kill_res (r: builtin_res mreg) (s: avail) : avail :=
+Definition kill_res (r: builtin_res mreg) (s: avail) : avail :=
   match r with
   | BR r => kill (R r) s
   | BR_none => s
-  | BR_splitlong hi lo => kill_res hi (kill_res lo s)
+  | BR_splitlong hi lo => kill (R hi) (kill (R lo) s)
   end.
 
 (** Likewise when a function call takes place. *)

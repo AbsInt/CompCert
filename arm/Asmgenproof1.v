@@ -53,7 +53,11 @@ Hint Resolve ireg_of_not_R14': asmgen.
 Lemma nextinstr_nf_pc:
   forall rs, (nextinstr_nf rs)#PC = Val.offset_ptr rs#PC Ptrofs.one.
 Proof.
-  intros. reflexivity.
+  intros.
+  unfold nextinstr_nf, nextinstr, undef_flags. rewrite Pregmap.gss.
+  repeat rewrite Pregmap.gso by (compute; intuition congruence).
+  unfold Val.offset_ptr.
+  destruct (Pregmap.get PC rs); reflexivity.
 Qed.
 
 Definition if_preg (r: preg) : bool :=
@@ -74,18 +78,53 @@ Proof.
   intros; red; intros; subst; discriminate.
 Qed.
 
-Hint Resolve data_if_preg if_preg_not_PC: asmgen.
+Lemma if_preg_not_CR: forall r c, if_preg r = true -> r <> CR c.
+Proof.
+  intros; red; intros; subst; discriminate.
+Qed.
+
+Hint Resolve data_if_preg if_preg_not_PC if_preg_not_CR: asmgen.
 
 Lemma nextinstr_nf_inv:
   forall r rs, if_preg r = true -> (nextinstr_nf rs)#r = rs#r.
 Proof.
-  intros. destruct r; reflexivity || discriminate.
+  intros.
+  unfold nextinstr_nf, nextinstr, undef_flags.
+  rewrite !Pregmap.gso; destruct r; reflexivity || discriminate.
 Qed.
 
 Lemma nextinstr_nf_inv1:
   forall r rs, data_preg r = true -> (nextinstr_nf rs)#r = rs#r.
 Proof.
-  intros. destruct r; reflexivity || discriminate.
+  intros.
+  unfold nextinstr_nf, nextinstr, undef_flags.
+  rewrite !Pregmap.gso; destruct r; reflexivity || discriminate.
+Qed.
+
+Lemma if_preg_nextinstr_nf_PC:
+  forall rs r v,
+  if_preg r = true ->
+  Pregmap.get PC (nextinstr_nf rs # r <- v) =
+  Val.offset_ptr (Pregmap.get PC rs) Ptrofs.one.
+Proof.
+  intros.
+  unfold nextinstr_nf, nextinstr, undef_flags. rewrite Pregmap.gss.
+  repeat rewrite Pregmap.gso by (compute; intuition congruence).
+  rewrite Pregmap.gso. unfold Val.offset_ptr. destruct (Pregmap.get PC rs); reflexivity.
+  auto using not_eq_sym, if_preg_not_PC.
+Qed.
+
+Lemma if_preg_nextinstr_PC:
+  forall rs r v,
+  if_preg r = true ->
+  Pregmap.get PC (nextinstr rs # r <- v) =
+  Val.offset_ptr (Pregmap.get PC rs) Ptrofs.one.
+Proof.
+  intros.
+  unfold nextinstr_nf, nextinstr, undef_flags. rewrite Pregmap.gss.
+  repeat rewrite Pregmap.gso by (compute; intuition congruence).
+  rewrite Pregmap.gso. unfold Val.offset_ptr. destruct (Pregmap.get PC rs); reflexivity.
+  auto using not_eq_sym, if_preg_not_PC.
 Qed.
 
 (** Useful simplification tactic *)
@@ -292,6 +331,7 @@ Qed.
 
 Lemma iterate_op_correct:
   forall op1 op2 (f: val -> int -> val) (rs: regset) (r: ireg) m v0 n k,
+  (forall (v: val) (i: int), Val.has_type (f v i) Tany32) ->
   (forall (rs:regset) n,
     exec_instr ge fn (op2 (SOimm n)) rs m =
     Next (nextinstr_nf (rs#r <- (f (rs#r) n))) m) ->
@@ -303,23 +343,30 @@ Lemma iterate_op_correct:
   /\ rs'#r = List.fold_left f (decompose_int n) v0
   /\ forall r': preg, r' <> r -> if_preg r' = true -> rs'#r' = rs#r'.
 Proof.
-  intros until k; intros SEM2 SEM1.
+  intros until k; intros TYP SEM2 SEM1.
   unfold iterate_op.
   destruct (decompose_int n) as [ | i tl] eqn:DI.
   unfold decompose_int in DI. destruct (decompose_int_base n); congruence.
   revert k. pattern tl. apply List.rev_ind.
   (* base case *)
   intros; simpl. econstructor.
-  split. apply exec_straight_one. rewrite SEM1. reflexivity. reflexivity.
+  split. apply exec_straight_one. rewrite SEM1. reflexivity.
   intuition Simpl.
+  intuition Simpl.
+  change (Preg.chunk_of r) with (chunk_of_type Tany32).
+  auto using Val.load_result_same.
   (* inductive case *)
   intros.
   rewrite List.map_app. simpl. rewrite app_ass. simpl.
   destruct (H (op2 (SOimm x) :: k)) as [rs' [A [B C]]].
   econstructor.
   split. eapply exec_straight_trans. eexact A. apply exec_straight_one.
-  rewrite SEM2. reflexivity. reflexivity.
-  split. rewrite fold_left_app; simpl. Simpl. rewrite B. auto.
+  rewrite SEM2. reflexivity.
+  intuition Simpl.
+  split. rewrite fold_left_app; simpl. Simpl.
+  rewrite B.
+  change (Preg.chunk_of r) with (chunk_of_type Tany32).
+  auto using Val.load_result_same.
   intros; Simpl.
 Qed.
 
@@ -337,20 +384,25 @@ Proof.
   set (l2 := length (decompose_int (Int.not n))).
   destruct (Nat.leb l1 1%nat).
 { (* single mov *)
-  econstructor; split. apply exec_straight_one. simpl; reflexivity. auto.
+  econstructor; split. apply exec_straight_one. simpl. reflexivity.
+  intuition Simpl.
   split; intros; Simpl. }
   destruct (Nat.leb l2 1%nat).
 { (* single movn *)
   econstructor; split. apply exec_straight_one.
-  simpl. rewrite Int.not_involutive. reflexivity. auto.
+  simpl. rewrite Int.not_involutive. reflexivity.
+  intuition Simpl.
   split; intros; Simpl. }
   destruct Archi.thumb2_support.
 { (* movw / movt *)
   unfold loadimm_word. destruct (Int.eq (Int.shru n (Int.repr 16)) Int.zero).
   econstructor; split.
-  apply exec_straight_one. simpl; eauto. auto. split; intros; Simpl.
+  apply exec_straight_one. simpl. reflexivity.
+  intuition Simpl.
+  split; intros; Simpl.
   econstructor; split.
-  eapply exec_straight_two. simpl; reflexivity. simpl; reflexivity. auto. auto.
+  eapply exec_straight_two. simpl; reflexivity. simpl. reflexivity.
+  intuition Simpl. intuition Simpl.
   split; intros; Simpl. simpl. f_equal. rewrite Int.zero_ext_and by omega.
   rewrite Int.and_assoc. change 65535 with (two_p 16 - 1). rewrite Int.and_idem.
   apply Int.same_bits_eq; intros.
@@ -365,14 +417,16 @@ Proof.
 { (* mov - orr* *)
   replace (Vint n) with (List.fold_left (fun v i => Val.or v (Vint i)) (decompose_int n) Vzero).
   apply iterate_op_correct.
-  auto.
+  destruct v; simpl; auto.
+  intros; simpl. reflexivity.
   intros; simpl. rewrite Int.or_commut; rewrite Int.or_zero; auto.
   rewrite decompose_int_or. simpl. rewrite Int.or_commut; rewrite Int.or_zero; auto.
 }
 { (* mvn - bic* *)
   replace (Vint n) with (List.fold_left (fun v i => Val.and v (Vint (Int.not i))) (decompose_int (Int.not n)) (Vint Int.mone)).
   apply iterate_op_correct.
-  auto.
+  destruct v; simpl; auto.
+  intros; simpl. reflexivity.
   intros. simpl. rewrite Int.and_commut; rewrite Int.and_mone; auto.
   rewrite decompose_int_bic. simpl. rewrite Int.not_involutive. rewrite Int.and_commut. rewrite Int.and_mone; auto.
 }
@@ -390,20 +444,26 @@ Proof.
   intros. unfold addimm.
   destruct (Int.ltu (Int.repr (-256)) n).
   (* sub *)
-  econstructor; split. apply exec_straight_one; simpl; auto.
-  split; intros; Simpl. apply Val.sub_opp_add.
+  econstructor; split. apply exec_straight_one; simpl; auto. Simpl.
+  split; intros; Simpl.
+  rewrite Val.sub_opp_add.
+  change (Preg.chunk_of r1) with (chunk_of_type Tany32).
+  rewrite Val.load_result_same; auto.
+  destruct (Pregmap.get r2 rs); simpl; auto.
   destruct (Nat.leb (length (decompose_int n)) (length (decompose_int (Int.neg n)))).
   (* add - add* *)
-  replace (Val.add (rs r2) (Vint n))
-     with (List.fold_left (fun v i => Val.add v (Vint i)) (decompose_int n) (rs r2)).
+  replace (Val.add (rs # r2) (Vint n))
+     with (List.fold_left (fun v i => Val.add v (Vint i)) (decompose_int n) (rs # r2)).
   apply iterate_op_correct.
+  destruct v; simpl; auto.
   auto.
   auto.
   apply decompose_int_add.
   (* sub - sub* *)
-  replace (Val.add (rs r2) (Vint n))
-     with (List.fold_left (fun v i => Val.sub v (Vint i)) (decompose_int (Int.neg n)) (rs r2)).
+  replace (Val.add (rs # r2) (Vint n))
+     with (List.fold_left (fun v i => Val.sub v (Vint i)) (decompose_int (Int.neg n)) (rs # r2)).
   apply iterate_op_correct.
+  destruct v; simpl; auto.
   auto.
   auto.
   rewrite decompose_int_sub. apply Val.sub_opp_add.
@@ -421,12 +481,15 @@ Proof.
   intros. unfold andimm. destruct (is_immed_arith n).
   (* andi *)
   exists (nextinstr_nf (rs#r1 <- (Val.and rs#r2 (Vint n)))).
-  split. apply exec_straight_one; auto. split; intros; Simpl.
+  split. apply exec_straight_one; auto. Simpl. split; intros; Simpl.
+  change (Preg.chunk_of r1) with (chunk_of_type Tany32).
+  rewrite Val.load_result_same; auto.
+  destruct (Pregmap.get r2 rs); simpl; auto.
   (* bic - bic* *)
-  replace (Val.and (rs r2) (Vint n))
-     with (List.fold_left (fun v i => Val.and v (Vint (Int.not i))) (decompose_int (Int.not n)) (rs r2)).
+  replace (Val.and (rs # r2) (Vint n))
+     with (List.fold_left (fun v i => Val.and v (Vint (Int.not i))) (decompose_int (Int.not n)) (rs # r2)).
   apply iterate_op_correct.
-  auto. auto.
+  destruct v; simpl; auto. auto. auto.
   rewrite decompose_int_bic. rewrite Int.not_involutive. auto.
 Qed.
 
@@ -441,14 +504,15 @@ Lemma rsubimm_correct:
 Proof.
   intros. unfold rsubimm.
   (* rsb - add* *)
-  replace (Val.sub (Vint n) (rs r2))
-     with (List.fold_left (fun v i => Val.add v (Vint i)) (decompose_int n) (Val.neg (rs r2))).
+  replace (Val.sub (Vint n) (rs # r2))
+     with (List.fold_left (fun v i => Val.add v (Vint i)) (decompose_int n) (Val.neg (rs # r2))).
   apply iterate_op_correct.
+  destruct v; simpl; auto.
   auto.
-  intros. simpl. destruct (rs r2); auto. simpl. rewrite Int.sub_add_opp.
+  intros. simpl. destruct (rs # r2); auto. simpl. rewrite Int.sub_add_opp.
   rewrite Int.add_commut; auto.
   rewrite decompose_int_add.
-  destruct (rs r2); simpl; auto. rewrite Int.sub_add_opp. rewrite Int.add_commut; auto.
+  destruct (rs # r2); simpl; auto. rewrite Int.sub_add_opp. rewrite Int.add_commut; auto.
 Qed.
 
 (** Or immediate *)
@@ -462,9 +526,10 @@ Lemma orimm_correct:
 Proof.
   intros. unfold orimm.
   (* ori - ori* *)
-  replace (Val.or (rs r2) (Vint n))
-     with (List.fold_left (fun v i => Val.or v (Vint i)) (decompose_int n) (rs r2)).
+  replace (Val.or (rs # r2) (Vint n))
+     with (List.fold_left (fun v i => Val.or v (Vint i)) (decompose_int n) (rs # r2)).
   apply iterate_op_correct.
+  destruct v; simpl; auto.
   auto.
   auto.
   apply decompose_int_or.
@@ -481,9 +546,10 @@ Lemma xorimm_correct:
 Proof.
   intros. unfold xorimm.
   (* xori - xori* *)
-  replace (Val.xor (rs r2) (Vint n))
-     with (List.fold_left (fun v i => Val.xor v (Vint i)) (decompose_int n) (rs r2)).
+  replace (Val.xor (rs # r2) (Vint n))
+     with (List.fold_left (fun v i => Val.xor v (Vint i)) (decompose_int n) (rs # r2)).
   apply iterate_op_correct.
+  destruct v; simpl; auto.
   auto.
   auto.
   apply decompose_int_xor.
@@ -496,7 +562,7 @@ Lemma indexed_memory_access_correct:
          (mk_immed: int -> int) (base: ireg) n k (rs: regset) m m',
   (forall (r1: ireg) (rs1: regset) n1 k,
     Val.add rs1#r1 (Vint n1) = Val.add rs#base (Vint n) ->
-    (forall (r: preg), if_preg r = true -> r <> IR14 -> rs1 r = rs r) ->
+    (forall (r: preg), if_preg r = true -> r <> IR14 -> rs1 # r = rs # r) ->
     exists rs',
     exec_straight ge fn (mk_instr r1 n1 :: k) rs1 m k rs' m' /\ P rs') ->
   exists rs',
@@ -522,97 +588,86 @@ Qed.
 
 Lemma loadind_int_correct:
   forall (base: ireg) ofs dst (rs: regset) m v k,
-  Mem.loadv Mint32 m (Val.offset_ptr rs#base ofs) = Some v ->
+  Mem.loadv Many32 m (Val.offset_ptr rs#base ofs) = Some v ->
   exists rs',
      exec_straight ge fn (loadind_int base ofs dst k) rs m k rs' m
   /\ rs'#dst = v
   /\ forall r, if_preg r = true -> r <> IR14 -> r <> dst -> rs'#r = rs#r.
 Proof.
   intros; unfold loadind_int.
-  assert (Val.offset_ptr (rs base) ofs = Val.add (rs base) (Vint (Ptrofs.to_int ofs))).
-  { destruct (rs base); try discriminate. simpl. f_equal; f_equal. symmetry; auto with ptrofs. }
+  assert (Val.offset_ptr (rs # base) ofs = Val.add (rs # base) (Vint (Ptrofs.to_int ofs))).
+  { destruct (rs # base); try discriminate. simpl. f_equal; f_equal. symmetry; auto with ptrofs. }
   apply indexed_memory_access_correct; intros.
   econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_load. rewrite H1, <- H0, H. eauto. auto.
+  apply exec_straight_one. simpl. unfold exec_load. rewrite H1, <- H0, H. eauto.
+  Simpl.
   split; intros; Simpl.
+  apply Mem.loadv_type, Val.load_result_same in H. auto.
 Qed.
 
 Lemma loadind_correct:
-  forall (base: ireg) ofs ty dst k c (rs: regset) m v,
-  loadind base ofs ty dst k = OK c ->
-  Mem.loadv (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) = Some v ->
+  forall (base: ireg) ofs q dst k c (rs: regset) m v,
+  loadind base ofs q dst k = OK c ->
+  Mem.loadv (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) = Some v ->
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of dst) = v
   /\ forall r, if_preg r = true -> r <> IR14 -> r <> preg_of dst -> rs'#r = rs#r.
 Proof.
   unfold loadind; intros.
-  assert (Val.offset_ptr (rs base) ofs = Val.add (rs base) (Vint (Ptrofs.to_int ofs))).
-  { destruct (rs base); try discriminate. simpl. f_equal; f_equal. symmetry; auto with ptrofs. }
-  destruct ty; destruct (preg_of dst); inv H; simpl in H0.
-- (* int *)
-  apply loadind_int_correct; auto.
-- (* float *)
+  assert (Val.offset_ptr (rs # base) ofs = Val.add (rs # base) (Vint (Ptrofs.to_int ofs))).
+  { destruct (rs # base); try discriminate. simpl. f_equal; f_equal. symmetry; auto with ptrofs. }
+  destruct q; destruct (preg_of dst); inv H; simpl in H0.
+- (* any32 to general-purpose register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. auto.
+  apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. Simpl.
   split; intros; Simpl.
-- (* single *)
+  apply Mem.loadv_type in H0. simpl. destruct v; auto; inversion H0.
+- (* any32 to single-precision register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. auto.
+  apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. Simpl.
   split; intros; Simpl.
-- (* any32 *)
+- (* any64 to double-precision register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. auto.
-  split; intros; Simpl.
-- (* any64 *)
-  apply indexed_memory_access_correct; intros.
-  econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. auto.
+  apply exec_straight_one. simpl. unfold exec_load. rewrite H, <- H1, H0. eauto. Simpl.
   split; intros; Simpl.
 Qed.
 
 (** Indexed memory stores. *)
 
 Lemma storeind_correct:
-  forall (base: ireg) ofs ty src k c (rs: regset) m m',
-  storeind src base ofs ty k = OK c ->
-  Mem.storev (chunk_of_type ty) m (Val.offset_ptr rs#base ofs) (rs#(preg_of src)) = Some m' ->
+  forall (base: ireg) ofs q src k c (rs: regset) m m',
+  storeind src base ofs q k = OK c ->
+  Mem.storev (chunk_of_quantity q) m (Val.offset_ptr rs#base ofs) (rs#(preg_of src)) = Some m' ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
   /\ forall r, if_preg r = true -> r <> IR14 -> rs'#r = rs#r.
 Proof.
   unfold storeind; intros.
   assert (DATA: data_preg (preg_of src) = true) by eauto with asmgen.
-  assert (Val.offset_ptr (rs base) ofs = Val.add (rs base) (Vint (Ptrofs.to_int ofs))).
-  { destruct (rs base); try discriminate. simpl. f_equal; f_equal. symmetry; auto with ptrofs. }
-  destruct ty; destruct (preg_of src); inv H; simpl in H0.
-- (* int *)
+  assert (Val.offset_ptr (rs # base) ofs = Val.add (rs # base) (Vint (Ptrofs.to_int ofs))).
+  { destruct (rs # base); try discriminate. simpl. f_equal; f_equal. symmetry; auto with ptrofs. }
+  destruct q; destruct (preg_of src); inv H; simpl in H0.
+- (* any32 from general-purpose register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
+  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto.
+  apply nextinstr_pc.
   intros; Simpl.
-- (* float *)
+- (* any32 from single-precision register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
+  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto.
+  apply nextinstr_pc.
   intros; Simpl.
-- (* single *)
+- (* any64 from double-precision register *)
   apply indexed_memory_access_correct; intros.
   econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
-  intros; Simpl.
-- (* any32 *)
-  apply indexed_memory_access_correct; intros.
-  econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
-  intros; Simpl.
-- (* any64 *)
-  apply indexed_memory_access_correct; intros.
-  econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto. auto.
+  apply exec_straight_one. simpl. unfold exec_store. rewrite H, <- H1, H2, H0 by auto with asmgen; eauto.
+  apply nextinstr_pc.
   intros; Simpl.
 Qed.
 
@@ -620,7 +675,7 @@ Qed.
 
 Lemma save_lr_correct:
   forall ofs k (rs: regset) m m',
-  Mem.storev Mint32 m (Val.offset_ptr rs#IR13 ofs) (rs#IR14) = Some m' ->
+  Mem.storev Many32 m (Val.offset_ptr rs#IR13 ofs) (rs#IR14) = Some m' ->
   exists rs',
      exec_straight ge fn (save_lr ofs k) rs m k rs' m'
   /\ (forall r, if_preg r = true -> r <> IR12 -> rs'#r = rs#r)
@@ -631,9 +686,10 @@ Proof.
   assert (EQ: Val.offset_ptr rs#IR13 ofs = Val.add rs#IR13 (Vint n)).
   { destruct rs#IR13; try discriminate. simpl. f_equal; f_equal. unfold n; symmetry; auto with ptrofs. }
   destruct (Int.eq n n1).
-- econstructor; split. apply exec_straight_one. simpl; unfold exec_store. rewrite <- EQ, H; reflexivity. auto.
+- econstructor; split. apply exec_straight_one. simpl; unfold exec_store. rewrite <- EQ, H; reflexivity.
+  apply nextinstr_pc.
   split. intros; Simpl. intros; Simpl.
-- destruct (addimm_correct IR12 IR13 (Int.sub n n1) (Pstr IR14 IR12 (SOimm n1) :: k) rs m)
+- destruct (addimm_correct IR12 IR13 (Int.sub n n1) (Pstr_a IR14 IR12 (SOimm n1) :: k) rs m)
   as (rs1 & A & B & C).
   econstructor; split.
   eapply exec_straight_trans. eexact A. 
@@ -643,7 +699,7 @@ Proof.
   rewrite (Int.add_commut (Int.neg n1)).
   rewrite Int.add_neg_zero. rewrite Int.add_zero. 
   rewrite <- EQ. rewrite C by eauto with asmgen. rewrite H. reflexivity.
-  auto.
+  Simpl.
   split. intros; Simpl. congruence.
 Qed.
   
@@ -658,6 +714,16 @@ Qed.
 
 (** Translation of conditions *)
 
+Ltac decompose_compare :=
+  match goal with
+  | [ |- Pregmap.get ?C (_ # ?C <- _) = _ ] => rewrite Pregmap.gss; decompose_compare
+  | [ |- Pregmap.get ?C (_ # _ <- _) = _ ] => rewrite Pregmap.gso; decompose_compare
+  | [ |- _ <> _ ] => compute; intuition congruence
+  | [ |- Val.load_result _ ?v = ?v ] =>
+    change (Preg.chunk_of _) with (chunk_of_type Tany32); rewrite Val.load_result_same
+  | _ => idtac
+  end.
+
 Lemma compare_int_spec:
   forall rs v1 v2 m,
   let rs1 := nextinstr (compare_int rs v1 v2 m) in
@@ -666,7 +732,12 @@ Lemma compare_int_spec:
   /\ rs1#CC = Val.cmpu (Mem.valid_pointer m) Cge v1 v2
   /\ rs1#CV = Val.sub_overflow v1 v2.
 Proof.
-  intros. unfold rs1. intuition.
+  intros. unfold rs1. Simpl. unfold compare_int.
+  repeat split; decompose_compare; auto.
+  destruct (Val.sub v1 v2); simpl; auto.
+  unfold Val.cmpu. destruct (Val.cmpu_bool _ _ v1 v2); try destruct b; simpl; auto.
+  unfold Val.cmpu. destruct (Val.cmpu_bool _ _ v1 v2); try destruct b; simpl; auto.
+  destruct v1, v2; simpl; auto.
 Qed.
 
 Lemma compare_int_inv:
@@ -676,6 +747,14 @@ Lemma compare_int_inv:
 Proof.
   intros. unfold rs1, compare_int.
   repeat Simplif.
+Qed.
+
+Lemma compare_int_nextpc:
+  forall rs v1 v2 m,
+  (nextinstr (compare_int rs v1 v2 m)) # PC = Val.offset_ptr (rs # PC) Ptrofs.one.
+Proof.
+  intros. unfold compare_int. Simplif.
+  destruct v1; destruct v2; repeat rewrite Pregmap.gso; auto; congruence.
 Qed.
 
 Lemma int_signed_eq:
@@ -804,7 +883,8 @@ Lemma compare_float_spec:
   /\ rs1#CC = Val.of_bool (negb (Float.cmp Clt f1 f2))
   /\ rs1#CV = Val.of_bool (negb (Float.cmp Ceq f1 f2 || Float.cmp Clt f1 f2 || Float.cmp Cgt f1 f2)).
 Proof.
-  intros. intuition.
+  intros. unfold rs1. Simpl. unfold compare_float.
+  repeat split; decompose_compare; auto; repeat destruct (Float.cmp _ _ _); simpl; auto.
 Qed.
 
 Lemma compare_float_inv:
@@ -813,7 +893,7 @@ Lemma compare_float_inv:
   forall r', data_preg r' = true -> rs1#r' = rs#r'.
 Proof.
   intros. unfold rs1, compare_float.
-  assert (nextinstr (rs#CN <- Vundef #CZ <- Vundef #CC <- Vundef #CV <- Vundef) r' = rs r').
+  assert ((nextinstr (rs#CN <- Vundef #CZ <- Vundef #CC <- Vundef #CV <- Vundef)) # r' = rs # r').
   { repeat Simplif. }
   destruct v1; destruct v2; auto.
   repeat Simplif.
@@ -821,9 +901,10 @@ Qed.
 
 Lemma compare_float_nextpc:
   forall rs v1 v2,
-  nextinstr (compare_float rs v1 v2) PC = Val.offset_ptr (rs PC) Ptrofs.one.
+  (nextinstr (compare_float rs v1 v2)) # PC = Val.offset_ptr (rs # PC) Ptrofs.one.
 Proof.
-  intros. unfold compare_float. destruct v1; destruct v2; reflexivity.
+  intros. unfold compare_float. Simplif.
+  destruct v1; destruct v2; repeat rewrite Pregmap.gso; auto; congruence.
 Qed.
 
 Lemma cond_for_float_cmp_correct:
@@ -910,7 +991,8 @@ Lemma compare_float32_spec:
   /\ rs1#CC = Val.of_bool (negb (Float32.cmp Clt f1 f2))
   /\ rs1#CV = Val.of_bool (negb (Float32.cmp Ceq f1 f2 || Float32.cmp Clt f1 f2 || Float32.cmp Cgt f1 f2)).
 Proof.
-  intros. intuition.
+  intros. unfold rs1, compare_float32.
+  repeat split; Simplif; decompose_compare; auto; repeat destruct (Float32.cmp _ _ _); simpl; auto.
 Qed.
 
 Lemma compare_float32_inv:
@@ -919,7 +1001,7 @@ Lemma compare_float32_inv:
   forall r', data_preg r' = true -> rs1#r' = rs#r'.
 Proof.
   intros. unfold rs1, compare_float32.
-  assert (nextinstr (rs#CN <- Vundef #CZ <- Vundef #CC <- Vundef #CV <- Vundef) r' = rs r').
+  assert ((nextinstr (rs#CN <- Vundef #CZ <- Vundef #CC <- Vundef #CV <- Vundef)) # r' = rs # r').
   { repeat Simplif. }
   destruct v1; destruct v2; auto.
   repeat Simplif.
@@ -927,9 +1009,10 @@ Qed.
 
 Lemma compare_float32_nextpc:
   forall rs v1 v2,
-  nextinstr (compare_float32 rs v1 v2) PC = Val.offset_ptr (rs PC) Ptrofs.one.
+  (nextinstr (compare_float32 rs v1 v2)) # PC = Val.offset_ptr (rs # PC) Ptrofs.one.
 Proof.
-  intros. unfold compare_float32. destruct v1; destruct v2; reflexivity.
+  intros. unfold compare_float32. Simplif.
+  destruct v1; destruct v2; repeat rewrite Pregmap.gso; auto; congruence.
 Qed.
 
 Lemma cond_for_float32_cmp_correct:
@@ -1027,98 +1110,98 @@ Lemma transl_cond_correct:
   transl_cond cond args k = OK c ->
   exists rs',
      exec_straight ge fn c rs m k rs' m
-  /\ match eval_condition cond (map rs (map preg_of args)) m with
+  /\ match eval_condition cond (map (fun r => rs # r) (map preg_of args)) m with
      | Some b => eval_testcond (cond_for_cond cond) rs' = Some b
                  /\ eval_testcond (cond_for_cond (negate_condition cond)) rs' = Some (negb b)
      | None => True
      end
-  /\ forall r, data_preg r = true -> rs'#r = rs r.
+  /\ forall r, data_preg r = true -> rs'#r = rs # r.
 Proof.
   intros until c; intros TR.
   unfold transl_cond in TR; destruct cond; ArgsInv.
 - (* Ccomp *)
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
-  split. destruct (Val.cmp_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
+  split. apply exec_straight_one. simpl. eauto. auto using compare_int_nextpc.
+  split. destruct (Val.cmp_bool c0 (rs # x) (rs # x0)) eqn:CMP; auto.
   split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
   apply compare_int_inv.
 - (* Ccompu *)
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
-  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (rs x0)) eqn:CMP; auto.
+  split. apply exec_straight_one. simpl. eauto. auto using compare_int_nextpc.
+  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs # x) (rs # x0)) eqn:CMP; auto.
   split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
   apply compare_int_inv.
 - (* Ccompshift *)
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
+  split. apply exec_straight_one. simpl. eauto. auto using compare_int_nextpc.
   split. rewrite transl_shift_correct.
-  destruct (Val.cmp_bool c0 (rs x) (eval_shift s (rs x0))) eqn:CMP; auto.
+  destruct (Val.cmp_bool c0 (rs # x) (eval_shift s (rs # x0))) eqn:CMP; auto.
   split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
   apply compare_int_inv.
 - (* Ccompushift *)
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
+  split. apply exec_straight_one. simpl. eauto. auto using compare_int_nextpc.
   split. rewrite transl_shift_correct.
-  destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (eval_shift s (rs x0))) eqn:CMP; auto.
+  destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs # x) (eval_shift s (rs # x0))) eqn:CMP; auto.
   split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
   apply compare_int_inv.
 - (* Ccompimm *)
   destruct (is_immed_arith i).
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
-  split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) eqn:CMP; auto.
+  split. apply exec_straight_one. simpl. eauto. auto using compare_int_nextpc.
+  split. destruct (Val.cmp_bool c0 (rs # x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
   apply compare_int_inv.
   destruct (is_immed_arith (Int.neg i)).
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
-  split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) eqn:CMP; auto.
+  split. apply exec_straight_one. simpl. eauto. auto using compare_int_nextpc.
+  split. destruct (Val.cmp_bool c0 (rs # x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_signed_cmp_correct; rewrite Int.neg_involutive; auto.
   rewrite Val.negate_cmp_bool, CMP; auto.
   apply compare_int_inv.
   exploit (loadimm_correct IR14). intros [rs' [P [Q R]]].
   econstructor.
   split. eapply exec_straight_trans. eexact P. apply exec_straight_one. simpl.
-  rewrite Q. rewrite R; eauto with asmgen. auto.
+  rewrite Q. rewrite R; eauto with asmgen. auto using compare_int_nextpc.
   split. rewrite <- R by (eauto with asmgen).
-  destruct (Val.cmp_bool c0 (rs' x) (Vint i)) eqn:CMP; auto.
+  destruct (Val.cmp_bool c0 (rs' # x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
   intros. rewrite compare_int_inv by auto. auto with asmgen.
 - (* Ccompuimm *)
   destruct (is_immed_arith i).
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
-  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) eqn:CMP; auto.
+  split. apply exec_straight_one. simpl. eauto. auto using compare_int_nextpc.
+  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs # x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
   apply compare_int_inv.
   destruct (is_immed_arith (Int.neg i)).
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
-  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) eqn:CMP; auto.
+  split. apply exec_straight_one. simpl. eauto. auto using compare_int_nextpc.
+  split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs # x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_unsigned_cmp_correct; rewrite Int.neg_involutive; auto.
   rewrite Val.negate_cmpu_bool, CMP; auto.
   apply compare_int_inv.
   exploit (loadimm_correct IR14). intros [rs' [P [Q R]]].
   econstructor.
   split. eapply exec_straight_trans. eexact P. apply exec_straight_one. simpl.
-  rewrite Q. rewrite R; eauto with asmgen. auto.
+  rewrite Q. rewrite R; eauto with asmgen. auto using compare_int_nextpc.
   split. rewrite <- R by (eauto with asmgen).
-  destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs' x) (Vint i)) eqn:CMP; auto.
+  destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs' # x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
   intros. rewrite compare_int_inv by auto. auto with asmgen.
 - (* Ccompf *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float_nextpc.
-  split. destruct (Val.cmpf_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. destruct (rs x0); try discriminate.
+  split. destruct (Val.cmpf_bool c0 (rs # x) (rs # x0)) eqn:CMP; auto.
+  destruct (rs # x); try discriminate. destruct (rs # x0); try discriminate.
   simpl in CMP. inv CMP.
   split. apply cond_for_float_cmp_correct. apply cond_for_float_not_cmp_correct.
   apply compare_float_inv.
 - (* Cnotcompf *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float_nextpc.
-  split. destruct (Val.cmpf_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. destruct (rs x0); try discriminate.
+  split. destruct (Val.cmpf_bool c0 (rs # x) (rs # x0)) eqn:CMP; auto.
+  destruct (rs # x); try discriminate. destruct (rs # x0); try discriminate.
   simpl in CMP. inv CMP.
 Local Opaque compare_float. simpl.
   split. apply cond_for_float_not_cmp_correct. rewrite negb_involutive. apply cond_for_float_cmp_correct.
@@ -1127,16 +1210,16 @@ Local Opaque compare_float. simpl.
 - (* Ccompfzero *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float_nextpc.
-  split. destruct (Val.cmpf_bool c0 (rs x) (Vfloat Float.zero)) eqn:CMP; auto.
-  destruct (rs x); try discriminate.
+  split. destruct (Val.cmpf_bool c0 (rs # x) (Vfloat Float.zero)) eqn:CMP; auto.
+  destruct (rs # x); try discriminate.
   simpl in CMP. inv CMP.
   split. apply cond_for_float_cmp_correct. apply cond_for_float_not_cmp_correct.
   apply compare_float_inv.
 - (* Cnotcompfzero *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float_nextpc.
-  split. destruct (Val.cmpf_bool c0 (rs x) (Vfloat Float.zero)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. simpl in CMP. inv CMP.
+  split. destruct (Val.cmpf_bool c0 (rs # x) (Vfloat Float.zero)) eqn:CMP; auto.
+  destruct (rs # x); try discriminate. simpl in CMP. inv CMP.
 Local Opaque compare_float. simpl.
   split. apply cond_for_float_not_cmp_correct. rewrite negb_involutive. apply cond_for_float_cmp_correct.
   exact I.
@@ -1144,16 +1227,16 @@ Local Opaque compare_float. simpl.
 - (* Ccompfs *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float32_nextpc.
-  split. destruct (Val.cmpfs_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. destruct (rs x0); try discriminate.
+  split. destruct (Val.cmpfs_bool c0 (rs # x) (rs # x0)) eqn:CMP; auto.
+  destruct (rs # x); try discriminate. destruct (rs # x0); try discriminate.
   simpl in CMP. inv CMP.
   split. apply cond_for_float32_cmp_correct. apply cond_for_float32_not_cmp_correct.
   apply compare_float32_inv.
 - (* Cnotcompfs *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float32_nextpc.
-  split. destruct (Val.cmpfs_bool c0 (rs x) (rs x0)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. destruct (rs x0); try discriminate.
+  split. destruct (Val.cmpfs_bool c0 (rs # x) (rs # x0)) eqn:CMP; auto.
+  destruct (rs # x); try discriminate. destruct (rs # x0); try discriminate.
   simpl in CMP. inv CMP.
 Local Opaque compare_float32. simpl.
   split. apply cond_for_float32_not_cmp_correct. rewrite negb_involutive. apply cond_for_float32_cmp_correct.
@@ -1162,16 +1245,16 @@ Local Opaque compare_float32. simpl.
 - (* Ccompfszero *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float32_nextpc.
-  split. destruct (Val.cmpfs_bool c0 (rs x) (Vsingle Float32.zero)) eqn:CMP; auto.
-  destruct (rs x); try discriminate.
+  split. destruct (Val.cmpfs_bool c0 (rs # x) (Vsingle Float32.zero)) eqn:CMP; auto.
+  destruct (rs # x); try discriminate.
   simpl in CMP. inv CMP.
   split. apply cond_for_float32_cmp_correct. apply cond_for_float32_not_cmp_correct.
   apply compare_float32_inv.
 - (* Cnotcompfzero *)
   econstructor.
   split. apply exec_straight_one. simpl. eauto. apply compare_float32_nextpc.
-  split. destruct (Val.cmpfs_bool c0 (rs x) (Vsingle Float32.zero)) eqn:CMP; auto.
-  destruct (rs x); try discriminate. simpl in CMP. inv CMP.
+  split. destruct (Val.cmpfs_bool c0 (rs # x) (Vsingle Float32.zero)) eqn:CMP; auto.
+  destruct (rs # x); try discriminate. simpl in CMP. inv CMP.
   simpl. split. apply cond_for_float32_not_cmp_correct. rewrite negb_involutive. apply cond_for_float32_cmp_correct.
   exact I.
   apply compare_float32_inv.
@@ -1179,15 +1262,40 @@ Qed.
 
 (** Translation of arithmetic operations. *)
 
+Ltac invert_load_result :=
+  match goal with
+  | [ |- Val.load_result ?c (?f ?arg1 ?arg2 ?arg3) = ?f ?arg1 ?arg2 ?arg3 ] =>
+      destruct arg1, arg2, arg3; simpl; auto
+  | [ |- Val.load_result ?c (?f ?arg1 ?arg2) = ?f ?arg1 ?arg2 ] =>
+      destruct arg1, arg2; simpl; auto;
+      match goal with
+      | [ |- match (if ?cond then _ else _) with _ => _ end  = if ?cond then _ else _ ] =>
+          destruct cond; auto
+      | _ =>
+          idtac
+      end
+  | [ |- Val.load_result ?c (?f ?arg1) = ?f ?arg1 ] =>
+      destruct arg1; simpl; auto
+  end.
+
+Ltac ResolveNextinstrPC :=
+  match goal with
+  | [ |- Pregmap.get PC (nextinstr _) = Val.offset_ptr (Pregmap.get PC _) _ ] =>
+    rewrite if_preg_nextinstr_PC; Simpl; reflexivity
+  | [ |- Pregmap.get PC (nextinstr_nf _) = Val.offset_ptr (Pregmap.get PC _) _ ] =>
+    rewrite if_preg_nextinstr_nf_PC; Simpl; reflexivity
+  | _ => reflexivity
+  end.
+
 Ltac TranslOpSimpl :=
   econstructor; split;
-  [ apply exec_straight_one; [simpl; eauto | reflexivity ]
+  [ apply exec_straight_one; [simpl; eauto | ResolveNextinstrPC ]
   | split; [try rewrite transl_shift_correct; repeat Simpl | intros; repeat Simpl] ].
 
 Lemma transl_op_correct_same:
   forall op args res k c (rs: regset) m v,
   transl_op op args res k = OK c ->
-  eval_operation ge rs#IR13 op (map rs (map preg_of args)) m = Some v ->
+  eval_operation ge rs#IR13 op (map (fun r => rs # r) (map preg_of args)) m = Some v ->
   match op with Ocmp _ => False | Oaddrstack _ => False | _ => True end ->
   exists rs',
      exec_straight ge fn c rs m k rs' m
@@ -1195,40 +1303,53 @@ Lemma transl_op_correct_same:
   /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs'#r = rs#r.
 Proof.
   intros until v; intros TR EV NOCMP.
-  unfold transl_op in TR; destruct op; ArgsInv; simpl in EV; inv EV; try (TranslOpSimpl; fail).
+  unfold transl_op in TR; destruct op; ArgsInv; simpl in EV; inv EV; try (TranslOpSimpl; try invert_load_result; fail).
   (* Omove *)
   destruct (preg_of res) eqn:RES; try discriminate;
   destruct (preg_of m0) eqn:ARG; inv TR.
-  econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
-  econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
+    (* ireg *)
+    econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl. intuition Simpl.
+    rewrite Preg.chunk_of_reg_type, Val.load_result_same; auto.
+    change (Preg.type i) with (Preg.type i0).
+    apply Pregmap.get_has_type.
+    (* freg *)
+    econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl. intuition Simpl.
   (* Ointconst *)
   generalize (loadimm_correct x i k rs m). intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
+  (* Oaddrsymbol *)
+  econstructor; split. apply exec_straight_one; simpl; eauto using if_preg_nextinstr_PC.
+  intuition Simpl.
+  change (Preg.chunk_of x) with (chunk_of_type Tany32).
+  apply Val.load_result_same; auto.
+  unfold Genv.symbol_address. destruct (Genv.find_symbol ge i); simpl; auto.
   (* Oaddrstack *)
   contradiction.
   (* Ocast8signed *)
   destruct Archi.thumb2_support.
-  econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
-  destruct (rs x0); auto; simpl. rewrite Int.shru_zero. reflexivity.
+  econstructor; split. apply exec_straight_one; simpl; eauto using if_preg_nextinstr_PC.
+  intuition Simpl.
+  destruct (rs # x0); auto; simpl. rewrite Int.shru_zero. reflexivity.
   set (rs1 := nextinstr_nf (rs#x <- (Val.shl rs#x0 (Vint (Int.repr 24))))).
   set (rs2 := nextinstr_nf (rs1#x <- (Val.shr rs1#x (Vint (Int.repr 24))))).
   exists rs2.
-  split. apply exec_straight_two with rs1 m; auto.
+  split. apply exec_straight_two with rs1 m; eauto using if_preg_nextinstr_nf_PC.
   split. unfold rs2; Simpl. unfold rs1; Simpl.
-  unfold Val.shr, Val.shl; destruct (rs x0); auto.
+  unfold Val.shr, Val.shl; destruct (rs # x0); auto.
   change (Int.ltu (Int.repr 24) Int.iwordsize) with true; simpl.
   f_equal. symmetry. apply (Int.sign_ext_shr_shl 8). compute; auto.
   intros. unfold rs2, rs1; Simpl.
   (* Ocast16signed *)
   destruct Archi.thumb2_support.
-  econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
-  destruct (rs x0); auto; simpl. rewrite Int.shru_zero. reflexivity.
+  econstructor; split. apply exec_straight_one; simpl; eauto using if_preg_nextinstr_PC.
+  intuition Simpl.
+  destruct (rs # x0); auto; simpl. rewrite Int.shru_zero. reflexivity.
   set (rs1 := nextinstr_nf (rs#x <- (Val.shl rs#x0 (Vint (Int.repr 16))))).
   set (rs2 := nextinstr_nf (rs1#x <- (Val.shr rs1#x (Vint (Int.repr 16))))).
   exists rs2.
-  split. apply exec_straight_two with rs1 m; auto.
+  split. apply exec_straight_two with rs1 m; eauto using if_preg_nextinstr_nf_PC.
   split. unfold rs2; Simpl. unfold rs1; Simpl.
-  unfold Val.shr, Val.shl; destruct (rs x0); auto.
+  unfold Val.shr, Val.shl; destruct (rs # x0); auto.
   change (Int.ltu (Int.repr 16) Int.iwordsize) with true; simpl.
   f_equal. symmetry. apply (Int.sign_ext_shr_shl 16). compute; auto.
   intros. unfold rs2, rs1; Simpl.
@@ -1240,13 +1361,24 @@ Proof.
   generalize (rsubimm_correct x x0 i k rs m).
   intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
+
   (* divs *)
 Local Transparent destroyed_by_op.
-  econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity. auto.
-  split. Simpl. simpl; intros. intuition Simpl.
+  econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity.
+  unfold nextinstr. intuition Simpl; invert_load_result.
+  split. simpl. intuition Simpl.
+  destruct (rs#IR0), (rs#IR1); inv H0.
+  destruct (_ || _ && _); inv H1; auto.
+  intros. Simpl. simpl in H2; decompose [and] H2.
+  rewrite !Pregmap.gso; auto.
   (* divu *)
-  econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity. auto.
-  split. Simpl. simpl; intros. intuition Simpl.
+  econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity.
+  unfold nextinstr. intuition Simpl; invert_load_result.
+  split. simpl. intuition Simpl.
+  destruct (rs#IR0), (rs#IR1); inv H0.
+  destruct (Int.eq i0 Int.zero); inv H1; auto.
+  intros. Simpl. simpl in H2; decompose [and] H2.
+  rewrite !Pregmap.gso; auto.
   (* Oandimm *)
   generalize (andimm_correct x x0 i k rs m).
   intros [rs' [A [B C]]].
@@ -1260,14 +1392,15 @@ Local Transparent destroyed_by_op.
   intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
   (* Oshrximm *)
-  destruct (rs x0) eqn: X0; simpl in H0; try discriminate.
+  destruct (rs # x0) eqn: X0; simpl in H0; try discriminate.
   destruct (Int.ltu i (Int.repr 31)) eqn: LTU; inv H0.
   revert EQ2. predSpec Int.eq Int.eq_spec i Int.zero; intros EQ2.
   (* i = 0 *)
   inv EQ2. econstructor.
-  split. apply exec_straight_one. simpl. reflexivity. auto.
+  split. apply exec_straight_one. simpl. reflexivity. Simpl.
   split. Simpl. unfold Int.shrx. rewrite Int.shl_zero. unfold Int.divs.
-  change (Int.signed Int.one) with 1. rewrite Z.quot_1_r. rewrite Int.repr_signed. auto.
+  change (Int.signed Int.one) with 1. rewrite Z.quot_1_r. rewrite Int.repr_signed.
+  rewrite X0; reflexivity.
   intros. Simpl.
   (* i <> 0 *)
   inv EQ2.
@@ -1296,40 +1429,49 @@ Local Transparent destroyed_by_op.
   exists rs3; split.
   apply exec_straight_three with rs1 m rs2 m.
   simpl. rewrite X0; reflexivity.
-  simpl. f_equal. Simpl. replace (rs1 x0) with (rs x0). rewrite X0; reflexivity.
+  simpl. f_equal. Simpl. replace (rs1 # x0) with (rs # x0). rewrite X0; reflexivity.
   unfold rs1; Simpl.
   reflexivity.
-  auto. auto. auto.
+  eauto using if_preg_nextinstr_nf_PC.
+  eauto using if_preg_nextinstr_nf_PC.
+  eauto using if_preg_nextinstr_nf_PC.
   split. unfold rs3; Simpl. unfold rs2; Simpl. unfold rs1; Simpl.
   simpl. change (Int.ltu (Int.repr 31) Int.iwordsize) with true. simpl.
   rewrite LTU'; simpl. rewrite LTU''; simpl.
   f_equal. symmetry. apply Int.shrx_shr_2. assumption.
   intros. unfold rs3; Simpl. unfold rs2; Simpl. unfold rs1; Simpl.
   (* intoffloat *)
-  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
+  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. Simpl.
 Transparent destroyed_by_op.
-  simpl. intuition Simpl.
+  split. Simpl. destruct (rs#x0); inv H0. destruct (Float.to_int f); inv H1; auto.
+  simpl; intros. decompose [and] H2. Simpl.
   (* intuoffloat *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   simpl. intuition Simpl.
+  split. Simpl. destruct (rs#x0); inv H0. destruct (Float.to_intu f); inv H1; auto.
+  simpl; intros. decompose [and] H2. Simpl.
   (* floatofint *)
-  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
+  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. Simpl.
   intuition Simpl.
   (* floatofintu *)
-  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
+  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. Simpl.
   intuition Simpl.
   (* intofsingle *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   simpl. intuition Simpl.
+  split. Simpl. destruct (rs#x0); inv H0. destruct (Float32.to_int f); inv H1; auto.
+  simpl; intros. decompose [and] H2. Simpl.
   (* intuofsingle *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   simpl. intuition Simpl.
+  split. Simpl. destruct (rs#x0); inv H0. destruct (Float32.to_intu f); inv H1; auto.
+  simpl; intros. decompose [and] H2. Simpl.
   (* singleofint *)
-  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
-  intuition Simpl.
+  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. Simpl.
+  split. Simpl. intuition Simpl.
   (* singleofintu *)
-  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
-  intuition Simpl.
+  econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. Simpl.
+  split. Simpl. intuition Simpl.
   (* Ocmp *)
   contradiction.
 Qed.
@@ -1337,7 +1479,7 @@ Qed.
 Lemma transl_op_correct:
   forall op args res k c (rs: regset) m v,
   transl_op op args res k = OK c ->
-  eval_operation ge rs#IR13 op (map rs (map preg_of args)) m = Some v ->
+  eval_operation ge rs#IR13 op (map (fun r => rs#r) (map preg_of args)) m = Some v ->
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ Val.lessdef v rs'#(preg_of res)
@@ -1357,16 +1499,17 @@ Proof.
   clear SAME; simpl in *; ArgsInv.
   destruct (addimm_correct x IR13 (Ptrofs.to_int i) k rs m) as [rs' [EX [RES OTH]]].
   exists rs'; split. auto. split.
-  rewrite RES; inv H0. destruct (rs IR13); simpl; auto. rewrite Ptrofs.of_int_to_int; auto.
+  rewrite RES; inv H0. destruct (rs # IR13); simpl; auto. rewrite Ptrofs.of_int_to_int; auto.
   intros; apply OTH; eauto with asmgen.
 - (* Ocmp *)
   clear SAME. simpl in H. monadInv H. simpl in H0. inv H0.
   rewrite (ireg_of_eq _ _ EQ).
   exploit transl_cond_correct; eauto. instantiate (1 := rs). instantiate (1 := m). intros [rs1 [A [B C]]].
   econstructor; split.
-  eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
+  eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto.
+  auto using if_preg_nextinstr_PC.
   split; intros; Simpl.
-  destruct (eval_condition c0 rs ## (preg_of ## args) m) as [b|]; simpl; auto.
+  destruct (eval_condition c0 (map (fun r => rs#r) (map preg_of args)) m) as [b|]; simpl; auto.
   destruct B as [B1 B2]; rewrite B1. destruct b; auto.
 Qed.
 
@@ -1387,11 +1530,11 @@ Lemma transl_memory_access_correct:
          (mk_immed: int -> int)
          addr args k c (rs: regset) a m m',
   transl_memory_access mk_instr_imm mk_instr_gen mk_immed addr args k = OK c ->
-  eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
+  eval_addressing ge (rs#SP) addr (map (fun r => rs#r) (map preg_of args)) = Some a ->
   match a with Vptr _ _ => True | _ => False end ->
   (forall (r1: ireg) (rs1: regset) n k,
     Val.add rs1#r1 (Vint n) = a ->
-    (forall (r: preg), if_preg r = true -> r <> IR14 -> rs1 r = rs r) ->
+    (forall (r: preg), if_preg r = true -> r <> IR14 -> rs1 # r = rs # r) ->
     exists rs',
     exec_straight ge fn (mk_instr_imm r1 n :: k) rs1 m k rs' m' /\ P rs') ->
   match mk_instr_gen with
@@ -1417,14 +1560,32 @@ Proof.
   erewrite ! ireg_of_eq; eauto. rewrite transl_shift_correct. auto.
   (* Ainstack *)
   inv TR. apply indexed_memory_access_correct. intros. eapply MK1; eauto.
-  rewrite H. destruct (rs IR13); try contradiction. simpl. f_equal; f_equal. auto with ptrofs.
+  rewrite H. destruct (rs # IR13); try contradiction. simpl. f_equal; f_equal. auto with ptrofs.
+Qed.
+
+Lemma loadv_Many32_aux:
+  forall chunk m a v x,
+  quantity_chunk chunk = Q32 ->
+  Mem.loadv chunk m a = Some v ->
+  Preg.type x = Tany32 ->
+  Val.load_result (Preg.chunk_of x) v = v.
+Proof.
+  intros.
+  apply Mem.loadv_type in H0.
+  assert (T: Val.has_type v Tany32).
+  { apply Val.has_subtype with (ty1 := type_of_chunk chunk); auto.
+    destruct chunk; simpl in *; congruence. }
+  replace (Preg.chunk_of x) with (chunk_of_type Tany32).
+  apply Val.load_result_same; auto.
+  destruct x; auto. inversion H1.
 Qed.
 
 Lemma transl_load_int_correct:
   forall mk_instr is_immed dst addr args k c (rs: regset) a chunk m v,
   transl_memory_access_int mk_instr is_immed dst addr args k = OK c ->
-  eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
+  eval_addressing ge (rs#SP) addr (map (fun r => rs#r) (map preg_of args)) = Some a ->
   Mem.loadv chunk m a = Some v ->
+  quantity_chunk chunk = Q32 ->
   (forall (r1 r2: ireg) (sa: shift_op) (rs1: regset),
     exec_instr ge fn (mk_instr r1 r2 sa) rs1 m =
     exec_load chunk (Val.add rs1#r2 (eval_shift_op sa rs1)) r1 rs1 m) ->
@@ -1437,18 +1598,20 @@ Proof.
   eapply transl_memory_access_correct; eauto.
   destruct a; discriminate || trivial.
   intros; simpl. econstructor; split. apply exec_straight_one.
-  rewrite H2. unfold exec_load. simpl eval_shift_op. rewrite H. rewrite H1. eauto. auto.
-  split. Simpl. intros; Simpl.
+  rewrite H3. unfold exec_load. simpl eval_shift_op. rewrite H. rewrite H1. eauto. Simpl.
+  split. Simpl. eauto using loadv_Many32_aux.
+  intros; Simpl.
   simpl; intros.
   econstructor; split. apply exec_straight_one.
-  rewrite H2. unfold exec_load. rewrite H. rewrite H1. eauto. auto.
-  split. Simpl. intros; Simpl.
+  rewrite H3. unfold exec_load. rewrite H. rewrite H1. eauto. Simpl.
+  split. Simpl. eauto using loadv_Many32_aux.
+  intros; Simpl.
 Qed.
 
 Lemma transl_load_float_correct:
   forall mk_instr is_immed dst addr args k c (rs: regset) a chunk m v,
   transl_memory_access_float mk_instr is_immed dst addr args k = OK c ->
-  eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
+  eval_addressing ge (rs#SP) addr (map (fun r => rs#r) (map preg_of args)) = Some a ->
   Mem.loadv chunk m a = Some v ->
   (forall (r1: freg) (r2: ireg) (n: int) (rs1: regset),
     exec_instr ge fn (mk_instr r1 r2 n) rs1 m =
@@ -1462,7 +1625,7 @@ Proof.
   eapply transl_memory_access_correct; eauto.
   destruct a; discriminate || trivial.
   intros; simpl. econstructor; split. apply exec_straight_one.
-  rewrite H2. unfold exec_load. rewrite H. rewrite H1. eauto. auto.
+  rewrite H2. unfold exec_load. rewrite H. rewrite H1. eauto. Simpl.
   split. Simpl. intros; Simpl.
   simpl; auto.
 Qed.
@@ -1470,7 +1633,7 @@ Qed.
 Lemma transl_store_int_correct:
   forall mr mk_instr is_immed src addr args k c (rs: regset) a chunk m m',
   transl_memory_access_int mk_instr is_immed src addr args k = OK c ->
-  eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
+  eval_addressing ge (rs#SP) addr (map (fun r => rs#r) (map preg_of args)) = Some a ->
   Mem.storev chunk m a rs#(preg_of src) = Some m' ->
   (forall (r1 r2: ireg) (sa: shift_op) (rs1: regset),
     exec_instr ge fn (mk_instr r1 r2 sa) rs1 m =
@@ -1487,16 +1650,16 @@ Proof.
   rewrite H2. unfold exec_store. simpl eval_shift_op. rewrite H. rewrite H3; eauto with asmgen.
   rewrite H1. eauto. auto.
   intros; Simpl.
-  simpl; intros.
+  simpl; intros. Simpl.
   econstructor; split. apply exec_straight_one.
-  rewrite H2. unfold exec_store. rewrite H. rewrite H1. eauto. auto.
+  rewrite H2. unfold exec_store. rewrite H. rewrite H1. eauto. Simpl.
   intros; Simpl.
 Qed.
 
 Lemma transl_store_float_correct:
   forall mr mk_instr is_immed src addr args k c (rs: regset) a chunk m m',
   transl_memory_access_float mk_instr is_immed src addr args k = OK c ->
-  eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
+  eval_addressing ge (rs#SP) addr (map (fun r => rs#r) (map preg_of args)) = Some a ->
   Mem.storev chunk m a rs#(preg_of src) = Some m' ->
   (forall (r1: freg) (r2: ireg) (n: int) (rs1: regset),
     exec_instr ge fn (mk_instr r1 r2 n) rs1 m =
@@ -1510,7 +1673,7 @@ Proof.
   eapply transl_memory_access_correct; eauto.
   destruct a; discriminate || trivial.
   intros; simpl. econstructor; split. apply exec_straight_one.
-  rewrite H2. unfold exec_store. rewrite H. rewrite H3; auto with asmgen. rewrite H1. eauto. auto.
+  rewrite H2. unfold exec_store. rewrite H. rewrite H3; auto with asmgen. rewrite H1. eauto. Simpl.
   intros; Simpl.
   simpl; auto.
 Qed.
@@ -1518,7 +1681,7 @@ Qed.
 Lemma transl_load_correct:
   forall chunk addr args dst k c (rs: regset) a m v,
   transl_load chunk addr args dst k = OK c ->
-  eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
+  eval_addressing ge (rs#SP) addr (map (fun r => rs#r) (map preg_of args)) = Some a ->
   Mem.loadv chunk m a = Some v ->
   exists rs',
       exec_straight ge fn c rs m k rs' m
@@ -1541,18 +1704,18 @@ Qed.
 Lemma transl_store_correct:
   forall chunk addr args src k c (rs: regset) a m m',
   transl_store chunk addr args src k = OK c ->
-  eval_addressing ge (rs#SP) addr (map rs (map preg_of args)) = Some a ->
+  eval_addressing ge (rs#SP) addr (map (fun r => rs#r) (map preg_of args)) = Some a ->
   Mem.storev chunk m a rs#(preg_of src) = Some m' ->
   exists rs',
       exec_straight ge fn c rs m k rs' m'
    /\ forall r, data_preg r = true -> preg_notin r (destroyed_by_store chunk addr) -> rs'#r = rs#r.
 Proof.
   intros. destruct chunk; simpl in H.
-- assert (Mem.storev Mint8unsigned m a (rs (preg_of src)) = Some m').
+- assert (Mem.storev Mint8unsigned m a (rs # (preg_of src)) = Some m').
     rewrite <- H1. destruct a; simpl; auto. symmetry. apply Mem.store_signed_unsigned_8.
   clear H1. eapply transl_store_int_correct; eauto.
 - eapply transl_store_int_correct; eauto.
-- assert (Mem.storev Mint16unsigned m a (rs (preg_of src)) = Some m').
+- assert (Mem.storev Mint16unsigned m a (rs # (preg_of src)) = Some m').
     rewrite <- H1. destruct a; simpl; auto. symmetry. apply Mem.store_signed_unsigned_16.
   clear H1. eapply transl_store_int_correct; eauto.
 - eapply transl_store_int_correct; eauto.

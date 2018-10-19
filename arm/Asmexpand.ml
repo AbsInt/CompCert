@@ -187,7 +187,7 @@ let expand_builtin_vload_common chunk base ofs res =
      emit (Pldrsh (res, base, SOimm ofs))
   | Mint32, BR(IR res) ->
      emit (Pldr (res, base, SOimm ofs))
-  | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
+  | Mint64, BR_splitlong(IR res1, IR res2) ->
      let ofs_hi = if Archi.big_endian then ofs else Int.add ofs _4 in
      let ofs_lo = if Archi.big_endian then Int.add ofs _4 else ofs in
      if base <> res2 then begin
@@ -350,7 +350,7 @@ let expand_builtin_inline name args res =
      emit (Pfsqrt (res,a1))
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
       expand_int64_arith (rl = ah ) rl (fun rl ->
         emit (Prsbs (rl,al,SOimm _0));
         (* No "rsc" instruction in Thumb2.  Emulate based on
@@ -364,20 +364,20 @@ let expand_builtin_inline name args res =
         end)
   | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
      expand_int64_arith (rl = ah || rl = bh) rl
 			(fun rl ->
 			 emit (Padds (rl,al,SOreg bl));
 			 emit (Padc (rh,ah,SOreg bh)))
   | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
                        BA_splitlong(BA(IR bh), BA(IR bl))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
      expand_int64_arith (rl = ah || rl = bh) rl
 		       (fun rl ->
 			emit (Psubs (rl,al,SOreg bl));
 			emit (Psbc (rh,ah,SOreg bh)))
   | "__builtin_mull", [BA(IR a); BA(IR b)],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
+                      BR_splitlong(IR rh, IR rl) ->
      emit (Pumull (rl,rh,a,b))
   (* Memory accesses *)
   | "__builtin_read16_reversed", [BA(IR a1)], BR(IR res) ->

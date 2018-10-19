@@ -16,6 +16,7 @@ Require Import Decidableplus.
 Require Import Maps.
 Require Import AST.
 Require Import Op.
+Require Import Memdata.
 
 (** ** Machine registers *)
 
@@ -72,6 +73,11 @@ Definition mreg_type (r: mreg): typ :=
   | F8  | F9  | F10  | F11 | F12  | F13  | F14  | F15 => Tany64
   end.
 
+Lemma mreg_type_cases: forall r, mreg_type r = Tany32 \/ mreg_type r = Tany64.
+Proof.
+  destruct r; simpl; auto.
+Qed.
+
 Open Scope positive_scope.
 
 Module IndexedMreg <: INDEXED_TYPE.
@@ -79,19 +85,38 @@ Module IndexedMreg <: INDEXED_TYPE.
   Definition eq := mreg_eq.
   Definition index (r: mreg): positive :=
     match r with
-    | R0 => 1  | R1 => 2  | R2 => 3  | R3 => 4
-    | R4 => 5  | R5 => 6  | R6 => 7  | R7 => 8
-    | R8 => 9  | R9 => 10 | R10 => 11 | R11 => 12
-    | R12 => 13
-    | F0 => 14 | F1 => 15 | F2 => 16  | F3 => 17
-    | F4 => 18 | F5 => 19 | F6 => 20  | F7 => 21
-    | F8 => 22 | F9 => 23 | F10 => 24 | F11 => 25
-    | F12 => 26 | F13 => 27 | F14 => 28 | F15 => 29
+    | R0  =>  2 | R1 =>  4 | R2  =>  6 | R3  =>  8
+    | R4  => 10 | R5 => 12 | R6  => 14 | R7  => 16
+    | R8  => 18 | R9 => 20 | R10 => 22 | R11 => 24
+    | R12 => 26
+    | F0  => 28 | F1  => 30 | F2  => 32 | F3  => 34
+    | F4  => 36 | F5  => 38 | F6  => 40 | F7  => 42
+    | F8  => 44 | F9  => 46 | F10 => 48 | F11 => 50
+    | F12 => 52 | F13 => 54 | F14 => 56 | F15 => 58
     end.
   Lemma index_inj:
     forall r1 r2, index r1 = index r2 -> r1 = r2.
   Proof.
     decide_goal.
+  Qed.
+
+  Open Scope Z_scope.
+
+  Lemma scaled_index_with_size_aux:
+    forall r1 r2, Zpos (index r1) < Zpos (index r2) -> Zpos (index r1) + 2 <= Zpos (index r2).
+  Proof.
+    decide_goal.
+  Qed.
+
+  Lemma scaled_index_with_size:
+    forall r1 r2,
+    Zpos (index r1) < Zpos (index r2) ->
+    Zpos (index r1) * 4 + AST.typesize (mreg_type r1) <= Zpos (index r2) * 4.
+  Proof.
+    intros.
+    generalize (scaled_index_with_size_aux r1 r2); intro.
+    assert (AST.typesize (mreg_type r1) <= 8) by (destruct (mreg_type r1); simpl; omega).
+    omega.
   Qed.
 End IndexedMreg.
 
@@ -156,7 +181,7 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   | _ => nil
   end.
 
-Definition destroyed_by_setstack (ty: typ): list mreg := nil.
+Definition destroyed_by_setstack (q: quantity): list mreg := nil.
 
 Definition destroyed_at_function_entry: list mreg :=
   R12 :: nil.

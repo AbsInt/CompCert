@@ -516,7 +516,7 @@ Inductive match_states: LTL.state -> Linear.state -> Prop :=
         (STACKS: list_forall2 match_stackframes s ts)
         (TRF: transf_function f = OK tf)
         (REACH: (reachable f)!!pc = true)
-        (ARG: ls (R arg) = Vint n)
+        (ARG: ls @ (R arg) = Vint n)
         (JUMP: list_nth_z tbl (Int.unsigned n) = Some pc),
       match_states (LTL.State s f sp pc (undef_regs destroyed_by_jumptable ls) m)
                    (Linear.State ts tf sp (Ljumptable arg tbl :: c) ls m)
@@ -710,7 +710,7 @@ Lemma transf_initial_states:
 Proof.
   intros. inversion H.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
-  exists (Callstate nil tf (Locmap.init Vundef) m0); split.
+  exists (Callstate nil tf Locmap.init m0); split.
   econstructor; eauto. eapply (Genv.init_mem_transf_partial TRANSF); eauto.
   rewrite (match_program_main TRANSF).
   rewrite symbols_preserved. eauto.

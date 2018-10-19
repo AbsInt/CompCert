@@ -418,22 +418,14 @@ module Target(System: SYSTEM):TARGET =
             fprintf oc "	movabsq	$%Ld, %a\n" n1 ireg64 rd
       | Pmov_rs(rd, id) ->
           print_mov_rs oc rd id
-      | Pmovl_rm(rd, a) ->
+      | Pmovl_rm(rd, a) | Pmovl_rm_a(rd, a) ->
           fprintf oc "	movl	%a, %a\n" addressing a ireg32 rd
-      | Pmovq_rm(rd, a) ->
+      | Pmovq_rm(rd, a) | Pmovq_rm_a(rd, a) ->
           fprintf oc "	movq	%a, %a\n" addressing a ireg64 rd
-      | Pmov_rm_a(rd, a) ->
-          if Archi.ptr64
-          then fprintf oc "	movq	%a, %a\n" addressing a ireg64 rd
-          else fprintf oc "	movl	%a, %a\n" addressing a ireg32 rd
-      | Pmovl_mr(a, r1) ->
+      | Pmovl_mr(a, r1) | Pmovl_mr_a(a, r1) ->
           fprintf oc "	movl	%a, %a\n" ireg32 r1 addressing a
-      | Pmovq_mr(a, r1) ->
+      | Pmovq_mr(a, r1) | Pmovq_mr_a(a, r1) ->
           fprintf oc "	movq	%a, %a\n" ireg64 r1 addressing a
-      | Pmov_mr_a(a, r1) ->
-          if Archi.ptr64
-          then fprintf oc "	movq	%a, %a\n" ireg64 r1 addressing a
-          else fprintf oc "	movl	%a, %a\n" ireg32 r1 addressing a
       | Pmovsd_ff(rd, r1) ->
           fprintf oc "	movapd	%a, %a\n" freg r1 freg rd
       | Pmovsd_fi(rd, n) ->
@@ -452,17 +444,17 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	movss	%a%s, %a %s %.18g\n"
                      label lbl rip_rel
                      freg rd comment (camlfloat_of_coqfloat32 n)
-      | Pmovss_fm(rd, a) ->
+      | Pmovss_fm(rd, a) | Pmovss_fm_a(rd, a) ->
           fprintf oc "	movss	%a, %a\n" addressing a freg rd
-      | Pmovss_mf(a, r1) ->
+      | Pmovss_mf(a, r1) | Pmovss_mf_a(a, r1) ->
           fprintf oc "	movss	%a, %a\n" freg r1 addressing a
-      | Pfldl_m(a) ->
+      | Pfldl_m(a) | Pfldl_m_a(a) ->
           fprintf oc "	fldl	%a\n" addressing a
-      | Pfstpl_m(a) ->
+      | Pfstpl_m(a) | Pfstpl_m_a(a) ->
           fprintf oc "	fstpl	%a\n" addressing a
-      | Pflds_m(a) ->
+      | Pflds_m(a) | Pflds_m_a(a) ->
           fprintf oc "	flds	%a\n" addressing a
-      | Pfstps_m(a) ->
+      | Pfstps_m(a) | Pfstps_m_a(a) ->
           fprintf oc "	fstps	%a\n" addressing a
             (* Moves with conversion *)
       | Pmovb_mr(a, r1) ->

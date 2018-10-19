@@ -396,9 +396,9 @@ module Target : TARGET =
          fprintf oc "	fmv.x.d	%a, %a\n"     ireg rd freg fs
 
       (* 32-bit (single-precision) floating point *)
-      | Pfls (fd, ra, ofs) ->
+      | Pfls (fd, ra, ofs) | Pfls_a (fd, ra, ofs) ->
          fprintf oc "	flw	%a, %a(%a)\n" freg fd offset ofs ireg ra
-      | Pfss (fs, ra, ofs) ->
+      | Pfss (fs, ra, ofs) | Pfss_a (fs, ra, ofs) ->
          fprintf oc "	fsw	%a, %a(%a)\n" freg fs offset ofs ireg ra
 
       | Pfnegs (fd, fs) ->

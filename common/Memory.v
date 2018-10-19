@@ -515,6 +515,14 @@ Proof.
   apply H. omega. apply IHn. intros. apply H. omega.
 Qed.
 
+Remark getN_outside:
+  forall n p m c,
+  getN n (p + 1) (ZMap.set p m c) = getN n (p + 1) c.
+Proof.
+  intros. apply getN_exten; intros i [L H].
+  rewrite ZMap.gso; auto. apply Z.neq_sym. omega.
+Qed.
+
 Remark getN_setN_disjoint:
   forall vl q c n p,
   Intv.disjoint (p, p + Z.of_nat n) (q, q + Z.of_nat (length vl)) ->
@@ -536,6 +544,68 @@ Remark setN_default:
   forall vl q c, fst (setN vl q c) = fst c.
 Proof.
   induction vl; simpl; intros. auto. rewrite IHvl. auto.
+Qed.
+
+Remark getN_setN_prefix:
+  forall vl n p c,
+  (n <= length vl)%nat ->
+  getN n p (setN vl p c) = firstn n vl.
+Proof.
+  induction vl; intros; simpl.
+  inv H; auto.
+  destruct n; simpl. auto.
+  decEq.
+  rewrite setN_outside, ZMap.gss; auto. omega.
+  apply IHvl. simpl in H; omega.
+Qed.
+
+Lemma getN_concat:
+  forall c n1 n2 p,
+  getN (n1 + n2)%nat p c = getN n1 p c ++ getN n2 (p + Z.of_nat n1) c.
+Proof.
+  induction n1; intros.
+  simpl. decEq. omega.
+  rewrite Nat2Z.inj_succ. simpl. decEq.
+  replace (p + Z.succ (Z.of_nat n1)) with ((p + 1) + Z.of_nat n1) by omega.
+  auto.
+Qed.
+
+Lemma setN_concat:
+  forall bytes1 bytes2 ofs c,
+  setN (bytes1 ++ bytes2) ofs c = setN bytes2 (ofs + Z.of_nat (length bytes1)) (setN bytes1 ofs c).
+Proof.
+  induction bytes1; intros.
+  simpl. decEq. omega.
+  simpl length. rewrite Nat2Z.inj_succ. simpl. rewrite IHbytes1. decEq. omega.
+Qed.
+
+Remark getN_setN_concat:
+  forall n ln m lm p c,
+  (n = length ln)%nat ->
+  (m = length lm)%nat ->
+  getN (n + m)%nat p (setN (ln ++ lm) p c) =
+  getN n p (setN ln p c) ++ getN m (p + Z.of_nat n) (setN lm (p + Z.of_nat n) c).
+Proof.
+  intros.
+  rewrite getN_concat, !setN_concat.
+  decEq.
+  rewrite getN_setN_outside, getN_setN_prefix; auto; omega.
+  rewrite <- H, !getN_setN_prefix; auto; omega.
+Qed.
+
+Remark getN_setN_suffix:
+  forall vl n m p c,
+  (n + m = length vl)%nat ->
+  getN m (p + Z.of_nat n) (setN vl p c) = skipn n vl.
+Proof.
+  intros.
+  assert (vl = firstn n vl ++ skipn n vl) by (rewrite firstn_skipn; auto).
+  assert (n = length (firstn n vl)) by (rewrite firstn_length_le; auto; omega).
+  assert (m = length (skipn n vl)). { rewrite H0, app_length, <- H1 in H. omega. }
+  rewrite H0, setN_concat.
+  rewrite <- H1, H2.
+  rewrite getN_setN_same.
+  rewrite <- H0; auto.
 Qed.
 
 (** [store chunk m b ofs v] perform a write in memory state [m].
@@ -682,6 +752,14 @@ Proof.
   apply decode_val_type.
 Qed.
 
+Theorem loadv_type:
+  forall m chunk addr v,
+  loadv chunk m addr = Some v ->
+  Val.has_type v (type_of_chunk chunk).
+Proof.
+  unfold loadv; intros. destruct addr; try congruence. eauto using load_type.
+Qed.
+
 Theorem load_cast:
   forall m chunk b ofs v,
   load chunk m b ofs = Some v ->
@@ -793,17 +871,6 @@ Theorem loadbytes_empty:
 Proof.
   intros. unfold loadbytes. rewrite pred_dec_true. rewrite nat_of_Z_neg; auto.
   red; intros. omegaContradiction.
-Qed.
-
-Lemma getN_concat:
-  forall c n1 n2 p,
-  getN (n1 + n2)%nat p c = getN n1 p c ++ getN n2 (p + Z.of_nat n1) c.
-Proof.
-  induction n1; intros.
-  simpl. decEq. omega.
-  rewrite Nat2Z.inj_succ. simpl. decEq.
-  replace (p + Z.succ (Z.of_nat n1)) with ((p + 1) + Z.of_nat n1) by omega.
-  auto.
 Qed.
 
 Theorem loadbytes_concat:
@@ -1148,6 +1215,23 @@ Proof.
   destruct (zeq p q). subst q. rewrite setN_outside. rewrite ZMap.gss.
   auto with coqlib. omega.
   right. apply IHvl. omega.
+Qed.
+
+Lemma setN_nth:
+  forall vl p q c m,
+  p <= q < p + Z.of_nat (length vl) ->
+  nth_error vl (Z.to_nat (q - p)) = Some m ->
+  ZMap.get q (setN vl p c) = m.
+Proof.
+  induction vl; intros.
+  simpl in H. omegaContradiction.
+  simpl length in H. rewrite Nat2Z.inj_succ in H. simpl.
+  destruct (zeq p q). subst q. rewrite setN_outside. rewrite ZMap.gss.
+  rewrite Z.sub_diag in H0. simpl in H0; congruence. omega.
+  apply IHvl. omega.
+  assert (QP: q - p = Z.succ (q - (p + 1))) by omega.
+  rewrite QP, Z2Nat.inj_succ in H0 by omega.
+  simpl in H0. auto.
 Qed.
 
 Lemma getN_in:
@@ -1579,15 +1663,6 @@ Qed.
 
 End STOREBYTES.
 
-Lemma setN_concat:
-  forall bytes1 bytes2 ofs c,
-  setN (bytes1 ++ bytes2) ofs c = setN bytes2 (ofs + Z.of_nat (length bytes1)) (setN bytes1 ofs c).
-Proof.
-  induction bytes1; intros.
-  simpl. decEq. omega.
-  simpl length. rewrite Nat2Z.inj_succ. simpl. rewrite IHbytes1. decEq. omega.
-Qed.
-
 Theorem storebytes_concat:
   forall m b ofs bytes1 m1 bytes2 m2,
   storebytes m b ofs bytes1 = Some m1 ->
@@ -1829,7 +1904,7 @@ Proof.
   intros. exploit load_result; eauto. intro. rewrite H0.
   injection ALLOC; intros. rewrite <- H2; simpl. rewrite <- H1.
   rewrite PMap.gss. destruct (size_chunk_nat_pos chunk) as [n E]. rewrite E. simpl.
-  rewrite ZMap.gi. apply decode_val_undef.
+  rewrite ZMap.gi. apply decode_val_hd_undef.
 Qed.
 
 Theorem load_alloc_same':

@@ -30,8 +30,8 @@ Definition node := positive.
 Inductive instruction: Type :=
   | Lop (op: operation) (args: list mreg) (res: mreg)
   | Lload (chunk: memory_chunk) (addr: addressing) (args: list mreg) (dst: mreg)
-  | Lgetstack (sl: slot) (ofs: Z) (ty: typ) (dst: mreg)
-  | Lsetstack (src: mreg) (sl: slot) (ofs: Z) (ty: typ)
+  | Lgetstack (sl: slot) (ofs: Z) (q: quantity) (dst: mreg)
+  | Lsetstack (src: mreg) (sl: slot) (ofs: Z) (q: quantity)
   | Lstore (chunk: memory_chunk) (addr: addressing) (args: list mreg) (src: mreg)
   | Lcall (sg: signature) (ros: mreg + ident)
   | Ltailcall (sg: signature) (ros: mreg + ident)
@@ -66,6 +66,9 @@ Definition funsig (fd: fundef) :=
 
 Definition genv := Genv.t fundef unit.
 Definition locset := Locmap.t.
+Module Regfile := Locmap.Regfile.
+
+Open Scope ltl.
 
 (** Calling conventions are reflected at the level of location sets
   (environments mapping locations to values) by the following two
@@ -78,9 +81,14 @@ Definition locset := Locmap.t.
   values as the corresponding outgoing stack slots (used for argument
   passing) in the caller.
 - Local and outgoing stack slots are initialized to undefined values.
+
+  Location sets are not really represented as functions, but we would
+  like them to behave as such. We first give a functional specification
+  of the behavior of [call_regs], then the actual definition. The
+  correspondence is proved below.
 *)
 
-Definition call_regs (caller: locset) : locset :=
+Definition call_regs_spec (caller: loc -> val) : (loc -> val) :=
   fun (l: loc) =>
     match l with
     | R r => caller (R r)
@@ -88,6 +96,18 @@ Definition call_regs (caller: locset) : locset :=
     | S Incoming ofs ty => caller (S Outgoing ofs ty)
     | S Outgoing ofs ty => Vundef
     end.
+
+Definition call_regs (caller: locset) : locset :=
+  match caller with
+  | (caller_rf, caller_stack) =>
+    (caller_rf,
+     fun s: slot =>
+       match s with
+       | Local => ZMap.init Undef
+       | Incoming => caller_stack Outgoing
+       | Outgoing => ZMap.init Undef
+       end)
+  end.
 
 (** [return_regs caller callee] returns the location set after
   a call instruction, as a function of the location set [caller]
@@ -99,9 +119,12 @@ Definition call_regs (caller: locset) : locset :=
 - Local and Incoming stack slots have the same values as in the caller.
 - Outgoing stack slots are set to Vundef to  reflect the fact that they
   may have been changed by the callee.
+
+  As for [call_regs], we give a functional specification and the real
+  implementation and prove the correspondence below.
 *)
 
-Definition return_regs (caller callee: locset) : locset :=
+Definition return_regs_spec (caller callee: loc -> val) : (loc -> val) :=
   fun (l: loc) =>
     match l with
     | R r => if is_callee_save r then caller (R r) else callee (R r)
@@ -109,17 +132,39 @@ Definition return_regs (caller callee: locset) : locset :=
     | S sl ofs ty => caller (S sl ofs ty)
     end.
 
+Definition return_regs (caller callee: locset) : locset :=
+  match caller, callee with
+  | (caller_rf, caller_stack), (callee_rf, _) =>
+    (Regfile.override destroyed_at_call callee_rf caller_rf,
+     fun s: slot =>
+     match s with
+     | Outgoing => ZMap.init Undef
+     | s => caller_stack s
+     end)
+  end.
+
 (** [undef_caller_save_regs ls] models the effect of calling
     an external function: caller-save registers and outgoing locations
     can change unpredictably, hence we set them to [Vundef]. *)
 
-Definition undef_caller_save_regs (ls: locset) : locset :=
+Definition undef_caller_save_regs_spec (ls: loc -> val) : (loc -> val) :=
   fun (l: loc) =>
     match l with
     | R r => if is_callee_save r then ls (R r) else Vundef
     | S Outgoing ofs ty => Vundef
     | S sl ofs ty => ls (S sl ofs ty)
     end.
+
+Definition undef_caller_save_regs (ls: locset) : locset :=
+  match ls with
+  | (rf, stack) =>
+    (Regfile.undef_regs destroyed_at_call rf,
+     fun s: slot =>
+     match s with
+     | Outgoing => ZMap.init Undef
+     | s => stack s
+     end)
+  end.
 
 (** LTL execution states. *)
 
@@ -166,7 +211,7 @@ Section RELSEM.
 Variable ge: genv.
 
 Definition reglist (rs: locset) (rl: list mreg) : list val :=
-  List.map (fun r => rs (R r)) rl.
+  List.map (fun r => rs @ (R r)) rl.
 
 Fixpoint undef_regs (rl: list mreg) (rs: locset) : locset :=
   match rl with
@@ -182,7 +227,7 @@ Definition destroyed_by_getstack (s: slot): list mreg :=
 
 Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
   match ros with
-  | inl r => Genv.find_funct ge (rs (R r))
+  | inl r => Genv.find_funct ge (rs @ (R r))
   | inr symb =>
       match Genv.find_symbol ge symb with
       | None => None
@@ -195,7 +240,7 @@ Definition find_function (ros: mreg + ident) (rs: locset) : option fundef :=
 
 Definition parent_locset (stack: list stackframe) : locset :=
   match stack with
-  | nil => Locmap.init Vundef
+  | nil => Locmap.init
   | Stackframe f sp ls bb :: stack' => ls
   end.
 
@@ -215,17 +260,17 @@ Inductive step: state -> trace -> state -> Prop :=
       rs' = Locmap.set (R dst) v (undef_regs (destroyed_by_load chunk addr) rs) ->
       step (Block s f sp (Lload chunk addr args dst :: bb) rs m)
         E0 (Block s f sp bb rs' m)
-  | exec_Lgetstack: forall s f sp sl ofs ty dst bb rs m rs',
-      rs' = Locmap.set (R dst) (rs (S sl ofs ty)) (undef_regs (destroyed_by_getstack sl) rs) ->
-      step (Block s f sp (Lgetstack sl ofs ty dst :: bb) rs m)
+  | exec_Lgetstack: forall s f sp sl ofs q dst bb rs m rs',
+      rs' = Locmap.set (R dst) (rs @ (S sl ofs q)) (undef_regs (destroyed_by_getstack sl) rs) ->
+      step (Block s f sp (Lgetstack sl ofs q dst :: bb) rs m)
         E0 (Block s f sp bb rs' m)
-  | exec_Lsetstack: forall s f sp src sl ofs ty bb rs m rs',
-      rs' = Locmap.set (S sl ofs ty) (rs (R src)) (undef_regs (destroyed_by_setstack ty) rs) ->
-      step (Block s f sp (Lsetstack src sl ofs ty :: bb) rs m)
+  | exec_Lsetstack: forall s f sp src sl ofs q bb rs m rs',
+      rs' = Locmap.set (S sl ofs q) (rs @ (R src)) (undef_regs (destroyed_by_setstack q) rs) ->
+      step (Block s f sp (Lsetstack src sl ofs q :: bb) rs m)
         E0 (Block s f sp bb rs' m)
   | exec_Lstore: forall s f sp chunk addr args src bb rs m a rs' m',
       eval_addressing ge sp addr (reglist rs args) = Some a ->
-      Mem.storev chunk m a (rs (R src)) = Some m' ->
+      Mem.storev chunk m a (rs @ (R src)) = Some m' ->
       rs' = undef_regs (destroyed_by_store chunk addr) rs ->
       step (Block s f sp (Lstore chunk addr args src :: bb) rs m)
         E0 (Block s f sp bb rs' m')
@@ -242,7 +287,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Block s f (Vptr sp Ptrofs.zero) (Ltailcall sig ros :: bb) rs m)
         E0 (Callstate s fd rs' m')
   | exec_Lbuiltin: forall s f sp ef args res bb rs m vargs t vres rs' m',
-      eval_builtin_args ge rs sp m args vargs ->
+      eval_builtin_args ge (Locmap.read rs) sp m args vargs ->
       external_call ef ge vargs m t vres m' ->
       rs' = Locmap.setres res vres (undef_regs (destroyed_by_builtin ef) rs) ->
       step (Block s f sp (Lbuiltin ef args res :: bb) rs m)
@@ -257,7 +302,7 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Block s f sp (Lcond cond args pc1 pc2 :: bb) rs m)
         E0 (State s f sp pc rs' m)
   | exec_Ljumptable: forall s f sp arg tbl bb rs m n pc rs',
-      rs (R arg) = Vint n ->
+      rs @ (R arg) = Vint n ->
       list_nth_z tbl (Int.unsigned n) = Some pc ->
       rs' = undef_regs (destroyed_by_jumptable) rs ->
       step (Block s f sp (Ljumptable arg tbl :: bb) rs m)
@@ -295,7 +340,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = signature_main ->
-      initial_state p (Callstate nil f (Locmap.init Vundef) m0).
+      initial_state p (Callstate nil f Locmap.init m0).
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m retcode,
@@ -320,3 +365,67 @@ Fixpoint successors_block (b: bblock) : list node :=
   | Lreturn :: _ => nil
   | instr :: b' => successors_block b'
   end.
+
+(** * General properties of auxiliary definitions for LTL *)
+
+Lemma call_regs_correct:
+  forall (l: loc) (caller: locset),
+  (call_regs caller) @ l = call_regs_spec (Locmap.read caller) l.
+Proof.
+  intros. destruct l, caller as [caller_rf caller_stack].
+  - reflexivity.
+  - simpl. unfold Stack.get. destruct sl; auto using FragBlock.gi.
+Qed.
+
+Local Opaque all_mregs.
+
+Lemma in_destroyed_at_call:
+  forall r, In r destroyed_at_call -> is_callee_save r = false.
+Proof.
+  intros. unfold destroyed_at_call in H.
+  apply filter_In in H. apply negb_true_iff. tauto.
+Qed.
+
+Lemma notin_destroyed_at_call:
+  forall r, ~ In r destroyed_at_call -> is_callee_save r = true.
+Proof.
+  intros.
+  apply negb_false_iff. apply not_true_iff_false.
+  contradict H.
+  apply filter_In. split; auto using all_mregs_complete.
+Qed.
+
+Lemma return_regs_correct:
+  forall (l: loc) (caller callee: locset),
+  (return_regs caller callee) @ l = return_regs_spec (Locmap.read caller) (Locmap.read callee) l.
+Proof.
+  intros. destruct l, caller, callee.
+  - unfold Locmap.get, return_regs, return_regs_spec.
+    destruct (In_dec mreg_eq r destroyed_at_call).
+    + rewrite Regfile.override_in; auto.
+      rewrite (in_destroyed_at_call r); auto.
+    + rewrite Regfile.override_notin; auto.
+      rewrite (notin_destroyed_at_call r); auto.
+  - simpl. unfold Stack.get. destruct sl; auto using FragBlock.gi.
+Qed.
+
+Lemma undef_caller_save_regs_correct:
+  forall (l: loc) (ls: locset),
+  (undef_caller_save_regs ls) @ l = undef_caller_save_regs_spec (Locmap.read ls) l.
+Proof.
+  intros. destruct l, ls.
+  - unfold Locmap.get, undef_caller_save_regs, undef_caller_save_regs_spec.
+    destruct (In_dec mreg_eq r destroyed_at_call).
+    + rewrite Regfile.undef_regs_in; auto.
+      rewrite (in_destroyed_at_call r); auto.
+    + rewrite Regfile.undef_regs_notin; auto.
+      rewrite (notin_destroyed_at_call r); auto.
+  - simpl. unfold Stack.get. destruct sl; auto using FragBlock.gi.
+Qed.
+
+Lemma LTL_undef_regs_Regfile_undef_regs:
+  forall rl rf stack, undef_regs rl (rf, stack) = (Regfile.undef_regs rl rf, stack).
+Proof.
+  induction rl; intros. auto.
+  simpl. rewrite IHrl; auto.
+Qed.

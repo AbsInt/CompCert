@@ -557,6 +557,17 @@ Proof.
   intros; discriminate.
 Qed.
 
+Lemma is_not_move_operation:
+  forall (F V A: Type) (genv: Genv.t F V) (sp: val)
+         (op: operation) (f: A -> val) (args: list A) (m: mem) (v: val),
+  eval_operation genv sp op (map f args) m = Some v ->
+  is_move_operation op args = None ->
+  op <> Omove.
+Proof.
+  intros. destruct (eq_operation op Omove); auto.
+  subst. destruct args; try destruct args; simpl in *; congruence.
+Qed.
+
 (** [negate_condition cond] returns a condition that is logically
   equivalent to the negation of [cond]. *)
 

@@ -18,6 +18,7 @@
 open Printf
 open Camlcoq
 open AST
+open Memdata
 
 let name_of_type = function
   | Tint -> "int"
@@ -26,6 +27,10 @@ let name_of_type = function
   | Tsingle -> "single"
   | Tany32 -> "any32"
   | Tany64 -> "any64"
+
+let name_of_quantity = function
+  | Q32 -> "Q32"
+  | Q64 -> "Q64"
 
 let name_of_chunk = function
   | Mint8signed -> "int8s"
@@ -83,10 +88,8 @@ let rec print_builtin_args px oc = function
   | a1 :: al ->
       fprintf oc "%a, %a" (print_builtin_arg px) a1 (print_builtin_args px) al
 
-let rec print_builtin_res px oc = function
+let print_builtin_res px oc = function
   | BR x -> px oc x
   | BR_none -> fprintf oc "_"
-  | BR_splitlong(hi, lo) ->
-      fprintf oc "splitlong(%a, %a)"
-                 (print_builtin_res px) hi (print_builtin_res px) lo
+  | BR_splitlong(hi, lo) -> fprintf oc "splitlong(%a, %a)" px hi px lo
 

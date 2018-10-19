@@ -13,6 +13,7 @@
 open Printf
 open Camlcoq
 open AST
+open Memdata
 open Registers
 open Machregs
 open Locations
@@ -105,12 +106,12 @@ let name_of_loc = function
                 | None -> "fixed-reg"
                 | Some s -> s
       end
-  | S (Local, ofs, ty) ->
-      sprintf "L%c%ld" (PrintXTL.short_name_of_type ty) (camlint_of_coqint ofs)
-  | S (Incoming, ofs, ty) ->
-      sprintf "I%c%ld" (PrintXTL.short_name_of_type ty) (camlint_of_coqint ofs)
-  | S (Outgoing, ofs, ty) ->
-      sprintf "O%c%ld" (PrintXTL.short_name_of_type ty) (camlint_of_coqint ofs)
+  | S (Local, ofs, q) ->
+      sprintf "L%c%ld" (PrintXTL.short_name_of_quantity q) (camlint_of_coqint ofs)
+  | S (Incoming, ofs, q) ->
+      sprintf "I%c%ld" (PrintXTL.short_name_of_quantity q) (camlint_of_coqint ofs)
+  | S (Outgoing, ofs, q) ->
+      sprintf "O%c%ld" (PrintXTL.short_name_of_quantity q) (camlint_of_coqint ofs)
 
 let name_of_node n =
   match n.var with
@@ -240,14 +241,15 @@ type graph = {
 let class_of_type = function
   | Tint | Tlong -> 0
   | Tfloat | Tsingle -> 1
-  | Tany32 | Tany64 -> assert false
+  | Tany32 -> 0
+  | Tany64 -> 1
 
 let class_of_reg r =
   if Conventions1.is_float_reg r then 1 else 0
 
 let class_of_loc = function
   | R r -> class_of_reg r
-  | S(_, _, ty) -> class_of_type ty
+  | S(_, _, q) -> class_of_type (typ_of_quantity q)
 
 let no_spill_class = 2
 
@@ -842,13 +844,13 @@ let find_slot conflicts typ =
   let al = Z.to_int (Locations.typealign typ) in
   let rec find curr = function
   | [] ->
-      S(Local, Z.of_uint curr, typ)
-  | S(Local, ofs, typ') :: l ->
+      S(Local, Z.of_uint curr, quantity_of_typ typ)
+  | S(Local, ofs, q') :: l ->
       let ofs = Z.to_int ofs in
       if curr + sz <= ofs then
-        S(Local, Z.of_uint curr, typ)
+        S(Local, Z.of_uint curr, quantity_of_typ typ)
       else begin
-        let sz'  = Z.to_int (Locations.typesize typ') in
+        let sz'  = Z.to_int (Locations.typesize (typ_of_quantity q')) in
         let ofs' = align (ofs + sz') al in
         find (if ofs' <= curr then curr else ofs') l
       end
