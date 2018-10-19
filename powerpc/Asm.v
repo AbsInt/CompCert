@@ -606,7 +606,7 @@ Definition load1 (chunk: memory_chunk) (rd: preg)
 
 Definition load2 (chunk: memory_chunk) (rd: preg) (r1 r2: ireg)
                  (rs: regset) (m: mem) :=
-  match Mem.loadv chunk m (Val.add rs#r1 rs#r2) with
+  match Mem.loadv chunk m (Val.add (gpr_or_zero rs r1) rs#r2) with
   | None => Stuck
   | Some v => Next (nextinstr (rs#rd <- v)) m
   end.
@@ -620,7 +620,7 @@ Definition store1 (chunk: memory_chunk) (r: preg)
 
 Definition store2 (chunk: memory_chunk) (r: preg) (r1 r2: ireg)
                   (rs: regset) (m: mem) :=
-  match Mem.storev chunk m (Val.add rs#r1 rs#r2) (rs#r) with
+  match Mem.storev chunk m (Val.add (gpr_or_zero rs r1) rs#r2) (rs#r) with
   | None => Stuck
   | Some m' => Next (nextinstr rs) m'
   end.
