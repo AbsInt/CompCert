@@ -135,7 +135,7 @@ Inductive event: Type :=
   | Event_vload: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_vstore: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_annot: string -> list eventval -> event
-  | Event_acq_rel: list mem_effect -> delta_perm_map -> event
+  | Event_acq_rel: list mem_effect -> delta_perm_map -> list mem_effect -> event
   | Event_spawn: val -> delta_perm_map -> delta_perm_map -> event.
 
 (** The dynamic semantics for programs collect traces of events.
@@ -692,15 +692,21 @@ Inductive inject_event: meminj -> event -> event -> Prop :=
   | INJ_vload : forall f mc id n v, inject_event f (Event_vload mc id n v) (Event_vload mc id n v)
   | INJ_vstore : forall f mc id n v, inject_event f (Event_vstore mc id n v) (Event_vstore mc id n v)
   | INJ_annot : forall f st t, inject_event f (Event_annot st t) (Event_annot st t)
-  | INJ_acq : forall f ls1 ls2 dpm1 dpm2,
+  | INJ_acq : forall f ls1 ls2 ls1' ls2' dpm1 dpm2,
       list_inject_mem_effect f ls1 ls2 ->
       inject_delta_map f dpm1 dpm2 ->
-      inject_event f (Event_acq_rel ls1 dpm1) (Event_acq_rel ls2 dpm2)
+      list_inject_mem_effect f ls1' ls2' ->
+      inject_event f (Event_acq_rel ls1 dpm1 ls1') (Event_acq_rel ls2 dpm2 ls2')
   | INJ_spawn : forall f v dm1 dm2 v' dm1' dm2',
       Val.inject f v v -> 
       inject_delta_map f dm1 dm1' ->
       inject_delta_map f dm2 dm2' ->
       inject_event f (Event_spawn v dm1 dm2) (Event_spawn v' dm1' dm2').
+Ltac trivial_inject_event:=
+  match goal with
+  | [H: inject_event ?f ?e ?e' |- _ ] =>
+    inversion H; subst; clear H
+  end.
 
 Inductive inject_trace: meminj -> trace -> trace -> Prop :=
 | injt_nil : forall f, inject_trace f nil nil
@@ -708,6 +714,28 @@ Inductive inject_trace: meminj -> trace -> trace -> Prop :=
     inject_event f e e' ->
     inject_trace f t t' ->
     inject_trace f (cons e t) (cons e' t').
+
+
+Definition trivial_inject t:=
+  forall {f t'},
+    inject_trace f t t' -> t' = t.
+Ltac trivial_inject_trace:=
+  match goal with
+  | [H: inject_trace ?f ?t ?t' |- _  ] =>
+    inversion H; subst; clear H;
+    try trivial_inject_event
+  end.
+Ltac solve_trivial_inject:=
+  lazymatch goal with
+  | [|- trivial_inject ?T] =>
+    match goal with
+    |[H:context[T] |- _ ] =>
+     intros ???;
+            inversion H; subst;
+     repeat trivial_inject_trace; reflexivity             
+    end
+  | _ => fail "Not an noninjectable goal."
+  end.
 
 Definition injection_full (f:meminj) (m:mem):=
   forall b ,
@@ -953,6 +981,13 @@ Proof.
   exists v1; constructor; auto.
 Qed.
 
+  
+Lemma volatile_load_trivial_inject:
+  forall {ge chunk m b ofs t vres},
+    volatile_load ge chunk m b ofs t vres ->
+    trivial_inject t.
+Proof. intros; solve_trivial_inject. Qed.
+
 Lemma volatile_load_ok:
   forall chunk,
   extcall_properties (volatile_load_sem chunk)
@@ -977,9 +1012,11 @@ Proof.
 (* mem injects *)
 - inv H0. inv H3. inv H8. inversion H6; subst.
   exploit volatile_load_inject; eauto. intros [v' [A B]].
-  exists f; exists v'; exists m1'; exists t; intuition. constructor; auto.
+  exists f; intros.
+  rewrite (volatile_load_trivial_inject A H0).
+  exists v'; exists m1'; intuition. constructor; auto.
   red; intros. congruence.
-  inversion H4; repeat constructor.
+  (*inversion H4; repeat constructor. *)
 (* mem injects *)
 - inv H0. inv H2. inv H7. inversion H5; subst.
   exploit volatile_load_inject; eauto. intros [v' [A B]].
@@ -1120,7 +1157,11 @@ Proof.
   intros. inv H0; auto.
   eapply store_full; eauto.
 Qed.
-
+Lemma volatile_store_trivial_inject:
+  forall {ge chunk m b ofs v t m'},
+    volatile_store ge chunk m b ofs v t m' ->
+    trivial_inject t.
+Proof. intros; solve_trivial_inject. Qed.
 Lemma volatile_store_ok:
   forall chunk,
   extcall_properties (volatile_store_sem chunk)

@@ -523,15 +523,15 @@ Definition at_external (c: state) : option (external_function * list val) :=
  end.
 
 (**NEW *)
-Definition after_external (rv: option val) (c: state) (m:mem): option state :=
+Definition after_external (rv: option val) (c: state) (m0:mem): option state :=
   match c with
      Callstate fd vargs k m =>
         match fd with
           Internal _ => None
         | External ef tps tp cc =>
             match rv with
-              Some v => Some(Returnstate v k m)
-            | None  => Some(Returnstate Vundef k m)
+              Some v => Some(Returnstate v k m0)
+            | None  => Some(Returnstate Vundef k m0)
             end
         end
    | _ => None
@@ -759,9 +759,9 @@ Inductive val_casted_list: list val -> typelist -> Prop :=
       val_casted v1 ty1 -> val_casted_list vl tyl ->
       val_casted_list (v1 :: vl) (Tcons  ty1 tyl).
 
-Require Import Conventions.
+(* Require Import Conventions.
 
-Definition loc_arguments' l := if Archi.ptr64 then loc_arguments_64 l 0 0 0 else loc_arguments_32 l 0.
+Definition loc_arguments' l := if Archi.ptr64 then loc_arguments_64 l 0 0 0 else loc_arguments_32 l 0. *)
 
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
@@ -780,7 +780,9 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
       Mem.alloc m0 0 0 = (m1, stk) ->
-      entry_point ge m0 (Callstate f args (Kcall None f0 empty_env (temp_bindings 1%positive (Vptr fb Ptrofs.zero::args)) Kstop) m1) (Vptr fb Ptrofs.zero) args.
+      entry_point ge m0 (Callstate f args (Kcall None f0 empty_env
+                                                 (temp_bindings
+                                                    1%positive (Vptr fb Ptrofs.zero::args)) Kstop) m1) (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=
