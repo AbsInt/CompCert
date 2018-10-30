@@ -1012,11 +1012,11 @@ Proof.
 (* mem injects *)
 - inv H0. inv H3. inv H8. inversion H6; subst.
   exploit volatile_load_inject; eauto. intros [v' [A B]].
-  exists f; intros.
-  rewrite (volatile_load_trivial_inject A H0).
-  exists v'; exists m1'; intuition. constructor; auto.
+  exists f; (*intros.
+  rewrite (volatile_load_trivial_inject A H0). *)
+  exists v'; exists m1', t;  intuition. constructor; auto.
   red; intros. congruence.
-  (*inversion H4; repeat constructor. *)
+  inversion H4; repeat constructor.
 (* mem injects *)
 - inv H0. inv H2. inv H7. inversion H5; subst.
   exploit volatile_load_inject; eauto. intros [v' [A B]].
