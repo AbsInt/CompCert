@@ -708,12 +708,17 @@ Ltac trivial_inject_event:=
     inversion H; subst; clear H
   end.
 
-Inductive inject_trace: meminj -> trace -> trace -> Prop :=
+
+Definition inject_trace mu:= list_map_rel (inject_event mu). 
+(* Inductive inject_trace: meminj -> trace -> trace -> Prop :=
 | injt_nil : forall f, inject_trace f nil nil
 | injt_cons: forall f e t e' t',
     inject_event f e e' ->
     inject_trace f t t' ->
     inject_trace f (cons e t) (cons e' t').
+ *)
+
+
 
 
 Definition trivial_inject t:=
