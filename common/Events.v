@@ -103,7 +103,7 @@ Inductive mem_effect :=
 | Alloc: forall (lo hi:Z), mem_effect
 | Free: forall (l: list (block * Z * Z)), mem_effect.
 
-Inductive list_map_rel {A} (r:A-> A -> Prop): list A -> list A-> Prop:=
+Inductive list_map_rel {A B} (r:A-> B -> Prop): list A -> list B-> Prop:=
 | list_rel_nil:
     list_map_rel r nil nil
 | list_rel_cons: forall a b l1 l2,
@@ -166,7 +166,7 @@ Inductive event: Type :=
   | Event_vstore: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_annot: string -> list eventval -> event
   | Event_acq_rel: list mem_effect -> delta_perm_map -> list mem_effect -> event
-  | Event_spawn: val -> delta_perm_map -> delta_perm_map -> event.
+  | Event_spawn: block -> delta_perm_map -> delta_perm_map -> event.
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -727,11 +727,11 @@ Inductive inject_event: meminj -> event -> event -> Prop :=
       inject_delta_map f dpm1 dpm2 ->
       list_inject_mem_effect f ls1' ls2' ->
       inject_event f (Event_acq_rel ls1 dpm1 ls1') (Event_acq_rel ls2 dpm2 ls2')
-  | INJ_spawn : forall f v dm1 dm2 v' dm1' dm2',
-      Val.inject f v v -> 
+  | INJ_spawn : forall f b1 dm1 dm2 b2 delt dm1' dm2',
+      f b1 = Some (b2, delt) ->
       inject_delta_map f dm1 dm1' ->
       inject_delta_map f dm2 dm2' ->
-      inject_event f (Event_spawn v dm1 dm2) (Event_spawn v' dm1' dm2').
+      inject_event f (Event_spawn b1 dm1 dm2) (Event_spawn b2 dm1' dm2').
 Ltac trivial_inject_event:=
   match goal with
   | [H: inject_event ?f ?e ?e' |- _ ] =>
@@ -751,25 +751,16 @@ Inductive inject_event_strong: meminj -> event -> event -> Prop :=
       inject_delta_map f dpm1 dpm2 ->
       list_inject_mem_effect_strong f ls1' ls2' ->
       inject_event_strong f (Event_acq_rel ls1 dpm1 ls1') (Event_acq_rel ls2 dpm2 ls2')
-  | INJ_spawn_strong : forall f v dm1 dm2 v' dm1' dm2',
-      inject_strong f v v -> 
+  | INJ_spawn_strong : forall f b1 dm1 dm2 b2 delt dm1' dm2',
+      f b1 = Some (b2, delt) ->
       inject_delta_map f dm1 dm1' ->
       inject_delta_map f dm2 dm2' ->
-      inject_event_strong f (Event_spawn v dm1 dm2) (Event_spawn v' dm1' dm2').
+      inject_event_strong f (Event_spawn b1 dm1 dm2) (Event_spawn b2 dm1' dm2').
 
 Definition inject_trace mu:= list_map_rel (inject_event mu). 
-(* Inductive inject_trace: meminj -> trace -> trace -> Prop :=
-| injt_nil : forall f, inject_trace f nil nil
-| injt_cons: forall f e t e' t',
-    inject_event f e e' ->
-    inject_trace f t t' ->
-    inject_trace f (cons e t) (cons e' t').
- *)
 Definition inject_trace_strong mu:= list_map_rel (inject_event_strong mu).
 
 Section StrongRelaxedInjections.
-
-
 
 Lemma val_inject_strong_compose:
   forall j12 j23 v1 v2 v3,
@@ -777,9 +768,37 @@ Lemma val_inject_strong_compose:
     Val.inject j23 v2 v3 ->
     Val.inject (compose_meminj j12 j23) v1 v3.
 Proof.
-  intros. inv H; auto; inv H0; auto. econstructor.
-  unfold compose_meminj; rewrite H1; rewrite H3; eauto.
-  rewrite Ptrofs.add_assoc. decEq. unfold Ptrofs.add. apply Ptrofs.eqm_samerepr. auto with ints.
+  
+  Ltac composition_arithmetic:=
+    (* Solves the Ptrofs.add... goal that results from 
+       injecting a pointer twice: the offsets are added 
+       in two different ways
+     *)
+    rewrite Ptrofs.add_assoc; decEq;
+    unfold Ptrofs.add; apply Ptrofs.eqm_samerepr; auto with ints.
+  Ltac composed_injections_injection_case j12 j23:=
+    match goal with
+    |[ H12: j12 _ = Some _, H23: j23 _ = Some _ |-
+       context[compose_meminj j12 j23]
+     ] =>
+     econstructor;
+     try (unfold compose_meminj; rewrite H12; rewrite H23); eauto;
+     try composition_arithmetic
+    end.
+  Ltac composed_injections:=
+     match goal with
+     |[|- forall j12 j23 _ _ _, _ -> _ -> ?R (compose_meminj j12 j23) _ _] =>
+      
+     let H1:= fresh "H1" in
+      let H2:= fresh "H2" in 
+      intros ????? H1 H2; inv H1;
+      auto; inv H2; auto;
+      try solve[econstructor; auto];
+      try composed_injections_injection_case j12 j23
+     | _ => fail "Not the shape expected"
+     end.
+  composed_injections.
+  
 Qed.
 
 Lemma val_inject_strong_compose':
@@ -787,11 +806,7 @@ Lemma val_inject_strong_compose':
     inject_strong j23 v2 v3 ->
     Val.inject j12 v1 v2 ->
     Val.inject (compose_meminj j12 j23) v1 v3.
-Proof.
-  intros. inv H; auto; inv H0; auto. econstructor.
-  unfold compose_meminj; rewrite H4; rewrite H1; eauto.
-  rewrite Ptrofs.add_assoc. decEq. unfold Ptrofs.add. apply Ptrofs.eqm_samerepr. auto with ints.
-Qed.
+Proof. composed_injections. Qed.
 
 Lemma val_inject_strong_interpolation:
   forall j12 j23 v1 v3,
@@ -811,8 +826,231 @@ Proof.
     apply Ptrofs.eqm_samerepr. auto with ints.    
 Qed.
 
+Lemma list_map_rel_trans:
+  forall {A B C},
+  forall (R12: A -> B -> Prop)
+    (R23: B -> C -> Prop)
+    (R13: A -> C -> Prop),
+    (forall x1 x2 x3,
+        R12 x1 x2 ->
+        R23 x2 x3 ->
+        R13 x1 x3) ->
+    (forall l1 l2 l3,
+        list_map_rel R12 l1 l2 ->
+        list_map_rel R23 l2 l3 ->
+        list_map_rel R13 l1 l3).
+Proof.
+  intros. revert l3 H1; induction H0; intros.
+  - inv H1. constructor.
+  - inv H2. constructor.
+    + eapply H; eauto.
+    + eapply IHlist_map_rel; auto.
+Qed.
 
 
+Lemma inject_hi_low_compose:
+  forall (j12 j23 : meminj) (x1 x2 x3 : block * Z * Z),
+    inject_hi_low j12 x1 x2 ->
+    inject_hi_low j23 x2 x3 -> inject_hi_low (compose_meminj j12 j23) x1 x3.
+Proof.
+  composed_injections.
+  do 2 rewrite Zplus_assoc_reverse.
+  econstructor.
+  Ltac rewrite_compose_meminj:=
+    match goal with
+    |[ H12: ?j12 _ = Some _, H23: ?j23 _ = Some _ |-
+       context[compose_meminj ?j12 ?j23]
+     ] => unfold compose_meminj; rewrite H12, H23
+    end.
+  rewrite_compose_meminj; reflexivity.
+Qed.
+Lemma inject_delta_map_compose:
+  forall j12 j23 dpm1 dpm2 dpm3,
+    inject_delta_map j12 dpm1 dpm2 ->
+    inject_delta_map j23 dpm2 dpm3 ->
+    inject_delta_map (compose_meminj j12 j23) dpm1 dpm3.
+Admitted.
+Lemma list_inject_hi_low_compose:
+  forall j12 j23 le1 le2 le3,
+    list_inject_hi_low j12 le1 le2 ->
+    list_inject_hi_low j23 le2 le3 ->
+    list_inject_hi_low (compose_meminj j12 j23) le1 le3.
+Proof.
+  intros ??; eapply list_map_rel_trans.
+  apply inject_hi_low_compose.
+Qed.
+Lemma memval_inject_strong_compose:
+  forall (j12 j23 : meminj) (x1 x2 x3 : memval),
+    memval_inject_strong j12 x1 x2 ->
+    memval_inject j23 x2 x3 -> memval_inject (compose_meminj j12 j23) x1 x3.
+Proof.
+  composed_injections.
+  econstructor; eapply val_inject_strong_compose; eassumption.
+Qed.
+
+Lemma list_memval_inject_strong_compose:
+  forall j12 j23 vals1 vals2 vals3,
+    list_memval_inject_strong j12 vals1 vals2 ->
+    list_memval_inject j23 vals2 vals3 ->
+    list_memval_inject (compose_meminj j12 j23) vals1 vals3.
+Proof.
+  intros ??; eapply list_map_rel_trans.
+  eapply memval_inject_strong_compose.
+Qed.
+
+Lemma inject_mem_effect_strong_compose:
+  forall (j12 j23 : meminj) (x1 x2 x3 : mem_effect),
+    inject_mem_effect_strong j12 x1 x2 ->
+    inject_mem_effect j23 x2 x3 -> inject_mem_effect (compose_meminj j12 j23) x1 x3.
+Proof.
+  composed_injections.
+  - rewrite Zplus_assoc_reverse.
+    eapply InjectWrites; auto.
+    (unfold compose_meminj; rewrite H; rewrite H6); auto.
+    eapply list_memval_inject_strong_compose; eassumption.
+  - econstructor.
+    eapply list_inject_hi_low_compose; eassumption.
+Qed.
+
+
+Lemma list_inject_event_strong_compose:
+  forall j12 j23 le1 le2 le3,
+    list_inject_mem_effect_strong j12 le1 le2 ->
+    list_inject_mem_effect j23 le2 le3 ->
+    list_inject_mem_effect (compose_meminj j12 j23) le1 le3.
+Proof.
+  intros ??; eapply list_map_rel_trans.
+  eapply inject_mem_effect_strong_compose.
+Qed.
+
+Lemma inject_event_strong_compose:
+  forall j12 j23 v1 v2 v3,
+    inject_event_strong j12 v1 v2 ->
+    inject_event j23 v2 v3 ->
+    inject_event (compose_meminj j12 j23) v1 v3.
+Proof.
+  intros. inv H; auto; inv H0; auto; try solve[econstructor].
+  -  econstructor.
+     + eapply list_inject_event_strong_compose; eassumption.
+     + eapply inject_delta_map_compose; eassumption.
+     + eapply list_inject_event_strong_compose; eassumption.
+  - econstructor; try eassumption.
+    + rewrite_compose_meminj; reflexivity.
+    + eapply inject_delta_map_compose; eassumption. 
+    + eapply inject_delta_map_compose; eassumption.
+Qed.
+
+Lemma inject_event_strong_interpolation:
+  forall j12 j23 v1 v3,
+    inject_event (compose_meminj j12 j23) v1 v3 ->
+    exists v2,
+      inject_event_strong j12 v1 v2 /\ inject_event j23 v2 v3.
+Proof.
+  intros.
+  inv H; try solve[ eexists; split; econstructor].
+Admitted.
+
+Lemma inject_trace_strong_compose:
+  forall j12 j23 l1 l2 l3,
+    inject_trace_strong j12 l1 l2 ->
+    inject_trace j23 l2 l3 ->
+    inject_trace (compose_meminj j12 j23) l1 l3.
+Proof.
+  intros ??; eapply list_map_rel_trans.
+  apply inject_event_strong_compose.
+Qed.
+
+Lemma list_map_rel_interpolation:
+  forall {A B C},
+  forall (R12: A -> B -> Prop)
+    (R23: B -> C -> Prop)
+    (R13: A -> C -> Prop),
+    (forall x1 x3, R13 x1 x3 ->
+              exists x2, R12 x1 x2 /\
+                    R23 x2 x3) ->
+    (forall l1 l3, list_map_rel R13 l1 l3 ->
+              exists l2, list_map_rel R12 l1 l2 /\
+                    list_map_rel R23 l2 l3).
+Proof.
+  intros.
+  induction H0; intros.
+  - repeat econstructor.
+  - rename l2 into l3.
+    destruct (H _ _ H0) as (x2&H12&H23).
+    destruct IHlist_map_rel as (l2&HH12&HH23).
+    do 3 econstructor; eauto.
+Qed.
+
+Lemma inject_trace_strong_interpolation:
+  forall j12 j23 v1 v3,
+    inject_trace (compose_meminj j12 j23) v1 v3 ->
+    exists v2,
+      inject_trace_strong j12 v1 v2 /\ inject_trace j23 v2 v3.
+Proof.
+  intros ??; eapply list_map_rel_interpolation.
+  apply inject_event_strong_interpolation.
+Qed.
+
+Section DETERMINISM.
+
+  
+  Definition deterministic {A B} (R: A -> B -> Prop):=
+    forall a b b', R a b -> R a b' -> b = b'.
+  Lemma  list_map_rel_determ:
+    forall {A B} (R: A -> B -> Prop),
+      deterministic R ->
+      deterministic (list_map_rel R).
+  Proof.
+    unfold deterministic;
+      intros. revert b' H1.
+    induction H0; intros.
+    - inv H1; auto.
+    - inv H2; f_equal.
+      + eapply H; eassumption.
+      + eapply IHlist_map_rel; assumption.
+  Qed.
+  Lemma inject_mem_effect_strong_determ:
+    forall (f12 : meminj),
+      deterministic (inject_mem_effect_strong f12).
+  Proof.
+  Admitted.
+  Lemma list_inject_mem_effect_strong_determ:
+    forall (f12 : meminj),
+      deterministic (list_inject_mem_effect_strong f12).
+  Proof.
+    intros ????; eapply list_map_rel_determ.
+    intros ???; eapply inject_mem_effect_strong_determ.
+  Qed.
+  Lemma inject_delta_map_determ:
+    forall (f12 : meminj),
+      deterministic (inject_delta_map f12).  
+  Admitted.
+  Lemma inject_event_strong_determ:
+    forall (f12 : meminj),
+      deterministic (inject_event_strong f12).
+  Proof.
+    unfold deterministic; intros.
+    inv H; auto; inv H0; auto.
+    - (*Event_acq_rel *)
+      f_equal.
+      + eapply list_inject_mem_effect_strong_determ; eassumption.
+      + eapply inject_delta_map_determ; eassumption.
+      + eapply list_inject_mem_effect_strong_determ; eassumption.
+    - f_equal.
+      + rewrite H1 in H7; inversion H7; reflexivity.
+      + eapply inject_delta_map_determ; eassumption.
+      + eapply inject_delta_map_determ; eassumption.
+  Qed.
+  Lemma inject_trace_strong_determ:
+    forall (f12 : meminj),
+      deterministic (inject_trace_strong f12).
+  Proof.
+    intros ????; eapply list_map_rel_determ.
+    eapply inject_event_strong_determ.
+  Qed.
+End DETERMINISM.
+
+  
 End StrongRelaxedInjections.
 
 Definition trivial_inject t:=
@@ -849,183 +1087,183 @@ Proof.
   destruct (plt b (Mem.nextblock m0)); inv H0.
   eapply n; auto.
 Qed.
-      
+
 Lemma nextblock_full: forall f m m',
-      injection_full f m ->
-      Mem.nextblock m' = Mem.nextblock m ->
-      injection_full f m'.
-  Proof. intros ? ? ? H ? ? ?; apply H.
-         unfold Mem.valid_block;
-           rewrite <- H0; auto.
-  Qed.
-  Lemma store_full: forall f chunk m b ofs v m',
-      injection_full f m ->
-      Mem.store chunk m b ofs v = Some m' ->
-      injection_full f m'.
-  Proof.
-    intros. eapply nextblock_full; eauto.
-    eapply Mem.nextblock_store; eauto.
-  Qed.
-  Lemma storebytes_full: forall f m b ofs ls m',
-      injection_full f m ->
-      Mem.storebytes m b ofs ls = Some m' ->
-      injection_full f m'.
-  Proof.
-    intros. eapply nextblock_full; eauto.
-    eapply Mem.nextblock_storebytes; eauto.
-  Qed.
-  Lemma free_full: forall f m ls lo hi m',
-      injection_full f m ->
-      Mem.free m ls lo hi = Some m' ->
-      injection_full f m'.
-  Proof.
-    intros. eapply nextblock_full; eauto.
-    eapply Mem.nextblock_free; eauto.
-  Qed.
-  Lemma free_list_full: forall f ls m m',
-      injection_full f m ->
-  Mem.free_list m ls = Some m' ->
-  injection_full f m'.
-  Proof.
-    induction ls.
-    - intros; inv H0; auto.
-    - intros. destruct a as [[b lo] hi];
-        simpl in H0. 
-      destruct (Mem.free m b lo hi) eqn:HH; inv H0.
-      eapply IHls in H2; eauto.
-      eapply free_full; eauto.
-  Qed.
-  Lemma alloc_full m lo hi m' b (ALLOC: Mem.alloc m lo hi = (m',b))
-    j1 (FULL : injection_full j1 m) j' sp' z
-    (J : j' b = Some (sp', z)) (K : inject_incr j1 j'):
-     injection_full j' m'.
-  Proof. 
-    red; intros bb Hbb.
-    destruct (Mem.valid_block_alloc_inv _ _ _ _ _ ALLOC _ Hbb).
-    * subst. rewrite J; congruence.
-    * apply FULL in H. remember (j1 bb) as d; destruct d; [| congruence].
-       symmetry in Heqd; destruct p. apply K in Heqd; congruence.
-  Qed.
+    injection_full f m ->
+    Mem.nextblock m' = Mem.nextblock m ->
+    injection_full f m'.
+Proof. intros ? ? ? H ? ? ?; apply H.
+       unfold Mem.valid_block;
+         rewrite <- H0; auto.
+Qed.
+Lemma store_full: forall f chunk m b ofs v m',
+    injection_full f m ->
+    Mem.store chunk m b ofs v = Some m' ->
+    injection_full f m'.
+Proof.
+  intros. eapply nextblock_full; eauto.
+  eapply Mem.nextblock_store; eauto.
+Qed.
+Lemma storebytes_full: forall f m b ofs ls m',
+    injection_full f m ->
+    Mem.storebytes m b ofs ls = Some m' ->
+    injection_full f m'.
+Proof.
+  intros. eapply nextblock_full; eauto.
+  eapply Mem.nextblock_storebytes; eauto.
+Qed.
+Lemma free_full: forall f m ls lo hi m',
+    injection_full f m ->
+    Mem.free m ls lo hi = Some m' ->
+    injection_full f m'.
+Proof.
+  intros. eapply nextblock_full; eauto.
+  eapply Mem.nextblock_free; eauto.
+Qed.
+Lemma free_list_full: forall f ls m m',
+    injection_full f m ->
+    Mem.free_list m ls = Some m' ->
+    injection_full f m'.
+Proof.
+  induction ls.
+  - intros; inv H0; auto.
+  - intros. destruct a as [[b lo] hi];
+              simpl in H0. 
+    destruct (Mem.free m b lo hi) eqn:HH; inv H0.
+    eapply IHls in H2; eauto.
+    eapply free_full; eauto.
+Qed.
+Lemma alloc_full m lo hi m' b (ALLOC: Mem.alloc m lo hi = (m',b))
+      j1 (FULL : injection_full j1 m) j' sp' z
+      (J : j' b = Some (sp', z)) (K : inject_incr j1 j'):
+  injection_full j' m'.
+Proof. 
+  red; intros bb Hbb.
+  destruct (Mem.valid_block_alloc_inv _ _ _ _ _ ALLOC _ Hbb).
+  * subst. rewrite J; congruence.
+  * apply FULL in H. remember (j1 bb) as d; destruct d; [| congruence].
+    symmetry in Heqd; destruct p. apply K in Heqd; congruence.
+Qed.
 
 Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
   mk_extcall_properties {
 
-(** The return value of an external call must agree with its signature. *)
-  ec_well_typed:
-    forall ge vargs m1 t vres m2,
-    sem ge vargs m1 t vres m2 ->
-    Val.has_type vres (proj_sig_res sg);
+      (** The return value of an external call must agree with its signature. *)
+      ec_well_typed:
+        forall ge vargs m1 t vres m2,
+          sem ge vargs m1 t vres m2 ->
+          Val.has_type vres (proj_sig_res sg);
 
-(** The semantics is invariant under change of global environment that preserves symbols. *)
-  ec_symbols_preserved:
-    forall ge1 ge2 vargs m1 t vres m2,
-    Senv.equiv ge1 ge2 ->
-    sem ge1 vargs m1 t vres m2 ->
-    sem ge2 vargs m1 t vres m2;
+      (** The semantics is invariant under change of global environment that preserves symbols. *)
+      ec_symbols_preserved:
+        forall ge1 ge2 vargs m1 t vres m2,
+          Senv.equiv ge1 ge2 ->
+          sem ge1 vargs m1 t vres m2 ->
+          sem ge2 vargs m1 t vres m2;
 
-(** External calls cannot invalidate memory blocks.  (Remember that
+      (** External calls cannot invalidate memory blocks.  (Remember that
   freeing a block does not invalidate its block identifier.) *)
-  ec_valid_block:
-    forall ge vargs m1 t vres m2 b,
-    sem ge vargs m1 t vres m2 ->
-    Mem.valid_block m1 b -> Mem.valid_block m2 b;
+      ec_valid_block:
+        forall ge vargs m1 t vres m2 b,
+          sem ge vargs m1 t vres m2 ->
+          Mem.valid_block m1 b -> Mem.valid_block m2 b;
 
-(** External calls cannot increase the max permissions of a valid block.
+      (** External calls cannot increase the max permissions of a valid block.
     They can decrease the max permissions, e.g. by freeing. *)
-  ec_max_perm:
-    forall ge vargs m1 t vres m2 b ofs p,
-    sem ge vargs m1 t vres m2 ->
-    Mem.valid_block m1 b -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p;
+      ec_max_perm:
+        forall ge vargs m1 t vres m2 b ofs p,
+          sem ge vargs m1 t vres m2 ->
+          Mem.valid_block m1 b -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p;
 
-(** External call cannot modify memory unless they have [Max, Writable]
+      (** External call cannot modify memory unless they have [Max, Writable]
    permissions. *)
-  ec_readonly:
-    forall ge vargs m1 t vres m2,
-    sem ge vargs m1 t vres m2 ->
-    Mem.unchanged_on (loc_not_writable m1) m1 m2;
+      ec_readonly:
+        forall ge vargs m1 t vres m2,
+          sem ge vargs m1 t vres m2 ->
+          Mem.unchanged_on (loc_not_writable m1) m1 m2;
 
-(** External calls must commute with memory extensions, in the
+      (** External calls must commute with memory extensions, in the
   following sense. *)
-  ec_mem_extends:
-    forall ge vargs m1 t vres m2 m1' vargs',
-    sem ge vargs m1 t vres m2 ->
-    Mem.extends m1 m1' ->
-    Val.lessdef_list vargs vargs' ->
-    exists vres', exists m2',
-       sem ge vargs' m1' t vres' m2'
-    /\ Val.lessdef vres vres'
-    /\ Mem.extends m2 m2'
-    /\ Mem.unchanged_on (loc_out_of_bounds m1) m1' m2';
+      ec_mem_extends:
+        forall ge vargs m1 t vres m2 m1' vargs',
+          sem ge vargs m1 t vres m2 ->
+          Mem.extends m1 m1' ->
+          Val.lessdef_list vargs vargs' ->
+          exists vres', exists m2',
+              sem ge vargs' m1' t vres' m2'
+              /\ Val.lessdef vres vres'
+              /\ Mem.extends m2 m2'
+              /\ Mem.unchanged_on (loc_out_of_bounds m1) m1' m2';
 
-(** External calls must commute with memory injections,
+      (** External calls must commute with memory injections,
   in the following sense. *)
-  ec_mem_inject:
-    forall ge1 ge2 vargs m1 t vres m2 f m1' vargs',
-    symbols_inject f ge1 ge2 ->
-    sem ge1 vargs m1 t vres m2 ->
-    Mem.inject f m1 m1' ->
-    injection_full f m1 ->
-    Val.inject_list f vargs vargs' ->
-    exists f', exists vres', exists m2', exists t',
-            sem ge2 vargs' m1' t' vres' m2'
-    /\ Val.inject f' vres vres'
-    /\ Mem.inject f' m2 m2'
-    /\ Mem.unchanged_on (loc_unmapped f) m1 m2
-    /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
-    /\ inject_incr f f'
-    /\ inject_separated f f' m1 m1'
-    /\ inject_trace f' t t'
-    /\ injection_full f' m2;
-  
-(** External calls must commute with memory injections,
+      ec_mem_inject:
+        forall ge1 ge2 vargs m1 t vres m2 f m1' vargs',
+          symbols_inject f ge1 ge2 ->
+          sem ge1 vargs m1 t vres m2 ->
+          Mem.inject f m1 m1' ->
+          injection_full f m1 ->
+          Val.inject_list f vargs vargs' ->
+          exists f', exists vres', exists m2', exists t',
+                  sem ge2 vargs' m1' t' vres' m2'
+                  /\ Val.inject f' vres vres'
+                  /\ Mem.inject f' m2 m2'
+                  /\ Mem.unchanged_on (loc_unmapped f) m1 m2
+                  /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
+                  /\ inject_incr f f'
+                  /\ inject_separated f f' m1 m1'
+                  /\ inject_trace f' t t'
+                  /\ injection_full f' m2;
+      
+      (** External calls must commute with memory injections,
   in the following sense. *)
-  ec_mem_inject':
-    forall ge1 ge2 vargs m1 t vres m2 f m1' vargs',
-    symbols_inject f ge1 ge2 ->
-    sem ge1 vargs m1 t vres m2 ->
-    Mem.inject f m1 m1' ->
-    Val.inject_list f vargs vargs' ->
-    exists f', exists vres', exists m2', exists t',
-            sem ge2 vargs' m1' t' vres' m2'
-    /\ Val.inject f' vres vres'
-    /\ Mem.inject f' m2 m2'
-    /\ Mem.unchanged_on (loc_unmapped f) m1 m2
-    /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
-    /\ inject_incr f f'
-    /\ inject_separated f f' m1 m1'
-    /\ inject_trace f' t t';
+      ec_mem_inject':
+        forall ge1 ge2 vargs m1 t vres m2 f m1' vargs',
+          symbols_inject f ge1 ge2 ->
+          sem ge1 vargs m1 t vres m2 ->
+          Mem.inject f m1 m1' ->
+          Val.inject_list f vargs vargs' ->
+          exists f', exists vres', exists m2', exists t',
+                  sem ge2 vargs' m1' t' vres' m2'
+                  /\ Val.inject f' vres vres'
+                  /\ Mem.inject f' m2 m2'
+                  /\ Mem.unchanged_on (loc_unmapped f) m1 m2
+                  /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
+                  /\ inject_incr f f'
+                  /\ inject_separated f f' m1 m1'
+                  /\ inject_trace f' t t';
 
-(** External calls produce at most one event. *)
-  ec_trace_length:
-    forall ge vargs m t vres m',
-    sem ge vargs m t vres m' -> (length t <= 1)%nat;
+      (** External calls produce at most one event. *)
+      ec_trace_length:
+        forall ge vargs m t vres m',
+          sem ge vargs m t vres m' -> (length t <= 1)%nat;
 
-(** External calls must be receptive to changes of traces by another, matching trace. *)
-  ec_receptive:
-    forall ge vargs m t1 vres1 m1 t2,
-    sem ge vargs m t1 vres1 m1 -> match_traces ge t1 t2 ->
-    exists vres2, exists m2, sem ge vargs m t2 vres2 m2;
+      (** External calls must be receptive to changes of traces by another, matching trace. *)
+      ec_receptive:
+        forall ge vargs m t1 vres1 m1 t2,
+          sem ge vargs m t1 vres1 m1 -> match_traces ge t1 t2 ->
+          exists vres2, exists m2, sem ge vargs m t2 vres2 m2;
 
-(** External calls must be deterministic up to matching between traces. *)
-  ec_determ:
-    forall ge vargs m t1 vres1 m1 t2 vres2 m2,
-    sem ge vargs m t1 vres1 m1 -> sem ge vargs m t2 vres2 m2 ->
-    match_traces ge t1 t2 /\ (t1 = t2 -> vres1 = vres2 /\ m1 = m2)
-}.
+      (** External calls must be deterministic up to matching between traces. *)
+      ec_determ:
+        forall ge vargs m t1 vres1 m1 t2 vres2 m2,
+          sem ge vargs m t1 vres1 m1 -> sem ge vargs m t2 vres2 m2 ->
+          match_traces ge t1 t2 /\ (t1 = t2 -> vres1 = vres2 /\ m1 = m2)
+    }.
 
 (** ** Semantics of volatile loads *)
 
 Inductive volatile_load_sem (chunk: memory_chunk) (ge: Senv.t):
-              list val -> mem -> trace -> val -> mem -> Prop :=
-  | volatile_load_sem_intro: forall b ofs m t v,
-      volatile_load ge chunk m b ofs t v ->
-      volatile_load_sem chunk ge (Vptr b ofs :: nil) m t v m.
+  list val -> mem -> trace -> val -> mem -> Prop :=
+| volatile_load_sem_intro: forall b ofs m t v,
+    volatile_load ge chunk m b ofs t v ->
+    volatile_load_sem chunk ge (Vptr b ofs :: nil) m t v m.
 
 Lemma volatile_load_preserved:
   forall ge1 ge2 chunk m b ofs t v,
-  Senv.equiv ge1 ge2 ->
-  volatile_load ge1 chunk m b ofs t v ->
-  volatile_load ge2 chunk m b ofs t v.
+    Senv.equiv ge1 ge2 ->
+    volatile_load ge1 chunk m b ofs t v ->
+    volatile_load ge2 chunk m b ofs t v.
 Proof.
   intros. destruct H as (A & B & C). inv H0; constructor; auto.
   rewrite C; auto.
@@ -1036,9 +1274,9 @@ Qed.
 
 Lemma volatile_load_extends:
   forall ge chunk m b ofs t v m',
-  volatile_load ge chunk m b ofs t v ->
-  Mem.extends m m' ->
-  exists v', volatile_load ge chunk m' b ofs t v' /\ Val.lessdef v v'.
+    volatile_load ge chunk m b ofs t v ->
+    Mem.extends m m' ->
+    exists v', volatile_load ge chunk m' b ofs t v' /\ Val.lessdef v v'.
 Proof.
   intros. inv H.
   econstructor; split; eauto. econstructor; eauto.
@@ -1047,26 +1285,26 @@ Qed.
 
 Lemma volatile_load_inject:
   forall ge1 ge2 f chunk m b ofs t v b' ofs' m',
-  symbols_inject f ge1 ge2 ->
-  volatile_load ge1 chunk m b ofs t v ->
-  Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
-  Mem.inject f m m' ->
-  exists v', volatile_load ge2 chunk m' b' ofs' t v' /\ Val.inject f v v'.
+    symbols_inject f ge1 ge2 ->
+    volatile_load ge1 chunk m b ofs t v ->
+    Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
+    Mem.inject f m m' ->
+    exists v', volatile_load ge2 chunk m' b' ofs' t v' /\ Val.inject f v v'.
 Proof.
   intros until m'; intros SI VL VI MI. generalize SI; intros (A & B & C & D).
   inv VL.
-- (* volatile load *)
-  inv VI. exploit B; eauto. intros [U V]. subst delta.
-  exploit eventval_match_inject_2; eauto. intros (v2 & X & Y).
-  rewrite Ptrofs.add_zero. exists (Val.load_result chunk v2); split.
-  constructor; auto.
-  erewrite D; eauto.
-  apply Val.load_result_inject. auto.
-- (* normal load *)
-  exploit Mem.loadv_inject; eauto. simpl; eauto. simpl; intros (v2 & X & Y).
-  exists v2; split; auto.
-  constructor; auto.
-  inv VI. erewrite D; eauto.
+  - (* volatile load *)
+    inv VI. exploit B; eauto. intros [U V]. subst delta.
+    exploit eventval_match_inject_2; eauto. intros (v2 & X & Y).
+    rewrite Ptrofs.add_zero. exists (Val.load_result chunk v2); split.
+    constructor; auto.
+    erewrite D; eauto.
+    apply Val.load_result_inject. auto.
+  - (* normal load *)
+    exploit Mem.loadv_inject; eauto. simpl; eauto. simpl; intros (v2 & X & Y).
+    exists v2; split; auto.
+    constructor; auto.
+    inv VI. erewrite D; eauto.
 Qed.
 
 Lemma volatile_load_receptive:
