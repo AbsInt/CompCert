@@ -110,7 +110,25 @@ Inductive list_map_rel {A} (r:A-> A -> Prop): list A -> list A-> Prop:=
                    r a b ->
                    list_map_rel r (l1) (l2)->
                    list_map_rel r (a::l1) (b::l2).
-Definition list_memval_inject mu:= list_map_rel (memval_inject mu). 
+
+Inductive inject_strong (mi : meminj) : val -> val -> Prop :=
+    inject_int : forall i : int, inject_strong mi (Vint i) (Vint i)
+  | inject_long : forall i : int64, inject_strong mi (Vlong i) (Vlong i)
+  | inject_float : forall f : float, inject_strong mi (Vfloat f) (Vfloat f)
+  | inject_single : forall f : float32, inject_strong mi (Vsingle f) (Vsingle f)
+  | inject_ptr : forall (b1 : block) (ofs1 : ptrofs) (b2 : block) (ofs2 : ptrofs) (delta : Z),
+                 mi b1 = Some (b2, delta) ->
+                 ofs2 = Ptrofs.add ofs1 (Ptrofs.repr delta) ->
+                 inject_strong mi (Vptr b1 ofs1) (Vptr b2 ofs2)
+  | val_inject_undef : inject_strong mi Vundef Vundef.
+Inductive memval_inject_strong (f : meminj) : memval -> memval -> Prop :=
+    memval_inject_byte : forall n : byte, memval_inject_strong f (Byte n) (Byte n)
+  | memval_inject_frag : forall (v1 v2 : val) (q : quantity) (n : nat),
+                         inject_strong f v1 v2 ->
+                         memval_inject_strong f (Fragment v1 q n) (Fragment v2 q n).
+Definition list_memval_inject mu:= list_map_rel (memval_inject mu).
+Definition list_memval_inject_strong mu:= list_map_rel (memval_inject_strong mu).
+
 Inductive inject_hi_low (mu:meminj): (block * Z * Z) -> (block * Z * Z) -> Prop:=
 | HiLow: forall b1 b2 hi low delt,
     mu b1 = Some(b2, delt) ->
@@ -128,6 +146,18 @@ Inductive inject_mem_effect (mu: meminj): mem_effect -> mem_effect -> Prop :=
     list_inject_hi_low mu l1 l2 ->
     inject_mem_effect mu (Free l1) (Free l2).
 Definition list_inject_mem_effect (mu:meminj):= list_map_rel (inject_mem_effect mu).
+
+Inductive inject_mem_effect_strong (mu: meminj): mem_effect -> mem_effect -> Prop :=
+| InjectWritesStrong: forall b1 b2 ofs1 delt vals1 vals2,
+    mu b1 = Some (b2, delt) ->
+    list_memval_inject_strong mu vals1 vals2 ->
+    inject_mem_effect_strong mu (Write b1 ofs1 vals1) (Write b2 (ofs1 + delt) vals2)
+| InjectAllocStrong: forall lo hi,
+    inject_mem_effect_strong mu (Alloc hi lo) (Alloc hi lo)
+| InjectFreeStrong: forall l1 l2,
+    list_inject_hi_low mu l1 l2 ->
+    inject_mem_effect_strong mu (Free l1) (Free l2).
+Definition list_inject_mem_effect_strong (mu:meminj):= list_map_rel (inject_mem_effect_strong mu).
 
 
 Inductive event: Type :=
@@ -708,6 +738,24 @@ Ltac trivial_inject_event:=
     inversion H; subst; clear H
   end.
 
+Inductive inject_event_strong: meminj -> event -> event -> Prop :=
+| INJ_syscall_strong:
+    forall f s t v, inject_event_strong f (Event_syscall s t v) (Event_syscall s t v)
+| INJ_vload_strong :
+    forall f mc id n v, inject_event_strong f (Event_vload mc id n v) (Event_vload mc id n v)
+| INJ_vstore_strong :
+    forall f mc id n v, inject_event_strong f (Event_vstore mc id n v) (Event_vstore mc id n v)
+  | INJ_annot_strong : forall f st t, inject_event_strong f (Event_annot st t) (Event_annot st t)
+  | INJ_acq_strong : forall f ls1 ls2 ls1' ls2' dpm1 dpm2,
+      list_inject_mem_effect_strong f ls1 ls2 ->
+      inject_delta_map f dpm1 dpm2 ->
+      list_inject_mem_effect_strong f ls1' ls2' ->
+      inject_event_strong f (Event_acq_rel ls1 dpm1 ls1') (Event_acq_rel ls2 dpm2 ls2')
+  | INJ_spawn_strong : forall f v dm1 dm2 v' dm1' dm2',
+      inject_strong f v v -> 
+      inject_delta_map f dm1 dm1' ->
+      inject_delta_map f dm2 dm2' ->
+      inject_event_strong f (Event_spawn v dm1 dm2) (Event_spawn v' dm1' dm2').
 
 Definition inject_trace mu:= list_map_rel (inject_event mu). 
 (* Inductive inject_trace: meminj -> trace -> trace -> Prop :=
@@ -717,9 +765,55 @@ Definition inject_trace mu:= list_map_rel (inject_event mu).
     inject_trace f t t' ->
     inject_trace f (cons e t) (cons e' t').
  *)
+Definition inject_trace_strong mu:= list_map_rel (inject_event_strong mu).
+
+Section StrongRelaxedInjections.
 
 
 
+Lemma val_inject_strong_compose:
+  forall j12 j23 v1 v2 v3,
+    inject_strong j12 v1 v2 ->
+    Val.inject j23 v2 v3 ->
+    Val.inject (compose_meminj j12 j23) v1 v3.
+Proof.
+  intros. inv H; auto; inv H0; auto. econstructor.
+  unfold compose_meminj; rewrite H1; rewrite H3; eauto.
+  rewrite Ptrofs.add_assoc. decEq. unfold Ptrofs.add. apply Ptrofs.eqm_samerepr. auto with ints.
+Qed.
+
+Lemma val_inject_strong_compose':
+  forall j12 j23 v1 v2 v3,
+    inject_strong j23 v2 v3 ->
+    Val.inject j12 v1 v2 ->
+    Val.inject (compose_meminj j12 j23) v1 v3.
+Proof.
+  intros. inv H; auto; inv H0; auto. econstructor.
+  unfold compose_meminj; rewrite H4; rewrite H1; eauto.
+  rewrite Ptrofs.add_assoc. decEq. unfold Ptrofs.add. apply Ptrofs.eqm_samerepr. auto with ints.
+Qed.
+
+Lemma val_inject_strong_interpolation:
+  forall j12 j23 v1 v3,
+    Val.inject (compose_meminj j12 j23) v1 v3 ->
+    exists v2,
+    inject_strong j12 v1 v2 /\ Val.inject j23 v2 v3.
+Proof.
+  intros.
+  inv H; try solve[ eexists; split; econstructor].
+  - (* ptr *)
+    unfold compose_meminj in H0.
+    destruct (j12 b1) as [[??]|] eqn:H12; try congruence.
+    destruct (j23 b) as [[??]|] eqn:H23; try congruence.
+    inversion H0; subst.
+    eexists; split; try econstructor; eauto.
+    rewrite Ptrofs.add_assoc. decEq. unfold Ptrofs.add.
+    apply Ptrofs.eqm_samerepr. auto with ints.    
+Qed.
+
+
+
+End StrongRelaxedInjections.
 
 Definition trivial_inject t:=
   forall {f t'},
@@ -987,11 +1081,11 @@ Proof.
 Qed.
 
   
-Lemma volatile_load_trivial_inject:
+(* Lemma volatile_load_trivial_inject:
   forall {ge chunk m b ofs t vres},
     volatile_load ge chunk m b ofs t vres ->
     trivial_inject t.
-Proof. intros; solve_trivial_inject. Qed.
+Proof. intros; solve_trivial_inject. Qed. *)
 
 Lemma volatile_load_ok:
   forall chunk,
@@ -1162,11 +1256,11 @@ Proof.
   intros. inv H0; auto.
   eapply store_full; eauto.
 Qed.
-Lemma volatile_store_trivial_inject:
+(*Lemma volatile_store_trivial_inject:
   forall {ge chunk m b ofs v t m'},
     volatile_store ge chunk m b ofs v t m' ->
     trivial_inject t.
-Proof. intros; solve_trivial_inject. Qed.
+Proof. intros; solve_trivial_inject. Qed.*)
 Lemma volatile_store_ok:
   forall chunk,
   extcall_properties (volatile_store_sem chunk)

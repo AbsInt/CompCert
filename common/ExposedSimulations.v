@@ -296,7 +296,7 @@ Section ExposingMemory.
                                     (Plus L2 s2 t' s2' \/ (Star L2 s2 t' s2' /\ Injorder i' i))
                                     /\ Injmatch_states i' f' s1' s2' /\
                                     Values.inject_incr f f' /\
-                                    inject_trace f' t t';
+                                    inject_trace_strong f' t t';
         Injsim_simulation_atx:
           simulation_atx_inj Injmatch_states;
         Injsim_atx:
@@ -357,7 +357,7 @@ Section ExposingMemory.
                 (exists i', exists s2' f' t',
                       Plus L2 s2 t' s2' /\
                       Injmatch_states SIM i' f' s1' s2'
-                      /\ inject_incr f f' /\ inject_trace f' t t')
+                      /\ inject_incr f f' /\ inject_trace_strong f' t t')
                 \/ (exists i' f', Injorder SIM i' i /\ t = E0 /\ Injmatch_states SIM i' f' s1' s2
                   /\ inject_incr f f').
     Proof.
@@ -401,7 +401,7 @@ Section ExposingMemory.
       forall s1 t s1', Plus L1 s1 t s1' ->
                   forall i f s2, Injmatch_states SIM i f s1 s2 -> 
             (exists i', exists f', exists s2' t', Plus L2 s2 t' s2' /\ Injmatch_states SIM i' f' s1' s2'
-            /\ inject_incr f f' /\ inject_trace f' t t')
+            /\ inject_incr f f' /\ inject_trace_strong f' t t')
             \/ (exists i', exists f', clos_trans _ (Injorder SIM) i' i /\ t = E0 /\ Injmatch_states SIM i' f' s1' s2
                            /\ inject_incr f f').
     Proof.
@@ -421,7 +421,7 @@ Section ExposingMemory.
       repeat split; auto.
       eapply inject_incr_trans; eauto.
       subst t.
-      admit. (*Some properties about inject_trace*)
+      admit. (*Some properties about inject_trace_strong*)
  
       
       exploit IHplus; eauto.
@@ -440,7 +440,7 @@ Section ExposingMemory.
                   forall i f s2, Injmatch_statesX SIM i f s1 s2 -> 
                   (exists i', exists f', exists s2' t',
                           Plus L2 s2 t' s2' /\ Injmatch_statesX SIM i' f' s1' s2'
-                          /\ inject_incr f f' /\ inject_trace f' t t')
+                          /\ inject_incr f f' /\ inject_trace_strong f' t t')
                   \/ (exists i', exists f',
                           clos_trans _ (InjorderX SIM) i' i /\ t = E0 /\
                           Injmatch_statesX SIM i' f' s1' s2 /\ inject_incr f f').
@@ -720,6 +720,14 @@ Section Composition.
     reflexivity.
   Qed.
   
+  Lemma inject_trace_strong_compose:
+    forall f12 f23 t1 t2 t3,
+      inject_trace_strong f12 t1 t2 ->
+      inject_trace_strong f23 t2 t3 ->
+      inject_trace_strong (compose_meminj f12 f23) t1 t3.
+  Proof.
+  Admitted.
+
   Lemma inject_trace_compose:
     forall f12 f23 t1 t2 t3,
       inject_trace f12 t1 t2 ->
@@ -785,7 +793,7 @@ Section Composition.
   subst f.
   eapply compose_inject_incr; eauto.
   
-  eapply inject_trace_compose; eauto.
+  eapply inject_trace_strong_compose; eauto.
   
 * (* L3 makes no step *)
   exists (i2', i1'); exists s2; exists (compose_meminj f' f''), t'. repeat (split; auto).
@@ -911,8 +919,7 @@ Section Composition.
   exists s3', f', f''; repeat (split; auto).
   subst f.
   eapply compose_inject_incr; eauto.
-  
-  eapply inject_trace_compose; eauto.
+  eapply inject_trace_compose; eauto. (*HERE*)
   
 * (* L3 makes no step *)
   exists (i2', i1'); exists s2; exists (compose_meminj f' f''), t'. repeat (split; auto).
@@ -946,7 +953,7 @@ Section Composition.
   exists (i2', i1'); exists s3'; exists (compose_meminj f12' f23'), t3'. repeat (split; auto).
   + exists s2',f12', f23'; auto.
   + subst; eapply compose_inject_incr; auto.
-  + subst; eapply inject_trace_compose; eauto.
+  + subst; eapply inject_trace_strong_compose; eauto.
   
 - (*match_states preserves at_external *)
   unfold preserves_atx_inj; intros.
