@@ -238,7 +238,7 @@ clear H H0 H1.
 do 2 rewrite <- Zabs2Nat.id_abs.
 f_equal.
 revert l i Heqp.
-assert (Z.abs_nat (phi inj_bound) < Z.abs_nat (2^31)).
+assert (Z.abs_nat (phi inj_bound) < Z.abs_nat (2 ^ Z.of_nat size)).
 apply Zabs_nat_lt, phi_bounded.
 induction (Z.abs_nat (phi inj_bound)); intros.
 inversion Heqp; reflexivity.
