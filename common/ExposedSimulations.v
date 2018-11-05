@@ -312,13 +312,21 @@ Section ExposingMemory.
           @at_external L1 s1 = Some (f,args) -> 
           forall t s1', Step L1 s1 t s1' ->
                    forall i f s2, match_states i f s1 s2 ->
-                             exists f', 
-                                  Values.inject_incr f f' /\
-                                  forall t',
-                                    inject_trace f' t t' ->
-                                    exists i', exists s2',
-                                        Step L2 s2 t' s2' /\
-                                        match_states i' f' s1' s2'.
+                             exists f',
+                               Values.inject_incr f f' /\
+                               (exists i' s2' t',
+                                   Step L2 s2 t' s2' /\
+                                   match_states i' f' s1' s2' /\
+                                   inject_trace_strong f' t t') /\
+                               forall t',
+                                 inject_trace f' t t' ->
+                                 exists i', exists s2',
+                                     Step L2 s2 t' s2' /\
+                                     match_states i' f' s1' s2'.
+
+
+
+        
         Record fsim_properties_inj_relaxed: Type :=
       {  InjindexX: Type;
         InjorderX: InjindexX -> InjindexX -> Prop;
@@ -947,18 +955,26 @@ Section Composition.
   eapply Injsim_atx in H; eauto.
   destruct H as (?&?&?).
   exploit (Injsim_simulation_atxX SIM23); eauto.
-  intros (f23'&Hincr&Hsim23).
+  intros (f23'&Hincr&Hstrong_sim&Hsim23).
+  destruct Hstrong_sim as (i2_str&s2_str&t_str&Step_str&Hinj_str&Htrace_str).
   exists (compose_meminj f12' f23').
-  split; [subst; eapply compose_inject_incr; auto|].
-  intros t' Htrace.
-  destruct (inject_trace_strong_interpolation Htrace) as (t2&Htrace12&Htrace23).
-  assert (t2 = t2') by (eapply inject_trace_strong_determ; eassumption).
-  subst t2'.
-  destruct (Hsim23 t' Htrace23) as 
-  [i2' [s3' [? ?]]].
-  exists (i2', i1'); exists s3'. repeat (split; auto).
-  exists s2',f12', f23'; auto.
-  
+  repeat split.
+  + subst; eapply compose_inject_incr; auto.
+  + exists (i2_str, i1'), s2_str, t_str.
+    repeat split; eauto.
+    * econstructor.
+      do 2 eexists.
+      repeat split; eauto.
+    * eapply inject_trace_strong_trans; eassumption.
+  + intros t' Htrace.
+    destruct (inject_trace_strong_interpolation Htrace) as (t2&Htrace12&Htrace23).
+    assert (t2 = t2') by (eapply inject_trace_strong_determ; eassumption).
+    subst t2'.
+    destruct (Hsim23 t' Htrace23) as 
+        [i2' [s3' [? ?]]].
+    exists (i2', i1'); exists s3'. repeat (split; auto).
+    exists s2',f12', f23'; auto.
+    
 - (*match_states preserves at_external *)
   unfold preserves_atx_inj; intros.
   destruct H as (?&?&?&?&?&?). 
