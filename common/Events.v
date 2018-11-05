@@ -97,10 +97,11 @@ Record inject_delta_map (mu: meminj)(dpm1 dpm2: delta_perm_map): Prop:=
    * These events are injectable
    * They can indicate changes to memory with an mem_effect
    * or changes to permissions with a delta_map.
+   NOTE: alloc records the new block. This helps on injections.
 *)
 Inductive mem_effect :=
   Write : forall (b : block) (ofs : Z) (bytes : list memval), mem_effect
-| Alloc: forall (lo hi:Z), mem_effect
+| Alloc: forall (b : block)(lo hi:Z), mem_effect
 | Free: forall (l: list (block * Z * Z)), mem_effect.
 
 Inductive list_map_rel {A B} (r:A-> B -> Prop): list A -> list B-> Prop:=
@@ -140,8 +141,9 @@ Inductive inject_mem_effect (mu: meminj): mem_effect -> mem_effect -> Prop :=
     mu b1 = Some (b2, delt) ->
     list_memval_inject mu vals1 vals2 ->
     inject_mem_effect mu (Write b1 ofs1 vals1) (Write b2 (ofs1 + delt) vals2)
-| InjectAlloc: forall lo hi,
-    inject_mem_effect mu (Alloc hi lo) (Alloc hi lo)
+| InjectAlloc: forall lo hi b1 b2,
+    mu b1 = Some (b2, 0) ->
+    inject_mem_effect mu (Alloc b1 hi lo) (Alloc b2 hi lo)
 | InjectFree: forall l1 l2,
     list_inject_hi_low mu l1 l2 ->
     inject_mem_effect mu (Free l1) (Free l2).
@@ -152,8 +154,9 @@ Inductive inject_mem_effect_strong (mu: meminj): mem_effect -> mem_effect -> Pro
     mu b1 = Some (b2, delt) ->
     list_memval_inject_strong mu vals1 vals2 ->
     inject_mem_effect_strong mu (Write b1 ofs1 vals1) (Write b2 (ofs1 + delt) vals2)
-| InjectAllocStrong: forall lo hi,
-    inject_mem_effect_strong mu (Alloc hi lo) (Alloc hi lo)
+| InjectAllocStrong:forall lo hi b1 b2,
+    mu b1 = Some (b2, 0) ->
+    inject_mem_effect_strong mu (Alloc b1 hi lo) (Alloc b2 hi lo)
 | InjectFreeStrong: forall l1 l2,
     list_inject_hi_low mu l1 l2 ->
     inject_mem_effect_strong mu (Free l1) (Free l2).
