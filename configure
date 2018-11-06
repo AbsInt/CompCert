@@ -519,6 +519,13 @@ case "$coq_ver" in
         missingtools=true;;
 esac
 
+case "$coq_ver" in
+  8.10?*)
+    coq_has_primitive_integers=true;;
+  ?*)
+    coq_has_primitive_integers=false;;
+esac
+
 echo "Testing OCaml... " | tr -d '\n'
 ocaml_ver=`ocamlopt -version 2>/dev/null`
 case "$ocaml_ver" in
@@ -638,7 +645,10 @@ case $arch in
         echo "-R x86_${bitsize} compcert.x86_${bitsize}" >> _CoqProject
         ;;
 esac
-echo "-R extraction_31_31 compcert.extraction_31_31" >> _CoqProject
+if $coq_has_primitive_integers
+then echo "-R extraction_31_63 compcert.extraction_31_63" >> _CoqProject
+else echo "-R extraction_31_31 compcert.extraction_31_31" >> _CoqProject
+fi
 
 #
 # Generate Makefile.config
@@ -672,6 +682,7 @@ CC=$cc
 CLIGHTGEN=$clightgen
 CLINKER=$clinker
 CLINKER_OPTIONS=$clinker_options
+COQ_HAS_PRIMITIVE_INTEGERS=$coq_has_primitive_integers
 CPREPRO=$cprepro
 CPREPRO_OPTIONS=$cprepro_options
 ENDIANNESS=$endianness

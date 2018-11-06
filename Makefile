@@ -21,7 +21,11 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
+ifeq ($(COQ_HAS_PRIMITIVE_INTEGERS),true)
+EXTRACTION31DIRS=extraction_31_63
+else
 EXTRACTION31DIRS=extraction_31_31
+endif
 
 DIRS=lib common $(ARCHDIRS) backend cfrontend driver \
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
