@@ -638,6 +638,7 @@ case $arch in
         echo "-R x86_${bitsize} compcert.x86_${bitsize}" >> _CoqProject
         ;;
 esac
+echo "-R extraction_31_31 compcert.extraction_31_31" >> _CoqProject
 
 #
 # Generate Makefile.config

@@ -21,11 +21,14 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
+EXTRACTION31DIRS=extraction_31_31
+
 DIRS=lib common $(ARCHDIRS) backend cfrontend driver \
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
+  $(EXTRACTION31DIRS) \
   cparser cparser/MenhirLib
 
-RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser
+RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser $(EXTRACTION31DIRS)
 
 COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
 
@@ -123,6 +126,7 @@ DRIVER=Compopts.v Compiler.v Complements.v
 # All source files
 
 FILES=$(VLIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
+  ExtractInt31.v \
   $(PARSERVALIDATOR) $(PARSER)
 
 # Generated source files

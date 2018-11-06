@@ -34,7 +34,7 @@ Require Clight.
 Require Compiler.
 Require Parser.
 Require Initializers.
-Require Int31.
+Require ExtractInt31.
 
 (* Standard lib *)
 Require Import ExtrOcamlBasic.
@@ -135,15 +135,6 @@ Extract Constant Cabs.cabsloc =>
  }".
 Extract Inlined Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
-
-(* Int31 *)
-Extract Inductive Int31.digits => "bool" [ "false" "true" ].
-Extract Inductive Int31.int31 => "int" [ "Camlcoq.Int31.constr" ] "Camlcoq.Int31.destr".
-Extract Constant Int31.twice => "Camlcoq.Int31.twice".
-Extract Constant Int31.twice_plus_one => "Camlcoq.Int31.twice_plus_one".
-Extract Constant Int31.compare31 => "Camlcoq.Int31.compare".
-Extract Constant Int31.On => "0".
-Extract Constant Int31.In => "1".
 
 (* Processor-specific extraction directives *)
 
