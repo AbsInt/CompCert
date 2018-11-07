@@ -123,10 +123,12 @@ Inductive inject_strong (mi : meminj) : val -> val -> Prop :=
                  inject_strong mi (Vptr b1 ofs1) (Vptr b2 ofs2)
   | val_inject_undef : inject_strong mi Vundef Vundef.
 Inductive memval_inject_strong (f : meminj) : memval -> memval -> Prop :=
-    memval_inject_byte : forall n : byte, memval_inject_strong f (Byte n) (Byte n)
-  | memval_inject_frag : forall (v1 v2 : val) (q : quantity) (n : nat),
+    memval_inject_byte_str : forall n : byte, memval_inject_strong f (Byte n) (Byte n)
+  | memval_inject_frag_str : forall (v1 v2 : val) (q : quantity) (n : nat),
                          inject_strong f v1 v2 ->
-                         memval_inject_strong f (Fragment v1 q n) (Fragment v2 q n).
+                         memval_inject_strong f (Fragment v1 q n) (Fragment v2 q n)
+  | memval_inject_undef_str : memval_inject_strong f Undef Undef.
+                                              
 Definition list_memval_inject mu:= list_map_rel (memval_inject mu).
 Definition list_memval_inject_strong mu:= list_map_rel (memval_inject_strong mu).
 
