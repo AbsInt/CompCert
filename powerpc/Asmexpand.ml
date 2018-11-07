@@ -348,7 +348,7 @@ let expand_builtin_vstore_1 chunk addr src =
                expand_store_int64 hi lo temp (Cint _0) (Cint _4))
         (fun r1 r2 ->
            emit (Padd(temp, r1, r2));
-           expand_load_int64 hi lo temp (Cint _0) (Cint _4))
+           expand_store_int64 hi lo temp (Cint _0) (Cint _4))
         addr temp
   | _, _ ->
       assert false
