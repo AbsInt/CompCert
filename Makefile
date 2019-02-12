@@ -279,12 +279,8 @@ distclean:
 check-admitted: $(FILES)
 	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
 
-# Problems with coqchk (coq 8.6):
-# Integers.Int.Z_mod_modulus_range takes forever to check
-# compcert.backend.SelectDivproof.divs_mul_shift_2 takes forever to check
-
 check-proof: $(FILES)
-	$(COQCHK) -admit compcert.lib.Integers -admit compcert.backend.SelectDivproof compcert.driver.Complements
+	$(COQCHK) compcert.driver.Complements
 
 print-includes:
 	@echo $(COQINCLUDES)

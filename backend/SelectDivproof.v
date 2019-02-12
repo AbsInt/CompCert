@@ -283,14 +283,15 @@ Proof.
   intros (A & B & C). split. auto. rewrite C. f_equal. f_equal.
   rewrite Int.add_signed. unfold Int.mulhs. set (n := Int.signed x).
   transitivity (Int.repr (n * (m - Int.modulus) / Int.modulus + n)).
-  f_equal.
+  apply f_equal.
   replace (n * (m - Int.modulus)) with (n * m +  (-n) * Int.modulus) by ring.
   rewrite Z_div_plus. ring. apply Int.modulus_pos.
   apply Int.eqm_samerepr. apply Int.eqm_add; auto with ints.
   apply Int.eqm_sym. eapply Int.eqm_trans. apply Int.eqm_signed_unsigned.
-  apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl2. f_equal. f_equal.
+  apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl2.
+  apply (f_equal (fun x => n * x / Int.modulus)).
   rewrite Int.signed_repr_eq. rewrite Zmod_small by assumption.
-  apply zlt_false. omega.
+  apply zlt_false. assumption.
 Qed.
 
 Theorem divu_mul_shift:
@@ -436,14 +437,15 @@ Proof.
   intros (A & B & C). split. auto. rewrite C. f_equal. f_equal.
   rewrite Int64.add_signed. unfold Int64.mulhs. set (n := Int64.signed x).
   transitivity (Int64.repr (n * (m - Int64.modulus) / Int64.modulus + n)).
-  f_equal.
+  apply f_equal.
   replace (n * (m - Int64.modulus)) with (n * m +  (-n) * Int64.modulus) by ring.
   rewrite Z_div_plus. ring. apply Int64.modulus_pos.
   apply Int64.eqm_samerepr. apply Int64.eqm_add; auto with ints.
   apply Int64.eqm_sym. eapply Int64.eqm_trans. apply Int64.eqm_signed_unsigned.
-  apply Int64.eqm_unsigned_repr_l. apply Int64.eqm_refl2. f_equal. f_equal.
+  apply Int64.eqm_unsigned_repr_l. apply Int64.eqm_refl2.
+  apply (f_equal (fun x => n * x / Int64.modulus)).
   rewrite Int64.signed_repr_eq. rewrite Zmod_small by assumption.
-  apply zlt_false. omega.
+  apply zlt_false. assumption.
 Qed.
 
 Remark int64_shru'_div_two_p:
