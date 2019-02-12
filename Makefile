@@ -268,6 +268,7 @@ clean:
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
 	rm -f $(GENERATED) .depend
+	rm -f .lia.cache
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test clean
