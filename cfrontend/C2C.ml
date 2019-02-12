@@ -315,8 +315,9 @@ let attributes = [
   ("noinline",Cutil.Attr_function);
   (* name-related *)
   ("aligned", Cutil.Attr_name);
-  ("section", Cutil.Attr_name);
-  ("unused", Cutil.Attr_name)
+  (* object-related *)
+  ("section", Cutil.Attr_object);
+  ("unused", Cutil.Attr_object)
 ]
 
 

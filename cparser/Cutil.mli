@@ -64,7 +64,10 @@ val has_std_alignas :  Env.t -> typ -> bool
   (* Do the attributes of the type contain the C11 _Alignas attribute *)
 
 type attribute_class =
-  | Attr_name           (* Attribute applies to the names being declared  *)
+  | Attr_object         (* Attribute applies to the object being declared
+                          (function, global variable, local variable)  *)
+  | Attr_name           (* Attribute applies to the name being declared
+                          (object, struct/union member, struct/union/enum tag *)
   | Attr_type           (* Attribute applies to types *)
   | Attr_struct         (* Attribute applies to struct, union and enum *)
   | Attr_function       (* Attribute applies to function types and decls *)

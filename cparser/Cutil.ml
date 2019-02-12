@@ -95,7 +95,10 @@ let rec remove_custom_attributes (names: string list)  (al: attributes) =
 (* Classification of attributes *)
 
 type attribute_class =
-  | Attr_name           (* Attribute applies to the names being declared  *)
+  | Attr_object         (* Attribute applies to the object being declared
+                           (function, global variable, local variable)  *)
+  | Attr_name           (* Attribute applies to the name being declared
+                          (object, struct/union member, struct/union/enum tag *)
   | Attr_type           (* Attribute applies to types *)
   | Attr_struct         (* Attribute applies to struct, union and enum *)
   | Attr_function       (* Attribute applies to function types and decls *)
@@ -111,7 +114,7 @@ let declare_attributes l =
 
 let class_of_attribute = function
   | AConst | AVolatile | ARestrict -> Attr_type
-  | AAlignas _ -> Attr_name
+  | AAlignas _ -> Attr_object
   | Attr(name, args) ->
       try Hashtbl.find attr_class (normalize_attrname name)
       with Not_found -> Attr_unknown
