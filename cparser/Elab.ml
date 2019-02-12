@@ -598,7 +598,7 @@ let get_nontype_attrs env ty =
     | Attr_type -> false
     | Attr_function -> not (is_function_type env ty)
     | _ -> true in
-  let nta = List.filter to_be_removed (attributes_of_type env ty) in
+  let nta = List.filter to_be_removed (attributes_of_type_no_expand ty) in
   (remove_attributes_type env nta ty, nta)
 
 (* Elaboration of a type specifier.  Returns 6-tuple:

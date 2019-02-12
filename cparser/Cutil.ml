@@ -163,7 +163,10 @@ let rec unroll env t =
       unroll env (add_attributes_type attr ty)
   | _ -> t
 
-(* Extracting the attributes of a type *)
+(* Extracting the attributes of a type, including the attributes
+   attached to typedefs, structs and unions.  In other words,
+   typedefs are unrolled and composite definitions expanded
+   before extracting the attributes.  *)
 
 let rec attributes_of_type env t =
   match t with
@@ -189,6 +192,23 @@ let rec attributes_of_type env t =
       | ei -> add_attributes ei.ei_attr a
       | exception Env.Error(Env.Unbound_tag _) -> a
       end
+
+(* Extracting the attributes of a type, excluding the attributes
+   attached to typedefs, structs and unions.  In other words,
+   typedefs are not unrolled and composite definitions are not expanded. *)
+
+let rec attributes_of_type_no_expand t =
+  match t with
+  | TVoid a -> a
+  | TInt(ik, a) -> a
+  | TFloat(fk, a) -> a
+  | TPtr(ty, a) -> a
+  | TArray(ty, sz, a) -> add_attributes a (attributes_of_type_no_expand ty)
+  | TFun(ty, params, vararg, a) -> a
+  | TNamed(s, a) -> a
+  | TStruct(s, a) -> a
+  | TUnion(s, a) -> a
+  | TEnum(s, a) -> a
 
 (* Changing the attributes of a type (at top-level) *)
 (* Same hack as above for array types. *)

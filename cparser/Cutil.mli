@@ -50,6 +50,8 @@ val remove_custom_attributes : string list -> attributes -> attributes
      in the given list of names. *)
 val attributes_of_type : Env.t -> typ -> attributes
   (* Return the attributes of the given type, expanding typedefs if needed. *)
+val attributes_of_type_no_expand : typ -> attributes
+  (* Return the attributes of the given type, without expanding typedefs. *)
 val add_attributes_type : attributes -> typ -> typ
   (* Add the given set of attributes to those of the given type. *)
 val remove_attributes_type : Env.t -> attributes -> typ -> typ
