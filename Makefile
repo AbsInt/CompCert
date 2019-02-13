@@ -22,8 +22,8 @@ ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
 DIRS=lib common $(ARCHDIRS) backend cfrontend driver \
-  flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
-  cparser cparser/MenhirLib
+  flocq/Core flocq/Prop flocq/Calc flocq/IEEE754 \
+  exportclight cparser cparser/MenhirLib
 
 RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser
 
@@ -43,15 +43,12 @@ GPATH=$(DIRS)
 # Flocq
 
 FLOCQ=\
-  Fcore_Raux.v Fcore_Zaux.v Fcore_defs.v Fcore_digits.v                     \
-  Fcore_float_prop.v Fcore_FIX.v Fcore_FLT.v Fcore_FLX.v                    \
-  Fcore_FTZ.v Fcore_generic_fmt.v Fcore_rnd.v Fcore_rnd_ne.v                \
-  Fcore_ulp.v Fcore.v                                                       \
-  Fcalc_bracket.v Fcalc_digits.v Fcalc_div.v Fcalc_ops.v                    \
-  Fcalc_round.v Fcalc_sqrt.v                                                \
-  Fprop_div_sqrt_error.v Fprop_mult_error.v Fprop_plus_error.v              \
-  Fprop_relative.v Fprop_Sterbenz.v                                         \
-  Fappli_rnd_odd.v Fappli_double_round.v Fappli_IEEE.v Fappli_IEEE_bits.v
+  Raux.v Zaux.v Defs.v Digits.v Float_prop.v FIX.v FLT.v FLX.v FTZ.v \
+  Generic_fmt.v Round_pred.v Round_NE.v Ulp.v Core.v \
+  Bracket.v Div.v Operations.v Round.v Sqrt.v \
+  Div_sqrt_error.v Mult_error.v Plus_error.v \
+  Relative.v Sterbenz.v Round_odd.v Double_rounding.v \
+  Binary.v Bits.v
 
 # General-purpose libraries (in lib/)
 
