@@ -2,9 +2,9 @@
 This file is part of the Flocq formalization of floating-point
 arithmetic in Coq: http://flocq.gforge.inria.fr/
 
-Copyright (C) 2010-2013 Sylvie Boldo
+Copyright (C) 2009-2018 Sylvie Boldo
 #<br />#
-Copyright (C) 2010-2013 Guillaume Melquiond
+Copyright (C) 2009-2018 Guillaume Melquiond
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -18,9 +18,10 @@ COPYING file for more details.
 *)
 
 (** Basic operations on floats: alignment, addition, multiplication *)
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
-Require Import Fcore_float_prop.
+Require Import Raux Defs Float_prop.
+
+Set Implicit Arguments.
+Set Strongly Strict Implicit.
 
 Section Float_ops.
 
@@ -28,7 +29,7 @@ Variable beta : radix.
 
 Notation bpow e := (bpow beta e).
 
-Arguments Float {beta} Fnum Fexp.
+Arguments Float {beta}.
 
 Definition Falign (f1 f2 : float beta) :=
   let '(Float m1 e1) := f1 in
@@ -54,7 +55,7 @@ Qed.
 
 Theorem Falign_spec_exp:
   forall f1 f2 : float beta,
-  snd (Falign f1 f2) = Zmin (Fexp f1) (Fexp f2).
+  snd (Falign f1 f2) = Z.min (Fexp f1) (Fexp f2).
 Proof.
 intros (m1,e1) (m2,e2).
 unfold Falign; simpl.
@@ -76,7 +77,7 @@ Qed.
 
 Definition Fabs (f1 : float beta) : float beta :=
   let '(Float m1 e1) := f1 in
-  Float (Zabs m1)%Z e1.
+  Float (Z.abs m1)%Z e1.
 
 Theorem F2R_abs :
   forall f1 : float beta,
@@ -100,7 +101,7 @@ destruct (Falign f1 f2) as ((m1, m2), e).
 intros (H1, H2).
 rewrite H1, H2.
 unfold F2R. simpl.
-rewrite Z2R_plus.
+rewrite plus_IZR.
 apply Rmult_plus_distr_r.
 Qed.
 
@@ -116,7 +117,7 @@ Qed.
 
 Theorem Fexp_Fplus :
   forall f1 f2 : float beta,
-  Fexp (Fplus f1 f2) = Zmin (Fexp f1) (Fexp f2).
+  Fexp (Fplus f1 f2) = Z.min (Fexp f1) (Fexp f2).
 Proof.
 intros f1 f2.
 unfold Fplus.
@@ -156,7 +157,7 @@ Theorem F2R_mult :
 Proof.
 intros (m1, e1) (m2, e2).
 unfold Fmult, F2R. simpl.
-rewrite Z2R_mult, bpow_plus.
+rewrite mult_IZR, bpow_plus.
 ring.
 Qed.
 
