@@ -27,6 +27,7 @@
 # Generated files
 /.depend
 /.depend.extr
+/.depend.flocq
 /compcert.ini
 /x86/ConstpropOp.v
 /x86/SelectOp.v

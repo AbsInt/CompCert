@@ -2,9 +2,9 @@
 This file is part of the Flocq formalization of floating-point
 arithmetic in Coq: http://flocq.gforge.inria.fr/
 
-Copyright (C) 2010-2013 Sylvie Boldo
+Copyright (C) 2010-2018 Sylvie Boldo
 #<br />#
-Copyright (C) 2010-2013 Guillaume Melquiond
+Copyright (C) 2010-2018 Guillaume Melquiond
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -19,10 +19,7 @@ COPYING file for more details.
 
 (** * Sterbenz conditions for exact subtraction *)
 
-Require Import Fcore_Raux.
-Require Import Fcore_defs.
-Require Import Fcore_generic_fmt.
-Require Import Fcalc_ops.
+Require Import Raux Defs Generic_fmt Operations.
 
 Section Fprop_Sterbenz.
 
@@ -37,7 +34,7 @@ Notation format := (generic_format beta fexp).
 Theorem generic_format_plus :
   forall x y,
   format x -> format y ->
-  (Rabs (x + y) < bpow (Zmin (ln_beta beta x) (ln_beta beta y)))%R ->
+  (Rabs (x + y) <= bpow (Z.min (mag beta x) (mag beta y)))%R ->
   format (x + y)%R.
 Proof.
 intros x y Fx Fy Hxy.
@@ -48,44 +45,51 @@ destruct (Req_dec x R0) as [Zx|Zx].
 now rewrite Zx, Rplus_0_l.
 destruct (Req_dec y R0) as [Zy|Zy].
 now rewrite Zy, Rplus_0_r.
+destruct Hxy as [Hxy|Hxy].
 revert Hxy.
-destruct (ln_beta beta x) as (ex, Ex). simpl.
+destruct (mag beta x) as (ex, Ex). simpl.
 specialize (Ex Zx).
-destruct (ln_beta beta y) as (ey, Ey). simpl.
+destruct (mag beta y) as (ey, Ey). simpl.
 specialize (Ey Zy).
 intros Hxy.
 set (fx := Float beta (Ztrunc (scaled_mantissa beta fexp x)) (fexp ex)).
 assert (Hx: x = F2R fx).
 rewrite Fx at 1.
-unfold canonic_exp.
-now rewrite ln_beta_unique with (1 := Ex).
+unfold cexp.
+now rewrite mag_unique with (1 := Ex).
 set (fy := Float beta (Ztrunc (scaled_mantissa beta fexp y)) (fexp ey)).
 assert (Hy: y = F2R fy).
 rewrite Fy at 1.
-unfold canonic_exp.
-now rewrite ln_beta_unique with (1 := Ey).
+unfold cexp.
+now rewrite mag_unique with (1 := Ey).
 rewrite Hx, Hy.
 rewrite <- F2R_plus.
 apply generic_format_F2R.
 intros _.
-case_eq (Fplus beta fx fy).
+case_eq (Fplus fx fy).
 intros mxy exy Pxy.
 rewrite <- Pxy, F2R_plus, <- Hx, <- Hy.
-unfold canonic_exp.
-replace exy with (fexp (Zmin ex ey)).
+unfold cexp.
+replace exy with (fexp (Z.min ex ey)).
 apply monotone_exp.
-now apply ln_beta_le_bpow.
-replace exy with (Fexp (Fplus beta fx fy)) by exact (f_equal Fexp Pxy).
+now apply mag_le_bpow.
+replace exy with (Fexp (Fplus fx fy)) by exact (f_equal Fexp Pxy).
 rewrite Fexp_Fplus.
 simpl. clear -monotone_exp.
 apply sym_eq.
 destruct (Zmin_spec ex ey) as [(H1,H2)|(H1,H2)] ; rewrite H2.
-apply Zmin_l.
+apply Z.min_l.
 now apply monotone_exp.
-apply Zmin_r.
+apply Z.min_r.
 apply monotone_exp.
 apply Zlt_le_weak.
-now apply Zgt_lt.
+now apply Z.gt_lt.
+apply generic_format_abs_inv.
+rewrite Hxy.
+apply generic_format_bpow.
+apply valid_exp.
+case (Zmin_spec (mag beta x) (mag beta y)); intros (H1,H2);
+   rewrite H2; now apply mag_generic_gt.
 Qed.
 
 Theorem generic_format_plus_weak :
@@ -100,17 +104,17 @@ now rewrite Zx, Rplus_0_l.
 destruct (Req_dec y R0) as [Zy|Zy].
 now rewrite Zy, Rplus_0_r.
 apply generic_format_plus ; try assumption.
-apply Rle_lt_trans with (1 := Hxy).
+apply Rle_trans with (1 := Hxy).
 unfold Rmin.
 destruct (Rle_dec (Rabs x) (Rabs y)) as [Hxy'|Hxy'].
-rewrite Zmin_l.
-destruct (ln_beta beta x) as (ex, Hx).
-now apply Hx.
-now apply ln_beta_le_abs.
-rewrite Zmin_r.
-destruct (ln_beta beta y) as (ex, Hy).
-now apply Hy.
-apply ln_beta_le_abs.
+rewrite Z.min_l.
+destruct (mag beta x) as (ex, Hx).
+apply Rlt_le; now apply Hx.
+now apply mag_le_abs.
+rewrite Z.min_r.
+destruct (mag beta y) as (ex, Hy).
+apply Rlt_le; now apply Hy.
+apply mag_le_abs.
 exact Zy.
 apply Rlt_le.
 now apply Rnot_le_lt.

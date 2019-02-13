@@ -21,13 +21,14 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
+FLOCQ_DIRS=flocq/Core flocq/Prop flocq/Calc flocq/IEEE754
+
 DIRS=lib common $(ARCHDIRS) backend cfrontend driver \
-  flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
-  cparser cparser/MenhirLib
+  exportclight cparser cparser/MenhirLib
 
-RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser
+RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver exportclight cparser
 
-COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
+COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d)) -Q flocq compcert.flocq
 
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
@@ -42,16 +43,41 @@ GPATH=$(DIRS)
 
 # Flocq
 
-FLOCQ=\
-  Fcore_Raux.v Fcore_Zaux.v Fcore_defs.v Fcore_digits.v                     \
-  Fcore_float_prop.v Fcore_FIX.v Fcore_FLT.v Fcore_FLX.v                    \
-  Fcore_FTZ.v Fcore_generic_fmt.v Fcore_rnd.v Fcore_rnd_ne.v                \
-  Fcore_ulp.v Fcore.v                                                       \
-  Fcalc_bracket.v Fcalc_digits.v Fcalc_div.v Fcalc_ops.v                    \
-  Fcalc_round.v Fcalc_sqrt.v                                                \
-  Fprop_div_sqrt_error.v Fprop_mult_error.v Fprop_plus_error.v              \
-  Fprop_relative.v Fprop_Sterbenz.v                                         \
-  Fappli_rnd_odd.v Fappli_double_round.v Fappli_IEEE.v Fappli_IEEE_bits.v
+FLOCQ_FILES=\
+	Core/Raux.v \
+	Core/Zaux.v \
+	Core/Defs.v \
+	Core/Digits.v \
+	Core/Float_prop.v \
+	Core/FIX.v \
+	Core/FLT.v \
+	Core/FLX.v \
+	Core/FTZ.v \
+	Core/Generic_fmt.v \
+	Core/Round_pred.v \
+	Core/Round_NE.v \
+	Core/Ulp.v \
+	Core/Core.v \
+	Calc/Bracket.v \
+	Calc/Div.v \
+	Calc/Operations.v \
+	Calc/Round.v \
+	Calc/Sqrt.v \
+	Prop/Div_sqrt_error.v \
+	Prop/Mult_error.v \
+	Prop/Plus_error.v \
+	Prop/Relative.v \
+	Prop/Sterbenz.v \
+	Prop/Round_odd.v \
+	Prop/Double_rounding.v \
+	IEEE754/Binary.v \
+	IEEE754/Bits.v
+
+FLOCQ=$(addprefix flocq/,$(FLOCQ_FILES))
+
+$(FLOCQ:.v=.vo): COQINCLUDES=-R flocq compcert.flocq
+
+depend2: COQINCLUDES=-R flocq compcert.flocq
 
 # General-purpose libraries (in lib/)
 
@@ -122,8 +148,10 @@ DRIVER=Compopts.v Compiler.v Complements.v
 
 # All source files
 
-FILES=$(VLIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) $(FLOCQ) \
+FILES_NOFLOCQ=$(VLIB) $(COMMON) $(BACKEND) $(CFRONTEND) $(DRIVER) \
   $(PARSERVALIDATOR) $(PARSER)
+
+FILES=$(FILES_NOFLOCQ) $(FLOCQ)
 
 # Generated source files
 
@@ -133,7 +161,7 @@ GENERATED=\
   cparser/Parser.v
 
 all:
-	@test -f .depend || $(MAKE) depend
+	@test -f .depend -a -f .depend.flocq || $(MAKE) depend
 	$(MAKE) proof
 	$(MAKE) extraction
 	$(MAKE) ccomp
@@ -231,11 +259,15 @@ cparser/Parser.v: cparser/Parser.vy
 	$(MENHIR) $(MENHIR_FLAGS) --coq cparser/Parser.vy
 	@chmod a-w $@
 
-depend: $(GENERATED) depend1
+depend: $(GENERATED) depend1 depend2
 
-depend1: $(FILES) exportclight/Clightdefs.v
+depend1: $(FILES_NOFLOCQ) exportclight/Clightdefs.v
 	@echo "Analyzing Coq dependencies"
 	@$(COQDEP) $^ > .depend
+
+depend2: $(FLOCQ)
+	@echo "Analyzing Coq Flocq dependencies"
+	@$(COQDEP) $^ > .depend.flocq
 
 install:
 	install -d $(BINDIR)
@@ -250,7 +282,7 @@ ifeq ($(CLIGHTGEN),true)
 endif
 ifeq ($(INSTALL_COQDEV),true)
 	install -d $(COQDEVDIR)
-	for d in $(DIRS); do \
+	for d in $(DIRS) $(FLOCQ_DIRS); do \
           install -d $(COQDEVDIR)/$$d && \
           install -m 0644 $$d/*.vo $(COQDEVDIR)/$$d/; \
 	done
@@ -260,14 +292,14 @@ endif
 
 
 clean:
-	rm -f $(patsubst %, %/*.vo, $(DIRS))
-	rm -f $(patsubst %, %/.*.aux, $(DIRS))
+	rm -f $(patsubst %, %/*.vo, $(DIRS) $(FLOCQ_DIRS))
+	rm -f $(patsubst %, %/.*.aux, $(DIRS) $(FLOCQ_DIRS))
 	rm -rf doc/html doc/*.glob
 	rm -f driver/Version.ml
 	rm -f compcert.ini
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
-	rm -f $(GENERATED) .depend
+	rm -f $(GENERATED) .depend .depend.flocq
 	rm -f .lia.cache
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
@@ -287,5 +319,6 @@ print-includes:
 	@echo $(COQINCLUDES)
 
 -include .depend
+-include .depend.flocq
 
 FORCE:
