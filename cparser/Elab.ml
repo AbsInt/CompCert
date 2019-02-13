@@ -2366,6 +2366,13 @@ let enter_typedefs loc env sto dl =
       error loc "initializer in typedef";
     if has_std_alignas env ty then
       error loc "alignment specified for typedef '%s'" s;
+    List.iter
+      (fun a -> match class_of_attribute a with
+                | Attr_object | Attr_struct ->
+                    error loc "attribute '%s' not allowed in 'typedef'"
+                              (name_of_attribute a)
+                | _ -> ())
+      (attributes_of_type_no_expand ty);
     match previous_def Env.lookup_typedef env s with
     | Some (s',ty') when Env.in_current_scope env s' ->
         if equal_types env ty ty' then begin

@@ -119,6 +119,15 @@ let class_of_attribute = function
       try Hashtbl.find attr_class (normalize_attrname name)
       with Not_found -> Attr_unknown
 
+(* Name for printing an attribute *)
+
+let name_of_attribute = function
+  | AConst -> "const"
+  | AVolatile -> "volatile"
+  | ARestrict -> "restrict"
+  | AAlignas n -> "_Alignas"
+  | Attr(name, _) ->  name
+
 (* Is an attribute a ISO C standard attribute? *)
 
 let attr_is_standard = function

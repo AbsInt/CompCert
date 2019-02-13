@@ -81,6 +81,8 @@ val class_of_attribute: attribute -> attribute_class
      have class [Attr_type].  Custom attributes have the class that
      was given to them using [declare_attribute], or [Attr_unknown]
      if not declared. *)
+val name_of_attribute: attribute -> string
+  (* Name for printing an attribute *)
 val attr_inherited_by_members: attribute -> bool
   (* Is an attribute of a composite inherited by members of the composite? *)
 

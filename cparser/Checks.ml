@@ -18,19 +18,12 @@ open Diagnostics
 open Cutil
 open Env
 
-let attribute_string = function
-  | AConst -> "const"
-  | AVolatile -> "volatile"
-  | ARestrict -> "restrict"
-  | AAlignas n -> "_Alignas"
-  | Attr(name, _) ->  name
-
 let unknown_attrs loc attrs =
   let unknown attr =
     let attr_class = class_of_attribute attr in
     if attr_class = Attr_unknown then
       warning loc Unknown_attribute
-        "unknown attribute '%s' ignored" (attribute_string attr) in
+        "unknown attribute '%s' ignored" (name_of_attribute attr) in
   List.iter unknown attrs
 
 let unknown_attrs_typ env loc ty =
