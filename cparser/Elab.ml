@@ -661,12 +661,24 @@ let rec elab_specifier ?(only = false) loc env specifier =
      The returned name-or-struct-related attributes are applied to the
      struct/union/enum being defined.
      The leftover attributes (e.g. object attributes) will be applied
-     to the variable being defined. *)
-  let get_definition_attrs () =
+     to the variable being defined.
+     If [optmembers] is [None], name-related attributes are not returned
+     but left in !attr.  This corresponds to two use cases:
+     - A use of an already-defined struct/union/enum.  In this case
+       the name-related attributes should go to the name being declared.
+       Sending them to the struct/union/enum would cause them to be ignored,
+       with a warning.  The struct-related attributes go to the 
+       struct/union/enum, are ignored, and cause a warning.
+     - An incomplete declaration of a struct/union.  In this case
+       the name- and struct-related attributes are just ignored,
+       like GCC does.
+  *)
+  let get_definition_attrs optmembers =
     let (ta, nta) =
       List.partition
         (fun a -> match class_of_attribute a with
-                  | Attr_struct | Attr_name -> true
+                  | Attr_struct -> true
+                  | Attr_name -> optmembers <> None
                   | _ -> false)
         !attr in
     attr := nta;
@@ -727,7 +739,8 @@ let rec elab_specifier ?(only = false) loc env specifier =
 
     | [Cabs.Tstruct_union(STRUCT, id, optmembers, a)] ->
         let a' =
-          add_attributes (get_definition_attrs()) (elab_attributes env a) in
+          add_attributes (get_definition_attrs optmembers)
+                         (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union only Struct loc id optmembers a' env in
         let ty =  TStruct(id', !attr) in
@@ -736,7 +749,8 @@ let rec elab_specifier ?(only = false) loc env specifier =
 
     | [Cabs.Tstruct_union(UNION, id, optmembers, a)] ->
         let a' =
-          add_attributes (get_definition_attrs()) (elab_attributes env a) in
+          add_attributes (get_definition_attrs optmembers)
+                         (elab_attributes env a) in
         let (id', env') =
           elab_struct_or_union only Union loc id optmembers a' env in
         let ty =  TUnion(id', !attr) in
@@ -745,7 +759,8 @@ let rec elab_specifier ?(only = false) loc env specifier =
 
     | [Cabs.Tenum(id, optmembers, a)] ->
         let a' =
-          add_attributes (get_definition_attrs()) (elab_attributes env a) in
+          add_attributes (get_definition_attrs optmembers)
+                         (elab_attributes env a) in
         let (id', env') =
           elab_enum only loc id optmembers a' env in
         let ty = TEnum (id', !attr) in

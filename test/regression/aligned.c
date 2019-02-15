@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #define ALIGNED __attribute((aligned(16)))
+#define ALIGNED1 __attribute((aligned(1)))
 
 typedef ALIGNED char c16;
 
@@ -72,6 +73,10 @@ typedef T2 T3[];
 typedef struct { T3 *area; } T4;
 /* Expected: size of a pointer, alignment of a pointer */
 
+struct t1 { double d; };
+struct t2 { char c; ALIGNED1 struct t1 d; };
+/* Expected: size = 1 + 8, alignment 1 */
+
 void check(const char * msg, void * addr, size_t sz)
 {
   printf("%s: size %zu, offset mod 16 = %lu\n",
@@ -104,5 +109,7 @@ int main()
          sizeof(T4) == sizeof(void *) ? "is" : "IS NOT",
          _Alignof(T4) == _Alignof(void *) ? "is" : "IS NOT");
 
+  printf("t2: size %zu, alignment %zu\n",
+         sizeof(struct t2), _Alignof(struct t2));
   return 0;
 }
