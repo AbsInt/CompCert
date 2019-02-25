@@ -20,7 +20,7 @@ open Pre_parser_aux
 
 module SSet = Set.Make(String)
 
-let lexicon : (string, Cabs.cabsloc -> token) Hashtbl.t = Hashtbl.create 17
+let lexicon : (string, Cabs.loc -> token) Hashtbl.t = Hashtbl.create 17
 let ignored_keywords : SSet.t ref = ref SSet.empty
 
 let reserved_keyword loc id =
@@ -434,10 +434,7 @@ and singleline_comment = parse
   | _      { singleline_comment lexbuf }
 
 {
-  open Streams
-  open Specif
-  open Parser
-  open !Aut.GramDefs
+  open Parser.MenhirLibParser.Inter
 
   (* This is the main entry point to the lexer. *)
 
@@ -463,8 +460,8 @@ and singleline_comment = parse
         curr_id := None;
         let loc = currentLoc lexbuf in
         let token =
-          if SSet.mem id !types_context then TYPEDEF_NAME (id, ref TypedefId, loc)
-          else VAR_NAME (id, ref VarId, loc)
+          if SSet.mem id !types_context then Pre_parser.TYPEDEF_NAME (id, ref TypedefId, loc)
+          else Pre_parser.VAR_NAME (id, ref VarId, loc)
         in
         Queue.push token tokens;
         token
@@ -497,133 +494,129 @@ and singleline_comment = parse
   (* [tokens_stream filename text] runs the pre_parser and produces a stream
      of (appropriately classified) tokens. *)
 
-  let tokens_stream filename text : token coq_Stream =
+  let tokens_stream filename text : buffer =
     let tokens = Queue.create () in
     let buffer = ref ErrorReports.Zero in
     invoke_pre_parser filename text (lexer tokens buffer) buffer;
-    let rec compute_token_stream () =
-      let loop t v =
-        Cons (Coq_existT (t, Obj.magic v), Lazy.from_fun compute_token_stream)
-      in
+    let rec compute_buffer () =
+      let loop t = Buf_cons (t, Lazy.from_fun compute_buffer) in
       match Queue.pop tokens with
-      | ADD_ASSIGN loc -> loop ADD_ASSIGN't loc
-      | AND loc -> loop AND't loc
-      | ANDAND loc -> loop ANDAND't loc
-      | AND_ASSIGN loc -> loop AND_ASSIGN't loc
-      | AUTO loc -> loop AUTO't loc
-      | BANG loc -> loop BANG't loc
-      | BAR loc -> loop BAR't loc
-      | BARBAR loc -> loop BARBAR't loc
-      | UNDERSCORE_BOOL loc -> loop UNDERSCORE_BOOL't loc
-      | BREAK loc -> loop BREAK't loc
-      | BUILTIN_VA_ARG loc -> loop BUILTIN_VA_ARG't loc
-      | BUILTIN_OFFSETOF loc -> loop BUILTIN_OFFSETOF't loc
-      | CASE loc -> loop CASE't loc
-      | CHAR loc -> loop CHAR't loc
-      | COLON loc -> loop COLON't loc
-      | COMMA loc -> loop COMMA't loc
-      | CONST loc -> loop CONST't loc
-      | CONSTANT (cst, loc) -> loop CONSTANT't (cst, loc)
-      | CONTINUE loc -> loop CONTINUE't loc
-      | DEC loc -> loop DEC't loc
-      | DEFAULT loc -> loop DEFAULT't loc
-      | DIV_ASSIGN loc -> loop DIV_ASSIGN't loc
-      | DO loc -> loop DO't loc
-      | DOT loc -> loop DOT't loc
-      | DOUBLE loc -> loop DOUBLE't loc
-      | ELLIPSIS loc -> loop ELLIPSIS't loc
-      | ELSE loc -> loop ELSE't loc
-      | ENUM loc -> loop ENUM't loc
-      | EOF -> loop EOF't ()
-      | EQ loc -> loop EQ't loc
-      | EQEQ loc -> loop EQEQ't loc
-      | EXTERN loc -> loop EXTERN't loc
-      | FLOAT loc -> loop FLOAT't loc
-      | FOR loc -> loop FOR't loc
-      | GEQ loc -> loop GEQ't loc
-      | GOTO loc -> loop GOTO't loc
-      | GT loc -> loop GT't loc
-      | HAT loc -> loop HAT't loc
-      | IF loc -> loop IF't loc
-      | INC loc -> loop INC't loc
-      | INLINE loc -> loop INLINE't loc
-      | INT loc -> loop INT't loc
-      | LBRACE loc -> loop LBRACE't loc
-      | LBRACK loc -> loop LBRACK't loc
-      | LEFT loc -> loop LEFT't loc
-      | LEFT_ASSIGN loc -> loop LEFT_ASSIGN't loc
-      | LEQ loc -> loop LEQ't loc
-      | LONG loc -> loop LONG't loc
-      | LPAREN loc -> loop LPAREN't loc
-      | LT loc -> loop LT't loc
-      | MINUS loc -> loop MINUS't loc
-      | MOD_ASSIGN loc -> loop MOD_ASSIGN't loc
-      | MUL_ASSIGN loc -> loop MUL_ASSIGN't loc
-      | NEQ loc -> loop NEQ't loc
-      | NORETURN loc -> loop NORETURN't loc
-      | OR_ASSIGN loc -> loop OR_ASSIGN't loc
-      | PACKED loc -> loop PACKED't loc
-      | PERCENT loc -> loop PERCENT't loc
-      | PLUS loc -> loop PLUS't loc
-      | PTR loc -> loop PTR't loc
-      | QUESTION loc -> loop QUESTION't loc
-      | RBRACE loc -> loop RBRACE't loc
-      | RBRACK loc -> loop RBRACK't loc
-      | REGISTER loc -> loop REGISTER't loc
-      | RESTRICT loc -> loop RESTRICT't loc
-      | RETURN loc -> loop RETURN't loc
-      | RIGHT loc -> loop RIGHT't loc
-      | RIGHT_ASSIGN loc -> loop RIGHT_ASSIGN't loc
-      | RPAREN loc -> loop RPAREN't loc
-      | SEMICOLON loc -> loop SEMICOLON't loc
-      | SHORT loc -> loop SHORT't loc
-      | SIGNED loc -> loop SIGNED't loc
-      | SIZEOF loc -> loop SIZEOF't loc
-      | SLASH loc -> loop SLASH't loc
-      | STAR loc -> loop STAR't loc
-      | STATIC loc -> loop STATIC't loc
-      | STRING_LITERAL (wide, str, loc) ->
+      | Pre_parser.ADD_ASSIGN loc -> loop (Parser.ADD_ASSIGN loc)
+      | Pre_parser.AND loc -> loop (Parser.AND loc)
+      | Pre_parser.ANDAND loc -> loop (Parser.ANDAND loc)
+      | Pre_parser.AND_ASSIGN loc -> loop (Parser.AND_ASSIGN loc)
+      | Pre_parser.AUTO loc -> loop (Parser.AUTO loc)
+      | Pre_parser.BANG loc -> loop (Parser.BANG loc)
+      | Pre_parser.BAR loc -> loop (Parser.BAR loc)
+      | Pre_parser.BARBAR loc -> loop (Parser.BARBAR loc)
+      | Pre_parser.UNDERSCORE_BOOL loc -> loop (Parser.UNDERSCORE_BOOL loc)
+      | Pre_parser.BREAK loc -> loop (Parser.BREAK loc)
+      | Pre_parser.BUILTIN_VA_ARG loc -> loop (Parser.BUILTIN_VA_ARG loc)
+      | Pre_parser.BUILTIN_OFFSETOF loc -> loop (Parser.BUILTIN_OFFSETOF loc)
+      | Pre_parser.CASE loc -> loop (Parser.CASE loc)
+      | Pre_parser.CHAR loc -> loop (Parser.CHAR loc)
+      | Pre_parser.COLON loc -> loop (Parser.COLON loc)
+      | Pre_parser.COMMA loc -> loop (Parser.COMMA loc)
+      | Pre_parser.CONST loc -> loop (Parser.CONST loc)
+      | Pre_parser.CONSTANT (cst, loc) -> loop (Parser.CONSTANT (cst, loc))
+      | Pre_parser.CONTINUE loc -> loop (Parser.CONTINUE loc)
+      | Pre_parser.DEC loc -> loop (Parser.DEC loc)
+      | Pre_parser.DEFAULT loc -> loop (Parser.DEFAULT loc)
+      | Pre_parser.DIV_ASSIGN loc -> loop (Parser.DIV_ASSIGN loc)
+      | Pre_parser.DO loc -> loop (Parser.DO loc)
+      | Pre_parser.DOT loc -> loop (Parser.DOT loc)
+      | Pre_parser.DOUBLE loc -> loop (Parser.DOUBLE loc)
+      | Pre_parser.ELLIPSIS loc -> loop (Parser.ELLIPSIS loc)
+      | Pre_parser.ELSE loc -> loop (Parser.ELSE loc)
+      | Pre_parser.ENUM loc -> loop (Parser.ENUM loc)
+      | Pre_parser.EOF -> loop (Parser.EOF ())
+      | Pre_parser.EQ loc -> loop (Parser.EQ loc)
+      | Pre_parser.EQEQ loc -> loop (Parser.EQEQ loc)
+      | Pre_parser.EXTERN loc -> loop (Parser.EXTERN loc)
+      | Pre_parser.FLOAT loc -> loop (Parser.FLOAT loc)
+      | Pre_parser.FOR loc -> loop (Parser.FOR loc)
+      | Pre_parser.GEQ loc -> loop (Parser.GEQ loc)
+      | Pre_parser.GOTO loc -> loop (Parser.GOTO loc)
+      | Pre_parser.GT loc -> loop (Parser.GT loc)
+      | Pre_parser.HAT loc -> loop (Parser.HAT loc)
+      | Pre_parser.IF loc -> loop (Parser.IF_ loc)
+      | Pre_parser.INC loc -> loop (Parser.INC loc)
+      | Pre_parser.INLINE loc -> loop (Parser.INLINE loc)
+      | Pre_parser.INT loc -> loop (Parser.INT loc)
+      | Pre_parser.LBRACE loc -> loop (Parser.LBRACE loc)
+      | Pre_parser.LBRACK loc -> loop (Parser.LBRACK loc)
+      | Pre_parser.LEFT loc -> loop (Parser.LEFT loc)
+      | Pre_parser.LEFT_ASSIGN loc -> loop (Parser.LEFT_ASSIGN loc)
+      | Pre_parser.LEQ loc -> loop (Parser.LEQ loc)
+      | Pre_parser.LONG loc -> loop (Parser.LONG loc)
+      | Pre_parser.LPAREN loc -> loop (Parser.LPAREN loc)
+      | Pre_parser.LT loc -> loop (Parser.LT loc)
+      | Pre_parser.MINUS loc -> loop (Parser.MINUS loc)
+      | Pre_parser.MOD_ASSIGN loc -> loop (Parser.MOD_ASSIGN loc)
+      | Pre_parser.MUL_ASSIGN loc -> loop (Parser.MUL_ASSIGN loc)
+      | Pre_parser.NEQ loc -> loop (Parser.NEQ loc)
+      | Pre_parser.NORETURN loc -> loop (Parser.NORETURN loc)
+      | Pre_parser.OR_ASSIGN loc -> loop (Parser.OR_ASSIGN loc)
+      | Pre_parser.PACKED loc -> loop (Parser.PACKED loc)
+      | Pre_parser.PERCENT loc -> loop (Parser.PERCENT loc)
+      | Pre_parser.PLUS loc -> loop (Parser.PLUS loc)
+      | Pre_parser.PTR loc -> loop (Parser.PTR loc)
+      | Pre_parser.QUESTION loc -> loop (Parser.QUESTION loc)
+      | Pre_parser.RBRACE loc -> loop (Parser.RBRACE loc)
+      | Pre_parser.RBRACK loc -> loop (Parser.RBRACK loc)
+      | Pre_parser.REGISTER loc -> loop (Parser.REGISTER loc)
+      | Pre_parser.RESTRICT loc -> loop (Parser.RESTRICT loc)
+      | Pre_parser.RETURN loc -> loop (Parser.RETURN loc)
+      | Pre_parser.RIGHT loc -> loop (Parser.RIGHT loc)
+      | Pre_parser.RIGHT_ASSIGN loc -> loop (Parser.RIGHT_ASSIGN loc)
+      | Pre_parser.RPAREN loc -> loop (Parser.RPAREN loc)
+      | Pre_parser.SEMICOLON loc -> loop (Parser.SEMICOLON loc)
+      | Pre_parser.SHORT loc -> loop (Parser.SHORT loc)
+      | Pre_parser.SIGNED loc -> loop (Parser.SIGNED loc)
+      | Pre_parser.SIZEOF loc -> loop (Parser.SIZEOF loc)
+      | Pre_parser.SLASH loc -> loop (Parser.SLASH loc)
+      | Pre_parser.STAR loc -> loop (Parser.STAR loc)
+      | Pre_parser.STATIC loc -> loop (Parser.STATIC loc)
+      | Pre_parser.STRING_LITERAL (wide, str, loc) ->
           (* Merge consecutive string literals *)
           let rec doConcat wide str =
-            try
-              match Queue.peek tokens with
-              | STRING_LITERAL (wide', str', loc) ->
-                  ignore (Queue.pop tokens);
-                  let (wide'', str'') = doConcat wide' str' in
-                  if str'' <> []
-                  then (wide || wide'', str @ str'')
-                  else (wide, str)
-              | _ ->
-                  (wide, str)
-            with Queue.Empty -> (wide, str) in
-          let (wide', str') = doConcat wide str in
-          loop STRING_LITERAL't ((wide', str'), loc)
-      | STRUCT loc -> loop STRUCT't loc
-      | SUB_ASSIGN loc -> loop SUB_ASSIGN't loc
-      | SWITCH loc -> loop SWITCH't loc
-      | TILDE loc -> loop TILDE't loc
-      | TYPEDEF loc -> loop TYPEDEF't loc
-      | TYPEDEF_NAME (id, typ, loc)
-      | VAR_NAME (id, typ, loc) ->
-          let terminal = match !typ with
-            | VarId -> VAR_NAME't
-            | TypedefId -> TYPEDEF_NAME't
-            | OtherId -> OTHER_NAME't
+            match Queue.peek tokens with
+            | Pre_parser.STRING_LITERAL (wide', str', loc) ->
+               ignore (Queue.pop tokens);
+               let (wide'', str'') = doConcat wide' str' in
+               if str'' <> []
+               then (wide || wide'', str @ str'')
+               else (wide, str)
+            | _ -> (wide, str)
+            | exception Queue.Empty -> (wide, str)
           in
-          loop terminal (id, loc)
-      | UNION loc -> loop UNION't loc
-      | UNSIGNED loc -> loop UNSIGNED't loc
-      | VOID loc -> loop VOID't loc
-      | VOLATILE loc -> loop VOLATILE't loc
-      | WHILE loc -> loop WHILE't loc
-      | XOR_ASSIGN loc -> loop XOR_ASSIGN't loc
-      | ALIGNAS loc -> loop ALIGNAS't loc
-      | ALIGNOF loc -> loop ALIGNOF't loc
-      | ATTRIBUTE loc -> loop ATTRIBUTE't loc
-      | ASM loc -> loop ASM't loc
-      | PRAGMA (s, loc) -> loop PRAGMA't (s, loc)
-      | PRE_NAME _ -> assert false
+          let (wide', str') = doConcat wide str in
+          loop (Parser.STRING_LITERAL ((wide', str'), loc))
+      | Pre_parser.STRUCT loc -> loop (Parser.STRUCT loc)
+      | Pre_parser.SUB_ASSIGN loc -> loop (Parser.SUB_ASSIGN loc)
+      | Pre_parser.SWITCH loc -> loop (Parser.SWITCH loc)
+      | Pre_parser.TILDE loc -> loop (Parser.TILDE loc)
+      | Pre_parser.TYPEDEF loc -> loop (Parser.TYPEDEF loc)
+      | Pre_parser.TYPEDEF_NAME (id, typ, loc)
+      | Pre_parser.VAR_NAME (id, typ, loc) ->
+          begin match !typ with
+          | VarId -> loop (Parser.VAR_NAME (id, loc))
+          | TypedefId -> loop (Parser.TYPEDEF_NAME (id, loc))
+          | OtherId -> loop (Parser.OTHER_NAME (id, loc))
+          end
+      | Pre_parser.UNION loc -> loop (Parser.UNION loc)
+      | Pre_parser.UNSIGNED loc -> loop (Parser.UNSIGNED loc)
+      | Pre_parser.VOID loc -> loop (Parser.VOID loc)
+      | Pre_parser.VOLATILE loc -> loop (Parser.VOLATILE loc)
+      | Pre_parser.WHILE loc -> loop (Parser.WHILE loc)
+      | Pre_parser.XOR_ASSIGN loc -> loop (Parser.XOR_ASSIGN loc)
+      | Pre_parser.ALIGNAS loc -> loop (Parser.ALIGNAS loc)
+      | Pre_parser.ALIGNOF loc -> loop (Parser.ALIGNOF loc)
+      | Pre_parser.ATTRIBUTE loc -> loop (Parser.ATTRIBUTE loc)
+      | Pre_parser.ASM loc -> loop (Parser.ASM loc)
+      | Pre_parser.PRAGMA (s, loc) -> loop (Parser.PRAGMA (s, loc))
+      | Pre_parser.PRE_NAME _ -> assert false
     in
-    Lazy.from_fun compute_token_stream
+    Lazy.from_fun compute_buffer
 
 }

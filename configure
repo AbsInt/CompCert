@@ -553,15 +553,12 @@ else
   ocaml_opt_comp=false
 fi
 
-MENHIR_REQUIRED=20161201
-MENHIR_NEW_API=20180530
-MENHIR_MAX=20181113
-menhir_flags=''
+MENHIR_REQUIRED=20190613
 echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
   20[0-9][0-9][0-9][0-9][0-9][0-9])
-      if test "$menhir_ver" -ge $MENHIR_REQUIRED -a "$menhir_ver" -le $MENHIR_MAX; then
+      if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
           echo "version $menhir_ver -- good!"
           menhir_include_dir=`menhir --suggest-menhirLib`
           if test -z "$menhir_include_dir"; then
@@ -570,12 +567,9 @@ case "$menhir_ver" in
               echo "Consider using the OPAM package for Menhir."
               missingtools=true
           fi
-          if test "$menhir_ver" -ge $MENHIR_NEW_API; then
-              menhir_flags="--coq-lib-path compcert.cparser.MenhirLib"
-          fi
       else
           echo "version $menhir_ver -- UNSUPPORTED"
-          echo "Error: CompCert requires a version of Menhir between $MENHIR_REQUIRED and $MENHIR_MAX, included."
+          echo "Error: CompCert requires a version greater or equal to $MENHIR_REQUIRED."
           missingtools=true
       fi;;
   *)
@@ -639,7 +633,8 @@ echo "-R lib compcert.lib \
 -R driver compcert.driver \
 -R flocq compcert.flocq \
 -R exportclight compcert.exportclight \
--R cparser compcert.cparser" > _CoqProject
+-R cparser compcert.cparser \
+-R MenhirLib compcert.MenhirLib" > _CoqProject
 case $arch in
     x86)
         echo "-R x86_${bitsize} compcert.x86_${bitsize}" >> _CoqProject
@@ -661,7 +656,6 @@ SHAREDIR=$sharedir
 COQDEVDIR=$coqdevdir
 OCAML_OPT_COMP=$ocaml_opt_comp
 MENHIR_INCLUDES=-I "$menhir_include_dir"
-MENHIR_FLAGS=$menhir_flags
 COMPFLAGS=-bin-annot
 EOF
 

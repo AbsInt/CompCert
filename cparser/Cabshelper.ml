@@ -16,11 +16,6 @@
 
 open Cabs
 
-let cabslu = {lineno = -10;
-	      filename = "cabs loc unknown";
-	      byteno = -10;
-              ident = 0}
-
 (*********** HELPER FUNCTIONS **********)
 
 let rec isStatic = function
@@ -44,13 +39,13 @@ let rec isTypedef = function
   | _ :: rest -> isTypedef rest
 
 
-let get_definitionloc (d : definition) : cabsloc =
+let get_definitionloc (d : definition) : loc =
   match d with
   | FUNDEF(_, _, _, _, l) -> l
   | DECDEF(_, l) -> l
   | PRAGMA(_, l) -> l
 
-let get_statementloc (s : statement) : cabsloc =
+let get_statementloc (s : statement) : loc =
 begin
   match s with
   | NOP(loc) -> loc
@@ -72,8 +67,8 @@ begin
   | ASM(_,_,_,_,_,_,loc) -> loc
 end
 
-let string_of_cabsloc l =
+let string_of_loc l =
   Printf.sprintf "%s:%d" l.filename l.lineno
 
-let format_cabsloc pp l =
+let format_loc pp l =
   Format.fprintf pp "%s:%d" l.filename l.lineno

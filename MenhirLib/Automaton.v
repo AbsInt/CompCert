@@ -1,23 +1,20 @@
-(* *********************************************************************)
-(*                                                                     *)
-(*              The Compcert verified compiler                         *)
-(*                                                                     *)
-(*          Jacques-Henri Jourdan, INRIA Paris-Rocquencourt            *)
-(*                                                                     *)
-(*  Copyright Institut National de Recherche en Informatique et en     *)
-(*  Automatique.  All rights reserved.  This file is distributed       *)
-(*  under the terms of the GNU General Public License as published by  *)
-(*  the Free Software Foundation, either version 2 of the License, or  *)
-(*  (at your option) any later version.  This file is also distributed *)
-(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
-(*                                                                     *)
-(* *********************************************************************)
+(****************************************************************************)
+(*                                                                          *)
+(*                                   Menhir                                 *)
+(*                                                                          *)
+(*           Jacques-Henri Jourdan, CNRS, LRI, Université Paris Sud         *)
+(*                                                                          *)
+(*  Copyright Inria. All rights reserved. This file is distributed under    *)
+(*  the terms of the GNU Lesser General Public License as published by the  *)
+(*  Free Software Foundation, either version 3 of the License, or (at your  *)
+(*  option) any later version, as described in the file LICENSE.            *)
+(*                                                                          *)
+(****************************************************************************)
 
 Require Grammar.
-Require Import Orders.
 Require Export Alphabet.
-Require Export List.
-Require Export Syntax.
+From Coq Require Import Orders.
+From Coq Require Export List Syntax.
 
 Module Type AutInit.
   (** The grammar of the automaton. **)
