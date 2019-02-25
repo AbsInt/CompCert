@@ -239,6 +239,7 @@ Inductive instruction : Type :=
   | Pld: ireg -> constant -> ireg -> instruction              (**r load 64-bit int (PPC64) *)
   | Pldx: ireg -> ireg -> ireg -> instruction                 (**r same, with 2 index regs *)
   | Pld_a: ireg -> constant -> ireg -> instruction            (**r load 64-bit quantity to int reg (PPC64) *)
+  | Pldbrx: ireg -> ireg -> ireg -> instruction               (**r load 64-bit int and reverse endianness (PPC64) *)
   | Pldx_a: ireg -> ireg -> ireg -> instruction               (**r same, with 2 index regs *)
   | Plfd: freg -> constant -> ireg -> instruction             (**r load 64-bit float *)
   | Plfdx: freg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
@@ -307,6 +308,7 @@ Inductive instruction : Type :=
   | Pstbx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs *)
   | Pstd: ireg -> constant -> ireg -> instruction             (**r store 64-bit integer (PPC64) *)
   | Pstdx: ireg -> ireg -> ireg -> instruction                (**r same, with 2 index regs (PPC64) *)
+  | Pstdbrx: ireg -> ireg -> ireg -> instruction              (**r store 64-bit int with reverse endianness (PPC64) *)
   | Pstdu: ireg -> constant -> ireg -> instruction            (**r store 64-bit integer with update (PPC64) *)
   | Pstd_a: ireg -> constant -> ireg -> instruction           (**r store 64-bit quantity from int reg (PPC64) *)
   | Pstdx_a: ireg -> ireg -> ireg -> instruction              (**r same, with 2 index regs (PPC64) *)
@@ -1077,6 +1079,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Picbi _ _
   | Picbtls _ _ _
   | Pisync
+  | Pldbrx _ _ _
   | Plwsync
   | Plhbrx _ _ _
   | Plwzu _ _ _
@@ -1086,6 +1089,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmtspr _ _
   | Prldicl _ _ _ _
   | Prldimi _ _ _ _
+  | Pstdbrx _ _ _
   | Pstdu _ _ _
   | Pstwbrx _ _ _
   | Pstwcx_ _ _ _
@@ -1125,6 +1129,15 @@ Definition preg_of (r: mreg) : preg :=
   | F24 => FPR24 | F25 => FPR25 | F26 => FPR26 | F27 => FPR27
   | F28 => FPR28 | F29 => FPR29 | F30 => FPR30 | F31 => FPR31
   end.
+
+(** Undefine all registers except SP and callee-save registers *)
+
+Definition undef_caller_save_regs (rs: regset) : regset :=
+  fun r =>
+    if preg_eq r SP
+    || In_dec preg_eq r (List.map preg_of (List.filter is_callee_save all_mregs))
+    then rs r
+    else Vundef.
 
 (** Extract the values of the arguments of an external call.
     We exploit the calling conventions from module [Conventions], except that
@@ -1185,7 +1198,7 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge b = Some (External ef) ->
       external_call ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
-      rs' = (set_pair (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA) ->
+      rs' = (set_pair (loc_external_result (ef_sig ef)) res (undef_caller_save_regs rs)) #PC <- (rs RA) ->
       step (State rs m) t (State rs' m').
 
 End RELSEM.

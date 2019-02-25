@@ -644,7 +644,7 @@ let add_interfs_instr g instr live =
       (* Reloads from incoming slots can occur when some 64-bit
          parameters are split and passed as two 32-bit stack locations. *)
       begin match src with
-      | L(Locations.S(Incoming, _, _)) -> 
+      | L(Locations.S(Incoming, _, _)) ->
           add_interfs_def g (vmreg temp_for_parent_frame) live
       | _ -> ()
       end
@@ -1210,9 +1210,9 @@ let regalloc f =
         Errors.OK(first_round f3 liveness)
       with
       | Timeout ->
-          Errors.Error(Errors.msg (coqstring_of_camlstring "Spilling fails to converge"))
+          Errors.Error(Errors.msg (coqstring_of_camlstring "spilling fails to converge"))
       | Type_error_at pc ->
-          Errors.Error [Errors.MSG(coqstring_of_camlstring "Ill-typed XTL code at PC ");
+          Errors.Error [Errors.MSG(coqstring_of_camlstring "ill-typed XTL code at PC ");
                  Errors.POS pc]
       | Bad_LTL ->
-          Errors.Error(Errors.msg (coqstring_of_camlstring "Bad LTL after spilling"))
+          Errors.Error(Errors.msg (coqstring_of_camlstring "bad LTL after spilling"))

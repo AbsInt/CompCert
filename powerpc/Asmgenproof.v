@@ -918,8 +918,8 @@ Local Transparent destroyed_by_jumptable.
   apply plus_one. eapply exec_step_external; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
-  unfold loc_external_result.
-  apply agree_set_other; auto. apply agree_set_pair; auto.
+  unfold loc_external_result. apply agree_set_other; auto. apply agree_set_pair; auto.
+  apply agree_undef_caller_save_regs; auto. 
 
 - (* return *)
   inv STACKS. simpl in *.

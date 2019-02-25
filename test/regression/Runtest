@@ -9,6 +9,9 @@ out="test$$.log"
 rm -f $out
 trap "rm -f $out" 0 INT QUIT
 
+# Is the test expected to fail?
+expect_fail=false
+
 # The architecture and the bitsize
 arch=`sed -n -e 's/^ARCH=//p' ../../Makefile.config`
 bits=`sed -n -e 's/^BITSIZE=//p' ../../Makefile.config`
@@ -26,10 +29,23 @@ else
   ref=""
 fi
 
+# Special conditions
+
+if test -f "$name.cond"; then
+  RUN=0 SKIP=1 EXPECT_FAIL=2 sh "$name.cond"
+  case "$?" in
+    1) echo "$name: skipped"; exit 0;;
+    2) expect_fail=true;;
+  esac
+fi
+
 # Administer the test
 if $SIMU $* > $out
 then
-  if test -n "$ref"; then
+  if $expect_fail; then
+    echo "$name: ERROR (should have failed but did not)"
+    exit 2
+  elif test -n "$ref"; then
     if cmp -s "$out" "$ref"; then
       echo "$name: passed"
       exit 0
@@ -43,7 +59,13 @@ then
     exit 0
   fi
 else
-  echo "$name: EXECUTION FAILED (status $?)"
-  exit 2
+  retcode=$?
+  if $expect_fail; then
+    echo "$name: passed (failed as expected)"
+    exit 0
+  else
+    echo "$name: EXECUTION FAILED (status $retcode)"
+    exit 2
+  fi
 fi
 

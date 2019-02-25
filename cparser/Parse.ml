@@ -19,7 +19,7 @@ module CharSet = Set.Make(struct type t = char let compare = compare end)
 
 let transform_program t p name =
   let run_pass pass flag p = if CharSet.mem flag t then pass p else p in
-  let p1 = (run_pass StructReturn.program 's'
+  let p1 = (run_pass StructPassing.program 's'
   (run_pass PackedStructs.program 'p'
   (run_pass Unblock.program 'b'
   (run_pass Bitfields.program 'f'
@@ -46,7 +46,7 @@ let read_file sourcefile =
   text
 
 let preprocessed_file transfs name sourcefile =
-  Cerrors.reset();
+  Diagnostics.reset();
   (* Reading the whole file at once may seem costly, but seems to be
      the simplest / most robust way of accessing the text underlying
      a range of positions. This is used when printing an error message.
@@ -55,7 +55,6 @@ let preprocessed_file transfs name sourcefile =
      on my machine. *)
   let text = read_file sourcefile in
   let p =
-    try
       let t = parse_transformations transfs in
       let rec inf = Datatypes.S inf in
       let ast : Cabs.definition list =
@@ -70,13 +69,11 @@ let preprocessed_file transfs name sourcefile =
              | Parser.Parser.Inter.Fail_pr ->
                  (* Theoretically impossible : implies inconsistencies
                     between grammars. *)
-                 Cerrors.fatal_error Cutil.no_loc "Internal error while parsing"
+               Diagnostics.fatal_error Diagnostics.no_loc "internal error while parsing"
              | Parser.Parser.Inter.Timeout_pr -> assert false
              | Parser.Parser.Inter.Parsed_pr (ast, _ ) -> ast) in
       let p1 = Timing.time "Elaboration" Elab.elab_file ast in
-      Cerrors.raise_on_errors ();
-      Timing.time2 "Emulations" transform_program t p1 name
-    with
-    | Cerrors.Abort ->
-        [] in
-  if Cerrors.check_errors() then None else Some p
+      Diagnostics.check_errors ();
+      Timing.time2 "Emulations" transform_program t p1 name in
+  Diagnostics.check_errors();
+  p

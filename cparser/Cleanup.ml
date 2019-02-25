@@ -93,7 +93,7 @@ let rec add_stmt s =
   | Scontinue -> ()
   | Sswitch(e, s1) -> add_exp e; add_stmt s1
   | Slabeled(lbl, s) ->
-      begin match lbl with Scase e -> add_exp e | _ -> () end;
+      begin match lbl with Scase(e, _) -> add_exp e | _ -> () end;
       add_stmt s
   | Sgoto lbl -> ()
   | Sreturn None -> ()
@@ -118,7 +118,12 @@ let add_enum e =
     e
 
 (* Saturate the set of referenced identifiers, starting with externally
-   visible global declarations *)
+   visible global declarations.
+
+   Externally-visible globals include a minima:
+   - Definitions of functions, unless "static" or "inline".
+   - Declaration of variables with default storage.
+*)
 
 let visible_decl (sto, id, ty, init) =
   sto = Storage_default &&
@@ -129,7 +134,7 @@ let visible_fundef f =
   | Storage_default -> not f.fd_inline
   | Storage_extern -> true
   | Storage_static -> false
-  | Storage_register -> assert false
+  | Storage_auto | Storage_register -> assert false
 
 let rec add_init_globdecls accu = function
   | [] -> accu

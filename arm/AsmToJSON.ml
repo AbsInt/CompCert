@@ -30,7 +30,7 @@ let mnemonic_names = [ "Padc"; "Padd"; "Padds"; "Pand";"Pannot"; "Pasr"; "Pb"; "
                        "Pftouizs"; "Pfuitod"; "Pfuitos"; "Pinlineasm"; "Pisb"; "Plabel"; "Pldr";
                        "Ploadsymbol_lbl"; "Pldr_p"; "Pldrb"; "Pldrb_p"; "Pldrh"; "Pldrh_p"; "Pldrsb";
                        "Pldrsh"; "Plsl"; "Plsr"; "Pmla"; "Pmov"; "Pmovite";
-                       "Pmovt"; "Pmovw"; "Pmul"; "Pmvn";  "Ploadsymbol_imm"; "Porr";
+                       "Pmovt"; "Pmovw"; "Pmul"; "Pmvn";  "Ploadsymbol_imm"; "Pnop"; "Porr";
                        "Ppush"; "Prev"; "Prev16"; "Prsb"; "Prsbs"; "Prsc"; "Psbc"; "Psbfx"; "Psdiv"; "Psmull";
                        "Pstr"; "Pstr_p"; "Pstrb"; "Pstrb_p"; "Pstrh"; "Pstrh_p"; "Psub"; "Psubs"; "Pudiv";
                        "Pumull" ]
@@ -130,10 +130,11 @@ let pp_arg pp = function
 
 let pp_instructions pp ic =
   let ic = List.filter (fun s -> match s with
-      | Pbuiltin (ef,_,_) ->
+      | Pbuiltin (ef,args,_) ->
         begin match ef with
-          | EF_inline_asm _
-          | EF_annot _ -> true
+          | EF_inline_asm _ -> true
+          | EF_annot  (kind,txt,targs) ->
+            P.to_int kind = 2 && AisAnnot.json_ais_annot TargetPrinter.preg_annot "r13" (camlstring_of_coqstring txt) args <> []
           | _ -> false
         end
       (* Only debug relevant *)
@@ -154,21 +155,20 @@ let pp_instructions pp ic =
       begin match ef with
         | EF_inline_asm _ ->
           instruction pp "Pinlineasm" [Id];
-          Cerrors.warning ("", -10) Cerrors.Inline_asm_sdump "inline assembler is not supported in sdump"
+          Diagnostics.(warning no_loc Inline_asm_sdump "inline assembler is not supported in sdump")
         | EF_annot (kind,txt, targs) ->
-          let annot_string = PrintAsmaux.annot_text TargetPrinter.preg_annot "r1" (camlstring_of_coqstring txt) args in
-          let len = String.length annot_string in
-          let buf = Buffer.create len in
-          String.iter (fun c -> begin match c with
-              | '\\' | '"' -> Buffer.add_char buf '\\'
-              | _ -> () end;
-              Buffer.add_char buf c) annot_string;
-          let annot_string = Buffer.contents buf in
-        let kind = match P.to_int kind with
-          | 1 -> "normal"
-          | 2 -> "ais"
-          | _ -> assert false in
-          instruction pp "Pannot" [String kind;String annot_string]
+
+          begin match P.to_int kind with
+          | 2 ->
+            let annots = AisAnnot.json_ais_annot TargetPrinter.preg_annot "r13" (camlstring_of_coqstring txt) args in
+            let annots = List.map (function
+                | AisAnnot.String s -> String s
+                | AisAnnot.Symbol s -> Atom s
+                | AisAnnot.Label _ -> assert false (* should never happen *)
+              ) annots in
+            instruction pp "Pannot" annots
+          | _ -> assert false
+          end
         (* Builtins that are not exported to JSON *)
         | EF_annot_val _
         | EF_builtin _
@@ -263,6 +263,7 @@ let pp_instructions pp ic =
     | Pmovw(r1, n) -> instruction pp "Pmovw" [Ireg r1; Long n]
     | Pmul(r1, r2, r3) -> instruction pp "Pmul" [Ireg r1; Ireg r2; Ireg r3]
     | Pmvn(r1, so) -> instruction pp "Pmvn" [Ireg r1; Shift so]
+    | Pnop -> instruction pp "Pnop" []
     | Porr(r1, r2, so) -> instruction pp "Porr" [Ireg r1; Ireg r2; Shift so]
     | Ppush(rl) -> instruction pp "Ppush" (List.map (fun r -> Ireg r) rl)
     | Prev(r1, r2) -> instruction pp "Prev" [Ireg r1; Ireg r2]
@@ -310,7 +311,7 @@ let print_if prog sourcename =
   | None -> ()
   | Some f ->
     let f = Filename.concat !sdump_folder f in
-    let oc = open_out f in
+    let oc = open_out_bin f in
     JsonAST.pp_ast (Format.formatter_of_out_channel oc) pp_instructions prog sourcename;
     close_out oc
 

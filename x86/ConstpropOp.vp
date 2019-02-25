@@ -72,16 +72,28 @@ Nondetfunction cond_strength_reduction
 Definition make_cmp_base (c: condition) (args: list reg) (vl: list aval) :=
   let (c', args') := cond_strength_reduction c args vl in (Ocmp c', args').
 
+Definition make_cmp_imm_eq (c: condition) (args: list reg) (vl: list aval) 
+                           (n: int) (r1: reg) (v1: aval) :=
+  if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
+  else if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
+  else make_cmp_base c args vl.
+
+Definition make_cmp_imm_ne (c: condition) (args: list reg) (vl: list aval) 
+                           (n: int) (r1: reg) (v1: aval) :=
+  if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
+  else if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
+  else make_cmp_base c args vl.
+
 Nondetfunction make_cmp (c: condition) (args: list reg) (vl: list aval) :=
   match c, args, vl with
   | Ccompimm Ceq n, r1 :: nil, v1 :: nil =>
-      if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
-      else if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
-      else make_cmp_base c args vl
+      make_cmp_imm_eq c args vl n r1 v1
   | Ccompimm Cne n, r1 :: nil, v1 :: nil =>
-      if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
-      else if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
-      else make_cmp_base c args vl
+      make_cmp_imm_ne c args vl n r1 v1
+  | Ccompuimm Ceq n, r1 :: nil, v1 :: nil =>
+      make_cmp_imm_eq c args vl n r1 v1
+  | Ccompuimm Cne n, r1 :: nil, v1 :: nil =>
+      make_cmp_imm_ne c args vl n r1 v1
   | _, _, _ =>
       make_cmp_base c args vl
   end.
@@ -192,11 +204,11 @@ Nondetfunction addr_strength_reduction_64
 
 Definition addr_strength_reduction
                 (addr: addressing) (args: list reg) (vl: list aval) :=
-  if Archi.ptr64 then
-    let addr_args' := addr_strength_reduction_64 addr args vl in
-    if addressing_valid (fst addr_args') then addr_args' else (addr, args)
-  else
-    addr_strength_reduction_32 addr args vl.
+  let addr_args' := 
+    if Archi.ptr64
+    then addr_strength_reduction_64 addr args vl
+    else addr_strength_reduction_32 addr args vl in
+  if addressing_valid (fst addr_args') then addr_args' else (addr, args).
 
 Definition make_addimm (n: int) (r: reg) :=
   if Int.eq n Int.zero

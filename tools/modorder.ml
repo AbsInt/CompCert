@@ -29,7 +29,7 @@ type node = {
 
 let re_continuation_line = Str.regexp "\\(.*\\)\\\\[ \t]*$"
 
-let re_depend_line = Str.regexp "\\([^ ]+\\) *:\\(.*\\)$"
+let re_depend_line = Str.regexp "\\([^:]*\\):\\(.*\\)$"
 
 let re_whitespace = Str.regexp "[ \t\n]+"
 
@@ -51,12 +51,14 @@ let parse_dependencies depfile =
     end else begin
       let lhs = Str.matched_group 1 l
       and rhs = Str.matched_group 2 l in
-      let node = {
-        deps = Str.split re_whitespace rhs;
-        result = rhs;
-        status = Todo
-      } in
-      Hashtbl.add deps lhs node
+      let lhs = Str.split re_whitespace lhs
+      and rhs = Str.split re_whitespace rhs in
+      List.iter (fun lhs -> let node = {
+          deps = rhs;
+          result = lhs;
+          status = Todo
+        } in
+          Hashtbl.add deps lhs node) lhs
     end in
 
   begin try

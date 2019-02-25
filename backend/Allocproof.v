@@ -1317,15 +1317,6 @@ Proof.
   eauto.
 Qed.
 
-Definition callee_save_loc (l: loc) :=
-  match l with
-  | R r => is_callee_save r = true
-  | S sl ofs ty => sl <> Outgoing
-  end.
-
-Definition agree_callee_save (ls1 ls2: locset) : Prop :=
-  forall l, callee_save_loc l -> ls1 l = ls2 l.
-
 Lemma return_regs_agree_callee_save:
   forall caller callee,
   agree_callee_save caller (return_regs caller callee).
@@ -2476,10 +2467,10 @@ Proof.
   rewrite Locmap.gss. rewrite Locmap.gso by (red; auto). rewrite Locmap.gss.
   rewrite val_longofwords_eq_1 by auto. auto.
   red; intros. rewrite (AG l H0).
-  symmetry; apply Locmap.gpo.
-  assert (X: forall r, is_callee_save r = false -> Loc.diff l (R r)).
-  { intros. destruct l; simpl in *. congruence. auto. }
-  generalize (loc_result_caller_save (ef_sig ef)). destruct (loc_result (ef_sig ef)); simpl; intuition auto.
+  rewrite locmap_get_set_loc_result_callee_save by auto.
+  unfold undef_caller_save_regs. destruct l; simpl in H0.
+  rewrite H0; auto.
+  destruct sl; auto; congruence.
   eapply external_call_well_typed; eauto.
 
 (* return *)

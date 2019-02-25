@@ -153,12 +153,13 @@ Definition normalize_addrmode_32 (a: addrmode) :=
 Definition normalize_addrmode_64 (a: addrmode) :=
   match a with
   | Addrmode base ofs (inl n) =>
-      let n' := Int.signed (Int.repr n) in
-      if zeq n' n
+      if Op.offset_in_range n
       then (a, None)
       else (Addrmode base ofs (inl _ 0), Some (Int64.repr n))
-  | Addrmode base ofs (inr _) =>
-      (a, None)
+  | Addrmode base ofs (inr (id, delta)) =>
+      if Op.ptroffset_in_range delta || negb Archi.ptr64
+      then (a, None)
+      else (Addrmode base ofs (inr _ (id, Ptrofs.zero)), Some (Ptrofs.to_int64 delta))
   end.
 
 (** Floating-point comparison.  We swap the operands in some cases
