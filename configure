@@ -555,7 +555,7 @@ fi
 
 MENHIR_REQUIRED=20161201
 MENHIR_NEW_API=20180530
-MENHIR_MAX=20181026
+MENHIR_MAX=20181113
 menhir_flags=''
 echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
