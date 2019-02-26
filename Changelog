@@ -25,7 +25,7 @@ Coq development:
 - Support Coq version 8.9.0
 - Avoid using "refine mode" when defining Instance
   (contributed by Maxime Dénès)
-- Do not support Menhir versions more recent than 20181026, because
+- Do not support Menhir versions more recent than 20181113, because
   they will introduce an incompatibility with this CompCert release.
 
 New feature:
