@@ -156,6 +156,9 @@ Proof.
   unfold Regmap.set. destruct (RegEq.eq r a); auto.
 Qed.
 
+Definition undef_caller_save_regs (rs: regset) : regset :=
+  fun r => if is_callee_save r then rs r else Vundef.
+
 Definition set_pair (p: rpair mreg) (v: val) (rs: regset) : regset :=
   match p with
   | One r => rs#r <- v
@@ -491,7 +494,7 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge fb = Some (External ef) ->
       extcall_arguments rs m (parent_sp s) (ef_sig ef) args ->
       external_call ef ge args m t res m' ->
-      rs' = set_pair (loc_result (ef_sig ef)) res rs ->
+      rs' = set_pair (loc_result (ef_sig ef)) res (undef_caller_save_regs rs) ->
       step (Callstate s fb rs m)
          t (Returnstate s rs' m')
   | exec_return:

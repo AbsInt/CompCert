@@ -42,6 +42,11 @@ let builtins = {
       (TInt(IInt, []), [TInt(IULongLong, [])], false);
     "__builtin_cmpb",
       (TInt (IUInt, []),  [TInt(IUInt, []);TInt(IUInt, [])], false);
+    (* Integer arithmetic in 32/64-bit hybrid mode *)
+    "__builtin_mulhd",
+      (TInt(ILongLong, []), [TInt(ILongLong, []); TInt(ILongLong, [])], false);
+    "__builtin_mulhdu",
+      (TInt(IULongLong, []), [TInt(IULongLong, []); TInt(IULongLong, [])], false);
     (* Float arithmetic *)
     "__builtin_fmadd",
       (TFloat(FDouble, []),
@@ -80,6 +85,11 @@ let builtins = {
       (TVoid [], [TPtr(TInt(IUShort, []), []); TInt(IUShort, [])], false);
     "__builtin_write32_reversed",
       (TVoid [], [TPtr(TInt(IUInt, []), []); TInt(IUInt, [])], false);
+    (* Memory accesses in 32/64-bit hybrid mode *)
+    "__builtin_read64_reversed",
+      (TInt(IULongLong, []), [TPtr(TInt(IULongLong, [AConst]), [])], false);
+    "__builtin_write64_reversed",
+      (TVoid [], [TPtr(TInt(IULongLong, []), []); TInt(IULongLong, [])], false);
     (* Synchronization *)
     "__builtin_eieio",
       (TVoid [], [], false);
@@ -113,7 +123,7 @@ let builtins = {
       (TInt(IUInt, []), [TInt(IInt, [])], false);
     "__builtin_set_spr",
       (TVoid [], [TInt(IInt, []); TInt(IUInt, [])], false);
-    (* Access to special registers in 32bit hybrid mode*)
+    (* Access to special registers in 32/64-bit hybrid mode *)
     "__builtin_get_spr64",
       (TInt(IULongLong, []), [TInt(IInt, [])], false);
     "__builtin_set_spr64",
@@ -135,7 +145,7 @@ let builtins = {
     (* no operation *)
     "__builtin_nop",
       (TVoid [], [], false);
-    (* atomic operations *)
+    (* Atomic operations *)
     "__builtin_atomic_exchange",
       (TVoid [], [TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[]);TPtr (TInt(IInt, []),[])],false);
     "__builtin_atomic_load",

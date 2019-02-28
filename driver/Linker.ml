@@ -19,6 +19,7 @@ open Driveraux
 (* Linking *)
 
 let linker exe_name files =
+  Diagnostics.raise_on_errors ();
   let cmd = List.concat [
     Configuration.linker;
     ["-o"; exe_name];
@@ -29,8 +30,7 @@ let linker exe_name files =
   ] in
   let exc = command cmd in
   if exc <> 0 then begin
-    command_error "linker" exc;
-    exit 2
+    command_error "linker" exc
   end
 
 
@@ -86,4 +86,4 @@ let linker_actions =
       push_linker_arg s);
     Prefix "-Wl,", Self push_linker_arg;
     Prefix "-WUl,", Self (fun s -> List.iter push_linker_arg (explode_comma_option s));
-    Exact "-u", Self push_linker_arg;]
+    Exact "-u", String (fun s -> push_linker_arg "-u"; push_linker_arg s);]

@@ -17,6 +17,7 @@ open Camlcoq
 open Sections
 open AST
 open Asm
+open AisAnnot
 open PrintAsmaux
 open Fileinfo
 
@@ -68,6 +69,23 @@ let preg oc = function
 
 let preg_annot = function
   | IR r -> if Archi.ptr64 then int64_reg_name r else int32_reg_name r
+  | FR r -> float_reg_name r
+  | _ -> assert false
+
+let ais_int64_reg_name = function
+  | RAX -> "rax"  | RBX -> "rbx"  | RCX -> "rcx"  | RDX -> "rdx"
+  | RSI -> "rsi"  | RDI -> "rdi"  | RBP -> "rbp"  | RSP -> "rsp"
+  | R8  -> "r8"   | R9  -> "r9"   | R10 -> "r10"  | R11 -> "r11"
+  | R12 -> "r12"  | R13 -> "r13"  | R14 -> "r14"  | R15 -> "r15"
+
+let ais_int32_reg_name = function
+  | RAX -> "eax"  | RBX -> "ebx"  | RCX -> "ecx"  | RDX -> "edx"
+  | RSI -> "esi"  | RDI -> "edi"  | RBP -> "ebp"  | RSP -> "esp"
+  | R8  -> "r8d"  | R9  -> "r9d"  | R10 -> "r10d" | R11 -> "r11d"
+  | R12 -> "r12d" | R13 -> "r13d" | R14 -> "r14d" | R15 -> "r15d"
+
+let preg_ais_annot = function
+  | IR r -> if Archi.ptr64 then ais_int64_reg_name r else ais_int32_reg_name r
   | FR r -> float_reg_name r
   | _ -> assert false
 
@@ -773,6 +791,8 @@ module Target(System: SYSTEM):TARGET =
 	 fprintf oc "	movsw\n";
       | Pmovw_rm (rd, a) ->
           fprintf oc "	movw	%a, %a\n" addressing a ireg16 rd
+      | Pnop ->
+          fprintf oc "	nop\n"
       | Prep_movsl ->
 	 fprintf oc "	rep	movsl\n"
       | Psbbl_rr (res,a1) ->
@@ -792,15 +812,15 @@ module Target(System: SYSTEM):TARGET =
       | Pbuiltin(ef, args, res) ->
           begin match ef with
             | EF_annot(kind,txt, targs) ->
-              let annot =
                 begin match (P.to_int kind) with
-                  | 1 -> annot_text preg_annot "sp" (camlstring_of_coqstring txt) args
+                  | 1 ->  let annot = annot_text preg_annot "esp" (camlstring_of_coqstring txt) args in
+                    fprintf oc "%s annotation: %S\n" comment annot
                   | 2 -> let lbl = new_label () in
-                    fprintf oc "%a: " label lbl;
-                    ais_annot_text lbl preg_annot "r1" (camlstring_of_coqstring txt) args
+                    fprintf oc "%a:\n" label lbl;
+                    let sp = if Archi.ptr64 then "rsp" else "esp" in
+                    add_ais_annot lbl preg_ais_annot sp (camlstring_of_coqstring txt) args
                   | _ -> assert false
-                end in
-              fprintf oc "%s annotation: %S\n" comment annot
+                end
           | EF_debug(kind, txt, targs) ->
               print_debug_info comment print_file_line preg_annot "%esp" oc
                                (P.to_int kind) (extern_atom txt) args

@@ -861,8 +861,8 @@ Transparent destroyed_at_function_entry.
   apply plus_one. eapply exec_step_external; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
-  unfold loc_external_result.
-  apply agree_set_other; auto. apply agree_set_pair; auto.
+  unfold loc_external_result. apply agree_set_other; auto. apply agree_set_pair; auto.
+  apply agree_undef_caller_save_regs; auto. 
 
 - (* return *)
   inv STACKS. simpl in *.
@@ -1015,7 +1015,9 @@ Theorem transf_program_correct:
                   (fun idx s1 s2 => idx = s1 /\ match_states s1 s2) *).
 Proof.
   eapply sim_extSim; try apply transf_program_correct'.
-  intros. destruct H as [? H']; inv H'; auto.
-Qed.
+  - admit.
+  - admit.
+  - intros. destruct H as [? H']; inv H'; auto.
+Admitted.
 
 End PRESERVATION.

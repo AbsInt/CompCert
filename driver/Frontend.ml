@@ -14,19 +14,28 @@
 open Clflags
 open Commandline
 open Driveraux
-open Printf
 
 (* Common frontend functions between clightgen and ccomp *)
 
+let predefined_macros =
+  [
+    "-D__COMPCERT__";
+    "-U__STDC_IEC_559_COMPLEX__";
+    "-D__STDC_NO_ATOMICS__";
+    "-D__STDC_NO_COMPLEX__";
+    "-D__STDC_NO_THREADS__";
+    "-D__STDC_NO_VLA__"
+  ]
 
 (* From C to preprocessed C *)
 
 let preprocess ifile ofile =
+  Diagnostics.raise_on_errors ();
   let output =
     if ofile = "-" then None else Some ofile in
   let cmd = List.concat [
     Configuration.prepro;
-    ["-D__COMPCERT__"];
+    predefined_macros;
     (if !Clflags.use_standard_headers
      then ["-I" ^ Filename.concat !Clflags.stdlib_path "include" ]
      else []);
@@ -37,8 +46,6 @@ let preprocess ifile ofile =
   if exc <> 0 then begin
     if ofile <> "-" then safe_remove ofile;
     command_error "preprocessor" exc;
-    eprintf "Error during preprocessing.\n";
-    exit 2
   end
 
 (* From preprocessed C to Csyntax *)
@@ -54,18 +61,11 @@ let parse_c_file sourcename ifile =
   ^ (if !option_fpacked_structs then "p" else "")
   in
   (* Parsing and production of a simplified C AST *)
-  let ast =
-    match Parse.preprocessed_file simplifs sourcename ifile with
-    | None -> exit 2
-    | Some p -> p in
+  let ast = Parse.preprocessed_file simplifs sourcename ifile in
   (* Save C AST if requested *)
   Cprint.print_if ast;
   (* Conversion to Csyntax *)
-  let csyntax =
-    match Timing.time "CompCert C generation" C2C.convertProgram ast with
-    | None -> exit 2
-    | Some p -> p in
-  flush stderr;
+  let csyntax = Timing.time "CompCert C generation" C2C.convertProgram ast in
   (* Save CompCert C AST if requested *)
   PrintCsyntax.print_if csyntax;
   csyntax
@@ -73,8 +73,12 @@ let parse_c_file sourcename ifile =
 let init () =
   Machine.config:=
     begin match Configuration.arch with
-    | "powerpc" -> if Configuration.gnu_toolchain
-                   then Machine.ppc_32_bigendian
+    | "powerpc" -> if Configuration.model = "e5500" || Configuration.model = "ppc64"
+                   then if Configuration.abi = "linux" then Machine.ppc_32_r64_linux_bigendian
+                   else if Configuration.gnu_toolchain then Machine.ppc_32_r64_bigendian
+                   else Machine.ppc_32_r64_diab_bigendian
+                   else if Configuration.abi = "linux" then Machine.ppc_32_linux_bigendian
+                   else if Configuration.gnu_toolchain then Machine.ppc_32_bigendian
                    else Machine.ppc_32_diab_bigendian
     | "arm"     -> if Configuration.is_big_endian
                    then Machine.arm_bigendian
@@ -84,6 +88,8 @@ let init () =
                    else
                      if Configuration.abi = "macosx"
                      then Machine.x86_32_macosx
+                     else if Configuration.system = "bsd"
+                     then Machine.x86_32_bsd
                      else Machine.x86_32
     | "riscV"   -> if Configuration.model = "64"
                    then Machine.rv64
@@ -120,7 +126,7 @@ let gnu_prepro_actions = [
   Exact "-imacros", String (gnu_prepro_opt_key "-imacros");
   Exact "-idirafter", String (gnu_prepro_opt_key "-idirafter");
   Exact "-isystem", String (gnu_prepro_opt_key "-isystem");
-  Exact "-iquote", String (gnu_prepro_opt_key "-iquore");
+  Exact "-iquote", String (gnu_prepro_opt_key "-iquote");
   Exact "-P", Self gnu_prepro_opt;
   Exact "-C", Self gnu_prepro_opt;
   Exact "-CC", Self gnu_prepro_opt;]

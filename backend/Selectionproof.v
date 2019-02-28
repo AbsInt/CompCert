@@ -1210,8 +1210,8 @@ Proof.
     Proof.
       unfold preserves_atx.
       intros. destruct H; subst.
-      destruct s1; try discriminate. simpl in H0.
-      destruct f0; try discriminate.
+      destruct s1 eqn:Hs1; try discriminate. simpl in H0.
+      destruct f0 eqn:Hf0; try discriminate.
       destruct (ef_inline e) eqn:HH; try discriminate.
       inversion H0; subst.
       inversion H1; subst.
@@ -1219,10 +1219,13 @@ Proof.
         simpl.
         inversion TF. destruct H. inversion H2.
         eexists; split; eauto.
-      - simpl.
-        inversion TF. destruct H. inversion H2.
-        eexists; split; eauto.
-    Qed.
+      - (* match_builtin_1 *)
+        simpl.
+        inversion TF. inversion H2.
+        admit. (* matching external function and buiting ? *)
+        (*eexists; split; eauto. *)
+        
+    Admitted.
     apply preserves_atx_proof.
   - simpl; intros ? ? ? [? ?]; subst; inversion H0; eauto.
   

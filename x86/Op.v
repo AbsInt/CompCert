@@ -201,9 +201,25 @@ Global Opaque eq_condition eq_addressing eq_operation.
     mode is valid, i.e. that the offsets are in range.
     The check always succeeds in 32-bit mode because offsets are
     always 32-bit integers and are normalized as 32-bit signed integers
-    during code generation (see [Asmgen.normalize_addrmode_32]). *)
+    during code generation (see [Asmgen.normalize_addrmode_32]).
 
-Definition offset_in_range (n: Z) : bool := zle Int.min_signed n && zle n Int.max_signed.
+    Moreover, in 64-bit mode, we use RIP-relative addressing for
+    access to globals.  (This is the "small code model" from the
+    x86_64 ELF ABI.)  Thus, for addressing global variables,
+    the offset from the variable plus the RIP-relative offset
+    must fit in 32 bits.  The "small code model" guarantees that
+    this will fit if the offset is between [-2^24] and [2^24-1],
+    under the assumption that no global variable is bigger than
+    [2^24] bytes. *)
+
+Definition offset_in_range (n: Z) : bool := 
+  zle Int.min_signed n && zle n Int.max_signed.
+
+Definition ptroffset_min := -16777216.      (**r [-2^24] *)
+Definition ptroffset_max := 16777215.       (**r [2^24 - 1] *)
+
+Definition ptroffset_in_range (n: ptrofs) : bool := 
+  let n := Ptrofs.signed n in zle ptroffset_min n && zle n ptroffset_max.
 
 Definition addressing_valid (a: addressing) : bool :=
   if Archi.ptr64 then
@@ -212,9 +228,9 @@ Definition addressing_valid (a: addressing) : bool :=
     | Aindexed2 n => offset_in_range n
     | Ascaled sc ofs => offset_in_range ofs
     | Aindexed2scaled sc ofs => offset_in_range ofs
-    | Aglobal s ofs => true
-    | Abased s ofs => true
-    | Abasedscaled sc s ofs => true
+    | Aglobal s ofs => ptroffset_in_range ofs
+    | Abased s ofs => ptroffset_in_range ofs
+    | Abasedscaled sc s ofs => ptroffset_in_range ofs
     | Ainstack ofs => offset_in_range (Ptrofs.signed ofs)
     end
   else true.

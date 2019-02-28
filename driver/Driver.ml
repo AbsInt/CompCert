@@ -13,11 +13,16 @@
 open Printf
 open Commandline
 open Clflags
+open CommonOptions
 open Timing
 open Driveraux
 open Frontend
 open Assembler
 open Linker
+open Diagnostics
+
+(* Name used for version string etc. *)
+let tool_name = "C verified compiler"
 
 (* Optional sdump suffix *)
 let sdump_suffix = ref ".json"
@@ -57,8 +62,8 @@ let compile_c_file sourcename ifile ofile =
     | Errors.OK asm ->
         asm
     | Errors.Error msg ->
-        eprintf "%s: %a" sourcename print_error msg;
-        exit 2 in
+      let loc = file_loc sourcename in
+        fatal_error loc "%a"  print_error msg in
   (* Dump Asm in binary and JSON format *)
   AsmToJSON.print_if asm sourcename;
   (* Print Asm in text form *)
@@ -139,16 +144,8 @@ let process_h_file sourcename =
     ensure_inputfile_exists sourcename;
     preprocess sourcename (output_filename_default "-");
     ""
-  end else begin
-    eprintf "Error: input file %s ignored (not in -E mode)\n" sourcename;
-    exit 2
-  end
-
-let version_string =
-  if Version.buildnr <> "" && Version.tag <> "" then
-    sprintf "The CompCert C verified compiler, %s, Build: %s, Tag: %s\n" Version.version Version.buildnr Version.tag
-  else
-    "The CompCert C verified compiler, version "^ Version.version ^ "\n"
+  end else
+    fatal_error no_loc "input file %s ignored (not in -E mode)\n" sourcename
 
 let target_help =
   if Configuration.arch = "arm" && Configuration.model <> "armv6" then
@@ -167,7 +164,7 @@ let toolchain_help =
     ""
 
 let usage_string =
-  version_string ^
+  version_string tool_name ^
   {|Usage: ccomp [options] <source files>
 Recognized source files:
   .c             C source file
@@ -183,19 +180,7 @@ Processing options:
   -o <file>      Generate output in <file>
 |} ^
   prepro_help ^
-{|Language support options (use -fno-<opt> to turn off -f<opt>) :
-  -fbitfields    Emulate bit fields in structs [off]
-  -flongdouble   Treat 'long double' as 'double' [off]
-  -fstruct-passing  Support passing structs and unions by value as function
-                    results or function arguments [off]
-  -fstruct-return   Like -fstruct-passing (deprecated)
-  -fvararg-calls Support calls to variable-argument functions [on]
-  -funprototyped Support calls to old-style functions without prototypes [on]
-  -fpacked-structs  Emulate packed structs [off]
-  -finline-asm   Support inline 'asm' statements [off]
-  -fall          Activate all language support options above
-  -fnone         Turn off all language support options above
-|}^
+  language_support_help ^
  DebugInit.debugging_help ^
 {|Optimization options: (use -fno-<opt> to turn off -f<opt>)
   -O             Optimize the compiled code [on by default]
@@ -235,16 +220,9 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -dasm          Save generated assembly in <file>.s
   -dall          Save all generated intermediate files in <file>.<ext>
   -sdump         Save info for post-linking validation in <file>.json
-General options:
-  -stdlib <dir>  Set the path of the Compcert run-time library
-  -v             Print external commands before invoking them
-  -timings       Show the time spent in various compiler passes
-  -version       Print the version string and exit
-  -target <value> Generate code for the given target
-  -conf <file>   Read configuration from file
-  @<file>        Read command line options from <file>
 |} ^
-  Cerrors.warning_help ^
+  general_help ^
+  warning_help ^
   {|Interpreter mode:
   -interp        Execute given .c files using the reference interpreter
   -quiet         Suppress diagnostic messages for the interpreter
@@ -256,15 +234,11 @@ General options:
 let print_usage_and_exit () =
   printf "%s" usage_string; exit 0
 
-let print_version_and_exit () =
-  printf "%s" version_string; exit 0
-
 let enforce_buildnr nr =
   let build = int_of_string Version.buildnr in
-  if nr != build then begin
-    eprintf "Mismatching builds: This is CompCert build %d, but QSK requires build %d.\n\
-Please use matching builds of QSK and CompCert.\n" build nr; exit 2
-  end
+  if nr != build then
+    fatal_error no_loc "Mismatching builds: This is CompCert build %d, but QSK requires build %d.\n\
+Please use matching builds of QSK and CompCert." build nr
 
 let dump_mnemonics destfile =
   let oc = open_out_bin destfile in
@@ -273,12 +247,6 @@ let dump_mnemonics destfile =
   Format.pp_print_flush pp ();
   close_out oc;
   exit 0
-
-let language_support_options = [
-  option_fbitfields; option_flongdouble;
-  option_fstruct_passing; option_fvararg_calls; option_funprototyped;
-  option_fpacked_structs; option_finline_asm
-]
 
 let optimization_options = [
   option_ftailcalls; option_fconstprop; option_fcse; option_fredundancy; option_finline_functions_called_once;
@@ -297,10 +265,9 @@ let cmdline_actions =
   [
 (* Getting help *)
   Exact "-help", Unit print_usage_and_exit;
-  Exact "--help", Unit print_usage_and_exit;
+  Exact "--help", Unit print_usage_and_exit;]
 (* Getting version info *)
-  Exact "-version", Unit print_version_and_exit;
-  Exact "--version", Unit print_version_and_exit;] @
+  @ version_options tool_name @
 (* Enforcing CompCert build numbers for QSKs and mnemonics dump *)
   (if Version.buildnr <> "" then
     [ Exact "-qsk-enforce-build", Integer enforce_buildnr;
@@ -317,10 +284,9 @@ let cmdline_actions =
                               option_o := Some s);]
   (* Preprocessing options *)
     @ prepro_actions @
-(* Language support options -- more below *)
- [ Exact "-fall", Unit (set_all language_support_options);
-  Exact "-fnone", Unit (unset_all language_support_options);]
-   (* Debugging options *)
+  (* Language support options *)
+    language_support_options
+  (* Debugging options *)
     @ DebugInit.debugging_actions @
 (* Code generation options -- more below *)
  [
@@ -333,10 +299,8 @@ let cmdline_actions =
   Exact "-ffloat-const-prop", Integer(fun n -> option_ffloatconstprop := n);
   Exact "-falign-functions", Integer(fun n -> option_falignfunctions := Some n);
   Exact "-falign-branch-targets", Integer(fun n -> option_falignbranchtargets := n);
-  Exact "-falign-cond-branches", Integer(fun n -> option_faligncondbranchs := n);
+  Exact "-falign-cond-branches", Integer(fun n -> option_faligncondbranchs := n);] @
 (* Target processor options *)
-  Exact "-conf", Ignore; (* Ignore option since it is already handled *)
-  Exact "-target", Ignore;] @ (* Ignore option since it is already handled *)
   (if Configuration.arch = "arm" then
     if Configuration.model = "armv6" then
       [ Exact "-marm", Ignore ] (* Thumb needs ARMv6T2 or ARMv7 *)
@@ -379,13 +343,11 @@ let cmdline_actions =
     option_dasm := true);
   Exact "-sdump", Set option_sdump;
   Exact "-sdump-suffix", String (fun s -> option_sdump := true; sdump_suffix:= s);
-  Exact "-sdump-folder", String (fun s -> AsmToJSON.sdump_folder := s);
+  Exact "-sdump-folder", String (fun s -> AsmToJSON.sdump_folder := s);] @
 (* General options *)
-  Exact "-v", Set option_v;
-  Exact "-stdlib", String(fun s -> stdlib_path := s);
-  Exact "-timings", Set option_timings;] @
+   general_options @
 (* Diagnostic options *)
-  Cerrors.warning_options @
+  warning_options @
 (* Interpreter mode *)
  [ Exact "-interp", Set option_interp;
   Exact "-quiet", Unit (fun () -> Interp.trace := 0);
@@ -393,17 +355,8 @@ let cmdline_actions =
   Exact "-random", Unit (fun () -> Interp.mode := Interp.Random);
   Exact "-all", Unit (fun () -> Interp.mode := Interp.All)
  ]
-(* -f options: come in -f and -fno- variants *)
-(* Language support options *)
-  @ f_opt "longdouble" option_flongdouble
-  @ f_opt "struct-return" option_fstruct_passing
-  @ f_opt "struct-passing" option_fstruct_passing
-  @ f_opt "bitfields" option_fbitfields
-  @ f_opt "vararg-calls" option_fvararg_calls
-  @ f_opt "unprototyped" option_funprototyped
-  @ f_opt "packed-structs" option_fpacked_structs
-  @ f_opt "inline-asm" option_finline_asm
 (* Optimization options *)
+(* -f options: come in -f and -fno- variants *)
   @ f_opt "tailcalls" option_ftailcalls
   @ f_opt "const-prop" option_fconstprop
   @ f_opt "cse" option_fcse
@@ -416,7 +369,7 @@ let cmdline_actions =
   @ [
 (* Catch options that are not handled *)
   Prefix "-", Self (fun s ->
-      eprintf "Unknown option `%s'\n" s; exit 2);
+      fatal_error no_loc "Unknown option `%s'" s);
 (* File arguments *)
   Suffix ".c", Self (fun s ->
       push_action process_c_file s; incr num_source_files; incr num_input_files);
@@ -450,21 +403,17 @@ let _ =
     Frontend.init ();
     parse_cmdline cmdline_actions;
     DebugInit.init (); (* Initialize the debug functions *)
-    if nolink () && !option_o <> None && !num_source_files >= 2 then begin
-      eprintf "Ambiguous '-o' option (multiple source files)\n";
-      exit 2
-    end;
+    if nolink () && !option_o <> None && !num_source_files >= 2 then
+      fatal_error no_loc "ambiguous '-o' option (multiple source files)";
     if !num_input_files = 0 then
-      begin
-        eprintf "ccomp: error: no input file\n";
-        exit 2
-      end;
+      fatal_error no_loc "no input file";
     let linker_args = time "Total compilation time" perform_actions () in
     if not (nolink ()) && linker_args <> [] then begin
       linker (output_filename_default "a.out") linker_args
     end;
-   if  Cerrors.check_errors () then exit 2
-  with Sys_error msg ->
-    eprintf "I/O error: %s.\n" msg; exit 2
-     | e ->
-       Cerrors.crash e
+    check_errors ()
+  with
+  | Sys_error msg
+  | CmdError msg -> error no_loc "%s" msg; exit 2
+  | Abort -> error_summary (); exit 2
+  | e -> crash e

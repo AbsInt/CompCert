@@ -466,7 +466,7 @@ let print_init p = function
   | Init_int64 n -> fprintf p "%LdLL" (camlint64_of_coqint n)
   | Init_float32 n -> fprintf p "%.15F" (camlfloat_of_coqfloat n)
   | Init_float64 n -> fprintf p "%.15F" (camlfloat_of_coqfloat n)
-  | Init_space n -> fprintf p "/* skip %ld */@ " (camlint_of_coqint n)
+  | Init_space n -> fprintf p "/* skip %s */@ " (Z.to_string n)
   | Init_addrof(symb, ofs) ->
       let ofs = camlint_of_coqint ofs in
       if ofs = 0l

@@ -15,7 +15,7 @@
 
 (* Operations on C types and abstract syntax *)
 
-open Cerrors
+open Diagnostics
 open C
 open Env
 open Machine
@@ -110,7 +110,8 @@ let declare_attributes l =
   List.iter (fun (n,c) -> declare_attribute n c) l
 
 let class_of_attribute = function
-  | AConst | AVolatile | ARestrict | AAlignas _ -> Attr_type
+  | AConst | AVolatile | ARestrict -> Attr_type
+  | AAlignas _ -> Attr_name
   | Attr(name, args) ->
       try Hashtbl.find attr_class (normalize_attrname name)
       with Not_found -> Attr_unknown
@@ -124,9 +125,8 @@ let attr_is_standard = function
 (* Is an attribute applicable to a whole array (true) or only to
    array elements (false)? *)
 
-let attr_array_applicable = function
-  | AConst | AVolatile | ARestrict | AAlignas _ -> false
-  | Attr _ -> true
+let attr_array_applicable a =
+  class_of_attribute a <> Attr_type
 
 (* Is an attribute of a composite type applicable to members of this type
   when they are accessed? *)
@@ -175,11 +175,20 @@ let rec attributes_of_type env t =
   | TFun(ty, params, vararg, a) -> a
   | TNamed(s, a) -> attributes_of_type env (unroll env t)
   | TStruct(s, a) ->
-      let ci = Env.find_struct env s in add_attributes ci.ci_attr a
+      begin match Env.find_struct env s with
+      | ci -> add_attributes ci.ci_attr a
+      | exception Env.Error(Env.Unbound_tag _) -> a
+      end
   | TUnion(s, a) ->
-      let ci = Env.find_union env s in add_attributes ci.ci_attr a
+      begin match Env.find_union env s with
+      | ci -> add_attributes ci.ci_attr a
+      | exception Env.Error(Env.Unbound_tag _) -> a
+      end
   | TEnum(s, a) ->
-    let ei = Env.find_enum env s in add_attributes ei.ei_attr a
+      begin match Env.find_enum env s with
+      | ei -> add_attributes ei.ei_attr a
+      | exception Env.Error(Env.Unbound_tag _) -> a
+      end
 
 (* Changing the attributes of a type (at top-level) *)
 (* Same hack as above for array types. *)
@@ -249,14 +258,32 @@ let strip_last_attribute typ  =
   | TEnum (n,at) -> let l,r = hd_opt at in
     l,TEnum(n,r)
 
+(* Check whether the attributes contain _Alignas attribute *)
+let has_std_alignas env typ  =
+  List.exists (function | AAlignas _ -> true | _ -> false) (attributes_of_type env typ)
+
 (* Extracting alignment value from a set of attributes.  Return 0 if none. *)
 
 let alignas_attribute al =
   let rec alignas_attr accu = function
   | [] -> accu
   | AAlignas n :: al -> alignas_attr (max n accu) al
+  | Attr(("aligned" | "__aligned__"), [AInt n]) :: al ->
+                        alignas_attr (max (Int64.to_int n) accu) al
   | a :: al -> alignas_attr accu al
   in alignas_attr 0 al
+
+(* Extracting struct packing parameters from a set of attributes.
+   Assume the parameters were checked earlier, e.g. alignments are
+   either 0 or powers of two. *)
+
+let packing_parameters al =
+  match find_custom_attributes ["packed";"__packed__"] al with
+  | [[]] -> (1, 0, false)
+  | [[AInt n]] -> (Int64.to_int n, 0, false)
+  | [[AInt n; AInt p]] -> (Int64.to_int n, Int64.to_int p, false)
+  | [[AInt n; AInt p; AInt q]] -> (Int64.to_int n, Int64.to_int p, q = 1L)
+  | _ -> (0, 0, false)
 
 (* Type compatibility *)
 
@@ -452,7 +479,10 @@ let rec alignof env t =
     let ci = Env.find_union env name in ci.ci_alignof
   | TEnum(_, _) -> Some(alignof_ikind enum_ikind)
 
-(* Compute the natural alignment of a struct or union. *)
+(* Compute the natural alignment of a struct or union.
+   Not done here but in composite_info_decl: taking into account
+   the packing parameters (max-field-alignment, min-struct-alignment)
+   and the alignas attributes. *)
 
 let alignof_struct_union env members =
   let rec align_rec al = function
@@ -521,7 +551,7 @@ let rec sizeof env t =
 
 (* Compute the size of a union.
    It is the size is the max of the sizes of fields.
-   Not done here but in composite_info_decl: rounding size to alignment. *)
+   Not done here but in composite_info_def: rounding size to alignment. *)
 
 let sizeof_union env members =
   let rec sizeof_rec sz = function
@@ -534,69 +564,66 @@ let sizeof_union env members =
       end
   in sizeof_rec 0 members
 
-(* Compute the size of a struct.
+(* Compute the size of a struct and the byte offset of the members.
    We lay out fields consecutively, inserting padding to preserve
    their alignment.
-   Not done here but in composite_info_decl: rounding size to alignment. *)
-let sizeof_struct env members =
-  let rec sizeof_rec ofs = function
+   The [ma] parameter is the maximal alignment for each member.
+   It is used for packed structs.  If [ma = 0], it is ignored.
+   Bitfields are taken into account for the size and offset computations
+   but not given an offset.
+   Not done here but in composite_info_def: rounding size to alignment. *)
+let sizeof_layout_struct env members ma =
+  let align_offset ofs a =
+    align ofs (if ma > 0 && a > ma then ma else a) in
+  let rec sizeof_rec ofs accu = function
   | [] ->
-      Some ofs
+      Some (ofs, accu)
   | [ { fld_typ = TArray(_, None, _) } as m ] ->
       (* C99: ty[] allowed as last field *)
       begin match alignof env m.fld_typ with
-      | Some a -> Some (align ofs a)
+      | Some a ->
+          let ofs = align_offset ofs a in
+          Some (ofs, (m.fld_name, ofs) :: accu)
       | None -> None
       end
   | m :: rem as ml ->
       if m.fld_bitfield = None then begin
         match alignof env m.fld_typ, sizeof env m.fld_typ with
-        | Some a, Some s -> sizeof_rec (align ofs a + s) rem
+        | Some a, Some s ->
+            let ofs = align_offset ofs a in
+            sizeof_rec (ofs + s) ((m.fld_name, ofs) :: accu) rem
         | _, _ -> None
       end else begin
         let (s, a, ml') = pack_bitfields ml in
-        sizeof_rec (align ofs a + s) ml'
+        sizeof_rec (align_offset ofs a + s) accu ml'
       end
-  in sizeof_rec 0 members
+  in sizeof_rec 0 [] members
+
+let sizeof_struct env members ma =
+  match sizeof_layout_struct env members ma with
+  | None -> None
+  | Some(sz, offsets) -> Some sz
+
+(* Compute the offsets of all non-bitfield members of a struct. *)
+let struct_layout env attrs members =
+  let (ma, _, _) = packing_parameters attrs in
+  match sizeof_layout_struct env members ma with
+  | Some(sz, offsets) -> offsets
+  | None -> []
 
 (* Compute the offset of a struct member *)
 let offsetof env ty field =
-  let rec sub acc name = function
-    | [] -> List.rev acc
-    | m::rem -> if m.fld_name = name then
-        List.rev acc
-      else
-        sub (m::acc) name rem in
   match unroll env ty with
-    | TStruct (id,_) ->
+  | TStruct (id, _) ->
       let str = Env.find_struct env id in
-      let pre = sub [] field.fld_name str.ci_members in
-      begin match sizeof_struct env pre, alignof env field.fld_typ with
-      | Some s, Some a ->
-        align s a
-      | _ -> assert false end
-    | TUnion _ -> 0
-    | _ -> assert false
-
-(* Simplified version to compute offsets on structs without bitfields *)
-let struct_layout env members =
-  let rec struct_layout_rec mem ofs = function
-    | [] ->
-        mem
-    | [ { fld_typ = TArray(_, None, _) } as m ] ->
-      (* C99: ty[] allowed as last field *)
-      begin match alignof env m.fld_typ with
-      | Some a -> ( m.fld_name,align ofs a)::mem
-      | None -> []
+      let offsets = struct_layout env str.ci_attr str.ci_members in
+      begin try
+        List.assoc field.fld_name offsets
+      with Not_found ->
+        raise (Env.Error(No_member(id.C.name, "struct", field.fld_name)))
       end
-    | m :: rem ->
-        match alignof env m.fld_typ, sizeof env m.fld_typ with
-        | Some a, Some s ->
-            let offset = align ofs a in
-            struct_layout_rec ((m.fld_name,offset)::mem) (offset + s) rem
-        | _, _ -> []
-  in struct_layout_rec [] 0 members
-
+  | TUnion _ -> 0
+  | _ -> assert false
 
 (* Determine whether a type is incomplete *)
 
@@ -616,12 +643,35 @@ let composite_info_decl su attr =
     ci_attr = attr }
 
 let composite_info_def env su attr m =
+  let (max_field_align, min_struct_align, swapped) = packing_parameters attr in
+  let attr_align = alignas_attribute attr in
+  let natural_align = alignof_struct_union env m in
   let al =
-    let a = alignas_attribute attr in
-    if a > 0 then Some a else alignof_struct_union env m
-  and sz =
+    (* alignas takes precedence over packing *)
+    if attr_align > 0 then Some attr_align
+    (* ignore packing on unions for compatibility with earlier versions *)
+    else if su = Union then natural_align
+    else begin
+      match natural_align with
+      | None -> None
+      | Some a ->
+          (* If max_field_align is given, reduce natural alignment a
+             to be at most max_field_align *)
+          let a =
+            if max_field_align > 0 && a > max_field_align
+            then max_field_align
+            else a in
+          (* If min_struct_align is given, increase alignment a
+             to be at least min_struct_align *)
+          let a =
+            if min_struct_align > 0 && a < min_struct_align
+            then min_struct_align
+            else a in
+          Some a
+      end in
+  let sz =
     match su with
-    | Struct -> sizeof_struct env m
+    | Struct -> sizeof_struct env m max_field_align
     | Union -> sizeof_union env m
   in
   { ci_kind = su; ci_members = m;
@@ -707,6 +757,11 @@ let is_integer_type env t =
   | TEnum(_, _) -> true
   | _ -> false
 
+let is_float_type env t =
+  match unroll env t with
+  | TFloat (_, _) -> true
+  | _ -> false
+
 let is_arith_type env t =
   match unroll env t with
   | TInt(_, _) -> true
@@ -744,6 +799,11 @@ let is_anonymous_composite = function
   | TUnion (id,_) -> id.C.name = ""
   | _ -> false
 
+let is_function_pointer_type env t =
+  match unroll env t with
+  | TPtr (ty, _) -> is_function_type env ty
+  | _ -> false
+
 (* Find the info for a field access *)
 
 let field_of_dot_access env t m =
@@ -774,6 +834,15 @@ let float_rank = function
   | FFloat -> 1
   | FDouble -> 2
   | FLongDouble -> 3
+
+(* Test for qualified array types *)
+
+let rec is_qualified_array = function
+  | TArray (ty, _, attr) ->
+    List.exists attr_is_standard attr || is_qualified_array ty
+  | TPtr (ty, _) -> is_qualified_array ty
+  | TFun(ty_ret, _, _, _) -> is_qualified_array ty_ret
+  | _ -> false
 
 (* Array and function types "decay" to pointer types in many cases *)
 
@@ -852,7 +921,7 @@ let argument_conversion env t =
   (* Arrays and functions degrade automatically to pointers *)
   (* Other types are not changed *)
   match unroll env t with
-  | TArray(ty, _, _) -> TPtr(ty, [])
+  | TArray(ty, _, attr) -> TPtr(ty, attr)
   | TFun _ as ty -> TPtr(ty, [])
   | _ -> t (* preserve typedefs *)
 
@@ -918,8 +987,12 @@ let ptrdiff_t_ikind () = find_matching_signed_ikind !config.sizeof_ptrdiff_t
 let type_of_constant = function
   | CInt(_, ik, _) -> TInt(ik, [])
   | CFloat(_, fk) -> TFloat(fk, [])
-  | CStr _ -> TPtr(TInt(IChar, []), [])
-  | CWStr _ -> TPtr(TInt(wchar_ikind(), []), [])
+  | CStr s ->
+    let size = Int64.of_int (String.length s + 1) in
+    TArray(TInt(IChar,[]), Some size, [])
+  | CWStr s ->
+    let size = Int64.of_int (List.length s + 1) in
+    TArray(TInt(wchar_ikind(), []), Some size, [])
   | CEnum(_, _) -> TInt(IInt, [])
 
 (* Check that a C expression is a lvalue *)
@@ -927,6 +1000,8 @@ let type_of_constant = function
 let rec is_lvalue e =
   match e.edesc with
   | EVar id -> true
+  | EConst (CStr _)
+  | EConst (CWStr _) -> true
   | EUnop((Oderef | Oarrow _), _) -> true
   | EUnop(Odot _, e') -> is_lvalue e'
   | EBinop(Oindex, _, _, _) -> true
@@ -983,6 +1058,27 @@ let is_call_to_fun e s =
   | EVar id -> id.C.name = s
   | _ -> false
 
+let is_bitfield env e =
+  match e.edesc with
+  | EUnop(Odot f,b) ->
+    let fld = field_of_dot_access env b.etyp f in
+    fld.fld_bitfield <> None
+  | EUnop(Oarrow f,b) ->
+    let fld = field_of_arrow_access env b.etyp f in
+    fld.fld_bitfield <> None
+  | _ -> false
+
+let contains_flex_array_mem env ty =
+  match unroll env ty with
+  | TStruct (id,_) ->
+    let ci = Env.find_struct env id in
+    let rec check_mem = function
+      | [] -> false
+      | [ { fld_typ = TArray(ty_elt, None, _) } ] -> true
+      | _::rem -> check_mem rem in
+    check_mem ci.ci_members
+  | _ -> false
+
 (* Assignment compatibility check over attributes.
    Standard attributes ("const", "volatile", "restrict") can safely
    be added (to the rhs type to get the lhs type) but must not be dropped.
@@ -1020,9 +1116,6 @@ let valid_cast env tfrom tto =
     (TInt _ | TPtr _ | TEnum _) -> true
   (* between int and float types *)
   | (TInt _ | TFloat _ | TEnum _), (TInt _ | TFloat _ | TEnum _) -> true
-  (* between identical composites *)
-  | TStruct(s1, _), TStruct(s2, _) -> s1 = s2
-  | TUnion(s1, _), TUnion(s2, _) -> s1 = s2
   | _, _ -> false
 
 (* Check that the cast from tfrom to tto is an integer to pointer conversion *)
@@ -1207,3 +1300,8 @@ let rec subst_stmt phi s =
                List.map subst_asm_operand inputs,
                clob)
   }
+
+let is_volatile_variable env exp =
+  match exp.edesc with
+  |  EVar x -> List.mem AVolatile (attributes_of_type env exp.etyp)
+  | _ -> false

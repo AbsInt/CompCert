@@ -306,6 +306,8 @@ struct
       fprintf oc "	vsqrt.f64 %a, %a\n" freg f1 freg f2
     | Psbc (r1,r2,sa) ->
       fprintf oc "	sbc	%a, %a, %a\n" ireg r1 ireg r2 shift_op sa
+    | Pnop ->
+      fprintf oc "	nop\n"
     | Pstr(r1, r2, sa) | Pstr_a(r1, r2, sa) ->
       fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Pstrb(r1, r2, sa) ->
@@ -459,15 +461,14 @@ struct
     | Pbuiltin(ef, args, res) ->
       begin match ef with
         | EF_annot(kind,txt, targs) ->
-          let annot =
             begin match (P.to_int kind) with
-              | 1 -> annot_text preg_annot "sp" (camlstring_of_coqstring txt) args
+              | 1 -> let annot = annot_text preg_annot "sp" (camlstring_of_coqstring txt) args in
+                fprintf oc "%s annotation: %S\n" comment annot
               | 2 -> let lbl = new_label () in
-                fprintf oc "%a: " label lbl;
-                ais_annot_text lbl preg_annot "sp" (camlstring_of_coqstring txt) args
+                fprintf oc "%a:\n" label lbl;
+                AisAnnot.add_ais_annot lbl preg_annot "r13" (camlstring_of_coqstring txt) args
               | _ -> assert false
-            end in
-          fprintf oc "%s annotation: %S\n" comment annot
+            end
         | EF_debug(kind, txt, targs) ->
           print_debug_info comment print_file_line preg_annot "sp" oc
             (P.to_int kind) (extern_atom txt) args

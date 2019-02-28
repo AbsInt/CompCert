@@ -275,7 +275,6 @@ unary_expression:
 | unary_operator cast_expression
 | SIZEOF unary_expression
 | SIZEOF LPAREN type_name RPAREN
-| ALIGNOF unary_expression
 | ALIGNOF LPAREN type_name RPAREN
     {}
 

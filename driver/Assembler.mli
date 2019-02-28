@@ -15,7 +15,7 @@ val assemble: string -> string -> unit
   (** From asm to object file *)
 
 val assembler_actions: (Commandline.pattern * Commandline.action) list
-  (** Commandline optins affecting the assembler *)
+  (** Commandline options affecting the assembler *)
 
 val assembler_help: string
   (** Commandline help description *)

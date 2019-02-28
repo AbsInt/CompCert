@@ -163,7 +163,7 @@ Extract Inlined Constant Fcalc_bracket.inbetween_loc => "fun _ -> assert false".
 Set Extraction AccessOpaque.
 
 (* Go! *)
-
+(*
 Cd "extraction".
 
 Separate Extraction
@@ -188,3 +188,4 @@ Separate Extraction
    Floats.Float32.from_parsed Floats.Float.from_parsed
    Globalenvs.Senv.invert_symbol
    Parser.translation_unit_file.
+*)

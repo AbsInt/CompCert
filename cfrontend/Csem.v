@@ -835,7 +835,7 @@ Inductive final_state: state -> int -> Prop :=
       final_state (Returnstate (Vint r) Kstop m) r.
 
 (** Wrapping up these definitions in a small-step semantics. *)
-
+(*
 Definition semantics (p: program) :=
   let ge:= (globalenv p) in
   Semantics_gen
@@ -867,3 +867,4 @@ Proof.
   eapply external_call_trace_length; eauto.
   inv H; simpl; try omega. eapply external_call_trace_length; eauto.
 Qed.
+*)

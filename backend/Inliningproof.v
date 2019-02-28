@@ -988,7 +988,7 @@ Proof.
   exploit tr_funbody_inv; eauto. intros TR; inv TR.
   left. econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Inop; eauto.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
 
 - (* op *)
@@ -1002,7 +1002,7 @@ Proof.
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Iop; eauto. erewrite eval_operation_preserved; eauto.
   exact symbols_preserved.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   apply match_stacks_inside_set_reg; auto.
   apply agree_set_reg; auto.
@@ -1020,7 +1020,7 @@ Proof.
   rewrite <- P. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Iload; eauto.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   apply match_stacks_inside_set_reg; auto.
   apply agree_set_reg; auto.
@@ -1041,7 +1041,7 @@ Proof.
   eapply plus_one. eapply exec_Istore; eauto.
   destruct a; simpl in H1; try discriminate.
   destruct a'; simpl in U; try discriminate.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   eapply match_stacks_inside_store; eauto.
   eapply Mem.store_valid_block_1; eauto.
@@ -1059,7 +1059,7 @@ Proof.
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Icall; eauto.
   eapply sig_function_translated; eauto.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   eapply match_stacks_cons; eauto.
   eapply agree_val_regs; eauto.
@@ -1092,7 +1092,7 @@ Proof.
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Itailcall; eauto.
   eapply sig_function_translated; eauto.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   eapply match_stacks_bound with (bound := sp').
   eapply match_stacks_invariant; eauto.
@@ -1112,7 +1112,7 @@ Proof.
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Icall; eauto.
   eapply sig_function_translated; eauto.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   eapply match_stacks_untailcall; eauto.
   eapply match_stacks_inside_invariant; eauto.
@@ -1168,7 +1168,7 @@ Proof.
     eapply eval_condition_inject; eauto. eapply agree_val_regs; eauto.
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Icond; eauto.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   destruct b; econstructor; eauto.
 
 - (* jumptable *)
@@ -1178,7 +1178,7 @@ Proof.
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Ijumptable; eauto.
   rewrite list_nth_z_map. rewrite H1. simpl; reflexivity.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
 
 - (* return *)
@@ -1195,7 +1195,7 @@ Proof.
   destruct X as [m1' FREE].
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Ireturn; eauto.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   eapply match_stacks_bound with (bound := sp').
   eapply match_stacks_invariant; eauto.
@@ -1236,7 +1236,7 @@ Proof.
   intros [F' [m1' [sp' [A [B [C [D [E FULL']]]]]]]].
   left; econstructor; exists F', E0; split.
   eapply plus_one. eapply exec_function_internal; eauto.
-  split; [| split; [trivial | apply injt_nil]].
+  split; [| split; [trivial | apply list_rel_nil]].
   rewrite H6. econstructor.
   (*instantiate (1 := F').*) apply match_stacks_inside_base.
   assert (SP: sp' = Mem.nextblock m'0) by (eapply Mem.alloc_result; eauto).
@@ -1291,7 +1291,7 @@ Proof.
   exploit tr_moves_init_regs; eauto. intros [rs'' [P [Q R]]].
   left; econstructor; exists F', E0; split.
   eapply plus_left. eapply exec_Inop; eauto. eexact P. traceEq.
-  split; [| split; [trivial | apply injt_nil]].
+  split; [| split; [trivial | apply list_rel_nil]].
   econstructor.
   eapply match_stacks_inside_alloc_left; eauto.
   eapply match_stacks_inside_invariant; eauto.
@@ -1328,7 +1328,7 @@ Proof.
 + (* normal case *)
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_return.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   apply match_stacks_inside_set_reg; auto.
   apply agree_set_reg; auto.
@@ -1337,7 +1337,7 @@ Proof.
   rewrite RET in RET0; inv RET0.
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_return.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   eapply match_regular_states.
   eapply match_stacks_inside_set_reg; eauto.
   eauto. auto.
@@ -1356,12 +1356,12 @@ Proof.
 + (* with a result *)
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Iop; eauto. simpl. reflexivity.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto. apply match_stacks_inside_set_reg; auto. apply agree_set_reg; auto.
 + (* without a result *)
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_Inop; eauto.
-  split; [| split; [apply inject_incr_refl | apply injt_nil]].
+  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto. subst vres. apply agree_set_reg_undef'; auto.
 Qed.
 
@@ -1501,21 +1501,28 @@ Proof.
   - apply well_founded_ltof.
   - intros. destruct H; subst. inv H0; trivial.
   - intros. destruct H; subst. inv H0; eauto.
-  - intros. exploit transf_entry_points; eauto.
+  - intros. inv H; simpl in *; eauto.
+    exploit transf_entry_points; eauto.
     intros (j & s & INIT & MATCH).
-    exists s1, j, s; auto.
-  - intros. exploit transf_initial_states'; eauto.
+    exists s1, j, s; repeat (split; auto).
+    admit. (* econstructor; eauto. *)
+    (*
+  - intros. inv H; simpl in *.
+    exploit transf_initial_states'; eauto.
     intros (f & s & INIT & MATCH).
-    exists s1, f, s; auto. 
+    exists s1, f, s; auto. *)
   - intros. destruct H; subst.
     eapply transf_final_states; eauto.
   - intros. destruct H0; subst.
     exploit step_simulation; eauto. 
     intros [[s2' [f' [t' [STEP [MATCH [IINCR INJT]]]]]] | [MEAS [TR MATCH]]]. 
-    exists s1', s2', f', t'; split. left; trivial. eauto.
+    exists s1', s2', f', t'; split. left; trivial. repeat (split; eauto).
+    admit.
     exists s1', s2, f, E0; split. right. split; trivial. constructor.
-    split; auto. split. apply inject_incr_refl. subst; apply injt_nil.
+    split; auto. split. apply inject_incr_refl. subst; apply list_rel_nil.
+  - admit.
+  - admit.
   - apply senv_preserved.
-Qed. 
+Admitted. 
 
 End INLINING.

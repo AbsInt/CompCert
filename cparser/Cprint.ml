@@ -361,6 +361,7 @@ let storage pp = function
   | Storage_default -> ()
   | Storage_extern -> fprintf pp "extern "
   | Storage_static -> fprintf pp "static "
+  | Storage_auto -> ()   (* used only in blocks, where it can be omitted *)
   | Storage_register -> fprintf pp "register "
 
 let full_decl pp (sto, id, ty, int) =
@@ -477,7 +478,7 @@ let rec stmt pp s =
 and slabel pp = function
   | Slabel s ->
       fprintf pp "%s" s
-  | Scase e ->
+  | Scase(e, _) ->
       fprintf pp "case %a" exp (0, e)
   | Sdefault ->
       fprintf pp "default"

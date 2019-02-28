@@ -46,7 +46,7 @@ End AnyRadix.
 
 Section Binary.
 
-Implicit Arguments exist [[A] [P]].
+Arguments exist {A P} x _.
 
 (** [prec] is the number of bits of the mantissa including the implicit one;
     [emax] is the exponent of the infinities.
@@ -597,9 +597,8 @@ revert H1. clear -H2.
 rewrite Zpos_digits2_pos.
 unfold fexp, FLT_exp.
 generalize (Zdigits radix2 (Zpos mx)).
-intros ; zify ; subst.
-clear -H H2. clearbody emin.
-omega.
+clearbody emin.
+intros ; zify ; omega.
 Qed.
 
 Theorem abs_B2R_lt_emax :

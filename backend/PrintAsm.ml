@@ -18,6 +18,7 @@ open PrintAsmaux
 open Printf
 open Sections
 open TargetPrinter
+open AisAnnot
 
 module Printer(Target:TARGET) =
   struct
@@ -148,21 +149,23 @@ module Printer(Target:TARGET) =
       | Gvar v -> print_var oc name v
 
     let print_ais_annot oc =
-      let annots = List.rev !ais_annot_list in
+      let annots = get_ais_annots () in
       if annots <> [] then begin
         Target.section oc Section_ais_annotation;
-        let annot_part oc lbl = function
-          |  Str.Delim _  ->
-            fprintf oc "	.byte 7,%d\n" (if Archi.ptr64 then 8 else 4) ;
-            fprintf oc "	%s %a\n" Target.address Target.label lbl
-          | Str.Text a -> fprintf oc "	.ascii %S\n" a in
-        let annot oc (lbl,str) =
-          List.iter (annot_part oc lbl) str;
-          fprintf oc "	.ascii \"\\n\"\n"
+        let print_addr oc pp_addr addr =
+          fprintf oc "	.byte 7,%d\n" (if Archi.ptr64 then 8 else 4);
+          fprintf oc "	%s %a\n" Target.address pp_addr addr in
+        let annot_part oc = function
+          | AisAnnot.Label lbl  ->
+            print_addr oc Target.label lbl
+          | AisAnnot.Symbol symb ->
+            print_addr oc Target.symbol symb
+          | AisAnnot.String a -> fprintf oc "	.ascii %S\n" a in
+        let annot oc str =
+          List.iter (annot_part oc) str
         in
         List.iter (annot oc) annots
-      end;
-      ais_annot_list := []
+      end
 
     module DwarfTarget: DwarfTypes.DWARF_TARGET =
       struct

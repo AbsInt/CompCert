@@ -28,7 +28,8 @@ Variable beta : radix.
 
 Notation bpow e := (bpow beta e).
 
-Arguments Float [beta] _ _.
+
+Arguments Float {beta} Fnum Fexp.
 
 Definition Falign (f1 f2 : float beta) :=
   let '(Float m1 e1) := f1 in

@@ -21,9 +21,9 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
-DIRS=lib common $(ARCHDIRS) backend cfrontend driver debug\
+DIRS=lib common $(ARCHDIRS) backend cfrontend driver \
   flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
-  cparser cparser/validator
+  cparser cparser/MenhirLib
 
 RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser
 
@@ -149,7 +149,7 @@ endif
 proof: $(FILES:.v=.vo)
 
 # Turn off some warnings for compiling Flocq
-flocq/%.vo: COQCOPTS+=-w -deprecated-implicit-arguments
+flocq/%.vo: COQCOPTS+=-w -compatibility-notation
 
 extraction: extraction/STAMP
 
@@ -178,18 +178,11 @@ FORCE:
 
 .PHONY: proof extraction runtime FORCE
 
-documentation: doc/coq2html $(FILES)
+documentation: $(FILES)
 	mkdir -p doc/html
 	rm -f doc/html/*.html
-	doc/coq2html -o 'doc/html/%.html' doc/*.glob \
+	coq2html -d doc/html/ -base compcert -short-names doc/*.glob \
           $(filter-out doc/coq2html cparser/Parser.v, $^)
-	cp doc/coq2html.css doc/coq2html.js doc/html/
-
-doc/coq2html: doc/coq2html.ml
-	ocamlopt -w +a-29 -o doc/coq2html str.cmxa doc/coq2html.ml
-
-doc/coq2html.ml: doc/coq2html.mll
-	ocamllex -q doc/coq2html.mll
 
 tools/ndfun: tools/ndfun.ml
 	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml
@@ -226,8 +219,6 @@ compcert.ini: Makefile.config
          echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
          echo "has_standard_headers=$(HAS_STANDARD_HEADERS)"; \
          echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
-         echo "struct_passing_style=$(STRUCT_PASSING)"; \
-         echo "struct_return_style=$(STRUCT_RETURN)"; \
 	 echo "response_file_style=$(RESPONSEFILE)";) \
         > compcert.ini
 
@@ -237,7 +228,9 @@ driver/Version.ml: VERSION
 	>driver/Version.ml
 
 cparser/Parser.v: cparser/Parser.vy
-	$(MENHIR) --coq cparser/Parser.vy
+	@rm -f $@
+	$(MENHIR) $(MENHIR_FLAGS) --coq cparser/Parser.vy
+	@chmod a-w $@
 
 depend: $(GENERATED) depend1
 
@@ -256,12 +249,21 @@ install:
 ifeq ($(CLIGHTGEN),true)
 	install -m 0755 ./clightgen $(BINDIR)
 endif
+ifeq ($(INSTALL_COQDEV),true)
+	install -d $(COQDEVDIR)
+	for d in $(DIRS); do \
+          install -d $(COQDEVDIR)/$$d && \
+          install -m 0644 $$d/*.vo $(COQDEVDIR)/$$d/; \
+	done
+	install -m 0644 ./VERSION $(COQDEVDIR)
+	@(echo "To use, pass the following to coq_makefile or add the following to _CoqProject:"; echo "-R $(COQDEVDIR) compcert") > $(COQDEVDIR)/README
+endif
+
 
 clean:
 	rm -f $(patsubst %, %/*.vo, $(DIRS))
 	rm -f $(patsubst %, %/.*.aux, $(DIRS))
 	rm -rf doc/html doc/*.glob
-	rm -f doc/coq2html.ml doc/coq2html doc/*.cm? doc/*.o
 	rm -f driver/Version.ml
 	rm -f compcert.ini
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr

@@ -630,7 +630,9 @@ Theorem transf_program_correct:
     RTL.get_mem RTL.get_mem.
 Proof.
   eapply sim_extSim; try eapply transf_program_correct'.
-  simpl; intros ? ? ? [? ?]; subst; inversion H0; auto.
-Qed.
+  - admit.
+  - admit.
+  - simpl; intros ? ? ? [? ?]; subst; inversion H0; auto.
+Admitted.
 
 End PRESERVATION.

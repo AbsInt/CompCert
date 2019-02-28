@@ -40,7 +40,11 @@ type bitfield_info =
      0 < pos + sz <= bitsizeof(int)
 *)
 
-(* Mapping (struct identifier, bitfield name) -> bitfield info *)
+let carrier_field bf =
+  { fld_name = bf.bf_carrier; fld_typ = bf.bf_carrier_typ;
+    fld_bitfield = None; fld_anonymous = false }
+
+(* Mapping (struct/union identifier, bitfield name) -> bitfield info *)
 
 let bitfield_table =
       (Hashtbl.create 57: (ident * string, bitfield_info) Hashtbl.t)
@@ -48,6 +52,13 @@ let bitfield_table =
 let is_bitfield structid fieldname =
   try Some (Hashtbl.find bitfield_table (structid, fieldname))
   with Not_found -> None
+
+(* Mapping struct/union identifier -> list of members after transformation,
+   including the carrier fields, but without the bit fields.
+   structs and unions containing no bit fields are not put in this table. *)
+
+let composite_transformed_members =
+      (Hashtbl.create 57: (ident, C.field list) Hashtbl.t)
 
 (* Signedness issues *)
 
@@ -66,7 +77,7 @@ let is_signed_enum_bitfield env sid fld eid n =
   else if List.for_all (fun (_, v, _) -> int_representable v n true) info.Env.ei_members
   then true
   else begin
-    Cerrors.warning Cutil.no_loc Cerrors.Unnamed
+    Diagnostics.warning Diagnostics.no_loc Diagnostics.Unnamed
       "not all values of type 'enum %s' can be represented in bit-field '%s' of struct '%s' (%d bits are not enough)"
       eid.C.name fld sid.C.name n;
     false
@@ -144,7 +155,7 @@ let rec transf_struct_members env id count = function
       end
 
 let rec transf_union_members env id count = function
-    [] -> []
+  | [] -> []
   | m :: ms ->
       (match m.fld_bitfield with
       | None ->  m::transf_union_members env id count ms
@@ -176,12 +187,19 @@ let rec transf_union_members env id count = function
              bf_signed = signed; bf_signed_res = signed2;
              bf_bool = is_bool};
           { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None; fld_anonymous = false;}
-          :: transf_struct_members env id (count + 1) ms)
+          :: transf_union_members env id (count + 1) ms)
 
 let transf_composite env su id attr ml =
-  match su with
-  | Struct -> (attr, transf_struct_members env id 1 ml)
-  | Union  -> (attr, transf_union_members env id 1 ml)
+  if List.for_all (fun f -> f.fld_bitfield = None) ml then
+    (attr, ml)
+  else begin
+    let ml' =
+      match su with
+      | Struct -> transf_struct_members env id 1 ml
+      | Union  -> transf_union_members env id 1 ml in
+    Hashtbl.add composite_transformed_members id ml';
+    (attr, ml')
+  end
 
 (* Bitfield manipulation expressions *)
 
@@ -336,11 +354,24 @@ let rec transf_struct_init id fld_init_list =
       | Some bf ->
           let (el, rem') =
             pack_bitfield_init id bf.bf_carrier fld_init_list in
-          ({fld_name = bf.bf_carrier; fld_typ = bf.bf_carrier_typ;
-            fld_bitfield = None; fld_anonymous = false},
+          (carrier_field bf,
            Init_single {edesc = ECast(bf.bf_carrier_typ, or_expr_list el);
                         etyp = bf.bf_carrier_typ})
           :: transf_struct_init id rem'
+
+(* Add default initialization for carrier fields that are not listed in the output of
+   [transf_struct_init].  This happens with carrier fields that contain no named
+   bitfields, only anonymous bitfields. *)
+
+let rec completed_struct_init env actual expected =
+  match actual, expected with
+  | [], [] -> []
+  | (f_a, i) :: actual', f_e :: expected' when f_a.fld_name = f_e.fld_name ->
+      (f_a, i) :: completed_struct_init env actual' expected'
+  | _, f_e :: expected' ->
+      (f_e, default_init env f_e.fld_typ) :: completed_struct_init env actual expected'
+  | _, [] ->
+      assert false
 
 (* Check whether a field access (e.f or e->f) is a bitfield access.
    If so, return carrier expression (e and *e, respectively)
@@ -503,8 +534,19 @@ and transf_init env i =
   | Init_struct(id, fld_init_list) ->
       let fld_init_list' =
         List.map (fun (f, i) -> (f, transf_init env i)) fld_init_list in
-        Init_struct(id, transf_struct_init id fld_init_list')
-  | Init_union(id, fld, i) -> Init_union(id, fld, transf_init env i)
+      begin match Hashtbl.find composite_transformed_members id with
+      | exception Not_found ->
+          Init_struct(id, fld_init_list')
+      | ml ->
+          Init_struct(id, completed_struct_init env (transf_struct_init id fld_init_list') ml)
+      end
+  | Init_union(id, fld, i) ->
+      let i' = transf_init env i in
+      match is_bitfield id fld.fld_name with
+      | None ->
+          Init_union(id, fld, i')
+      | Some bf ->
+          Init_union(id, carrier_field bf, Init_single (bitfield_initializer bf i'))
 
 (* Declarations *)
 
@@ -528,6 +570,8 @@ let transf_fundef env f =
 (* Programs *)
 
 let program p =
+  Hashtbl.clear bitfield_table;
+  Hashtbl.clear composite_transformed_members;
   Transform.program
     ~composite:transf_composite
     ~decl: transf_decl

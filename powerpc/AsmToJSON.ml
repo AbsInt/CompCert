@@ -97,24 +97,29 @@ let mnemonic_names  =["Padd"; "Paddc"; "Padde"; "Paddi"; "Paddic"; "Paddis"; "Pa
                       "Pfmadd"; "Pfmr"; "Pfmsub"; "Pfmul"; "Pfmuls"; "Pfneg"; "Pfnmadd";
                       "Pfnmsub"; "Pfres"; "Pfrsp"; "Pfrsqrte"; "Pfsel"; "Pfsqrt"; "Pfsub";
                       "Pfsubs"; "Picbi"; "Picbtls"; "Pinlineasm"; "Pisel"; "Pisync"; "Plabel";
-                      "Plbz"; "Plbzx"; "Pld"; "Pldi"; "Pldx"; "Plfd"; "Plfdx"; "Plfi"; "Plfis";
+                      "Plbz"; "Plbzx"; "Pld"; "Pldbrx"; "Pldi"; "Pldx"; "Plfd"; "Plfdx"; "Plfi"; "Plfis";
                       "Plfs"; "Plfsx"; "Plha"; "Plhax"; "Plhbrx"; "Plhz"; "Plhzx"; "Plwarx";
                       "Plwbrx"; "Plwsync"; "Plwz"; "Plwzu"; "Plwzx"; "Pmbar"; "Pmfcr"; "Pmflr";
                       "Pmfspr"; "Pmr"; "Pmtctr"; "Pmtlr"; "Pmtspr"; "Pmulhd"; "Pmulhdu"; "Pmulhw";
                       "Pmulhwu"; "Pmulld"; "Pmulli"; "Pmullw"; "Pnand"; "Pnor"; "Por"; "Porc";
                       "Pori"; "Poris"; "Prldicl"; "Prldimi"; "Prldinm"; "Prlwimi"; "Prlwinm";
                       "Psld"; "Pslw"; "Psrad"; "Psradi"; "Psraw"; "Psrawi"; "Psrd"; "Psrw";
-                      "Pstb"; "Pstbx"; "Pstd"; "Pstdu"; "Pstdx"; "Pstfd"; "Pstfdu"; "Pstfdx";
+                      "Pstb"; "Pstbx"; "Pstd"; "Pstdbrx"; "Pstdu"; "Pstdx"; "Pstfd"; "Pstfdu"; "Pstfdx";
                       "Pstfs"; "Pstfsx"; "Psth"; "Psthbrx"; "Psthx"; "Pstw"; "Pstwbrx"; "Pstwcx_";
                       "Pstwu"; "Pstwux"; "Pstwx"; "Psubfc"; "Psubfe"; "Psubfic"; "Psubfze";
                       "Psync"; "Ptrap"; "Pxor"; "Pxori"; "Pxoris"]
 
 let pp_instructions pp ic =
   let ic = List.filter (fun s -> match s with
-      | Pbuiltin (ef,_,_) ->
+      | Pbuiltin (ef,args,_) ->
         begin match ef with
-          | EF_inline_asm _
-          | EF_annot _ -> true
+          | EF_inline_asm _ -> true
+          | EF_annot (kind,txt,targs) ->
+            begin match  P.to_int kind with
+              | 1 -> false
+              | 2 ->  AisAnnot.json_ais_annot preg_annot "r1" (camlstring_of_coqstring txt) args <> []
+              | _ -> false
+            end
           | _ -> false
         end
       | Pcfi_adjust _  (* Only debug relevant *)
@@ -231,6 +236,7 @@ let pp_instructions pp ic =
   | Plbzx (ir1,ir2,ir3) -> instruction pp "Plbzx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pld (ir1,c,ir2)
   | Pld_a (ir1,c,ir2) -> instruction pp "Pld" [Ireg ir1; Constant c; Ireg ir2]
+  | Pldbrx (ir1,ir2,ir3) -> instruction pp "Pldbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pldx (ir1,ir2,ir3)
   | Pldx_a (ir1,ir2,ir3) -> instruction pp "Pldx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Plfd (fr,c,ir)
@@ -300,6 +306,7 @@ let pp_instructions pp ic =
   | Pstbx (ir1,ir2,ir3) -> instruction pp "Pstbx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstd (ir1,c,ir2)
   | Pstd_a (ir1,c,ir2) -> instruction pp "Pstd" [Ireg ir1; Constant c; Ireg ir2]
+  | Pstdbrx (ir1,ir2,ir3) -> instruction pp "Pstdbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstdx (ir1,ir2,ir3)
   | Pstdx_a (ir1,ir2,ir3) -> instruction pp "Pstdx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Pstdu (ir1,c,ir2) -> instruction pp "Pstdu" [Ireg ir1; Constant c; Ireg ir2]
@@ -340,21 +347,19 @@ let pp_instructions pp ic =
     begin match ef with
       | EF_inline_asm _ ->
         instruction pp "Pinlineasm" [Id];
-        Cerrors.warning ("",-10) Cerrors.Inline_asm_sdump "inline assembler is not supported in sdump"
+        Diagnostics.(warning no_loc Inline_asm_sdump "inline assembler is not supported in sdump")
       | EF_annot (kind,txt,targs) ->
-        let annot_string = PrintAsmaux.annot_text preg_annot "r1" (camlstring_of_coqstring txt) args in
-        let len = String.length annot_string in
-        let buf = Buffer.create len in
-        String.iter (fun c -> begin match c with
-            | '\\' | '"' -> Buffer.add_char buf '\\'
-            | _ -> () end;
-            Buffer.add_char buf c) annot_string;
-        let annot_string = Buffer.contents buf in
-        let kind = match P.to_int kind with
-          | 1 -> "normal"
-          | 2 -> "ais"
-          | _ -> assert false in
-        instruction pp "Pannot" [String kind;String annot_string]
+        begin match P.to_int kind with
+          | 2 ->
+            let annots = AisAnnot.json_ais_annot preg_annot "r1" (camlstring_of_coqstring txt) args in
+            let annots = List.map (function
+                | AisAnnot.String s -> String s
+                | AisAnnot.Symbol s -> Atom s
+                | AisAnnot.Label _ -> assert false (* should never happen *)
+              ) annots in
+            instruction pp "Pannot" annots
+          | _ -> assert false
+        end
       | EF_annot_val _
       | EF_builtin _
       | EF_debug _
@@ -378,7 +383,7 @@ let print_if prog sourcename =
   | None -> ()
   | Some f ->
     let f = Filename.concat !sdump_folder f in
-    let oc = open_out f in
+    let oc = open_out_bin f in
     pp_ast (formatter_of_out_channel oc) pp_instructions prog sourcename;
     close_out oc
 
