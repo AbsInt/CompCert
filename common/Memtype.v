@@ -104,7 +104,7 @@ Parameter alloc: forall (m: mem) (lo hi: Z), mem * block.
 
 (** [free m b lo hi] frees (deallocates) the range of offsets from [lo]
   included to [hi] excluded in block [b].  Returns the updated memory
-  state, or [None] if the freed addresses are not writable. *)
+  state, or [None] if the freed addresses are not freeable. *)
 Parameter free: forall (m: mem) (b: block) (lo hi: Z), option mem.
 
 (** [load chunk m b ofs] reads a memory quantity [chunk] from
