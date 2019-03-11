@@ -172,10 +172,8 @@ unary_expression:
 | loc = SIZEOF LPAREN typ = type_name RPAREN
     { (TYPE_SIZEOF typ, loc) }
 (* Non-standard *)
-| loc = ALIGNOF expr = unary_expression
-    { (EXPR_ALIGNOF (fst expr), loc) }
 | loc = ALIGNOF LPAREN typ = type_name RPAREN
-    { (TYPE_ALIGNOF typ, loc) }
+    { (ALIGNOF typ, loc) }
 
 unary_operator:
 | loc = AND
@@ -546,7 +544,7 @@ attribute_specifier:
 | loc = ALIGNAS LPAREN args = argument_expression_list RPAREN
     { (ALIGNAS_ATTR (rev' args) loc, loc) }
 | loc = ALIGNAS LPAREN typ = type_name RPAREN
-    { (ALIGNAS_ATTR [TYPE_ALIGNOF typ] loc, loc) }
+    { (ALIGNAS_ATTR [ALIGNOF typ] loc, loc) }
 
 gcc_attribute_list:
 | a = gcc_attribute
@@ -562,7 +560,7 @@ gcc_attribute:
 | w = gcc_attribute_word LPAREN RPAREN
     { GCC_ATTR_ARGS w [] }
 | w = gcc_attribute_word LPAREN args = argument_expression_list RPAREN
-    { GCC_ATTR_ARGS w args }
+    { GCC_ATTR_ARGS w (rev' args) }
 
 gcc_attribute_word:
 | i = OTHER_NAME

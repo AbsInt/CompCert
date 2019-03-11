@@ -700,9 +700,9 @@ Qed.
 Lemma compare_floats_spec:
   forall rs n1 n2,
   let rs' := nextinstr (compare_floats (Vfloat n1) (Vfloat n2) rs) in
-     rs'#ZF = Val.of_bool (negb (Float.cmp Cne n1 n2))
+     rs'#ZF = Val.of_bool (Float.cmp Ceq n1 n2 || negb (Float.ordered n1 n2))
   /\ rs'#CF = Val.of_bool (negb (Float.cmp Cge n1 n2))
-  /\ rs'#PF = Val.of_bool (negb (Float.cmp Ceq n1 n2 || Float.cmp Clt n1 n2 || Float.cmp Cgt n1 n2))
+  /\ rs'#PF = Val.of_bool (negb (Float.ordered n1 n2))
   /\ (forall r, data_preg r = true -> rs'#r = rs#r).
 Proof.
   intros. unfold rs'; unfold compare_floats.
@@ -715,9 +715,9 @@ Qed.
 Lemma compare_floats32_spec:
   forall rs n1 n2,
   let rs' := nextinstr (compare_floats32 (Vsingle n1) (Vsingle n2) rs) in
-     rs'#ZF = Val.of_bool (negb (Float32.cmp Cne n1 n2))
+     rs'#ZF = Val.of_bool (Float32.cmp Ceq n1 n2 || negb (Float32.ordered n1 n2))
   /\ rs'#CF = Val.of_bool (negb (Float32.cmp Cge n1 n2))
-  /\ rs'#PF = Val.of_bool (negb (Float32.cmp Ceq n1 n2 || Float32.cmp Clt n1 n2 || Float32.cmp Cgt n1 n2))
+  /\ rs'#PF = Val.of_bool (negb (Float32.ordered n1 n2))
   /\ (forall r, data_preg r = true -> rs'#r = rs#r).
 Proof.
   intros. unfold rs'; unfold compare_floats32.
@@ -763,38 +763,22 @@ Proof.
   intros [A [B [C D]]].
   unfold eval_extcond, eval_testcond. rewrite A; rewrite B; rewrite C.
   destruct c; simpl.
-(* eq *)
-  rewrite Float.cmp_ne_eq.
-  caseEq (Float.cmp Ceq n1 n2); intros.
-  auto.
-  simpl. destruct (Float.cmp Clt n1 n2 || Float.cmp Cgt n1 n2); auto.
-(* ne *)
-  rewrite Float.cmp_ne_eq.
-  caseEq (Float.cmp Ceq n1 n2); intros.
-  auto.
-  simpl. destruct (Float.cmp Clt n1 n2 || Float.cmp Cgt n1 n2); auto.
-(* lt *)
-  rewrite <- (Float.cmp_swap Cge n1 n2).
-  rewrite <- (Float.cmp_swap Cne n1 n2).
-  simpl.
-  rewrite Float.cmp_ne_eq. rewrite Float.cmp_le_lt_eq.
-  caseEq (Float.cmp Clt n1 n2); intros; simpl.
-  caseEq (Float.cmp Ceq n1 n2); intros; simpl.
-  elimtype False. eapply Float.cmp_lt_eq_false; eauto.
-  auto.
-  destruct (Float.cmp Ceq n1 n2); auto.
-(* le *)
+- (* eq *)
+Transparent Float.cmp Float.ordered.
+  unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
+- (* ne *)
+  unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
+- (* lt *)
+  rewrite <- (Float.cmp_swap Clt n2 n1). simpl. unfold Float.ordered. 
+  destruct (Float.compare n2 n1) as [[]|]; reflexivity.
+- (* le *)
   rewrite <- (Float.cmp_swap Cge n1 n2). simpl.
-  destruct (Float.cmp Cle n1 n2); auto.
-(* gt *)
-  rewrite Float.cmp_ne_eq. rewrite Float.cmp_ge_gt_eq.
-  caseEq (Float.cmp Cgt n1 n2); intros; simpl.
-  caseEq (Float.cmp Ceq n1 n2); intros; simpl.
-  elimtype False. eapply Float.cmp_gt_eq_false; eauto.
-  auto.
-  destruct (Float.cmp Ceq n1 n2); auto.
-(* ge *)
+  destruct (Float.compare n1 n2) as [[]|]; auto.
+- (* gt *)
+ unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
+- (* ge *)
   destruct (Float.cmp Cge n1 n2); auto.
+Opaque Float.cmp Float.ordered.
 Qed.
 
 Lemma testcond_for_neg_float_comparison_correct:
@@ -811,38 +795,22 @@ Proof.
   intros [A [B [C D]]].
   unfold eval_extcond, eval_testcond. rewrite A; rewrite B; rewrite C.
   destruct c; simpl.
-(* eq *)
-  rewrite Float.cmp_ne_eq.
-  caseEq (Float.cmp Ceq n1 n2); intros.
-  auto.
-  simpl. destruct (Float.cmp Clt n1 n2 || Float.cmp Cgt n1 n2); auto.
-(* ne *)
-  rewrite Float.cmp_ne_eq.
-  caseEq (Float.cmp Ceq n1 n2); intros.
-  auto.
-  simpl. destruct (Float.cmp Clt n1 n2 || Float.cmp Cgt n1 n2); auto.
-(* lt *)
-  rewrite <- (Float.cmp_swap Cge n1 n2).
-  rewrite <- (Float.cmp_swap Cne n1 n2).
-  simpl.
-  rewrite Float.cmp_ne_eq. rewrite Float.cmp_le_lt_eq.
-  caseEq (Float.cmp Clt n1 n2); intros; simpl.
-  caseEq (Float.cmp Ceq n1 n2); intros; simpl.
-  elimtype False. eapply Float.cmp_lt_eq_false; eauto.
-  auto.
-  destruct (Float.cmp Ceq n1 n2); auto.
-(* le *)
+- (* eq *)
+Transparent Float.cmp Float.ordered.
+  unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
+- (* ne *)
+  unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
+- (* lt *)
+  rewrite <- (Float.cmp_swap Clt n2 n1). simpl. unfold Float.ordered. 
+  destruct (Float.compare n2 n1) as [[]|]; reflexivity.
+- (* le *)
   rewrite <- (Float.cmp_swap Cge n1 n2). simpl.
-  destruct (Float.cmp Cle n1 n2); auto.
-(* gt *)
-  rewrite Float.cmp_ne_eq. rewrite Float.cmp_ge_gt_eq.
-  caseEq (Float.cmp Cgt n1 n2); intros; simpl.
-  caseEq (Float.cmp Ceq n1 n2); intros; simpl.
-  elimtype False. eapply Float.cmp_gt_eq_false; eauto.
-  auto.
-  destruct (Float.cmp Ceq n1 n2); auto.
-(* ge *)
+  destruct (Float.compare n1 n2) as [[]|]; auto.
+- (* gt *)
+ unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
+- (* ge *)
   destruct (Float.cmp Cge n1 n2); auto.
+Opaque Float.cmp Float.ordered.
 Qed.
 
 Lemma testcond_for_float32_comparison_correct:
@@ -859,38 +827,22 @@ Proof.
   intros [A [B [C D]]].
   unfold eval_extcond, eval_testcond. rewrite A; rewrite B; rewrite C.
   destruct c; simpl.
-(* eq *)
-  rewrite Float32.cmp_ne_eq.
-  caseEq (Float32.cmp Ceq n1 n2); intros.
-  auto.
-  simpl. destruct (Float32.cmp Clt n1 n2 || Float32.cmp Cgt n1 n2); auto.
-(* ne *)
-  rewrite Float32.cmp_ne_eq.
-  caseEq (Float32.cmp Ceq n1 n2); intros.
-  auto.
-  simpl. destruct (Float32.cmp Clt n1 n2 || Float32.cmp Cgt n1 n2); auto.
-(* lt *)
-  rewrite <- (Float32.cmp_swap Cge n1 n2).
-  rewrite <- (Float32.cmp_swap Cne n1 n2).
-  simpl.
-  rewrite Float32.cmp_ne_eq. rewrite Float32.cmp_le_lt_eq.
-  caseEq (Float32.cmp Clt n1 n2); intros; simpl.
-  caseEq (Float32.cmp Ceq n1 n2); intros; simpl.
-  elimtype False. eapply Float32.cmp_lt_eq_false; eauto.
-  auto.
-  destruct (Float32.cmp Ceq n1 n2); auto.
-(* le *)
+- (* eq *)
+Transparent Float32.cmp Float32.ordered.
+  unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
+- (* ne *)
+  unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
+- (* lt *)
+  rewrite <- (Float32.cmp_swap Clt n2 n1). simpl. unfold Float32.ordered. 
+  destruct (Float32.compare n2 n1) as [[]|]; reflexivity.
+- (* le *)
   rewrite <- (Float32.cmp_swap Cge n1 n2). simpl.
-  destruct (Float32.cmp Cle n1 n2); auto.
-(* gt *)
-  rewrite Float32.cmp_ne_eq. rewrite Float32.cmp_ge_gt_eq.
-  caseEq (Float32.cmp Cgt n1 n2); intros; simpl.
-  caseEq (Float32.cmp Ceq n1 n2); intros; simpl.
-  elimtype False. eapply Float32.cmp_gt_eq_false; eauto.
-  auto.
-  destruct (Float32.cmp Ceq n1 n2); auto.
-(* ge *)
+  destruct (Float32.compare n1 n2) as [[]|]; auto.
+- (* gt *)
+ unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
+- (* ge *)
   destruct (Float32.cmp Cge n1 n2); auto.
+Opaque Float32.cmp Float32.ordered.
 Qed.
 
 Lemma testcond_for_neg_float32_comparison_correct:
@@ -907,38 +859,22 @@ Proof.
   intros [A [B [C D]]].
   unfold eval_extcond, eval_testcond. rewrite A; rewrite B; rewrite C.
   destruct c; simpl.
-(* eq *)
-  rewrite Float32.cmp_ne_eq.
-  caseEq (Float32.cmp Ceq n1 n2); intros.
-  auto.
-  simpl. destruct (Float32.cmp Clt n1 n2 || Float32.cmp Cgt n1 n2); auto.
-(* ne *)
-  rewrite Float32.cmp_ne_eq.
-  caseEq (Float32.cmp Ceq n1 n2); intros.
-  auto.
-  simpl. destruct (Float32.cmp Clt n1 n2 || Float32.cmp Cgt n1 n2); auto.
-(* lt *)
-  rewrite <- (Float32.cmp_swap Cge n1 n2).
-  rewrite <- (Float32.cmp_swap Cne n1 n2).
-  simpl.
-  rewrite Float32.cmp_ne_eq. rewrite Float32.cmp_le_lt_eq.
-  caseEq (Float32.cmp Clt n1 n2); intros; simpl.
-  caseEq (Float32.cmp Ceq n1 n2); intros; simpl.
-  elimtype False. eapply Float32.cmp_lt_eq_false; eauto.
-  auto.
-  destruct (Float32.cmp Ceq n1 n2); auto.
-(* le *)
+- (* eq *)
+Transparent Float32.cmp Float32.ordered.
+  unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
+- (* ne *)
+  unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
+- (* lt *)
+  rewrite <- (Float32.cmp_swap Clt n2 n1). simpl. unfold Float32.ordered. 
+  destruct (Float32.compare n2 n1) as [[]|]; reflexivity.
+- (* le *)
   rewrite <- (Float32.cmp_swap Cge n1 n2). simpl.
-  destruct (Float32.cmp Cle n1 n2); auto.
-(* gt *)
-  rewrite Float32.cmp_ne_eq. rewrite Float32.cmp_ge_gt_eq.
-  caseEq (Float32.cmp Cgt n1 n2); intros; simpl.
-  caseEq (Float32.cmp Ceq n1 n2); intros; simpl.
-  elimtype False. eapply Float32.cmp_gt_eq_false; eauto.
-  auto.
-  destruct (Float32.cmp Ceq n1 n2); auto.
-(* ge *)
+  destruct (Float32.compare n1 n2) as [[]|]; auto.
+- (* gt *)
+ unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
+- (* ge *)
   destruct (Float32.cmp Cge n1 n2); auto.
+Opaque Float32.cmp Float32.ordered.
 Qed.
 
 Remark swap_floats_commut:

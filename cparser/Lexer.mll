@@ -21,7 +21,7 @@ open Pre_parser_aux
 module SSet = Set.Make(String)
 
 let lexicon : (string, Cabs.cabsloc -> token) Hashtbl.t = Hashtbl.create 17
-let ignored_keyworkds : SSet.t ref = ref SSet.empty
+let ignored_keywords : SSet.t ref = ref SSet.empty
 
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
@@ -85,7 +85,7 @@ let () =
       ("while", fun loc -> WHILE loc)];
   if Configuration.system <> "diab" then
     (* We can ignore the __extension__ GCC keyword. *)
-    ignored_keyworkds := SSet.add "__extension__" !ignored_keyworkds
+    ignored_keywords := SSet.add "__extension__" !ignored_keywords
 
 let init_ctx = SSet.singleton "__builtin_va_list"
 let types_context : SSet.t ref = ref init_ctx
@@ -135,7 +135,7 @@ let error lb fmt =
 
 let warning lb fmt =
   Diagnostics.warning
-      (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) Diagnostics.Unnamed ("warning: " ^^ fmt)
+      (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) Diagnostics.Unnamed fmt
 
 (* Simple character escapes *)
 
@@ -329,7 +329,7 @@ rule initial = parse
   | ","                           { COMMA(currentLoc lexbuf) }
   | "."                           { DOT(currentLoc lexbuf) }
   | identifier as id              {
-    if SSet.mem id !ignored_keyworkds then
+    if SSet.mem id !ignored_keywords then
       initial lexbuf
     else
       try Hashtbl.find lexicon id (currentLoc lexbuf)

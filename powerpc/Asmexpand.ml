@@ -348,7 +348,7 @@ let expand_builtin_vstore_1 chunk addr src =
                expand_store_int64 hi lo temp (Cint _0) (Cint _4))
         (fun r1 r2 ->
            emit (Padd(temp, r1, r2));
-           expand_load_int64 hi lo temp (Cint _0) (Cint _4))
+           expand_store_int64 hi lo temp (Cint _0) (Cint _4))
         addr temp
   | _, _ ->
       assert false
@@ -410,6 +410,30 @@ let expand_builtin_va_start r =
 let expand_int64_arith conflict rl fn =
   if conflict then (fn GPR0; emit (Pmr(rl, GPR0))) else fn rl
 
+(* Expansion of integer conditional moves (__builtin_*sel) *)
+(* The generated code works equally well with 32-bit integer registers
+   and with 64-bit integer registers. *)
+
+let expand_integer_cond_move a1 a2 a3 res =
+  if a2 = a3 then
+    emit (Pmr (res, a2))
+  else if eref then begin
+    emit (Pcmpwi (a1,Cint (Int.zero)));
+    emit (Pisel (res,a3,a2,CRbit_2))
+  end else begin
+    (* a1 has type _Bool, hence it is 0 or 1 *)
+    emit (Psubfic (GPR0, a1, Cint _0));
+    (* r0 = -1 (all ones) if a1 is true, r0 = 0 if a1 is false *)
+    if res <> a3 then begin
+      emit (Pand_ (res, a2, GPR0));
+      emit (Pandc (GPR0, a3, GPR0))
+    end else begin
+      emit (Pandc (res, a3, GPR0));
+      emit (Pand_ (GPR0, a2, GPR0))
+    end;
+    emit (Por (res, res, GPR0))
+  end
+
 (* Convert integer constant into GPR with corresponding number *)
 let int_to_int_reg = function
    | 0 -> Some GPR0  | 1 -> Some GPR1  | 2 -> Some GPR2  | 3 -> Some GPR3
@@ -433,6 +457,16 @@ let expand_builtin_inline name args res =
       emit (Pmulhw(res, a1, a2))
   | "__builtin_mulhwu", [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pmulhwu(res, a1, a2))
+  | "__builtin_mulhd", [BA(IR a1); BA(IR a2)], BR(IR res) ->
+      if Archi.ppc64 then
+        emit (Pmulhd(res, a1, a2))
+      else
+        raise (Error "__builtin_mulhd is only supported for PPC64 targets")
+  | "__builtin_mulhdu", [BA(IR a1); BA(IR a2)], BR(IR res) ->
+      if Archi.ppc64 then
+        emit (Pmulhdu(res, a1, a2))
+      else
+        raise (Error "__builtin_mulhdu is only supported for PPC64 targets")
   | ("__builtin_clz" | "__builtin_clzl"), [BA(IR a1)], BR(IR res) ->
       emit (Pcntlzw(res, a1))
   | "__builtin_clzll", [BA(IR a1)], BR(IR res) ->
@@ -543,10 +577,20 @@ let expand_builtin_inline name args res =
       emit (Plhbrx(res, GPR0, a1))
   | "__builtin_read32_reversed", [BA(IR a1)], BR(IR res) ->
       emit (Plwbrx(res, GPR0, a1))
+  | "__builtin_read64_reversed", [BA(IR a1)], BR(IR res) ->
+      if Archi.ppc64 then
+        emit (Pldbrx(res, GPR0, a1))
+      else
+        raise (Error "__builtin_read64_reversed is only supported for PPC64 targets")
   | "__builtin_write16_reversed", [BA(IR a1); BA(IR a2)], _ ->
       emit (Psthbrx(a2, GPR0, a1))
   | "__builtin_write32_reversed", [BA(IR a1); BA(IR a2)], _ ->
       emit (Pstwbrx(a2, GPR0, a1))
+  | "__builtin_write64_reversed", [BA(IR a1); BA(IR a2)], _ ->
+      if Archi.ppc64 then
+        emit (Pstdbrx(a2, GPR0, a1))
+      else
+        raise (Error "__builtin_write64_reversed is only supported for PPC64 targets")
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
       ()
@@ -562,7 +606,7 @@ let expand_builtin_inline name args res =
       if not (mo = _0 || mo = _1) then
         raise (Error "the argument of __builtin_mbar must be 0 or 1");
       emit (Pmbar mo)
-  | "__builin_mbar", _, _ ->
+  | "__builtin_mbar", _, _ ->
       raise (Error "the argument of __builtin_mbar must be a constant");
   | "__builtin_trap", [], _ ->
       emit (Ptrap)
@@ -649,25 +693,13 @@ let expand_builtin_inline name args res =
   | "__builtin_return_address",_,BR (IR res) ->
       emit (Plwz (res, Cint! retaddr_offset,GPR1))
   (* Integer selection *)
-  | ("__builtin_isel" | "__builtin_uisel"), [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
-      if eref then begin
-        emit (Pcmpwi (a1,Cint (Int.zero)));
-        emit (Pisel (res,a3,a2,CRbit_2))
-      end else if a2 = a3 then
-        emit (Pmr (res, a2))
-      else begin
-        (* a1 has type _Bool, hence it is 0 or 1 *)
-        emit (Psubfic (GPR0, a1, Cint _0));
-        (* r0 = 0xFFFF_FFFF if a1 is true, r0 = 0 if a1 is false *)
-        if res <> a3 then begin
-          emit (Pand_ (res, a2, GPR0));
-          emit (Pandc (GPR0, a3, GPR0))
-        end else begin
-          emit (Pandc (res, a3, GPR0));
-          emit (Pand_ (GPR0, a2, GPR0))
-        end;
-        emit (Por (res, res, GPR0))
-      end
+  | ("__builtin_bsel" | "__builtin_isel" | "__builtin_uisel"), [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
+      expand_integer_cond_move a1 a2 a3 res
+  | ("__builtin_isel64" | "__builtin_uisel64"), [BA (IR a1); BA (IR a2); BA (IR a3)],BR (IR res) ->
+    if Archi.ppc64 then
+      expand_integer_cond_move a1 a2 a3 res
+    else
+      raise (Error (name ^" is only supported for PPC64 targets"))
   (* no operation *)
   | "__builtin_nop", [], _ ->
       emit (Pori (GPR0, GPR0, Cint _0))
@@ -871,7 +903,7 @@ let expand_instruction instr =
           expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
       | EF_annot_val(kind,txt, targ) ->
           expand_annot_val kind txt targ args res
-       | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
+      | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
           emit instr
       | _ ->
           assert false
@@ -912,10 +944,7 @@ let preg_to_dwarf = function
 let expand_function id fn =
   try
     set_current_function fn;
-    if !Clflags.option_g then
-      expand_debug id 1 preg_to_dwarf expand_instruction fn.fn_code
-    else
-      List.iter expand_instruction fn.fn_code;
+    expand id 1 preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))

@@ -18,15 +18,21 @@
 prefix='/usr/local'
 bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
+coqdevdir='$(PREFIX)/lib/compcert/coq'
 toolprefix=''
 target=''
 has_runtime_lib=true
 has_standard_headers=true
 clightgen=false
+install_coqdev=false
 responsefile="gnu"
 ignore_coq_version=false
 
 usage='Usage: ./configure [options] target
+For help on options and targets, do: ./configure -help
+'
+
+help='Usage: ./configure [options] target
 
 Supported targets:
   ppc-eabi             (PowerPC, EABI with GNU/Unix tools)
@@ -75,13 +81,19 @@ Options:
   -prefix <dir>        Install in <dir>/bin and <dir>/lib/compcert
   -bindir <dir>        Install binaries in <dir>
   -libdir <dir>        Install libraries in <dir>
+  -coqdevdir <dir>     Install Coq development (.vo files) in <dir>
   -toolprefix <pref>   Prefix names of tools ("gcc", etc) with <pref>
   -no-runtime-lib      Do not compile nor install the runtime support library
   -no-standard-headers Do not install nor use the standard .h headers
-  -clightgen           Also compile the clightgen tool
+  -clightgen           Also compile and install the clightgen tool
+  -install-coqdev      Also install the Coq development (implied by -clightgen)
   -ignore-coq-version  Accept to use experimental or unsupported versions of Coq
 '
 
+#
+# Remove Leftover Makefile.config (if any)  (GPR#244)
+#
+rm -f Makefile.config
 
 #
 # Parse Command-Line Arguments
@@ -96,6 +108,8 @@ while : ; do
         bindir="$2"; shift;;
     -libdir|--libdir)
         libdir="$2"; shift;;
+    -coqdevdir|--coqdevdir)
+        coqdevdir="$2"; install_coqdev=true; shift;;
     -toolprefix|--toolprefix)
         toolprefix="$2"; shift;;
     -no-runtime-lib)
@@ -103,9 +117,18 @@ while : ; do
     -no-standard-headers)
         has_standard_headers=false;;
     -clightgen)
-        clightgen=true;;
+        clightgen=true
+        install_coqdev=true;;
     -ignore-coq-version|--ignore-coq-version)
         ignore_coq_version=true;;
+    -install-coqdev|--install-coqdev|-install-coq-dev|--install-coq-dev)
+        install_coqdev=true;;
+    -help|--help)
+        echo "$help"; exit 0;;
+    -*)
+        echo "Error: unknown option '$1'." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
     *)
         if test -n "$target"; then echo "$usage" 1>&2; exit 2; fi
         target="$1";;
@@ -176,8 +199,6 @@ casmruntime=""
 clinker_needs_no_pie=true
 clinker_options=""
 cprepro_options=""
-struct_passing=""
-struct_return=""
 
 
 #
@@ -205,8 +226,6 @@ if test "$arch" = "arm"; then
   cprepro="${toolprefix}gcc"
   cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
   libmath="-lm"
-  struct_passing="ints"
-  struct_return="int1-4"
   system="linux"
 fi
 
@@ -227,16 +246,15 @@ if test "$arch" = "powerpc"; then
 
   case "$target" in
     linux)
-        struct_return="ref"
+        abi="linux"
         ;;
     *)
-        struct_return="int1-8"
+        abi="eabi"
         ;;
   esac
 
   case "$target" in
     eabi-diab)
-        abi="eabi"
         asm_supports_cfi=false
         casm="${toolprefix}das"
         casm_options="-Xalign-value"
@@ -246,12 +264,10 @@ if test "$arch" = "powerpc"; then
         cprepro="${toolprefix}dcc"
         cprepro_options="-E -D__GNUC__"
         libmath="-lm"
-        struct_passing="ref-caller"
         system="diab"
         responsefile="diab"
         ;;
     *)
-        abi="eabi"
         casm="${toolprefix}gcc"
         casm_options="-c"
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
@@ -260,7 +276,6 @@ if test "$arch" = "powerpc"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ref-caller"
         system="linux"
         ;;
   esac
@@ -283,8 +298,6 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ints"
-        struct_return="int1248"    # to check!
         system="bsd"
         ;;
     cygwin)
@@ -297,8 +310,6 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ '-D__attribute__(x)=' -E"
         libmath="-lm"
-        struct_passing="ints"
-        struct_return="ref"
         system="cygwin"
         ;;
     linux)
@@ -311,8 +322,6 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ints"
-        struct_return="ref"
         system="linux"
         ;;
     macosx)
@@ -328,8 +337,6 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -arch i386 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
         libmath=""
-        struct_passing="ints"
-        struct_return="int1248"
         system="macosx"
 
         if [[ $kernel_major -gt 11 ]]; then
@@ -363,8 +370,6 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ref-callee"   # wrong!
-        struct_return="ref"           # to check!
         system="bsd"
         ;;
     linux)
@@ -377,8 +382,6 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
         libmath="-lm"
-        struct_passing="ref-callee"   # wrong!
-        struct_return="ref"           # to check!
         system="linux"
         ;;
     macosx)
@@ -394,8 +397,6 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
         libmath=""
-        struct_passing="ref-callee"   # wrong!
-        struct_return="ref"           # to check!
         system="macosx"
         ;;
     *)
@@ -424,8 +425,6 @@ if test "$arch" = "riscV"; then
   cprepro="${toolprefix}gcc"
   cprepro_options="$model_options -std=c99 -U__GNUC__ -E"
   libmath="-lm"
-  struct_passing="ref-callee"   # wrong!
-  struct_return="ref"           # to check!
   system="linux"
 fi
 
@@ -504,19 +503,19 @@ missingtools=false
 echo "Testing Coq... " | tr -d '\n'
 coq_ver=$(${COQBIN}coqc -v 2>/dev/null | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p')
 case "$coq_ver" in
-  8.6.1|8.7.0|8.7.1)
+  8.6.1|8.7.0|8.7.1|8.7.2|8.8.0|8.8.1|8.8.2|8.9.0)
         echo "version $coq_ver -- good!";;
   ?*)
         echo "version $coq_ver -- UNSUPPORTED"
         if $ignore_coq_version; then
             echo "Warning: this version of Coq is unsupported, proceed at your own risks."
         else
-            echo "Error: CompCert requires Coq version 8.6.1 or 8.7.0 or 8.7.1."
+            echo "Error: CompCert requires one of the following Coq versions: 8.9.0, 8.8.2, 8.8.1, 8.8.0, 8.7.2, 8.7.1, 8.7.0, 8.6.1"
             missingtools=true
         fi;;
   "")
         echo "NOT FOUND"
-        echo "Error: make sure Coq version 8.7.1 is installed."
+        echo "Error: make sure Coq version 8.9.0 is installed."
         missingtools=true;;
 esac
 
@@ -555,18 +554,24 @@ else
 fi
 
 MENHIR_REQUIRED=20161201
+MENHIR_NEW_API=20180530
+MENHIR_MAX=20181113
+menhir_flags=''
 echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
   20[0-9][0-9][0-9][0-9][0-9][0-9])
-      if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
+      if test "$menhir_ver" -ge $MENHIR_REQUIRED -a "$menhir_ver" -le $MENHIR_MAX; then
           echo "version $menhir_ver -- good!"
           menhir_includes="-I `menhir --suggest-menhirLib`"
-        else
+          if test "$menhir_ver" -ge $MENHIR_NEW_API; then
+              menhir_flags="--coq-lib-path compcert.cparser.MenhirLib"
+          fi
+      else
           echo "version $menhir_ver -- UNSUPPORTED"
-          echo "Error: CompCert requires Menhir version $MENHIR_REQUIRED or later."
+          echo "Error: CompCert requires a version of Menhir between $MENHIR_REQUIRED and $MENHIR_MAX, included."
           missingtools=true
-        fi;;
+      fi;;
   *)
         echo "NOT FOUND"
         echo "Error: make sure Menhir version $MENHIR_REQUIRED or later is installed."
@@ -647,8 +652,10 @@ BINDIR=$bindir
 LIBDIR=$libdir
 MANDIR=$sharedir/man
 SHAREDIR=$sharedir
+COQDEVDIR=$coqdevdir
 OCAML_OPT_COMP=$ocaml_opt_comp
 MENHIR_INCLUDES=$menhir_includes
+MENHIR_FLAGS=$menhir_flags
 COMPFLAGS=-bin-annot
 EOF
 
@@ -670,10 +677,9 @@ CPREPRO_OPTIONS=$cprepro_options
 ENDIANNESS=$endianness
 HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
+INSTALL_COQDEV=$install_coqdev
 LIBMATH=$libmath
 MODEL=$model
-STRUCT_PASSING=$struct_passing
-STRUCT_RETURN=$struct_return
 SYSTEM=$system
 RESPONSEFILE=$responsefile
 EOF
@@ -715,19 +721,6 @@ BITSIZE=
 # ENDIANNESS=big     # for ARM or PowerPC
 # ENDIANNESS=little  # for ARM or x86
 ENDIANNESS=
-
-# Default calling conventions for passing structs and unions by value
-# See options -fstruct-passing=<style> and -fstruct-return=<style>
-# in the CompCert user's manual
-#
-STRUCT_PASSING=ref_callee
-# STRUCT_PASSING=ref_caller
-# STRUCT_PASSING=ints
-#
-STRUCT_RETURN=ref
-# STRUCT_RETURN=int1248
-# STRUCT_RETURN=int1-4
-# STRUCT_RETURN=int1-8
 
 # Target operating system and development environment
 #
@@ -800,6 +793,7 @@ else
 
 bindirexp=`echo "$bindir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
 libdirexp=`echo "$libdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
+coqdevdirexp=`echo "$coqdevdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
 
 cat <<EOF
 
@@ -808,7 +802,6 @@ CompCert configuration:
     Hardware model................ $model
     Application binary interface.. $abi
     Endianness.................... $endianness
-    Composite passing conventions. arguments: $struct_passing, return values: $struct_return
     OS and development env........ $system
     C compiler.................... $cc
     C preprocessor................ $cprepro
@@ -818,12 +811,23 @@ CompCert configuration:
     Linker........................ $clinker
     Linker needs '-no-pie'........ $clinker_needs_no_pie
     Math library.................. $libmath
+    Build command to use.......... $make
     Binaries installed in......... $bindirexp
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $libdirexp
     Standard headers provided..... $has_standard_headers
     Standard headers installed in. $libdirexp/include
-    Build command to use.......... $make
+EOF
 
+if $install_coqdev; then
+cat <<EOF
+    Coq development installed in.. $coqdevdirexp
+EOF
+else
+cat <<EOF
+    Coq development will not be installed
 EOF
 fi
+
+fi
+

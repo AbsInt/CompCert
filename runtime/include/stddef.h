@@ -108,13 +108,22 @@ typedef signed int wchar_t;
 
 #if defined(_STDDEF_H) || defined(__need_NULL)
 #ifndef NULL
-#define NULL 0
+#define NULL ((void *) 0)
 #endif
 #undef __need_NULL
 #endif
 
 #if defined(_STDDEF_H) && !defined(offsetof)
 #define offsetof(ty,member) (__builtin_offsetof(ty,member))
+#endif
+
+#ifdef _STDDEF_H
+/* Type whose alignment is supported in every context and is at least
+   as great as that of any standard type not using alignment
+   specifiers. Since we do not support long double per default the type
+   with the maximum alignment supported in every context is long long.
+*/
+typedef long long max_align_t;
 #endif
 
 #endif

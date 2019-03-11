@@ -17,6 +17,15 @@ open Driveraux
 
 (* Common frontend functions between clightgen and ccomp *)
 
+let predefined_macros =
+  [
+    "-D__COMPCERT__";
+    "-U__STDC_IEC_559_COMPLEX__";
+    "-D__STDC_NO_ATOMICS__";
+    "-D__STDC_NO_COMPLEX__";
+    "-D__STDC_NO_THREADS__";
+    "-D__STDC_NO_VLA__"
+  ]
 
 (* From C to preprocessed C *)
 
@@ -26,7 +35,7 @@ let preprocess ifile ofile =
     if ofile = "-" then None else Some ofile in
   let cmd = List.concat [
     Configuration.prepro;
-    ["-D__COMPCERT__"];
+    predefined_macros;
     (if !Clflags.use_standard_headers
      then ["-I" ^ Filename.concat !Clflags.stdlib_path "include" ]
      else []);
@@ -64,8 +73,12 @@ let parse_c_file sourcename ifile =
 let init () =
   Machine.config:=
     begin match Configuration.arch with
-    | "powerpc" -> if Configuration.gnu_toolchain
-                   then Machine.ppc_32_bigendian
+    | "powerpc" -> if Configuration.model = "e5500" || Configuration.model = "ppc64"
+                   then if Configuration.abi = "linux" then Machine.ppc_32_r64_linux_bigendian
+                   else if Configuration.gnu_toolchain then Machine.ppc_32_r64_bigendian
+                   else Machine.ppc_32_r64_diab_bigendian
+                   else if Configuration.abi = "linux" then Machine.ppc_32_linux_bigendian
+                   else if Configuration.gnu_toolchain then Machine.ppc_32_bigendian
                    else Machine.ppc_32_diab_bigendian
     | "arm"     -> if Configuration.is_big_endian
                    then Machine.arm_bigendian
@@ -75,6 +88,8 @@ let init () =
                    else
                      if Configuration.abi = "macosx"
                      then Machine.x86_32_macosx
+                     else if Configuration.system = "bsd"
+                     then Machine.x86_32_bsd
                      else Machine.x86_32
     | "riscV"   -> if Configuration.model = "64"
                    then Machine.rv64
@@ -111,7 +126,7 @@ let gnu_prepro_actions = [
   Exact "-imacros", String (gnu_prepro_opt_key "-imacros");
   Exact "-idirafter", String (gnu_prepro_opt_key "-idirafter");
   Exact "-isystem", String (gnu_prepro_opt_key "-isystem");
-  Exact "-iquote", String (gnu_prepro_opt_key "-iquore");
+  Exact "-iquote", String (gnu_prepro_opt_key "-iquote");
   Exact "-P", Self gnu_prepro_opt;
   Exact "-C", Self gnu_prepro_opt;
   Exact "-CC", Self gnu_prepro_opt;]

@@ -140,8 +140,7 @@ with expression :=
   | MEMBEROFPTR : expression -> string -> expression
 
     (* Non-standard *)
-  | EXPR_ALIGNOF : expression -> expression
-  | TYPE_ALIGNOF : (list spec_elem * decl_type) -> expression
+  | ALIGNOF : (list spec_elem * decl_type) -> expression
   | BUILTIN_OFFSETOF : (list spec_elem * decl_type) -> list initwhat -> expression
 
 with constant :=

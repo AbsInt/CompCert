@@ -327,7 +327,7 @@ let print_init_data p = function
   | Init_int64 i -> fprintf p "%LdLL" (camlint64_of_coqint i)
   | Init_float32 f -> fprintf p "float32 %.15F" (camlfloat_of_coqfloat f)
   | Init_float64 f -> fprintf p "%.15F" (camlfloat_of_coqfloat f)
-  | Init_space i -> fprintf p "[%ld]" (camlint_of_coqint i)
+  | Init_space i -> fprintf p "[%s]" (Z.to_string i)
   | Init_addrof(id,off) -> fprintf p "%ld(\"%s\")" (camlint_of_coqint off) (extern_atom id)
 
 let rec print_init_data_list p = function

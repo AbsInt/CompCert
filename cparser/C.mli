@@ -85,9 +85,10 @@ type attributes = attribute list
 (** Storage classes *)
 
 type storage =
-  | Storage_default
+  | Storage_default (* used for toplevel names without explicit storage *)
   | Storage_extern
   | Storage_static
+  | Storage_auto    (* used for block-scoped names without explicit storage *)
   | Storage_register
 
 (** Unary operators *)
@@ -219,7 +220,7 @@ and stmt_desc =
 
 and slabel =
   | Slabel of string
-  | Scase of exp
+  | Scase of exp * int64
   | Sdefault
 
 (** Declarations *)

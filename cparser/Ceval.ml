@@ -13,7 +13,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Evaluation of compile-time constants *)
+(* Evaluation and recognition of compile-time constants *)
 
 open C
 open Cutil
@@ -103,7 +103,7 @@ let cast env ty_to v =
       else raise Notconst
   | TPtr(ty, _), I n ->
       I (normalize_int n (ptr_t_ikind ()))
-  | TPtr(ty, _), (S _ | WS _) ->
+  | (TArray(ty, _, _) | TPtr (ty, _)), (S _ | WS _) ->
       v
   | TEnum(_, _), I n ->
       I (normalize_int n enum_ikind)
@@ -217,8 +217,6 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
         comparison env (<=) None tyop v1 v2
     | Oge ->
         comparison env (>=) None tyop v1 v2
-    | Ocomma ->
-        v2
     | Ologand ->
         if boolean_value v1
         then if boolean_value v2 then I 1L else I 0L
@@ -274,8 +272,102 @@ let constant_expr env ty e =
     match unroll env ty, cast env ty (expr env e) with
     | TInt(ik, _), I n -> Some(CInt(n, ik, ""))
     | TPtr(_, _), I n -> Some(CInt(n, IInt, ""))
-    | TPtr(_, _), S s -> Some(CStr s)
-    | TPtr(_, _), WS s -> Some(CWStr s)
+    | (TArray(_, _, _) | TPtr(_, _)), S s -> Some(CStr s)
+    | (TArray(_, _, _) | TPtr(_, _)), WS s -> Some(CWStr s)
     | TEnum(_, _), I n -> Some(CInt(n, enum_ikind, ""))
     | _   -> None
   with Notconst -> None
+
+(* Recognition of constant initializers and constant expressions.
+   This is just a check: no evaluation of the constants is done.
+   Reference: ISO C99 section 6.6 *)
+
+let rec is_constant_init env = function
+  | Init_single e -> is_constant_expr env e
+  | Init_array il -> List.for_all (is_constant_init env) il
+  | Init_struct(id, fil) ->
+      List.for_all (fun (f, i) -> is_constant_init env i) fil
+  | Init_union(id, f, i) -> is_constant_init env i
+
+and is_constant_expr env e =
+  match e.edesc with
+  | EConst cst -> true
+  | ESizeof ty -> true
+  | EAlignof ty -> true
+  | EVar id ->
+      begin match Env.find_ident env id with
+      | Env.II_ident _ -> is_constant_rval_of_lval env e
+      | Env.II_enum _ -> true   (* an enum value is a constant *)
+      | exception Env.Error _ -> false  (* should not happen *)
+      end
+  | EUnop(op, e1) ->
+      begin match op with
+      | Ominus | Oplus | Olognot | Onot -> is_constant_expr env e1
+      | Oderef | Odot _ | Oarrow _ -> is_constant_rval_of_lval env e
+      | Oaddrof -> is_constant_lval env e1
+      | Opreincr | Opredecr | Opostincr | Opostdecr -> false
+        (* Constant expressions shall not contain increment or decrement *)
+      end
+  | EBinop(op, e1, e2, _) ->
+      begin match op with
+      | Oadd | Osub | Omul | Odiv | Omod
+      | Oand | Oor  | Oxor | Oshl | Oshr
+      | Oeq  | One  | Olt  | Ogt  | Ole  | Oge
+      | Ologand | Ologor ->
+          is_constant_expr env e1 && is_constant_expr env e2
+      | Oindex ->
+          is_constant_rval_of_lval env e
+      | Oassign 
+      | Oadd_assign | Osub_assign | Omul_assign | Odiv_assign | Omod_assign
+      | Oand_assign | Oor_assign | Oxor_assign  | Oshl_assign | Oshr_assign ->
+          false
+        (* constant expressions shall not contain assignments *)
+      | Ocomma ->
+          false
+        (* some C compilers accept "e1, e2" as a constant expression.
+           But this is not standard ISO C. *)
+      end
+  | EConditional(e1, e2, e3) ->
+      is_constant_expr env e1 && is_constant_expr env e2
+                              && is_constant_expr env e3
+  | ECast(ty, e1) ->
+      is_constant_expr env e1
+  | ECompound(ty, i) ->
+      is_constant_init env i
+  | ECall(fn, args) ->
+      false
+      (* constant expressions shall not contain function calls *)
+
+and is_constant_rval_of_lval env e =
+  (* The value of an object shall not be accessed by use of the . -> * []
+     operators.  This is the case if the object has array or function type.
+     A scalar type or a composite type implies a memory access. *)
+  match unroll env e.etyp with
+  | TArray _ | TFun _ -> is_constant_lval env e
+  | _ -> false
+
+and is_constant_lval env e =
+  match e.edesc with
+  | EConst (CStr _)
+  | EConst (CWStr _) -> true
+  | EVar id ->
+      begin match Env.find_ident env id with
+      | Env.II_ident(sto, _) ->
+          begin match sto with
+          | Storage_default | Storage_extern | Storage_static -> true
+          | Storage_auto | Storage_register -> false
+          end
+      | Env.II_enum _ -> false   (* should not happen *)
+      | exception Env.Error _ -> false  (* should not happen *)
+      end
+  | EUnop(Oderef, e1) -> is_constant_expr env e1
+  | EUnop(Odot f, e1) -> is_constant_lval env e1
+  | EUnop(Oarrow f, e1) -> is_constant_expr env e1
+  | EBinop(Oindex, e1, e2, _) -> 
+      is_constant_expr env e1 && is_constant_expr env e2
+  | ECompound(ty, i) ->
+      is_constant_init env i
+  | _ -> false
+
+
+

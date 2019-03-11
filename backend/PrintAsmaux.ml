@@ -212,18 +212,6 @@ let annot_text preg_string sp_reg_name txt args =
         sprintf "<bad parameter %s>" s in
   String.concat "" (List.map fragment (Str.full_split re_annot_param txt))
 
-let ais_annot_list: (int * Str.split_result list) list ref = ref []
-
-let re_annot_addr = Str.regexp "%addr"
-let re_annot_quote = Str.regexp "\007"
-
-let ais_annot_text lbl preg_string sp_reg_name txt args =
-  let annot = annot_text preg_string sp_reg_name txt args in
-  let annot = Str.global_replace re_annot_quote "\007\000" annot in
-  let annots = Str.full_split re_annot_addr annot in
-  ais_annot_list := (lbl,annots)::!ais_annot_list;
-  annot
-
 (* Printing of [EF_debug] info.  To be completed. *)
 
 let re_file_line = Str.regexp "#line:\\(.*\\):\\([1-9][0-9]*\\)$"

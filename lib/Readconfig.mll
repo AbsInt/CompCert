@@ -43,9 +43,9 @@ let error msg lexbuf =
                        lexbuf.lex_curr_p.pos_lnum,
                        msg)))
 
-let ill_formed_line lexbuf = error "Ill-formed line" lexbuf
-let unterminated_quote lexbuf = error "Unterminated quote" lexbuf
-let lone_backslash lexbuf = error "Lone \\ (backslash) at end of file" lexbuf
+let ill_formed_line lexbuf = error "ill-formed line" lexbuf
+let unterminated_quote lexbuf = error "unterminated quote" lexbuf
+let lone_backslash lexbuf = error "lone \\ (backslash) at end of file" lexbuf
 
 }
 

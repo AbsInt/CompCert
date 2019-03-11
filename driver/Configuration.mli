@@ -46,27 +46,6 @@ val has_runtime_lib: bool
 val has_standard_headers: bool
   (** True if CompCert's standard header files is available. *)
 
-
-type struct_passing_style =
-  | SP_ref_callee                       (* by reference, callee takes copy *)
-  | SP_ref_caller                       (* by reference, caller takes copy *)
-  | SP_split_args                       (* by value, as a sequence of ints *)
-
-type struct_return_style =
-  | SR_int1248      (* return by content if size is 1, 2, 4 or 8 bytes *)
-  | SR_int1to4      (* return by content if size is <= 4 *)
-  | SR_int1to8      (* return by content if size is <= 8 *)
-  | SR_ref          (* always return by assignment to a reference
-                       given as extra argument *)
-
-val struct_passing_style: struct_passing_style
-  (** Calling conventions to use for passing structs and unions as
-      first-class values *)
-
-val struct_return_style: struct_return_style
-  (** Calling conventions to use for returning structs and unions as
-      first-class values *)
-
 type response_file_style =
   | Gnu         (* responsefiles in gnu compatible syntax *)
   | Diab        (* responsefiles in diab compatible syntax *)

@@ -1,7 +1,9 @@
 include ../../Makefile.config
 
 CCOMP=../../ccomp
-CCOMPFLAGS=$(CCOMPOPTS) -stdlib ../../runtime -dparse -dc -dclight -dasm -fall
+CCOMPFLAGS=$(CCOMPOPTS) -stdlib ../../runtime \
+ -dparse -dc -dclight -dasm -fall \
+ -DARCH_$(ARCH) -DMODEL_$(MODEL)
 INTERPFLAGS=-stdlib ../../runtime -interp -quiet -fall
 LIBS=$(LIBMATH)
 
@@ -20,17 +22,8 @@ TESTS=int32 int64 floats floats-basics \
 
 TESTS_COMP=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
   bitfields5 bitfields6 bitfields7 bitfields8 \
-  builtins-$(ARCH) packedstruct2 alignas \
-  varargs1 varargs2 sections alias
-
-# packedstruct1 makes unaligned memory accesses
-
-ifeq ($(ARCH),powerpc)
-TESTS_COMP+=packedstruct1
-endif
-ifeq ($(ARCH),x86)
-TESTS_COMP+=packedstruct1
-endif
+  builtins-$(ARCH) packedstruct1 packedstruct2 alignas \
+  varargs1 varargs2 varargs3 sections alias aligned
 
 # Can run, both in compiled mode and in interpreter mode,
 # but produce processor-dependent results, so no reference output in Results
@@ -70,12 +63,12 @@ clean:
 
 test:
 	@echo "----------- Compiled tests -------------"
-	@for i in $(TESTS) $(TESTS_COMP); do \
+	@set -e; for i in $(TESTS) $(TESTS_COMP); do \
 	   SIMU='$(SIMU)' ./Runtest $$i ./$$i.compcert; \
          done
 	@echo "----------- Interpreted tests -------------"
-	@for i in $(TESTS); do \
-           SIMU='' ./Runtest $$i $(CCOMP) $(INTERPFLAGS) $$i.c; \
+	@set -e; for i in $(TESTS); do \
+           SIMU='' INTERP=1 ./Runtest $$i $(CCOMP) $(INTERPFLAGS) $$i.c; \
          done
 	@for i in $(TESTS_DIFF); do \
            if $(CCOMP) -fall -interp -quiet $$i.c > _cinterp.log; then \

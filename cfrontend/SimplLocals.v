@@ -22,6 +22,7 @@ Require Compopts.
 
 Open Scope error_monad_scope.
 Open Scope string_scope.
+Open Scope list_scope.
 
 Module VSet := FSetAVL.Make(OrderedPositive).
 

@@ -735,7 +735,9 @@ Proof.
   intros. repeat Simplif.
 - exploit (loadimm_correct GPR0 ofs'); eauto. intros [rs' [P [Q R]]].
   econstructor; split. eapply exec_straight_trans. eexact P.
-  apply exec_straight_one. rewrite H0. unfold load2. rewrite Q, R by auto with asmgen.
+  apply exec_straight_one. rewrite H0. unfold load2.
+  rewrite gpr_or_zero_not_zero by auto. simpl.
+  rewrite Q, R by auto with asmgen.
   rewrite LD. reflexivity. unfold nextinstr. repeat Simplif.
   split. repeat Simplif.
   intros. repeat Simplif.
@@ -789,6 +791,7 @@ Proof.
 - exploit (loadimm_correct GPR0 ofs'); eauto. intros [rs' [P [Q R]]].
   econstructor; split. eapply exec_straight_trans. eexact P.
   apply exec_straight_one. rewrite H0. unfold store2.
+  rewrite gpr_or_zero_not_zero by auto.
   rewrite Q. rewrite R by auto with asmgen. rewrite R by auto.
   rewrite ST. reflexivity. unfold nextinstr. repeat Simplif.
   intros. repeat Simplif.
@@ -1409,7 +1412,7 @@ Lemma transl_memory_access_correct:
     exists rs',
         exec_straight ge fn (mk1 cst r1 :: k) rs1 m k rs' m' /\ P rs') ->
   (forall (r1 r2: ireg) (rs1: regset) k,
-    Val.lessdef a (Val.add rs1#r1 rs1#r2) ->
+    Val.lessdef a (Val.add (gpr_or_zero rs1 r1) rs1#r2) ->
     (forall r, r <> PC -> r <> temp -> r <> GPR0 -> rs1 r = rs r) ->
     exists rs',
         exec_straight ge fn (mk2 r1 r2 :: k) rs1 m k rs' m' /\ P rs') ->
@@ -1435,7 +1438,7 @@ Transparent Val.add.
   simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
   auto. auto.
   (* Aindexed2 *)
-  apply MK2; auto.
+  apply MK2. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
   (* Aglobal *)
   destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ]; inv TR.
   (* Aglobal from small data *)
@@ -1469,6 +1472,7 @@ Transparent Val.add.
   (* Abased from small data *)
   set (rs1 := nextinstr (rs#GPR0 <- (Genv.symbol_address ge i i0))).
   exploit (MK2 x GPR0 rs1 k).
+    simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen.
     unfold rs1; Simpl. rewrite Val.add_commut. auto.
     intros. unfold rs1; Simpl.
   intros [rs' [EX' AG']].
@@ -1483,6 +1487,7 @@ Transparent Val.add.
   set (rs2 := nextinstr (rs1#temp <- (Val.add Vzero (high_half ge i i0)))).
   set (rs3 := nextinstr (rs2#temp <- (Genv.symbol_address ge i i0))).
   exploit (MK2 temp GPR0 rs3).
+    rewrite gpr_or_zero_not_zero by eauto with asmgen.
     f_equal. unfold rs3; Simpl. unfold rs3, rs2, rs1; Simpl.
     intros. unfold rs3, rs2, rs1; Simpl.
   intros [rs' [EX' AG']].

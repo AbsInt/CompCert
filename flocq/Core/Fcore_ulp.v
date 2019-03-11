@@ -43,7 +43,6 @@ now left.
 now right.
 Qed.
 
-
 (** [negligible_exp] is either none (as in FLX) or Some n such that n <= fexp n. *)
 Definition negligible_exp: option Z :=
   match (LPO_Z _ (fun z => Z_le_dec_aux z (fexp z))) with
@@ -272,6 +271,7 @@ Qed.
 
 Lemma not_FTZ_generic_format_ulp:
    (forall x,  F (ulp x)) -> Exp_not_FTZ fexp.
+Proof.
 intros H e.
 specialize (H (bpow (e-1))).
 rewrite ulp_neq_0 in H.
@@ -1483,23 +1483,27 @@ now apply generic_format_opp.
 now apply Ropp_lt_contravar.
 Qed.
 
-
-Theorem lt_succ_le:
+Theorem lt_succ_le :
   forall x y,
-  F x -> F y -> (y <> 0)%R ->
+  (y <> 0)%R ->
   (x <= y)%R ->
   (x < succ y)%R.
 Proof.
-intros x y Fx Fy Zy Hxy.
-case (Rle_or_lt (succ y) x); trivial; intros H.
-absurd (succ y = y)%R.
-apply Rgt_not_eq.
+intros x y Zy Hxy.
+apply Rle_lt_trans with (1 := Hxy).
 now apply succ_gt_id.
-apply Rle_antisym.
-now apply Rle_trans with x.
-apply succ_ge_id.
 Qed.
 
+Theorem pred_lt_le :
+  forall x y,
+  (x <> 0)%R ->
+  (x <= y)%R ->
+  (pred x < y)%R.
+Proof.
+intros x y Zy Hxy.
+apply Rlt_le_trans with (2 := Hxy).
+now apply pred_lt_id.
+Qed.
 
 Theorem succ_pred_aux : forall x, F x -> (0 < x)%R -> succ (pred x)=x.
 Proof.
@@ -1510,17 +1514,15 @@ rewrite succ_eq_pos.
 now apply pred_pos_plus_ulp.
 Qed.
 
-Theorem pred_succ_aux_0 : (pred (succ 0)=0)%R.
+Theorem pred_ulp_0 :
+  pred (ulp 0) = 0%R.
 Proof.
-unfold succ; rewrite Rle_bool_true.
-2: apply Rle_refl.
-rewrite Rplus_0_l.
 rewrite pred_eq_pos.
 2: apply ulp_ge_0.
 unfold ulp; rewrite Req_bool_true; trivial.
 case negligible_exp_spec'.
 (* *)
-intros (H1,H2); rewrite H1.
+intros [H1 _]; rewrite H1.
 unfold pred_pos; rewrite Req_bool_false.
 2: apply Rlt_not_eq, bpow_gt_0.
 unfold ulp; rewrite Req_bool_true; trivial.
@@ -1535,110 +1537,72 @@ apply Rminus_diag_eq, f_equal.
 apply sym_eq, valid_exp; omega.
 Qed.
 
-Theorem pred_succ_aux : forall x, F x -> (0 < x)%R -> pred (succ x)=x.
+Theorem succ_0 :
+  succ 0 = ulp 0.
+Proof.
+unfold succ.
+rewrite Rle_bool_true.
+apply Rplus_0_l.
+apply Rle_refl.
+Qed.
+
+Theorem pred_0 :
+  pred 0 = Ropp (ulp 0).
+Proof.
+rewrite <- succ_0.
+rewrite <- Ropp_0 at 1.
+apply pred_opp.
+Qed.
+
+Theorem pred_succ_aux :
+  forall x, F x -> (0 < x)%R ->
+  pred (succ x) = x.
 Proof.
 intros x Fx Hx.
-rewrite succ_eq_pos;[idtac|now left].
-rewrite pred_eq_pos.
-2: apply Rplus_le_le_0_compat;[now left| apply ulp_ge_0].
-unfold pred_pos.
-case Req_bool_spec; intros H1.
-(* *)
-pose (l:=(ln_beta beta (x+ulp x))).
-rewrite H1 at 1; fold l.
-apply Rplus_eq_reg_r with (ulp x).
-rewrite H1; fold l.
-rewrite (ulp_neq_0 x) at 3.
-2: now apply Rgt_not_eq.
-unfold canonic_exp.
-replace (fexp (ln_beta beta x)) with (fexp (l-1))%Z.
-ring.
-apply f_equal, sym_eq.
-apply Zle_antisym.
-assert (ln_beta beta x - 1 < l - 1)%Z;[idtac|omega].
-apply lt_bpow with beta.
-unfold l; rewrite <- H1.
-apply Rle_lt_trans with x.
-destruct (ln_beta beta x) as (e,He); simpl.
-rewrite <- (Rabs_right x) at 1.
-2: apply Rle_ge; now left.
-now apply He, Rgt_not_eq.
-apply Rplus_lt_reg_l with (-x)%R; ring_simplify.
-rewrite ulp_neq_0.
-apply bpow_gt_0.
-now apply Rgt_not_eq.
-apply le_bpow with beta.
-unfold l; rewrite <- H1.
-apply id_p_ulp_le_bpow; trivial.
-rewrite <- (Rabs_right x) at 1.
-2: apply Rle_ge; now left.
-apply bpow_ln_beta_gt.
-(* *)
-replace (ulp (x+ ulp x)) with (ulp x).
-ring.
-rewrite ulp_neq_0 at 1.
-2: now apply Rgt_not_eq.
-rewrite ulp_neq_0 at 1.
-2: apply Rgt_not_eq, Rlt_gt.
-2: apply Rlt_le_trans with (1:=Hx).
-2: apply Rplus_le_reg_l with (-x)%R; ring_simplify.
-2: apply ulp_ge_0.
-apply f_equal; unfold canonic_exp; apply f_equal.
-apply sym_eq, ln_beta_unique.
-rewrite Rabs_right.
-2: apply Rle_ge; left.
-2: apply Rlt_le_trans with (1:=Hx).
-2: apply Rplus_le_reg_l with (-x)%R; ring_simplify.
-2: apply ulp_ge_0.
-destruct (ln_beta beta x) as (e,He); simpl.
-rewrite Rabs_right in He.
-2: apply Rle_ge; now left.
-split.
-apply Rle_trans with x.
-apply He, Rgt_not_eq; assumption.
-apply Rplus_le_reg_l with (-x)%R; ring_simplify.
-apply ulp_ge_0.
-case (Rle_lt_or_eq_dec (x+ulp x) (bpow e)); trivial.
-apply id_p_ulp_le_bpow; trivial.
-apply He, Rgt_not_eq; assumption.
-intros K; contradict H1.
-rewrite K, ln_beta_bpow.
-apply f_equal; ring.
+apply Rle_antisym.
+- apply Rnot_lt_le.
+  intros H.
+  apply succ_le_lt with (1 := Fx) in H.
+  revert H.
+  apply Rlt_not_le.
+  apply pred_lt_id.
+  apply Rgt_not_eq.
+  apply Rlt_le_trans with (1 := Hx).
+  apply succ_ge_id.
+  now apply generic_format_pred, generic_format_succ.
+- apply le_pred_lt with (1 := Fx).
+  now apply generic_format_succ.
+  apply succ_gt_id.
+  now apply Rgt_not_eq.
 Qed.
 
-
-
-Theorem succ_pred : forall x, F x -> succ (pred x)=x.
+Theorem succ_pred :
+  forall x, F x ->
+  succ (pred x) = x.
 Proof.
 intros x Fx.
-case (Rle_or_lt 0 x); intros Hx.
-destruct Hx as [Hx|Hx].
+destruct (Rle_or_lt 0 x) as [[Hx|Hx]|Hx].
 now apply succ_pred_aux.
 rewrite <- Hx.
-rewrite pred_eq_opp_succ_opp, succ_opp, Ropp_0.
-rewrite pred_succ_aux_0; ring.
+rewrite pred_0, succ_opp, pred_ulp_0.
+apply Ropp_0.
 rewrite pred_eq_opp_succ_opp, succ_opp.
 rewrite pred_succ_aux.
-ring.
+apply Ropp_involutive.
 now apply generic_format_opp.
 now apply Ropp_0_gt_lt_contravar.
 Qed.
 
-Theorem pred_succ : forall x, F x -> pred (succ x)=x.
+Theorem pred_succ :
+  forall x, F x ->
+  pred (succ x) = x.
 Proof.
 intros x Fx.
-case (Rle_or_lt 0 x); intros Hx.
-destruct Hx as [Hx|Hx].
-now apply pred_succ_aux.
-rewrite <- Hx.
-apply pred_succ_aux_0.
-rewrite succ_eq_opp_pred_opp, pred_opp.
-rewrite succ_pred_aux.
-ring.
+rewrite <- (Ropp_involutive x).
+rewrite succ_opp, pred_opp.
+apply f_equal, succ_pred.
 now apply generic_format_opp.
-now apply Ropp_0_gt_lt_contravar.
 Qed.
-
 
 Theorem round_UP_pred_plus_eps :
   forall x, F x ->
@@ -2041,26 +2005,16 @@ apply error_le_half_ulp.
 rewrite round_DN_opp; apply Ropp_0_gt_lt_contravar; apply Rlt_gt; assumption.
 Qed.
 
-
-Theorem pred_le: forall x y,
-   F x -> F y -> (x <= y)%R -> (pred x <= pred y)%R.
+Theorem pred_le :
+  forall x y, F x -> F y -> (x <= y)%R ->
+  (pred x <= pred y)%R.
 Proof.
-intros x y Fx Fy Hxy.
-assert (V:( ((x = 0) /\ (y = 0)) \/ (x <>0 \/ x < y))%R).
-case (Req_dec x 0); intros Zx.
-case Hxy; intros Zy.
-now right; right.
-left; split; trivial; now rewrite <- Zy.
-now right; left.
-destruct V as [(V1,V2)|V].
-rewrite V1,V2; now right.
-apply le_pred_lt; try assumption.
-apply generic_format_pred; try assumption.
-case V; intros V1.
-apply Rlt_le_trans with (2:=Hxy).
-now apply pred_lt_id.
-apply Rle_lt_trans with (2:=V1).
-now apply pred_le_id.
+intros x y Fx Fy [Hxy| ->].
+2: apply Rle_refl.
+apply le_pred_lt with (2 := Fy).
+now apply generic_format_pred.
+apply Rle_lt_trans with (2 := Hxy).
+apply pred_le_id.
 Qed.
 
 Theorem succ_le: forall x y,
@@ -2086,6 +2040,28 @@ Proof.
 intros x y Fx Fy Hxy.
 rewrite <- (pred_succ x), <- (pred_succ y); try assumption.
 apply pred_le; trivial; now apply generic_format_succ.
+Qed.
+
+Theorem pred_lt :
+  forall x y, F x -> F y -> (x < y)%R ->
+  (pred x < pred y)%R.
+Proof.
+intros x y Fx Fy Hxy.
+apply Rnot_le_lt.
+intros H.
+apply Rgt_not_le with (1 := Hxy).
+now apply pred_le_inv.
+Qed.
+
+Theorem succ_lt :
+  forall x y, F x -> F y -> (x < y)%R ->
+  (succ x < succ y)%R.
+Proof.
+intros x y Fx Fy Hxy.
+apply Rnot_le_lt.
+intros H.
+apply Rgt_not_le with (1 := Hxy).
+now apply succ_le_inv.
 Qed.
 
 (* was lt_UP_le_DN *)

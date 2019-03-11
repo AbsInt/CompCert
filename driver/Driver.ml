@@ -404,7 +404,7 @@ let _ =
     parse_cmdline cmdline_actions;
     DebugInit.init (); (* Initialize the debug functions *)
     if nolink () && !option_o <> None && !num_source_files >= 2 then
-      fatal_error no_loc "Ambiguous '-o' option (multiple source files)";
+      fatal_error no_loc "ambiguous '-o' option (multiple source files)";
     if !num_input_files = 0 then
       fatal_error no_loc "no input file";
     let linker_args = time "Total compilation time" perform_actions () in

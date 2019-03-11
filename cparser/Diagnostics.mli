@@ -47,6 +47,14 @@ type warning_type =
   | Inline_asm_sdump               (** inline assembler used in combination of sdump *)
   | Unused_variable                (** unused local variables *)
   | Unused_parameter               (** unused function parameter *)
+  | Wrong_ais_parameter            (** wrong parameter type for ais replacement *)
+  | Unused_ais_parameter           (** unused builtin ais parameter *)
+  | Ignored_attributes             (** attributes declarations after definition *)
+  | Extern_after_definition        (** extern declaration after non-extern definition *)
+  | Static_in_inline               (** static variable in non-static inline function *)
+  | Flexible_array_extensions      (** usange of structs with flexible arrays in structs and arrays *)
+  | Tentative_incomplete_static    (** static tentative definition with incomplete type *)
+  | Reduced_alignment              (** alignment reduction *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 (** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to

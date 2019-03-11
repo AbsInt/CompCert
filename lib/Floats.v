@@ -48,6 +48,9 @@ Definition cmp_of_comparison (c: comparison) (x: option Datatypes.comparison) : 
       match x with Some(Gt|Eq) => true | _ => false end
   end.
 
+Definition ordered_of_comparison (x: option Datatypes.comparison) : bool :=
+  match x with None => false | Some _ => true end.
+
 Lemma cmp_of_comparison_swap:
   forall c x,
   cmp_of_comparison (swap_comparison c) x =
@@ -217,8 +220,12 @@ Definition mul: float -> float -> float :=
   Bmult 53 1024 __ __ binop_pl mode_NE. (**r multiplication *)
 Definition div: float -> float -> float :=
   Bdiv 53 1024 __ __ binop_pl mode_NE. (**r division *)
-Definition cmp (c:comparison) (f1 f2: float) : bool := (**r comparison *)
-  cmp_of_comparison c (Bcompare _ _ f1 f2).
+Definition compare (f1 f2: float) : option Datatypes.comparison := (**r general comparison *)
+  Bcompare 53 1024 f1 f2.
+Definition cmp (c:comparison) (f1 f2: float) : bool := (**r Boolean comparison *)
+  cmp_of_comparison c (compare f1 f2).
+Definition ordered (f1 f2: float) : bool :=
+  ordered_of_comparison (compare f1 f2).
 
 (** Conversions *)
 
@@ -322,7 +329,7 @@ Qed.
 Theorem cmp_swap:
   forall c x y, cmp (swap_comparison c) x y = cmp c y x.
 Proof.
-  unfold cmp; intros. rewrite (Bcompare_swap _ _ x y).
+  unfold cmp, compare; intros. rewrite (Bcompare_swap _ _ x y).
   apply cmp_of_comparison_swap.
 Qed.
 
@@ -440,7 +447,7 @@ Proof.
   subst p; smart_omega.
   destruct (ZofB_range_pos 53 1024 __ __ x p C) as [P Q]. omega.
   assert (CMP: Bcompare _ _ x y = Some Lt).
-  { unfold cmp, cmp_of_comparison in H. destruct (Bcompare _ _ x y) as [[]|]; auto; discriminate. }
+  { unfold cmp, cmp_of_comparison, compare in H. destruct (Bcompare _ _ x y) as [[]|]; auto; discriminate. }
   rewrite Bcompare_correct in CMP by auto.
   inv CMP. apply Rcompare_Lt_inv in H1. rewrite EQy in H1.
   assert (p < Int.unsigned ox8000_0000).
@@ -465,7 +472,7 @@ Proof.
   assert (FINx: is_finite _ _ x = true).
   { rewrite ZofB_correct in C. destruct (is_finite _ _ x) eqn:FINx; congruence. }
   assert (GE: (B2R _ _ x >= Z2R (Int.unsigned ox8000_0000))%R).
-  { rewrite <- EQy. unfold cmp, cmp_of_comparison in H.
+  { rewrite <- EQy. unfold cmp, cmp_of_comparison, compare in H.
     rewrite Bcompare_correct in H by auto.
     destruct (Rcompare (B2R 53 1024 x) (B2R 53 1024 y)) eqn:CMP.
     apply Req_ge; apply Rcompare_Eq_inv; auto.
@@ -949,8 +956,12 @@ Definition mul: float32 -> float32 -> float32 :=
   Bmult 24 128 __ __ binop_pl mode_NE. (**r multiplication *)
 Definition div: float32 -> float32 -> float32 :=
   Bdiv 24 128 __ __ binop_pl mode_NE. (**r division *)
+Definition compare (f1 f2: float32) : option Datatypes.comparison := (**r general comparison *)
+  Bcompare 24 128 f1 f2.
 Definition cmp (c:comparison) (f1 f2: float32) : bool := (**r comparison *)
-  cmp_of_comparison c (Bcompare _ _ f1 f2).
+  cmp_of_comparison c (compare f1 f2).
+Definition ordered (f1 f2: float32) : bool :=
+  ordered_of_comparison (compare f1 f2).
 
 (** Conversions *)
 
@@ -1034,7 +1045,7 @@ Qed.
 Theorem cmp_swap:
   forall c x y, cmp (swap_comparison c) x y = cmp c y x.
 Proof.
-  unfold cmp; intros. rewrite (Bcompare_swap _ _ x y).
+  unfold cmp, compare; intros. rewrite (Bcompare_swap _ _ x y).
   apply cmp_of_comparison_swap.
 Qed.
 
@@ -1338,12 +1349,12 @@ Global Opaque
   Float.zero Float.eq_dec Float.neg Float.abs Float.of_single Float.to_single
   Float.of_int Float.of_intu Float.of_long Float.of_longu
   Float.to_int Float.to_intu Float.to_long Float.to_longu
-  Float.add Float.sub Float.mul Float.div Float.cmp
+  Float.add Float.sub Float.mul Float.div Float.cmp Float.ordered
   Float.to_bits Float.of_bits Float.from_words.
 
 Global Opaque
   Float32.zero Float32.eq_dec Float32.neg Float32.abs
   Float32.of_int Float32.of_intu Float32.of_long Float32.of_longu
   Float32.to_int Float32.to_intu Float32.to_long Float32.to_longu
-  Float32.add Float32.sub Float32.mul Float32.div Float32.cmp
+  Float32.add Float32.sub Float32.mul Float32.div Float32.cmp Float32.ordered
   Float32.to_bits Float32.of_bits.

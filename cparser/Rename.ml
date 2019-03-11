@@ -84,7 +84,7 @@ let ident env id =
     IdentMap.find id env.re_id
   with Not_found ->
     Diagnostics.fatal_error Diagnostics.no_loc "internal error: rename: %s__%d unbound"
-                        id.name id.stamp
+      id.name id.stamp
 
 let rec typ env = function
   | TPtr(ty, a) -> TPtr(typ env ty, a)
@@ -188,7 +188,7 @@ and stmt_or_decl env s =
       (stmt env s, env)
 
 and slabel env = function
-  | Scase e -> Scase(exp env e)
+  | Scase(e, n) -> Scase(exp env e, n)
   | sl -> sl
 
 let fundef env f =

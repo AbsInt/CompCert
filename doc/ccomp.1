@@ -365,7 +365,7 @@ CompCert supports the following warning classes:
 .sp
 \fIc11\-extensions\fP:
 Feature specific to C11.
-Enabled by default.
+Disabled by default.
 .sp
 \fIcompare\-distinct\-pointer\-types\fP:
 Comparison of different pointer types.
@@ -379,8 +379,20 @@ Disabled by default.
 Dangerous conversion of constants, e.g. literals that are too large for the given type.
 Enabled by default.
 .sp
+\fIextern\-after\-definition\fP:
+Extern declarations after non-extern definitions.
+Enabled by default.
+.sp
+\fIflexible\-array\-extensions\fP:
+Use of structs with flexible arrays nexted within structs or arrays.
+Disabled by default.
+.sp
 \fIgnu\-empty\-struct\fP:
 GNU extension for empty structs.
+Enabled by default.
+.sp
+\fIignored\-attributes\fP:
+Attribute declarations after definitions.
 Enabled by default.
 .sp
 \fIimplicit\-function\-declaration\fP:
@@ -389,6 +401,10 @@ Enabled by default.
 .sp
 \fIimplicit\-int\fP:
 Type of parameter or return type is implicitly assumed to be int.
+Enabled by default.
+.sp
+\fIinline\-asm\-sdump\fP:
+Use of unsupported features in combination with dump of abstract syntax tree.
 Enabled by default.
 .sp
 \fIint\-conversion\fP:
@@ -407,13 +423,29 @@ Enabled by default.
 Wrong return type for main.
 Enabled by default.
 .sp
+\fImissing\-declarations\fP:
+Declations which do not declare anything.
+Enabled by default.
+.sp
 \fIpointer\-type\-mismatch\fP:
 Use of incompatible pointer types in conditional expressions.
 Enabled by default.
 .sp
+\fIreduced\-alignment\fP:
+Alignment specifications lower than natural alignment.
+Disabled by default.
+.sp
 \fIreturn\-type\fP:
 Void-return statement in non-void function.
 Enabled by default.
+.sp
+\fIstatic\-in\-inline\fP:
+Use of static variables in non-static inline functions.
+Enabled by default.
+.sp
+\fItentative\-incomplete\-static\fP:
+Use of tentative static definitions with incomplete type.
+Disabled by default.
 .sp
 \fIunknown\-attributes\fP:
 Use of unsupported or unknown attributes.
@@ -423,17 +455,25 @@ Enabled by default.
 Use of unsupported or unknown pragmas.
 Disabled by default.
 .sp
+\fIunused\-ais\-parameter\fP:
+Unused parameter for embedded program annotations.
+Disabled by default.
+.sp
+\fIunused\-variable\fP:
+Unused local variables.
+Enabled by default.
+.sp
 \fIvarargs\fP:
 Promotable vararg arguments.
+Enabled by default.
+.sp
+\fIwrong\-ais\-parameter\fP:
+Use of illegal parameter expressions for embedded program annotations.
 Enabled by default.
 .sp
 \fIzero\-length\-array\fP:
 GNU extension for zero length arrays.
 Disabled by default.
-.sp
-\fIinline\-asm\-sdump\fP:
-Use of unsupported features in combination with dump of abstract syntax tree.
-Enabled by default.
 .
 .TP
 .B \-Wno-<warning>
@@ -518,10 +558,6 @@ Save generated assembly in <file>.s.
 .TP
 .B \-dall
 Save all generated intermediate files in <file>.<ext>.
-.
-.TP
-.B \-doptions
-Save the compiler configuration in <file>.opt.json.
 .
 .TP
 .B \-sdump

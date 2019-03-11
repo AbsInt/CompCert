@@ -231,6 +231,7 @@ Inductive instruction : Type :=
   | Prev16: ireg -> ireg -> instruction               (**r reverse bytes and reverse bits. *)
   | Prsc: ireg -> ireg -> shift_op -> instruction     (**r reverse subtract without carry. *)
   | Psbc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
+  | Pnop : instruction                                (**r nop instruction *)
   (* Add, sub, rsb versions with s suffix *)
   | Padds: ireg -> ireg -> shift_op -> instruction    (**r integer addition with update of condition flags *)
   | Psubs: ireg -> ireg -> shift_op -> instruction    (**r integer subtraction with update of condition flags *)
@@ -805,6 +806,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfsqrt _ _
   | Prsc _ _ _
   | Psbc _ _ _
+  | Pnop
   | Padds _ _ _
   | Psubs _ _ _
   | Prsbs _ _ _
@@ -851,6 +853,15 @@ Definition preg_of (r: mreg) : preg :=
   | F8 => FR8 | F9 => FR9 | F10 => FR10 | F11 => FR11
   | F12 => FR12 | F13 => FR13 | F14 => FR14 | F15 => FR15
   end.
+
+(** Undefine all registers except SP and callee-save registers *)
+
+Definition undef_caller_save_regs (rs: regset) : regset :=
+  fun r =>
+    if preg_eq r SP
+    || In_dec preg_eq r (List.map preg_of (List.filter is_callee_save all_mregs))
+    then rs r
+    else Vundef.
 
 (** Extract the values of the arguments of an external call.
     We exploit the calling conventions from module [Conventions], except that
@@ -911,7 +922,7 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge b = Some (External ef) ->
       external_call ef ge args m t res m' ->
       extcall_arguments rs m (ef_sig ef) args ->
-      rs' = (set_pair (loc_external_result (ef_sig ef) ) res rs)#PC <- (rs IR14) ->
+      rs' = (set_pair (loc_external_result (ef_sig ef) ) res (undef_caller_save_regs rs))#PC <- (rs IR14) ->
       step (State rs m) t (State rs' m').
 
 End RELSEM.

@@ -1,0 +1,12 @@
+a: size 1, offset mod 16 = 0
+b: size 3, offset mod 16 = 0
+c: size is that of a pointer, offset mod 16 is good
+d: size 1, offset mod 16 = 0
+f: size is that of a pointer, offset mod 16 is good
+g: size 32, offset mod 16 = 0
+h: size 16, offset mod 16 = 0
+i: size 16, offset mod 16 = 0
+j: size 16, offset mod 16 = 0
+T2: size 112, alignment 16
+T4: size is that of a pointer, alignment is that of a pointer
+t2: size 9, alignment 1

@@ -36,7 +36,7 @@ let byteswapped_fields : (ident * string, unit) Hashtbl.t
 
 let rec can_byte_swap env ty =
   match unroll env ty with
-  | TInt(ik, _) -> (sizeof_ikind ik <= !config.sizeof_ptr (*FIXME*), sizeof_ikind ik > 1)
+  | TInt(ik, _) -> (sizeof_ikind ik <= !config.sizeof_intreg, sizeof_ikind ik > 1)
   | TEnum(_, _) -> (true, sizeof_ikind enum_ikind > 1)
   | TPtr(_, _) -> (true, true)          (* tolerance? *)
   | TArray(ty_elt, _, _) -> can_byte_swap env ty_elt
@@ -66,7 +66,7 @@ let transf_field_decl mfa swapped loc env struct_id f =
   if swapped then begin
     let (can_swap, must_swap) = can_byte_swap env f.fld_typ in
     if not can_swap then
-      error loc "cannot byte-swap field of type '%a'"
+      fatal_error loc "cannot byte-swap field of type '%a'"
         Cprint.typ f.fld_typ;
     if must_swap then
       Hashtbl.add byteswapped_fields (struct_id, f.fld_name) ()
@@ -81,28 +81,21 @@ let transf_field_decl mfa swapped loc env struct_id f =
 (* Rewriting struct declarations *)
 
 let transf_struct_decl mfa msa swapped loc env struct_id attrs ml =
+  let attrs' =
+    remove_custom_attributes  ["packed";"__packed__"] attrs in
   let ml' =
     List.map (transf_field_decl mfa swapped loc env struct_id) ml in
-  if msa = 0 then (attrs, ml') else begin
-    let al' = (* natural alignment of the transformed struct *)
-      List.fold_left
-        (fun a f' -> max a (safe_alignof loc env f'.fld_typ))
-        1 ml' in
-      (set_alignas_attr (max msa al') attrs, ml')
+  if msa = 0 then (attrs', ml') else begin
+    (* [Cutil.composite_info_def] takes packing parameters into account.
+       Hence the alignment it returns is the correct alignment for
+       the transformed struct. *)
+    let ci = Cutil.composite_info_def env Struct attrs ml in
+    match ci.ci_alignof with
+    | None -> error loc "incomplete struct"; (attrs', ml')
+    | Some al -> (set_alignas_attr al attrs', ml')
   end
 
 (* Rewriting composite declarations *)
-
-let is_pow2 n = n > 0 && n land (n - 1) = 0
-
-let packed_param_value loc n =
-  let m = Int64.to_int n in
-  if n <> Int64.of_int m then
-    (error loc "__packed__ parameter `%Ld' is too large" n; 0)
-  else if m = 0 || is_pow2 m then
-    m
-  else
-    (error loc "__packed__ parameter `%Ld' must be a power of 2" n; 0)
 
 let transf_composite loc env su id attrs ml =
   match su with
@@ -110,18 +103,11 @@ let transf_composite loc env su id attrs ml =
   | Struct ->
       let (mfa, msa, swapped) =
         match find_custom_attributes ["packed";"__packed__"] attrs with
-        | [] -> (0L, 0L, false)
-        | [[]] -> (1L, 0L, false)
-        | [[AInt n]] -> (n, 0L, false)
-        | [[AInt n; AInt p]] -> (n, p, false)
-        | [[AInt n; AInt p; AInt q]] -> (n, p, q <> 0L)
-        | _ ->
-          error loc "ill-formed or ambiguous __packed__ attribute";
-          (0L, 0L, false) in
-      let mfa = packed_param_value loc mfa in
-      let msa = packed_param_value loc msa in
-      let attrs' = remove_custom_attributes  ["packed";"__packed__"] attrs in
-      transf_struct_decl mfa msa swapped loc env id attrs' ml
+        | []  -> (0, 0, false)
+        | [_] -> Cutil.packing_parameters attrs
+        | _   -> error loc "multiple __packed__ attributes";
+                 (0, 0, false) in
+      transf_struct_decl mfa msa swapped loc env id attrs ml
 
 (* Accessor functions *)
 
@@ -155,7 +141,7 @@ let use_reversed = ref false
 let bswap_read loc env lval =
   let ty = lval.etyp in
   let (bsize, aty) = accessor_type loc env ty in
-  assert (bsize = 16 || bsize = 32 || (bsize = 64 && !config.sizeof_ptr = 8));
+  assert (bsize = 16 || bsize = 32 || (bsize = 64 && !config.sizeof_intreg = 8));
   try
     if !use_reversed then begin
       let (id, fty) =
@@ -182,7 +168,7 @@ let bswap_write loc env lhs rhs =
   let ty = lhs.etyp in
   let (bsize, aty) =
     accessor_type loc env ty in
-  assert (bsize = 16 || bsize = 32 || (bsize = 64 && !config.sizeof_ptr = 8));
+  assert (bsize = 16 || bsize = 32 || (bsize = 64 && !config.sizeof_intreg = 8));
   try
     if !use_reversed then begin
       let (id, fty) =

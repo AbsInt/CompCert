@@ -220,7 +220,7 @@ Lemma ptlz_past_ptlz_prod:
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems),
   rev_append hole_symbs (ptlz_past ptlz) = prod_rhs_rev (ptlz_prod ptlz).
 Proof.
-fix 4.
+fix ptlz_past_ptlz_prod 4.
 destruct ptlz; simpl.
 rewrite <- rev_alt, rev_involutive; reflexivity.
 apply (ptlz_past_ptlz_prod _ _ _ ptlz).
@@ -298,7 +298,7 @@ Lemma build_pt_dot_cost:
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems),
     ptd_cost (build_pt_dot ptl ptlz) = ptl_size ptl + ptlz_cost ptlz.
 Proof.
-fix 4.
+fix build_pt_dot_cost 4.
 destruct ptl; intros.
 reflexivity.
 destruct p.
@@ -313,7 +313,7 @@ Lemma build_pt_dot_buffer:
     (ptlz:ptl_zipper hole_symbs hole_word hole_sems),
     ptd_buffer (build_pt_dot ptl ptlz) = hole_word ++ ptlz_buffer ptlz.
 Proof.
-fix 4.
+fix build_pt_dot_buffer 4.
 destruct ptl; intros.
 reflexivity.
 destruct p.
@@ -330,7 +330,7 @@ Lemma ptd_stack_compat_build_pt_dot:
   ptlz_stack_compat ptlz stack ->
   ptd_stack_compat (build_pt_dot ptl ptlz) stack.
 Proof.
-fix 4.
+fix ptd_stack_compat_build_pt_dot 4.
 destruct ptl; intros.
 eauto.
 destruct p.
@@ -375,7 +375,7 @@ Lemma pop_ptlz_cost:
   let 'existT _ word (existT _ sem (ptz, pt)) := pop_ptlz ptl ptlz in
   ptlz_cost ptlz = ptz_cost ptz.
 Proof.
-fix 5.
+fix pop_ptlz_cost 5.
 destruct ptlz.
 reflexivity.
 simpl; apply pop_ptlz_cost.
@@ -388,7 +388,7 @@ Lemma pop_ptlz_buffer:
   let 'existT _ word (existT _ sem (ptz, pt)) := pop_ptlz ptl ptlz in
   ptlz_buffer ptlz = ptz_buffer ptz.
 Proof.
-fix 5.
+fix pop_ptlz_buffer 5.
 destruct ptlz.
 reflexivity.
 simpl; apply pop_ptlz_buffer.
@@ -428,7 +428,7 @@ Lemma pop_ptlz_pop_stack_compat:
       end.
 Proof.
 Opaque AlphabetComparable AlphabetComparableUsualEq.
-fix 5.
+fix pop_ptlz_pop_stack_compat 5.
 destruct ptlz. intros; simpl.
 split.
 apply H.
@@ -591,7 +591,7 @@ Lemma parse_fix_complete:
       | Err => True
     end.
 Proof.
-fix 3.
+fix parse_fix_complete 3.
 destruct n_steps; intros; simpl.
 apply Nat.lt_0_succ.
 apply step_next_ptd in H.
