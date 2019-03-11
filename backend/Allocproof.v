@@ -1649,7 +1649,7 @@ Proof.
     exploit add_equations_builtin_args_lessdef; eauto.
     intros (vargs' & A & B).
     exploit external_call_mem_extends; eauto.
-    intros (vres' & m2' & C & D & E & F).
+    intros (vres' & m2' & C & D & E).
     exists vargs', vres', m2'; auto.
   }
   destruct ef; auto.
@@ -2454,7 +2454,7 @@ Proof.
   econstructor; eauto.
 
 (* external function *)
-- exploit external_call_mem_extends; eauto. intros [v' [m'' [F [G [J K]]]]].
+- exploit external_call_mem_extends; eauto. intros [v' [m'' [F [G J]]]].
   simpl in FUN; inv FUN.
   econstructor; split.
   apply plus_one. econstructor; eauto.

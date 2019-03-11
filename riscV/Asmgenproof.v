@@ -824,7 +824,7 @@ Local Transparent destroyed_by_op.
   generalize (transf_function_no_overflow _ _ H3); intro NOOV.
   exploit builtin_args_match; eauto. intros [vargs' [P Q]].
   exploit external_call_mem_extends; eauto.
-  intros [vres' [m2' [A [B [C D]]]]].
+  intros [vres' [m2' [A [B C]]]].
   left. econstructor; split. apply plus_one.
   eapply exec_step_builtin. eauto. eauto.
   eapply find_instr_tail; eauto.
@@ -970,7 +970,7 @@ Local Transparent destroyed_at_function_entry.
   exploit extcall_arguments_match; eauto.
   intros [args' [C D]].
   exploit external_call_mem_extends; eauto.
-  intros [res' [m2' [P [Q [R S]]]]].
+  intros [res' [m2' [P [Q R]]]].
   left; econstructor; split.
   apply plus_one. eapply exec_step_external; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.

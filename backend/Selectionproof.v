@@ -968,7 +968,7 @@ Proof.
 - (* Sbuiltin *)
   exploit sel_builtin_args_correct; eauto. intros [vargs' [P Q]].
   exploit external_call_mem_extends; eauto.
-  intros [vres' [m2 [A [B [C D]]]]].
+  intros [vres' [m2 [A [B C]]]].
   left; econstructor; split.
   econstructor. eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto. apply sel_builtin_res_correct; auto.
@@ -1046,13 +1046,13 @@ Proof.
   destruct TF as (hf & HF & TF).
   monadInv TF.
   exploit external_call_mem_extends; eauto.
-  intros [vres' [m2 [A [B [C D]]]]].
+  intros [vres' [m2 [A [B C]]]].
   left; econstructor; split.
   econstructor. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
 - (* external call turned into a Sbuiltin *)
   exploit external_call_mem_extends; eauto.
-  intros [vres' [m2 [A [B [C D]]]]].
+  intros [vres' [m2 [A [B C]]]].
   left; econstructor; split.
   econstructor. eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.

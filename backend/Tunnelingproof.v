@@ -476,7 +476,7 @@ Proof.
   econstructor; eauto using return_regs_lessdef, match_parent_locset.
 - (* Lbuiltin *)
   exploit eval_builtin_args_lessdef. eexact LS. eauto. eauto. intros (tvargs & EVA & LDA).
-  exploit external_call_mem_extends; eauto. intros (tvres & tm' & A & B & C & D).
+  exploit external_call_mem_extends; eauto. intros (tvres & tm' & A & B & C).
   left; simpl; econstructor; split.
   eapply exec_Lbuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved. 
@@ -522,7 +522,7 @@ Proof.
   simpl. econstructor; eauto using locmap_undef_regs_lessdef, call_regs_lessdef.
 - (* external function *)
   exploit external_call_mem_extends; eauto using locmap_getpairs_lessdef.
-  intros (tvres & tm' & A & B & C & D).
+  intros (tvres & tm' & A & B & C).
   left; simpl; econstructor; split.
   eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.

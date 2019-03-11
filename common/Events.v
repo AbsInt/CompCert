@@ -597,9 +597,6 @@ Definition extcall_sem : Type :=
 
 (** We now specify the expected properties of this predicate. *)
 
-Definition loc_out_of_bounds (m: mem) (b: block) (ofs: Z) : Prop :=
-  ~Mem.perm m b ofs Max Nonempty.
-
 Definition loc_not_writable (m: mem) (b: block) (ofs: Z) : Prop :=
   ~Mem.perm m b ofs Max Writable.
 
@@ -662,8 +659,7 @@ Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
     exists vres', exists m2',
        sem ge vargs' m1' t vres' m2'
     /\ Val.lessdef vres vres'
-    /\ Mem.extends m2 m2'
-    /\ Mem.unchanged_on (loc_out_of_bounds m1) m1' m2';
+    /\ Mem.extends m2 m2';
 
 (** External calls must commute with memory injections,
   in the following sense. *)
@@ -852,8 +848,7 @@ Lemma volatile_store_extends:
   Val.lessdef v v' ->
   exists m2',
      volatile_store ge chunk m1' b ofs v' t m2'
-  /\ Mem.extends m2 m2'
-  /\ Mem.unchanged_on (loc_out_of_bounds m1) m1' m2'.
+  /\ Mem.extends m2 m2'.
 Proof.
   intros. inv H.
 - econstructor; split. econstructor; eauto.
@@ -862,12 +857,6 @@ Proof.
 - exploit Mem.store_within_extends; eauto. intros [m2' [A B]].
   exists m2'; intuition.
 + econstructor; eauto.
-+ eapply Mem.store_unchanged_on; eauto.
-  unfold loc_out_of_bounds; intros.
-  assert (Mem.perm m1 b i Max Nonempty).
-  { apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
-    exploit Mem.store_valid_access_3. eexact H3. intros [P Q]. eauto. }
-  tauto.
 Qed.
 
 Lemma volatile_store_inject:
@@ -936,7 +925,7 @@ Proof.
 - inv H. eapply volatile_store_readonly; eauto.
 (* mem extends*)
 - inv H. inv H1. inv H6. inv H7. inv H4.
-  exploit volatile_store_extends; eauto. intros [m2' [A [B C]]].
+  exploit volatile_store_extends; eauto. intros [m2' [A B]].
   exists Vundef; exists m2'; intuition. constructor; auto.
 (* mem inject *)
 - inv H0. inv H2. inv H7. inv H8. inversion H5; subst.
@@ -1005,7 +994,6 @@ Proof.
   intros [m2' [C D]].
   exists (Vptr b Ptrofs.zero); exists m2'; intuition.
   econstructor; eauto.
-  eapply UNCHANGED; eauto.
 (* mem injects *)
 - inv H0. inv H2. inv H8.
   assert (SZ: v' = Vptrofs sz).
@@ -1077,12 +1065,6 @@ Proof.
   exploit Mem.free_parallel_extends; eauto. intros [m2' [C D]].
   exists Vundef; exists m2'; intuition.
   econstructor; eauto.
-  eapply Mem.free_unchanged_on; eauto.
-  unfold loc_out_of_bounds; intros.
-  assert (Mem.perm m1 b i Max Nonempty).
-  { apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-    eapply Mem.free_range_perm. eexact H4. eauto. }
-  tauto.
 (* mem inject *)
 - inv H0. inv H2. inv H7. inv H9.
   exploit Mem.load_inject; eauto. intros [v' [A B]].
@@ -1170,13 +1152,7 @@ Proof.
   exists Vundef; exists m2'.
   split. econstructor; eauto.
   split. constructor.
-  split. auto.
-  eapply Mem.storebytes_unchanged_on; eauto. unfold loc_out_of_bounds; intros.
-  assert (Mem.perm m1 bdst i Max Nonempty).
-  apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
-  eapply Mem.storebytes_range_perm; eauto.
-  erewrite list_forall2_length; eauto.
-  tauto.
+  auto.
 - (* injections *)
   intros. inv H0. inv H2. inv H14. inv H15. inv H11. inv H12.
   destruct (zeq sz 0).

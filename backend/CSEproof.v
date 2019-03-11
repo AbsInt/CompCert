@@ -1111,7 +1111,7 @@ Proof.
   exploit (@eval_builtin_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)); eauto.
   intros (vargs' & A & B).
   exploit external_call_mem_extends; eauto.
-  intros (v' & m1' & P & Q & R & S).
+  intros (v' & m1' & P & Q & R).
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
@@ -1198,7 +1198,7 @@ Proof.
 - (* external function *)
   monadInv TFD.
   exploit external_call_mem_extends; eauto.
-  intros (v' & m1' & P & Q & R & S).
+  intros (v' & m1' & P & Q & R).
   econstructor; split.
   eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.

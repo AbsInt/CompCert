@@ -704,7 +704,7 @@ Proof.
   intros; red; intros. inv TE.
   exploit H0; eauto. intros [rs1 [tm1 [EX1 [ME1 [RR1 [RO1 EXT1]]]]]].
   exploit external_call_mem_extends; eauto.
-  intros [v' [tm2 [A [B [C [D E]]]]]].
+  intros [v' [tm2 [A [B C]]]].
   exists (rs1#rd <- v'); exists tm2.
 (* Exec *)
   split. eapply star_right. eexact EX1.
@@ -736,7 +736,7 @@ Proof.
   intros; red; intros. inv TE.
   exploit H3; eauto. intros [rs1 [tm1 [EX1 [ME1 [RR1 [RO1 EXT1]]]]]].
   exploit external_call_mem_extends; eauto.
-  intros [v' [tm2 [A [B [C [D E]]]]]].
+  intros [v' [tm2 [A [B C]]]].
   exploit function_ptr_translated; eauto. simpl. intros [tf [P Q]]. inv Q.
   exists (rs1#rd <- v'); exists tm2.
 (* Exec *)
@@ -1423,7 +1423,7 @@ Proof.
   exploit (@eval_builtin_args_lessdef _ ge (fun r => rs'#r) (fun r => rs'#r)); eauto.
   intros (vargs'' & X & Y).
   assert (Z: Val.lessdef_list vl vargs'') by (eapply Val.lessdef_list_trans; eauto).
-  edestruct external_call_mem_extends as [tv [tm'' [A [B [C D]]]]]; eauto.
+  edestruct external_call_mem_extends as [tv [tm'' [A [B C]]]]; eauto.
   econstructor; split.
   left. eapply plus_right. eexact E.
   eapply exec_Ibuiltin. eauto.
@@ -1542,7 +1542,7 @@ Proof.
 
   (* external call *)
   monadInv TF.
-  edestruct external_call_mem_extends as [tvres [tm' [A [B [C D]]]]]; eauto.
+  edestruct external_call_mem_extends as [tvres [tm' [A [B C]]]]; eauto.
   econstructor; split.
   left; apply plus_one. eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.

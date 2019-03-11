@@ -484,7 +484,7 @@ Proof.
   exploit (@eval_builtin_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)); eauto.
   intros (vargs' & P & Q).
   exploit external_call_mem_extends; eauto.
-  intros [v' [m'1 [A [B [C D]]]]].
+  intros [v' [m'1 [A [B C]]]].
   left. exists (State s' (transf_function f) (Vptr sp0 Ptrofs.zero) pc' (regmap_setres res v' rs') m'1); split.
   eapply exec_Ibuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
@@ -545,7 +545,7 @@ Proof.
 
 - (* external call *)
   exploit external_call_mem_extends; eauto.
-  intros [res' [m2' [A [B [C D]]]]].
+  intros [res' [m2' [A [B C]]]].
   left. exists (Returnstate s' res' m2'); split.
   simpl. econstructor; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.

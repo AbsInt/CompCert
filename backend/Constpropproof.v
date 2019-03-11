@@ -479,7 +479,7 @@ Opaque builtin_strength_reduction.
     apply REGS. eauto. eexact P.
   intros (vargs'' & U & V).
   exploit external_call_mem_extends; eauto.
-  intros [v' [m2' [A [B [C D]]]]].
+  intros [v' [m2' [A [B C]]]].
   left; econstructor; econstructor; split.
   eapply exec_Ibuiltin; eauto.
   eapply eval_builtin_args_preserved. eexact symbols_preserved. eauto.
@@ -543,7 +543,7 @@ Opaque builtin_strength_reduction.
 
 - (* external function *)
   exploit external_call_mem_extends; eauto.
-  intros [v' [m2' [A [B [C D]]]]].
+  intros [v' [m2' [A [B C]]]].
   simpl. left; econstructor; econstructor; split.
   eapply exec_function_external; eauto.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
