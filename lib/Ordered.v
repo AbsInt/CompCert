@@ -21,6 +21,8 @@ Require Import Coqlib.
 Require Import Maps.
 Require Import Integers.
 
+Create HintDb ordered_type.
+
 (** The ordered type of positive numbers *)
 
 Module OrderedPositive <: OrderedType.
@@ -173,17 +175,17 @@ Definition eq (x y: t) :=
 
 Lemma eq_refl : forall x : t, eq x x.
 Proof.
-  intros; split; auto.
+  intros; split; auto with ordered_type.
 Qed.
 
 Lemma eq_sym : forall x y : t, eq x y -> eq y x.
 Proof.
-  unfold eq; intros. intuition auto.
+  unfold eq; intros. intuition auto with ordered_type.
 Qed.
 
 Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
 Proof.
-  unfold eq; intros. intuition eauto.
+  unfold eq; intros. intuition eauto with ordered_type.
 Qed.
 
 Definition lt (x y: t) :=
@@ -201,7 +203,7 @@ Proof.
   case (A.compare (fst x) (fst z)); intro.
   assumption.
   generalize (A.lt_not_eq H2); intro. elim H5.
-  apply A.eq_trans with (fst z). auto. auto.
+  apply A.eq_trans with (fst z). auto. auto with ordered_type.
   generalize (@A.lt_not_eq (fst z) (fst y)); intro.
   elim H5. apply A.lt_trans with (fst x); auto.
   apply A.eq_sym; auto.

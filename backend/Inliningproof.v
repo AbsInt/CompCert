@@ -744,7 +744,7 @@ Lemma match_stacks_free_right:
   match_stacks F m m1' stk stk' sp.
 Proof.
   intros. eapply match_stacks_invariant; eauto.
-  intros. eapply Mem.perm_free_1; eauto.
+  intros. eapply Mem.perm_free_1; eauto with ordered_type.
   intros. eapply Mem.perm_free_3; eauto.
 Qed.
 
@@ -1043,7 +1043,7 @@ Proof.
   eapply match_stacks_bound with (bound := sp').
   eapply match_stacks_invariant; eauto.
     intros. eapply Mem.perm_free_3; eauto.
-    intros. eapply Mem.perm_free_1; eauto.
+    intros. eapply Mem.perm_free_1; eauto with ordered_type.
     intros. eapply Mem.perm_free_3; eauto.
   erewrite Mem.nextblock_free; eauto. red in VB; xomega.
   eapply agree_val_regs; eauto.
@@ -1135,7 +1135,7 @@ Proof.
   eapply match_stacks_bound with (bound := sp').
   eapply match_stacks_invariant; eauto.
     intros. eapply Mem.perm_free_3; eauto.
-    intros. eapply Mem.perm_free_1; eauto.
+    intros. eapply Mem.perm_free_1; eauto with ordered_type.
     intros. eapply Mem.perm_free_3; eauto.
   erewrite Mem.nextblock_free; eauto. red in VB; xomega.
   destruct or; simpl. apply agree_val_reg; auto. auto.
@@ -1182,7 +1182,7 @@ Proof.
     subst b1. rewrite D in H8; inv H8. eelim Plt_strict; eauto.
     intros. eapply Mem.perm_alloc_1; eauto.
     intros. exploit Mem.perm_alloc_inv. eexact A. eauto.
-    rewrite dec_eq_false; auto.
+    rewrite dec_eq_false; auto with ordered_type.
   auto. auto. auto. eauto. auto.
   rewrite H5. apply agree_regs_init_regs. eauto. auto. inv H1; auto. congruence. auto.
   eapply Mem.valid_new_block; eauto.
