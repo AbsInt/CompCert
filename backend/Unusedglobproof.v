@@ -1373,9 +1373,9 @@ Proof.
   * apply Y with id; auto.
   * exists gd1; auto.
   * exists gd2; auto.
-  * eapply used_not_defined_2 in GD1; eauto. eapply used_not_defined_2 in GD2; eauto.
+  * eapply used_not_defined_2 in GD1; [ | eauto | congruence ].
+    eapply used_not_defined_2 in GD2; [ | eauto | congruence ].
     tauto.
-    congruence.
   }
   destruct E as [g LD].
   left. unfold prog_defs_names; simpl.

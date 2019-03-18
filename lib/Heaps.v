@@ -432,7 +432,7 @@ Lemma lt_heap_In:
 Proof.
   induction h; simpl; intros.
   contradiction.
-  intuition. apply le_lt_trans with x0; auto. red. left. apply E.eq_sym; auto.
+  intuition. apply le_lt_trans with x0; auto. red. left. assumption.
 Qed.
 
 Lemma findMax_max:
