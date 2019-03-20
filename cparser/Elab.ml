@@ -295,14 +295,16 @@ let parse_int base s =
     |  _ -> assert false in
   let v = ref 0L in
   for i = 0 to String.length s - 1 do
-    if !v < 0L || !v > max_val then raise Overflow;
-    v := Int64.mul !v (Int64.of_int base);
     let c = s.[i] in
     let digit =
       if c >= '0' && c <= '9' then Char.code c - 48
       else if c >= 'A' && c <= 'F' then Char.code c - 55
       else raise Bad_digit in
     if digit >= base then raise Bad_digit;
+    if !v < 0L || !v > max_val then raise Overflow;
+    (* because (2^64 - 1) % 10 = 5, not 9 *)
+    if base = 10 && !v = max_val && digit > 5 then raise Overflow;
+    v := Int64.mul !v (Int64.of_int base);
     v := Int64.add !v (Int64.of_int digit)
   done;
   !v
