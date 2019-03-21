@@ -118,7 +118,7 @@ Proof.
   simpl. rewrite Z.ltb_lt in *.
   assert (H : forall x, Digits.digits2_pos x = Pos.size x).
   { induction x; simpl; auto; rewrite IHx; zify; omega. }
-  rewrite H, Psize_log_inf, <- Zlog2_log_inf in *. clear H.
+  rewrite H, Psize_Zlog2 in *; clear H.
   change (Z.pos (Pos.lor p 2251799813685248)) with (Z.lor (Z.pos p) 2251799813685248%Z).
   rewrite Z.log2_lor by (zify; omega).
   now apply Z.max_case.
@@ -921,7 +921,7 @@ Proof.
   simpl. rewrite Z.ltb_lt in *.
   assert (H : forall x, Digits.digits2_pos x = Pos.size x).
   { induction x; simpl; auto; rewrite IHx; zify; omega. }
-  rewrite H, Psize_log_inf, <- Zlog2_log_inf in *. clear H.
+  rewrite H, Psize_Zlog2 in *. clear H.
   change (Z.pos (Pos.lor p 4194304)) with (Z.lor (Z.pos p) 4194304%Z).
   rewrite Z.log2_lor by (zify; omega).
   now apply Z.max_case.

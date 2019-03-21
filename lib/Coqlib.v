@@ -183,6 +183,12 @@ Hint Resolve Ple_refl Plt_Ple Ple_succ Plt_strict: coqlib.
 Ltac xomega := unfold Plt, Ple in *; zify; omega.
 Ltac xomegaContradiction := exfalso; xomega.
 
+Lemma Psize_Zlog2 (p: positive) :
+  Zpos (Pos.size p) = Z.succ (Z.log2 (Zpos p)).
+Proof.
+  destruct p; simpl; rewrite ?Pos.add_1_r; reflexivity.
+Qed.
+
 (** Peano recursion over positive numbers. *)
 
 Section POSITIVE_ITERATION.
