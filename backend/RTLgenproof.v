@@ -704,7 +704,7 @@ Proof.
   intros; red; intros. inv TE.
   exploit H0; eauto. intros [rs1 [tm1 [EX1 [ME1 [RR1 [RO1 EXT1]]]]]].
   exploit external_call_mem_extends; eauto.
-  intros [v' [tm2 [A [B [C [D E]]]]]].
+  intros [v' [tm2 [A [B [C D]]]]].
   exists (rs1#rd <- v'); exists tm2.
 (* Exec *)
   split. eapply star_right. eexact EX1.
@@ -736,7 +736,7 @@ Proof.
   intros; red; intros. inv TE.
   exploit H3; eauto. intros [rs1 [tm1 [EX1 [ME1 [RR1 [RO1 EXT1]]]]]].
   exploit external_call_mem_extends; eauto.
-  intros [v' [tm2 [A [B [C [D E]]]]]].
+  intros [v' [tm2 [A [B [C D]]]]].
   exploit function_ptr_translated; eauto. simpl. intros [tf [P Q]]. inv Q.
   exists (rs1#rd <- v'); exists tm2.
 (* Exec *)
