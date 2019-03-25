@@ -80,9 +80,15 @@ Proof.
   unfold modulus. apply two_power_nat_two_p.
 Qed.
 
+Remark modulus_gt_one: modulus > 1.
+Proof.
+  rewrite modulus_power. apply Z.lt_gt. apply (two_p_monotone_strict 0).
+  generalize wordsize_pos; omega.
+Qed.
+
 Remark modulus_pos: modulus > 0.
 Proof.
-  rewrite modulus_power. apply two_p_gt_ZERO. generalize wordsize_pos; omega.
+  generalize modulus_gt_one; omega.
 Qed.
 
 (** * Representation of machine integers *)
