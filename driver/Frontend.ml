@@ -17,15 +17,36 @@ open Driveraux
 
 (* Common frontend functions between clightgen and ccomp *)
 
+(* Split the version number into major.minor.patchlevel *)
+
+let re_version = Str.regexp {|\([0-9]+\)\.\([0-9]+\)\(\.\([0-9]+\)\)?|}
+
+let (v_major, v_minor, v_patchlevel) =
+  let get n =
+    try int_of_string (Str.matched_group n Version.version)
+    with Not_found -> 0 in
+  assert (Str.string_match re_version Version.version 0);
+  (get 1, get 2, get 4)
+
+let v_number =
+  assert (v_major < 100 && v_minor < 100 && v_patchlevel < 100);
+  10000 * v_major + 100 * v_minor + v_patchlevel
+
+(* Predefined macros: version numbers, C11 features *)
+
 let predefined_macros =
-  [
+  Printf.([
     "-D__COMPCERT__";
+    sprintf "-D__COMPCERT_MAJOR__=%d" v_major;    
+    sprintf "-D__COMPCERT_MINOR__=%d" v_minor;    
+    sprintf "-D__COMPCERT_PATCHLEVEL__=%d" v_patchlevel;    
+    sprintf "-D__COMPCERT_VERSION__=%d" v_number;    
     "-U__STDC_IEC_559_COMPLEX__";
     "-D__STDC_NO_ATOMICS__";
     "-D__STDC_NO_COMPLEX__";
     "-D__STDC_NO_THREADS__";
     "-D__STDC_NO_VLA__"
-  ]
+  ])
 
 (* From C to preprocessed C *)
 
