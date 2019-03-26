@@ -769,41 +769,25 @@ Transparent Float.cmp Float.ordered.
 - (* ne *)
   unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
 - (* lt *)
-  rewrite <- (Float.cmp_swap Clt n2 n1). simpl. unfold Float.ordered. 
+  rewrite <- (Float.cmp_swap FClt n2 n1). simpl. unfold Float.ordered. 
   destruct (Float.compare n2 n1) as [[]|]; reflexivity.
 - (* le *)
-  rewrite <- (Float.cmp_swap Cge n1 n2). simpl.
+  rewrite <- (Float.cmp_swap FCge n1 n2). simpl.
   destruct (Float.compare n1 n2) as [[]|]; auto.
 - (* gt *)
- unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
+  unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
 - (* ge *)
-  destruct (Float.cmp Cge n1 n2); auto.
-- (* notlt *)
-  replace (Float.cmp FCnotlt n1 n2) with (negb (Float.cmp FClt n1 n2)) by (symmetry; apply (Float.cmp_negate FClt)).
-  rewrite <- (Float.cmp_swap FCge n1 n2).
-  rewrite <- (Float.cmp_swap FCne n1 n2).
-  simpl.
-  rewrite Float.cmp_ne_eq. rewrite Float.cmp_le_lt_eq.
-  destruct (Float.cmp FClt n1 n2) eqn:LT; simpl.
-  destruct (Float.cmp FCeq n1 n2) eqn:EQ; simpl.
-  exfalso. eapply Float.cmp_lt_eq_false; eauto.
-  auto.
-  destruct (Float.cmp FCeq n1 n2); auto.
-- (* notle *)
-  replace (Float.cmp FCnotle n1 n2) with (negb (Float.cmp FCle n1 n2)) by (symmetry; apply (Float.cmp_negate FCle)).
-  rewrite <- (Float.cmp_swap FCge n1 n2). simpl.
-  destruct (Float.cmp FCle n1 n2); auto.
-- (* notgt *)
-  replace (Float.cmp FCnotgt n1 n2) with (negb (Float.cmp FCgt n1 n2)) by (symmetry; apply (Float.cmp_negate FCgt)).
-  rewrite Float.cmp_ne_eq. rewrite Float.cmp_ge_gt_eq.
-  destruct (Float.cmp FCgt n1 n2) eqn:GT; simpl.
-  destruct (Float.cmp FCeq n1 n2) eqn:EQ; simpl.
-  exfalso. eapply Float.cmp_gt_eq_false; eauto.
-  auto.
-  destruct (Float.cmp FCeq n1 n2); auto.
-- (* notge *)
-  replace (Float.cmp FCnotge n1 n2) with (negb (Float.cmp FCge n1 n2)) by (symmetry; apply (Float.cmp_negate FCge)).
   destruct (Float.cmp FCge n1 n2); auto.
+- (* notlt *)
+  rewrite <- (Float.cmp_swap FCnotlt n2 n1). simpl. unfold Float.ordered. 
+  destruct (Float.compare n2 n1) as [[]|]; reflexivity.
+- (* notle *)
+  rewrite <- (Float.cmp_swap FCnotle n2 n1). simpl.
+  destruct (Float.compare n2 n1) as [[]|]; reflexivity.
+- (* notgt *)
+  unfold Float.ordered, Float.cmp; destruct (Float.compare n1 n2) as [[]|]; reflexivity.
+- (* notge *)
+  unfold Float.cmp; destruct (Float.compare n1 n2) as [[]|]; auto.
 Opaque Float.cmp Float.ordered.
 Qed.
 
@@ -827,76 +811,27 @@ Transparent Float32.cmp Float32.ordered.
 - (* ne *)
   unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
 - (* lt *)
-  rewrite <- (Float32.cmp_swap Clt n2 n1). simpl. unfold Float32.ordered. 
+  rewrite <- (Float32.cmp_swap FClt n2 n1). simpl. unfold Float32.ordered. 
   destruct (Float32.compare n2 n1) as [[]|]; reflexivity.
 - (* le *)
-  rewrite <- (Float32.cmp_swap Cge n1 n2). simpl.
-  destruct (Float32.compare n1 n2) as [[]|]; auto.
-- (* gt *)
- unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
-- (* ge *)
-  destruct (Float32.cmp Cge n1 n2); auto.
-Opaque Float32.cmp Float32.ordered.
-Qed.
-
-Lemma testcond_for_neg_float32_comparison_correct:
-  forall c n1 n2 rs,
-  eval_extcond (testcond_for_condition (Cnotcompfs c))
-               (nextinstr (compare_floats32 (Vsingle (swap_floats c n1 n2))
-                                            (Vsingle (swap_floats c n2 n1)) rs)) =
-  Some(negb(Float32.cmp c n1 n2)).
-Proof.
-  intros.
-  generalize (compare_floats32_spec rs (swap_floats c n1 n2) (swap_floats c n2 n1)).
-  set (rs' := nextinstr (compare_floats32 (Vsingle (swap_floats c n1 n2))
-                                          (Vsingle (swap_floats c n2 n1)) rs)).
-  intros [A [B [C D]]].
-  unfold eval_extcond, eval_testcond. rewrite A; rewrite B; rewrite C.
-  destruct c; simpl.
-- (* eq *)
-Transparent Float32.cmp Float32.ordered.
-  unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
-- (* ne *)
-  unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
-- (* lt *)
-  rewrite <- (Float32.cmp_swap Clt n2 n1). simpl. unfold Float32.ordered. 
-  destruct (Float32.compare n2 n1) as [[]|]; reflexivity.
-- (* le *)
-  rewrite <- (Float32.cmp_swap Cge n1 n2). simpl.
-  destruct (Float32.compare n1 n2) as [[]|]; auto.
-- (* gt *)
- unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
-- (* ge *)
-  destruct (Float32.cmp Cge n1 n2); auto.
-- (* notlt *)
-  replace (Float32.cmp FCnotlt n1 n2) with (negb (Float32.cmp FClt n1 n2)) by (symmetry; apply (Float32.cmp_negate FClt)).
-  rewrite <- (Float32.cmp_swap FCge n1 n2).
-  rewrite <- (Float32.cmp_swap FCne n1 n2).
-  simpl.
-  rewrite Float32.cmp_ne_eq. rewrite Float32.cmp_le_lt_eq.
-  destruct (Float32.cmp FClt n1 n2) eqn:LT; simpl.
-  destruct (Float32.cmp FCeq n1 n2) eqn:EQ; simpl.
-  exfalso. eapply Float32.cmp_lt_eq_false; eauto.
-  auto.
-  destruct (Float32.cmp FCeq n1 n2); auto.
-- (* notle *)
-  replace (Float32.cmp FCnotle n1 n2) with (negb (Float32.cmp FCle n1 n2)) by (symmetry; apply (Float32.cmp_negate FCle)).
   rewrite <- (Float32.cmp_swap FCge n1 n2). simpl.
-  destruct (Float32.cmp FCle n1 n2); auto.
-- (* notgt *)
-  replace (Float32.cmp FCnotgt n1 n2) with (negb (Float32.cmp FCgt n1 n2)) by (symmetry; apply (Float32.cmp_negate FCgt)).
-  rewrite Float32.cmp_ne_eq. rewrite Float32.cmp_ge_gt_eq.
-  destruct (Float32.cmp FCgt n1 n2) eqn:GT; simpl.
-  destruct (Float32.cmp FCeq n1 n2) eqn:EQ; simpl.
-  exfalso. eapply Float32.cmp_gt_eq_false; eauto.
-  auto.
-  destruct (Float32.cmp FCeq n1 n2); auto.
-- (* notge *)
-  replace (Float32.cmp FCnotge n1 n2) with (negb (Float32.cmp FCge n1 n2)) by (symmetry; apply (Float32.cmp_negate FCge)).
+  destruct (Float32.compare n1 n2) as [[]|]; auto.
+- (* gt *)
+ unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
+- (* ge *)
   destruct (Float32.cmp FCge n1 n2); auto.
+- (* notlt *)
+  rewrite <- (Float32.cmp_swap FCnotlt n2 n1). simpl. unfold Float32.ordered. 
+  destruct (Float32.compare n2 n1) as [[]|]; reflexivity.
+- (* notle *)
+  rewrite <- (Float32.cmp_swap FCnotle n2 n1). simpl.
+  destruct (Float32.compare n2 n1) as [[]|]; reflexivity.
+- (* notgt *)
+  unfold Float32.ordered, Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; reflexivity.
+- (* notge *)
+  unfold Float32.cmp; destruct (Float32.compare n1 n2) as [[]|]; auto.
 Opaque Float32.cmp Float32.ordered.
 Qed.
-
 
 Remark swap_floats_commut:
   forall (A B: Type) c (f: A -> B) x y, swap_floats c (f x) (f y) = f (swap_floats c x y).
