@@ -11,21 +11,43 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open Printf
 open Clflags
 open Commandline
 open Driveraux
 
 (* Common frontend functions between clightgen and ccomp *)
 
+(* Split the version number into major.minor *)
+
+let re_version = Str.regexp {|\([0-9]+\)\.\([0-9]+\)|}
+
+let (v_major, v_minor) =
+  let get n = int_of_string (Str.matched_group n Version.version) in
+  assert (Str.string_match re_version Version.version 0);
+  (get 1, get 2)
+
+let v_number =
+  assert (v_minor < 100);
+  100 * v_major + v_minor
+
+(* Predefined macros: version numbers, C11 features *)
+
 let predefined_macros =
-  [
+  let macros = [  
     "-D__COMPCERT__";
+    sprintf "-D__COMPCERT_MAJOR__=%d" v_major;    
+    sprintf "-D__COMPCERT_MINOR__=%d" v_minor;    
+    sprintf "-D__COMPCERT_VERSION__=%d" v_number;    
     "-U__STDC_IEC_559_COMPLEX__";
     "-D__STDC_NO_ATOMICS__";
     "-D__STDC_NO_COMPLEX__";
     "-D__STDC_NO_THREADS__";
     "-D__STDC_NO_VLA__"
-  ]
+  ] in
+  if Version.buildnr = ""
+  then macros
+  else sprintf "-D__COMPCERT_BUILDNR__=%s" Version.buildnr :: macros
 
 (* From C to preprocessed C *)
 
