@@ -11,6 +11,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open Printf
 open Clflags
 open Commandline
 open Driveraux
@@ -35,7 +36,7 @@ let v_number =
 (* Predefined macros: version numbers, C11 features *)
 
 let predefined_macros =
-  Printf.([
+  let macros = [  
     "-D__COMPCERT__";
     sprintf "-D__COMPCERT_MAJOR__=%d" v_major;    
     sprintf "-D__COMPCERT_MINOR__=%d" v_minor;    
@@ -46,7 +47,10 @@ let predefined_macros =
     "-D__STDC_NO_COMPLEX__";
     "-D__STDC_NO_THREADS__";
     "-D__STDC_NO_VLA__"
-  ])
+  ] in
+  if Version.buildnr = ""
+  then macros
+  else sprintf "-D__COMPCERT_BUILDNR__=%s" Version.buildnr :: macros
 
 (* From C to preprocessed C *)
 
