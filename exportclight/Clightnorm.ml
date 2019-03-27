@@ -133,7 +133,7 @@ let rec norm_stmt s =
       add_sequence sl (Sreturn(Some e'))
   | Sswitch(e, ls) ->
       let (sl, e') = norm_expr e in
-      add_sequence sl (Sswitch(e, norm_lbl_stmt ls))
+      add_sequence sl (Sswitch(e', norm_lbl_stmt ls))
   | Slabel(lbl, s1) ->
       Slabel(lbl, norm_stmt s1)
   | Sgoto lbl -> s
