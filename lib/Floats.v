@@ -94,10 +94,25 @@ Proof.
   destruct x as [[]|]; simpl; intros; discriminate.
 Qed.
 
+(** Relation between number of bits and base-2 logarithm *)
+
+Lemma digits2_log2:
+  forall p, Z.pos (Digits.digits2_pos p) = Z.succ (Z.log2 (Z.pos p)).
+Proof.
+  assert (E: forall p, Digits.digits2_pos p = Pos.size p).
+  { induction p; simpl; rewrite ?IHp; auto. }
+  intros p. rewrite E. 
+  destruct p; simpl; rewrite ?Pos.add_1_r; reflexivity.
+Qed.
+
 Local Notation __ := (eq_refl Datatypes.Lt).
 
 Local Hint Extern 1 (Prec_gt_0 _) => exact (eq_refl Datatypes.Lt).
 Local Hint Extern 1 (_ < _) => exact (eq_refl Datatypes.Lt).
+
+Print Digits.digits2_pos.
+Print Pos.size.
+
 
 (** * Double-precision FP numbers *)
 
@@ -115,12 +130,9 @@ Lemma transform_quiet_nan_proof (p : positive) :
   nan_pl 53 (Pos.lor p (iter_nat xO 51 1%positive)) = true.
 Proof.
   unfold nan_pl. intros K.
-  simpl. rewrite Z.ltb_lt in *.
-  assert (H : forall x, Digits.digits2_pos x = Pos.size x).
-  { induction x; simpl; auto; rewrite IHx; zify; omega. }
-  rewrite H, Psize_log_inf, <- Zlog2_log_inf in *. clear H.
+  simpl. rewrite Z.ltb_lt, digits2_log2 in *.
   change (Z.pos (Pos.lor p 2251799813685248)) with (Z.lor (Z.pos p) 2251799813685248%Z).
-  rewrite Z.log2_lor by (zify; omega).
+  rewrite Z.log2_lor by xomega.
   now apply Z.max_case.
 Qed.
 
@@ -918,12 +930,9 @@ Lemma transform_quiet_nan_proof (p : positive) :
   nan_pl 24 (Pos.lor p (iter_nat xO 22 1%positive)) = true.
 Proof.
   unfold nan_pl. intros K.
-  simpl. rewrite Z.ltb_lt in *.
-  assert (H : forall x, Digits.digits2_pos x = Pos.size x).
-  { induction x; simpl; auto; rewrite IHx; zify; omega. }
-  rewrite H, Psize_log_inf, <- Zlog2_log_inf in *. clear H.
+  simpl. rewrite Z.ltb_lt, digits2_log2 in *.
   change (Z.pos (Pos.lor p 4194304)) with (Z.lor (Z.pos p) 4194304%Z).
-  rewrite Z.log2_lor by (zify; omega).
+  rewrite Z.log2_lor by xomega.
   now apply Z.max_case.
 Qed.
 
