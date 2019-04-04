@@ -101,7 +101,7 @@ Lemma digits2_log2:
 Proof.
   assert (E: forall p, Digits.digits2_pos p = Pos.size p).
   { induction p; simpl; rewrite ?IHp; auto. }
-  intros p. rewrite E. 
+  intros p. rewrite E.
   destruct p; simpl; rewrite ?Pos.add_1_r; reflexivity.
 Qed.
 
@@ -109,10 +109,6 @@ Local Notation __ := (eq_refl Datatypes.Lt).
 
 Local Hint Extern 1 (Prec_gt_0 _) => exact (eq_refl Datatypes.Lt).
 Local Hint Extern 1 (_ < _) => exact (eq_refl Datatypes.Lt).
-
-Print Digits.digits2_pos.
-Print Pos.size.
-
 
 (** * Double-precision FP numbers *)
 
