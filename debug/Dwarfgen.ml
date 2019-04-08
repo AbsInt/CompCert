@@ -593,7 +593,7 @@ let gnu_string_entry s =
 let gen_gnu_debug_info sec_name var_section : debug_entries =
   Hashtbl.clear string_table;
   let r,dwr,low_pc =
-    try if !Clflags.option_gdwarf > 3 then
+    try if !Clflags.option_gdwarf > 2 then
         let pcs  = fold_section_start (fun s low acc ->
           (low,section_end s)::acc) [] in
         match pcs with
