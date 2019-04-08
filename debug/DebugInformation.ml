@@ -553,7 +553,10 @@ let close_scope atom s_id lbl =
         | a::rest -> a,rest
         | _ -> assert false (* We must have an opening scope *)
       end in
-    let new_r = ({last_r with end_addr = Some lbl;})::rest in
+    let new_r = if last_r.start_addr = Some lbl then
+        rest
+      else
+        ({last_r with end_addr = Some lbl;})::rest in
     Hashtbl.replace scope_ranges s_id new_r
   with Not_found -> ()
 
