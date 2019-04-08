@@ -344,7 +344,7 @@ module Dwarfgenaux (Target: TARGET) =
 
     let global_variable_to_entry acc id v =
       let loc = match v.gvar_atom with
-      | Some a when is_variable_printed (extern_atom a) ->
+      | Some a when is_symbol_printed (extern_atom a) ->
           Some (LocSymbol a)
       | _ -> None in
       let var = {
@@ -529,7 +529,10 @@ module Dwarfgenaux (Target: TARGET) =
       match t with
       | GlobalVariable g -> Some (global_variable_to_entry acc id g)
       | Function f ->
+        if is_symbol_printed f.fun_name then
           Some (function_to_entry sec_name acc id f)
+        else
+          None
 
   end
 

@@ -635,12 +635,12 @@ let compute_gnu_file_enum f =
 
 let all_files_iter f = StringSet.iter f !all_files
 
-let printed_vars: StringSet.t ref = ref StringSet.empty
+let printed_symbols: StringSet.t ref = ref StringSet.empty
 
-let is_variable_printed id = StringSet.mem id !printed_vars
+let is_symbol_printed id = StringSet.mem id !printed_symbols
 
-let variable_printed id =
-  printed_vars := StringSet.add id !printed_vars
+let symbol_printed id =
+  printed_symbols := StringSet.add id !printed_symbols
 
 let init name =
   id := 0;
@@ -663,7 +663,7 @@ let init name =
   Hashtbl.reset scope_ranges;
   Hashtbl.reset label_translation;
   all_files := StringSet.singleton name;
-  printed_vars := StringSet.empty
+  printed_symbols := StringSet.empty
 
 let default_debug =
   {
@@ -693,6 +693,6 @@ let default_debug =
    exists_section = exists_section;
    remove_unused = remove_unused;
    remove_unused_function = remove_unused_function;
-   variable_printed = variable_printed;
+   symbol_printed = symbol_printed;
    add_diab_info = (fun _ _ _ _ -> ());
  }
