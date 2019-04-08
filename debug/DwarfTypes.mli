@@ -272,9 +272,11 @@ type location_entry =
    }
 type dw_locations = constant option * location_entry list
 
-type range_entry = (address * address) list
+type range_entry =
+  | AddressRange  of (address * address) list
+  | OffsetRange of reference * (address * address) list
 
-type dw_ranges = range_entry list
+type dw_ranges = (int * range_entry) list
 
 type dw_string = (int * string) list
 

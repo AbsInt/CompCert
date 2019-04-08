@@ -72,7 +72,9 @@ let up_locs acc loc =
   {acc with locs = loc@acc.locs;}
 
 let up_ranges acc r =
-  {acc with ranges = r;}
+  let off, old_r = acc.ranges in
+  let new_r = (off +1 ), (off, r):: old_r in
+  (Offset off), {acc with ranges = new_r;}
 
 let empty_accu =
   {
@@ -89,6 +91,8 @@ module Dwarfgenaux (Target: TARGET) =
     let name_opt n = if n <> "" then Some (string_entry n) else None
 
     let subrange_type : int option ref = ref None
+
+    let current_section_start : int option ref = ref None
 
     let encoding_of_ikind = function
       | IBool -> DW_ATE_boolean
@@ -424,7 +428,7 @@ module Dwarfgenaux (Target: TARGET) =
       let acc = up_locs (up_typs acc p.formal_parameter_type) loc_list in
       new_entry (next_id ()) (DW_TAG_formal_parameter p),acc
 
-    let scope_range f_id id (o,dwr) =
+    let scope_range f_id id acc =
       try
         let r = get_scope_ranges id in
         let lbl l h = match l,h with
@@ -435,19 +439,22 @@ module Dwarfgenaux (Target: TARGET) =
         | _ -> raise Not_found in
         begin
           match r with
-          | [] -> Empty,(o,dwr)
+          | [] -> Empty,acc
           | [a] ->
               let l,h = lbl a.start_addr a.end_addr in
-              Pc_pair (l,h),(o,dwr)
+              Pc_pair (l,h), acc
           | a::rest ->
               if !Clflags.option_gdwarf > 2 then
                 let r = List.map (fun e -> lbl e.start_addr e.end_addr) r in
-                (Offset o), (o + 2 + 4 * (List.length r),r::dwr)
-              else
+                let r = match !current_section_start with
+                  | None -> AddressRange r
+                  | Some s -> OffsetRange (s, r) in
+                up_ranges acc r
+             else
                 let l,h = lbl (List.hd (List.rev rest)).start_addr a.end_addr in
-                Pc_pair (l,h),(o,dwr)
+                Pc_pair (l,h), acc
         end
-      with Not_found -> Empty,(o,dwr)
+      with Not_found -> Empty, acc
 
     let rec local_variable_to_entry f_id acc v id =
       match v.lvar_atom with
@@ -466,11 +473,10 @@ module Dwarfgenaux (Target: TARGET) =
           Some (new_entry id (DW_TAG_variable var)),acc
 
     and scope_to_entry f_id acc sc id =
-      let r,dwr = scope_range f_id id acc.ranges in
+      let r, acc = scope_range f_id id acc in
       let scope = {
         lexical_block_range = r;
       } in
-      let acc = up_ranges acc dwr in
       let vars,acc = mmap_opt (local_to_entry  f_id) acc sc.scope_variables in
       let entry = new_entry id (DW_TAG_lexical_block scope) in
       add_children entry vars,acc
@@ -490,7 +496,7 @@ module Dwarfgenaux (Target: TARGET) =
           | Scope sc -> mmap_opt (local_to_entry f_id) acc sc.scope_variables
           | _ -> assert false)
 
-    let function_to_entry acc id f =
+    let function_to_entry sec_name acc id f =
       let r = match f.fun_low_pc, f.fun_high_pc with
       | Some l,Some h -> Pc_pair (l,h)
       | _ -> Empty in
@@ -503,8 +509,13 @@ module Dwarfgenaux (Target: TARGET) =
         subprogram_range = r;
       } in
       let f_id = get_opt_val f.fun_atom in
+      let start_sec =
+        try
+          Some (section_start (sec_name f_id))
+        with Not_found -> None in
+      current_section_start := start_sec;
       let acc = match f.fun_return_type with Some s -> up_typs acc s | None -> acc in
-      let f_entry =  new_entry id (DW_TAG_subprogram f_tag) in
+      let f_entry = new_entry id (DW_TAG_subprogram f_tag) in
       let children,acc =
         if !Clflags.option_gdepth > 1 then
           let params,acc = mmap (function_parameter_to_entry f_id) acc f.fun_parameter in
@@ -514,10 +525,11 @@ module Dwarfgenaux (Target: TARGET) =
           [],acc in
       add_children f_entry (children),acc
 
-    let definition_to_entry acc id t =
+    let definition_to_entry sec_name acc id t =
       match t with
-      | GlobalVariable g -> global_variable_to_entry acc id g
-      | Function f -> function_to_entry acc id f
+      | GlobalVariable g -> Some (global_variable_to_entry acc id g)
+      | Function f ->
+          Some (function_to_entry sec_name acc id f)
 
   end
 
@@ -535,14 +547,15 @@ let prod_name =
   Printf.sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)"
     version_string Configuration.arch Configuration.system Configuration.abi Configuration.model
 
-let diab_gen_compilation_section s defs acc =
+let diab_gen_compilation_section sec_name s defs acc =
   let module Gen = Dwarfgenaux(struct
     let file_loc = diab_file_loc s
     let string_entry s =  Simple_string s
   end) in
   let defs,accu = List.fold_left (fun (acc,bcc) (id,t) ->
-    let t,bcc = Gen.definition_to_entry bcc id t in
-    t::acc,bcc) ([],empty_accu) defs in
+      match Gen.definition_to_entry sec_name bcc id t with
+      | Some (t,bcc) -> t::acc,bcc
+      | None -> acc,bcc) ([],empty_accu) defs in
   let low_pc = section_start s
   and line_start,debug_start = diab_additional_section s
   and high_pc = section_end s in
@@ -569,7 +582,7 @@ let gen_diab_debug_info sec_name var_section : debug_entries =
     | Function f -> sec_name (get_opt_val f.fun_atom) in
     let old = try StringMap.find s acc with Not_found -> [] in
     StringMap.add s ((id,t)::old) acc) StringMap.empty in
-  let entries = StringMap.fold diab_gen_compilation_section defs [] in
+  let entries = StringMap.fold (diab_gen_compilation_section sec_name) defs [] in
   Diab entries
 
 let gnu_file_loc (f,l) =
@@ -592,30 +605,32 @@ let gnu_string_entry s =
 
 let gen_gnu_debug_info sec_name var_section : debug_entries =
   Hashtbl.clear string_table;
-  let r,dwr,low_pc =
+  let r,accu,low_pc =
     try if !Clflags.option_gdwarf > 2 then
         let pcs  = fold_section_start (fun s low acc ->
           (low,section_end s)::acc) [] in
         match pcs with
-        | [] ->  Empty,(0,[]),None
-        | [(l,h)] ->   Pc_pair (l,h),(0,[]),Some l
-        | _ -> Offset 0,(2 + 4 * (List.length pcs),[pcs]),None
+        | [] ->  Empty, empty_accu, None
+        | [(l,h)] ->   Pc_pair (l,h), empty_accu, Some l
+        | _ ->
+          let off, acc = up_ranges empty_accu (AddressRange pcs) in
+          off, acc, None
     else
         let l = section_start ".text"
         and h = section_end ".text" in
-        Pc_pair(l,h),(0,[]),Some l
-    with Not_found ->  Empty,(0,[]),None in
-  let accu = up_ranges empty_accu dwr in
+        Pc_pair(l,h), empty_accu,Some l
+    with Not_found ->  Empty ,empty_accu, None in
   let module Gen = Dwarfgenaux (struct
     let file_loc = gnu_file_loc
     let string_entry = gnu_string_entry
   end) in
-  let defs,accu,sec = fold_definitions (fun  id t (acc,bcc,sec) ->
+  let defs,accu,sec = fold_definitions (fun id t (acc,bcc,sec) ->
     let s = match t with
     | GlobalVariable _ -> var_section
     | Function f -> sec_name (get_opt_val f.fun_atom) in
-    let t,bcc = Gen.definition_to_entry bcc id t in
-    t::acc,bcc,StringSet.add s sec) ([],accu,StringSet.empty) in
+    match Gen.definition_to_entry sec_name bcc id t with
+    | Some (t,bcc) -> t::acc,bcc,StringSet.add s sec
+    | None -> acc, bcc, sec) ([],accu,StringSet.empty) in
   let types = Gen.gen_types accu.typs in
   let cp = {
     compile_unit_name = gnu_string_entry !file_name;
