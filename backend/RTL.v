@@ -73,7 +73,7 @@ Inductive instruction: Type :=
           it transitions to [ifnot]. *)
   | Ijumptable: reg -> list node -> instruction
       (** [Ijumptable arg tbl] transitions to the node that is the [n]-th
-          element of the list [tbl], where [n] is the signed integer
+          element of the list [tbl], where [n] is the unsigned integer
           value of register [arg]. *)
   | Ireturn: option reg -> instruction.
       (** [Ireturn] terminates the execution of the current function
