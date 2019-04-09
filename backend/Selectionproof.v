@@ -460,7 +460,7 @@ Qed.
 
 End SEL_SWITCH.
 
-Section SEL_SWITH_INT.
+Section SEL_SWITCH_INT.
 
 Variable cunit: Cminor.program.
 Variable hf: helper_functions.
@@ -547,7 +547,7 @@ Proof.
 - apply Int64.unsigned_range.
 Qed.
 
-End SEL_SWITH_INT.
+End SEL_SWITCH_INT.
 
 (** Compatibility of evaluation functions with the "less defined than" relation. *)
 
