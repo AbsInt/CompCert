@@ -244,6 +244,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
     (* Mapping from abbreviation string to abbreviaton id *)
     let abbrev_mapping: (string,int) Hashtbl.t = Hashtbl.create 7
 
+    (* Mapping from abbreviation range id to label *)
     let range_labels : (int, int) Hashtbl.t = Hashtbl.create 7
 
     (* Look up the id of the abbreviation and add it if it is missing *)
@@ -444,8 +445,8 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | Offset i ->
         let lbl = new_label () in
         Hashtbl.add range_labels i lbl;
-        fprintf oc "	.4byte		%a+(%a-%a)%a\n"
-          label !debug_ranges_addr label lbl label !debug_ranges_addr print_comment "DW_AT_ranges"
+        fprintf oc "	.4byte		%a%a\n"
+          label lbl print_comment "DW_AT_ranges"
       | _ -> ()
 
     let print_compilation_unit oc tag =
