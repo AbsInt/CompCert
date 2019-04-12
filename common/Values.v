@@ -132,6 +132,23 @@ Proof.
   simpl in *. InvBooleans. destruct H0. split; auto. eapply has_subtype; eauto.
 Qed.
 
+Definition has_type_dec (v: val) (t: typ) : { has_type v t } + { ~ has_type v t }.
+Proof.
+  unfold has_type; destruct v.
+- auto.
+- destruct t; auto.
+- destruct t; auto.
+- destruct t; auto.
+- destruct t; auto.
+- destruct t. 
+  apply bool_dec.
+  auto.
+  apply bool_dec.
+  auto.
+  apply bool_dec.
+  auto.
+Defined.
+
 (** Truth values.  Non-zero integers are treated as [True].
   The integer 0 (also used to represent the null pointer) is [False].
   Other values are neither true nor false. *)
@@ -896,6 +913,55 @@ Definition offset_ptr (v: val) (delta: ptrofs) : val :=
   match v with
   | Vptr b ofs => Vptr b (Ptrofs.add ofs delta)
   | _ => Vundef
+  end.
+
+(** Normalize a value to the given type, turning it into Vundef if it does not
+    match the type. *)
+
+Definition normalize (v: val) (ty: typ) : val :=
+  match v, ty with
+  | Vundef, _ => Vundef
+  | Vint _, Tint => v
+  | Vlong _, Tlong => v
+  | Vfloat _, Tfloat => v
+  | Vsingle _, Tsingle => v
+  | Vptr _ _, (Tint | Tany32) => if Archi.ptr64 then Vundef else v
+  | Vptr _ _, Tlong => if Archi.ptr64 then v else Vundef
+  | (Vint _ | Vsingle _), Tany32 => v
+  | _, Tany64 => v
+  | _, _ => Vundef
+  end.
+
+Lemma normalize_type:
+  forall v ty, has_type (normalize v ty) ty.
+Proof.
+  intros; destruct v; simpl.
+- auto.
+- destruct ty; exact I.
+- destruct ty; exact I.
+- destruct ty; exact I.
+- destruct ty; exact I.
+- unfold has_type; destruct ty, Archi.ptr64; auto.
+Qed.
+
+Lemma normalize_idem:
+  forall v ty, has_type v ty -> normalize v ty = v.
+Proof.
+  unfold has_type, normalize; intros. destruct v.
+- auto.
+- destruct ty; intuition auto.
+- destruct ty; intuition auto.
+- destruct ty; intuition auto.
+- destruct ty; intuition auto.
+- destruct ty, Archi.ptr64; intuition congruence.
+Qed.
+
+(** Select between two values based on the result of a comparison. *)
+
+Definition select (cmp: option bool) (v1 v2: val) (ty: typ) :=
+  match cmp with
+  | Some b => normalize (if b then v1 else v2) ty
+  | None => Vundef
   end.
 
 (** [load_result] reflects the effect of storing a value with a given
@@ -2044,6 +2110,36 @@ Proof.
   intros. destruct v; simpl; auto. f_equal. apply Ptrofs.add_assoc.
 Qed.
 
+Lemma lessdef_normalize:
+  forall v ty, lessdef (normalize v ty) v.
+Proof.
+  intros. destruct v; simpl.
+  - auto.
+  - destruct ty; auto.
+  - destruct ty; auto.
+  - destruct ty; auto.
+  - destruct ty; auto.
+  - destruct ty, Archi.ptr64; auto.
+Qed.
+
+Lemma normalize_lessdef:
+  forall v v' ty, lessdef v v' -> lessdef (normalize v ty) (normalize v' ty).
+Proof.
+  intros. inv H; auto.
+Qed.
+
+Lemma select_lessdef:
+  forall ob ob' v1 v1' v2 v2' ty,
+  ob = None \/ ob = ob' ->
+  lessdef v1 v1' -> lessdef v2 v2' ->
+  lessdef (select ob v1 v2 ty) (select ob' v1' v2' ty).
+Proof.
+  intros; unfold select. destruct H.
+- subst ob; auto.
+- subst ob'; destruct ob as [b|]; auto.
+  apply normalize_lessdef. destruct b; auto.
+Qed.
+
 (** * Values and memory injections *)
 
 (** A memory injection [f] is a function from addresses to either [None]
@@ -2326,6 +2422,36 @@ Lemma hiword_inject:
   forall v v', inject f v v' -> inject f (Val.hiword v) (Val.hiword v').
 Proof.
   intros. unfold Val.hiword; inv H; auto.
+Qed.
+
+Lemma normalize_inject:
+  forall v v' ty, inject f v v' -> inject f (normalize v ty) (normalize v' ty).
+Proof.
+  intros. inv H.
+- destruct ty; constructor.
+- destruct ty; constructor.
+- destruct ty; constructor.
+- destruct ty; constructor.
+- simpl. destruct ty.
++ destruct Archi.ptr64; econstructor; eauto.
++ auto.
++ destruct Archi.ptr64; econstructor; eauto.
++ auto.
++ destruct Archi.ptr64; econstructor; eauto.
++ econstructor; eauto.
+- constructor.
+Qed.
+
+Lemma select_inject:
+  forall ob ob' v1 v1' v2 v2' ty,
+  ob = None \/ ob = ob' ->
+  inject f v1 v1' -> inject f v2 v2' ->
+  inject f (select ob v1 v2 ty) (select ob' v1' v2' ty).
+Proof.
+  intros; unfold select. destruct H.
+- subst ob; auto.
+- subst ob'; destruct ob as [b|]; auto.
+  apply normalize_inject. destruct b; auto.
 Qed.
 
 End VAL_INJ_OPS.

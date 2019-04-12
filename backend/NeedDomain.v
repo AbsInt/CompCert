@@ -786,6 +786,34 @@ Proof.
   inv H0. rewrite iagree_and_eq in H. rewrite H. auto.
 Qed.
 
+(** The needs of a select *)
+
+Lemma normalize_sound:
+  forall v w x ty,
+  vagree v w x ->
+  vagree (Val.normalize v ty) (Val.normalize w ty) x.
+Proof.
+  intros. destruct x; simpl in *. 
+- auto.
+- unfold Val.normalize. destruct v. 
+  auto.
+  destruct w; try contradiction. destruct ty; auto.
+  destruct ty; auto.
+  destruct ty; auto.
+  destruct ty; auto.
+  destruct ty; destruct Archi.ptr64; auto.
+- apply Val.normalize_lessdef; auto.
+Qed.
+
+Lemma select_sound:
+  forall ob v1 v2 w1 w2 ty x,
+  vagree v1 w1 x -> vagree v2 w2 x ->
+  vagree (Val.select ob v1 v2 ty) (Val.select ob w1 w2 ty) x.
+Proof.
+  unfold Val.select; intros. destruct ob as [b|]; auto with na.
+  apply normalize_sound. destruct b; auto.
+Qed.
+
 (** The default abstraction: if the result is unused, the arguments are
   unused; otherwise, the arguments are needed in full. *)
 
