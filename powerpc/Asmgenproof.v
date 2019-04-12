@@ -179,13 +179,27 @@ Proof.
 Qed.
 Hint Resolve rolm_label: labels.
 
+Remark loadimm64_32s_label:
+  forall r n k, tail_nolabel k (loadimm64_32s r n k).
+Proof.
+  unfold loadimm64_32s; intros. destruct Int64.eq; TailNoLabel.
+Qed.
+Hint Resolve loadimm64_32s_label: labels.
+
 Remark loadimm64_label:
   forall r n k, tail_nolabel k (loadimm64 r n k).
 Proof.
-  unfold loadimm64; intros.
-  destruct Int64.eq. TailNoLabel. destruct Int64.eq; TailNoLabel.
+  unfold loadimm64; intros. destruct Int64.eq; TailNoLabel.
 Qed.
 Hint Resolve loadimm64_label: labels.
+
+Remark loadimm64_notemp_label:
+  forall r n k, tail_nolabel k (loadimm64_notemp r n k).
+Proof.
+  unfold loadimm64_notemp; intros. destruct Int64.eq; TailNoLabel.
+  eapply tail_nolabel_trans; TailNoLabel.
+Qed.
+Hint Resolve loadimm64_notemp_label: labels.
 
 Remark loadind_label:
   forall base ofs ty dst k c,

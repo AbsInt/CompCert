@@ -125,16 +125,34 @@ Definition rolm (r1 r2: ireg) (amount mask: int) (k: code) :=
 Definition low64_u (n: int64) := Int64.zero_ext 16 n.
 Definition low64_s (n: int64) := Int64.sign_ext 16 n.
 
-Definition loadimm64 (r: ireg) (n: int64) (k: code) :=
+Definition loadimm64_32s (r: ireg) (n: int64) (k: code) :=
   let lo_u := low64_u n in
   let lo_s := low64_s n in
-  let hi_s := Int64.sign_ext 16 (Int64.shr n (Int64.repr 16)) in
+  let hi_s := low64_s (Int64.shr n (Int64.repr 16)) in
   if Int64.eq n lo_s then
     Paddi64 r GPR0 n :: k
-  else if Int64.eq n (Int64.or (Int64.shl hi_s (Int64.repr 16)) lo_u) then
-    Paddis64 r GPR0 hi_s :: Pori64 r r lo_u :: k
+  else
+    Paddis64 r GPR0 hi_s :: Pori64 r r lo_u :: k.
+
+Definition loadimm64 (r: ireg) (n: int64) (k: code) :=
+  if Int64.eq n (Int64.sign_ext 32 n) then
+    loadimm64_32s r n k
   else
     Pldi r n :: k.
+
+(** [loadimm64_notemp] is a variant of [loadimm64] that uses no temporary
+  register.  The code it produces is larger and slower than the code
+  produced by [loadimm64], but it is sometimes useful to preserve all registers
+  except the destination. *)
+
+Definition loadimm64_notemp (r: ireg) (n: int64) (k: code) :=
+  if Int64.eq n (Int64.sign_ext 32 n) then
+    loadimm64_32s r n k
+  else
+    loadimm64_32s r (Int64.shru n (Int64.repr 32))
+     (Prldinm r r (Int.repr 32) (Int64.shl Int64.mone (Int64.repr 32)) ::
+      Poris64 r r (low64_u (Int64.shru n (Int64.repr 16))) ::
+      Pori64 r r (low64_u n) :: k).
 
 Definition opimm64 (insn2: ireg -> ireg -> ireg -> instruction)
                    (insn1: ireg -> ireg -> int64 -> instruction)
@@ -261,18 +279,14 @@ Definition transl_cond
       do r1 <- ireg_of a1;
       if Int64.eq n (low64_s n) then
         OK (Pcmpdi r1 n :: k)
-      else if ireg_eq r1 GPR12 then
-        OK (Pmr GPR0 GPR12 :: loadimm64 GPR12 n (Pcmpd GPR0 GPR12 :: k))
       else
-        OK (loadimm64 GPR0 n (Pcmpd r1 GPR0 :: k))
+        OK (loadimm64_notemp GPR0 n (Pcmpd r1 GPR0 :: k))
   | Ccompluimm c n, a1 :: nil =>
       do r1 <- ireg_of a1;
       if Int64.eq n (low64_u n) then
         OK (Pcmpldi r1 n :: k)
-      else if ireg_eq r1 GPR12 then
-        OK (Pmr GPR0 GPR12 :: loadimm64 GPR12 n (Pcmpld GPR0 GPR12 :: k))
       else
-        OK (loadimm64 GPR0 n (Pcmpld r1 GPR0 :: k))
+        OK (loadimm64_notemp GPR0 n (Pcmpld r1 GPR0 :: k))
   | _, _ =>
       Error(msg "Asmgen.transl_cond")
   end.

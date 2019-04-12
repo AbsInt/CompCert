@@ -532,6 +532,40 @@ Qed.
 
 (** Load int64 constant. *)
 
+Lemma loadimm64_32s_correct:
+  forall r n k rs m,
+  exists rs',
+     exec_straight ge fn (loadimm64_32s r n k) rs m  k rs' m
+  /\ rs'#r = Vlong (Int64.sign_ext 32 n)
+  /\ forall r': preg, r' <> r -> r' <> PC -> rs'#r' = rs#r'.
+Proof.
+  unfold loadimm64_32s; intros. predSpec Int64.eq Int64.eq_spec n (low64_s n).
+  - econstructor; split; [|split].
+    + apply exec_straight_one. simpl; eauto. auto.
+    + Simpl. rewrite Int64.add_zero_l. rewrite H. unfold low64_s.
+      rewrite Int64.sign_ext_widen by omega. auto.
+    + intros; Simpl.
+  - econstructor; split; [|split].
+    + eapply exec_straight_two. simpl; eauto. simpl; eauto. auto. auto.
+    + Simpl. simpl. f_equal. rewrite Int64.add_zero_l.
+      apply Int64.same_bits_eq; intros.  assert (Int64.zwordsize = 64) by auto.
+      rewrite Int64.bits_or, Int64.bits_shl by auto.
+      unfold low64_s, low64_u.
+      rewrite Int64.bits_zero_ext by omega.
+      change (Int64.unsigned (Int64.repr 16)) with 16.
+      destruct (zlt i 16).
+      * rewrite Int64.bits_sign_ext by omega. rewrite zlt_true by omega. auto.
+      * rewrite ! Int64.bits_sign_ext by omega. rewrite orb_false_r.
+        destruct (zlt i 32).
+        ** rewrite zlt_true by omega. rewrite Int64.bits_shr by omega.
+           change (Int64.unsigned (Int64.repr 16)) with 16.
+           rewrite zlt_true by omega. f_equal; omega.
+        ** rewrite zlt_false by omega. rewrite Int64.bits_shr by omega.
+           change (Int64.unsigned (Int64.repr 16)) with 16.
+           reflexivity.
+    + intros; Simpl.
+Qed.
+
 Lemma loadimm64_correct:
   forall r n k rs m,
   exists rs',
@@ -540,20 +574,78 @@ Lemma loadimm64_correct:
   /\ forall r': preg, r' <> r -> r' <> GPR12 -> r' <> PC -> rs'#r' = rs#r'.
 Proof.
   intros. unfold loadimm64.
-  set (hi_s := Int64.sign_ext 16 (Int64.shr n (Int64.repr 16))).
-  set (hi' := Int64.shl hi_s (Int64.repr 16)).
-  destruct (Int64.eq n (low64_s n)).
-  (* addi *)
-  econstructor; split. apply exec_straight_one. simpl; eauto. auto.
-  rewrite Int64.add_zero_l. intuition Simpl.
-  (* addis + ori *)
-  predSpec Int64.eq Int64.eq_spec n (Int64.or hi' (low64_u n)).
-  econstructor; split. eapply exec_straight_two. simpl; eauto. simpl; eauto. auto. auto.
-  split. Simpl. rewrite Int64.add_zero_l. simpl; f_equal; auto.
-  intros. Simpl.
-  (* ldi *)
-  econstructor; split. apply exec_straight_one. simpl; eauto. auto.
-  intuition Simpl.
+  predSpec Int64.eq Int64.eq_spec n (Int64.sign_ext 32 n).
+  - destruct (loadimm64_32s_correct r n k rs m) as (rs' & A & B & C).
+    exists rs'; intuition auto. congruence.
+  - econstructor; split. apply exec_straight_one. simpl; eauto. auto.
+    intuition Simpl.
+Qed.
+
+(** Alternate load int64 immediate *)
+
+Lemma loadimm64_notemp_correct:
+  forall r n k rs m,
+  exists rs',
+     exec_straight ge fn (loadimm64_notemp r n k) rs m  k rs' m
+  /\ rs'#r = Vlong n
+  /\ forall r': preg, r' <> r -> r' <> PC -> rs'#r' = rs#r'.
+Proof.
+  intros. unfold loadimm64_notemp.
+  predSpec Int64.eq Int64.eq_spec n (Int64.sign_ext 32 n).
+- destruct (loadimm64_32s_correct r n k rs m) as (rs' & A & B & C).
+  exists rs'; intuition auto. congruence.
+- set (n2 := Int64.shru n (Int64.repr 32)).
+  set (n1 := Int64.zero_ext 16 (Int64.shru n (Int64.repr 16))).
+  set (n0 := Int64.zero_ext 16 n).
+  set (mi := Int64.shl n1 (Int64.repr 16)).
+  set (hi := Int64.shl (Int64.sign_ext 32 n2) (Int64.repr 32)).
+  assert (HI: forall i, 0 <= i < Int64.zwordsize ->
+              Int64.testbit hi i = if zlt i 32 then false else Int64.testbit n i).
+  { intros. unfold hi. assert (Int64.zwordsize = 64) by auto.
+    rewrite Int64.bits_shl by auto.
+    change (Int64.unsigned (Int64.repr 32)) with 32.
+    destruct (zlt i 32); auto.
+    rewrite Int64.bits_sign_ext by omega.
+    rewrite zlt_true by omega.
+    unfold n2. rewrite Int64.bits_shru by omega.
+    change (Int64.unsigned (Int64.repr 32)) with 32.
+    rewrite zlt_true by omega. f_equal; omega.
+  }
+  assert (MI: forall i, 0 <= i < Int64.zwordsize ->
+              Int64.testbit mi i =
+              if zlt i 16 then false
+              else if zlt i 32 then Int64.testbit n i else false).
+  { intros. unfold mi. assert (Int64.zwordsize = 64) by auto.
+    rewrite Int64.bits_shl by auto.
+    change (Int64.unsigned (Int64.repr 16)) with 16.
+    destruct (zlt i 16); auto.
+    unfold n1. rewrite Int64.bits_zero_ext by omega.
+    rewrite Int64.bits_shru by omega.
+    destruct (zlt i 32).
+    rewrite zlt_true by omega.
+    change (Int64.unsigned (Int64.repr 16)) with 16.
+    rewrite zlt_true by omega. f_equal; omega.
+    rewrite zlt_false by omega. auto.
+  }
+  assert (EQ: Int64.or (Int64.or hi mi) n0 = n).
+  { apply Int64.same_bits_eq; intros.
+    rewrite ! Int64.bits_or by auto.
+    unfold n0; rewrite Int64.bits_zero_ext by omega.
+    rewrite HI, MI by auto.
+    destruct (zlt i 16).
+    rewrite zlt_true by omega. auto.
+    destruct (zlt i 32); rewrite ! orb_false_r; auto.
+  }
+  edestruct (loadimm64_32s_correct r n2) as (rs' & A & B & C).
+  econstructor; split; [|split].
+  + eapply exec_straight_trans. eexact A.
+    eapply exec_straight_three.
+    simpl. rewrite B. simpl; auto.
+    simpl; auto.
+    simpl; auto.
+    reflexivity. reflexivity. reflexivity.
+  + Simpl. simpl. f_equal. rewrite <- Int64.shl_rolm by auto. exact EQ.
+  + intros; Simpl.
 Qed.
 
 (** Add int64 immediate. *)
@@ -890,7 +982,7 @@ Lemma transl_cond_correct_1:
        (if snd (crbit_for_cond cond)
         then Val.of_optbool (eval_condition cond (map rs (map preg_of args)) m)
         else Val.notbool (Val.of_optbool (eval_condition cond (map rs (map preg_of args)) m)))
-  /\ forall r, important_preg r = true  -> preg_notin r (destroyed_by_cond cond) ->  rs'#r = rs#r.
+  /\ forall r, important_preg r = true -> rs'#r = rs#r.
 Proof.
   intros.
 Opaque Int.eq.
@@ -992,20 +1084,12 @@ Opaque Int.eq.
   auto with asmgen.
 - (* Ccomplimm *)
   rewrite <- Val.notbool_negb_3. rewrite <- Val.negate_cmpl_bool.
-  destruct (Int64.eq i (low64_s i)); [|destruct (ireg_eq x GPR12)]; inv EQ0.
+  destruct (Int64.eq i (low64_s i)); inv EQ0.
 + destruct (compare_slong_spec rs (rs x) (Vlong i)) as [A [B [C D]]].
   econstructor; split.
   apply exec_straight_one. simpl; reflexivity. reflexivity.
   split. case c0; simpl; auto. auto with asmgen.
-+ destruct (loadimm64_correct GPR12 i (Pcmpd GPR0 GPR12 :: k) (nextinstr (rs#GPR0 <- (rs#GPR12))) m) as [rs1 [EX1 [RES1 OTH1]]].
-  destruct (compare_slong_spec rs1 (rs GPR12) (Vlong i)) as [A [B [C D]]].
-  assert (SAME: rs1 GPR0 = rs GPR12) by (apply OTH1; eauto with asmgen).
-  econstructor; split.
-  eapply exec_straight_step. simpl;reflexivity. reflexivity.
-  eapply exec_straight_trans. eexact EX1. eapply exec_straight_one. simpl;reflexivity. reflexivity.
-  split. rewrite RES1, SAME. destruct c0; simpl; auto.
-  simpl; intros. rewrite RES1, SAME. rewrite D by eauto with asmgen. rewrite OTH1 by eauto with asmgen. Simpl.
-+ destruct (loadimm64_correct GPR0 i (Pcmpd x GPR0 :: k) rs m) as [rs1 [EX1 [RES1 OTH1]]].
++ destruct (loadimm64_notemp_correct GPR0 i (Pcmpd x GPR0 :: k) rs m) as [rs1 [EX1 [RES1 OTH1]]].
   destruct (compare_slong_spec rs1 (rs x) (Vlong i)) as [A [B [C D]]].
   assert (SAME: rs1 x = rs x) by (apply OTH1; eauto with asmgen).
   econstructor; split.
@@ -1014,20 +1098,12 @@ Opaque Int.eq.
   simpl; intros. rewrite RES1, SAME. rewrite D; eauto with asmgen.
 - (* Ccompluimm *)
   rewrite <- Val.notbool_negb_3. rewrite <- Val.negate_cmplu_bool.
-  destruct (Int64.eq i (low64_u i)); [|destruct (ireg_eq x GPR12)]; inv EQ0.
+  destruct (Int64.eq i (low64_u i)); inv EQ0.
 + destruct (compare_ulong_spec rs m (rs x) (Vlong i)) as [A [B [C D]]].
   econstructor; split.
   apply exec_straight_one. simpl; reflexivity. reflexivity.
   split. case c0; simpl; auto. auto with asmgen.
-+ destruct (loadimm64_correct GPR12 i (Pcmpld GPR0 GPR12 :: k) (nextinstr (rs#GPR0 <- (rs#GPR12))) m) as [rs1 [EX1 [RES1 OTH1]]].
-  destruct (compare_ulong_spec rs1 m (rs GPR12) (Vlong i)) as [A [B [C D]]].
-  assert (SAME: rs1 GPR0 = rs GPR12) by (apply OTH1; eauto with asmgen).
-  econstructor; split.
-  eapply exec_straight_step. simpl;reflexivity. reflexivity.
-  eapply exec_straight_trans. eexact EX1. eapply exec_straight_one. simpl;reflexivity. reflexivity.
-  split. rewrite RES1, SAME. destruct c0; simpl; auto.
-  simpl; intros. rewrite RES1, SAME. rewrite D by eauto with asmgen. rewrite OTH1 by eauto with asmgen. Simpl.
-+ destruct (loadimm64_correct GPR0 i (Pcmpld x GPR0 :: k) rs m) as [rs1 [EX1 [RES1 OTH1]]].
++ destruct (loadimm64_notemp_correct GPR0 i (Pcmpld x GPR0 :: k) rs m) as [rs1 [EX1 [RES1 OTH1]]].
   destruct (compare_ulong_spec rs1 m (rs x) (Vlong i)) as [A [B [C D]]].
   assert (SAME: rs1 x = rs x) by (apply OTH1; eauto with asmgen).
   econstructor; split.
@@ -1046,7 +1122,7 @@ Lemma transl_cond_correct_2:
        (if snd (crbit_for_cond cond)
         then Val.of_bool b
         else Val.notbool (Val.of_bool b))
-  /\ forall r, important_preg r = true -> preg_notin r (destroyed_by_cond cond)  -> rs'#r = rs#r.
+  /\ forall r, important_preg r = true -> rs'#r = rs#r.
 Proof.
   intros.
   replace (Val.of_bool b)
@@ -1073,7 +1149,8 @@ Proof.
   exploit transl_cond_correct_2. eauto.
     eapply eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto.
   intros [rs' [A [B C]]].
-  exists rs'; split. eauto. split. auto. apply agree_undef_regs with rs; auto. intros r D.
+  exists rs'; split. eauto. split. auto.
+  apply agree_undef_regs with rs; auto. intros r D E.
   apply C. apply important_data_preg_1; auto.
 Qed.
 
