@@ -1262,13 +1262,13 @@ Qed.
 Lemma transl_select_op_correct:
   forall cond args ty r1 r2 rd k rs m c,
   transl_select_op cond args r1 r2 rd k = OK c ->
-  important_preg r1 = true -> important_preg r2 = true ->
+  important_preg rd = true -> important_preg r1 = true -> important_preg r2 = true ->
   exists rs',
   exec_straight ge fn c rs m k rs' m
   /\ Val.lessdef (Val.select (eval_condition cond (map rs (map preg_of args)) m) rs#r1 rs#r2 ty) rs'#rd
   /\ forall r, important_preg r = true  -> r <> rd -> rs'#r = rs#r.
 Proof.
-  intros until c.  intros TR IMP1 IMP2.
+  intros until c.  intros TR IMP1 IMP2 IMP3.
   unfold transl_select_op in TR.
   destruct (ireg_eq r1 r2).
   - inv TR. econstructor; split; [|split].

@@ -866,7 +866,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
           | Vint n => if Int.eq n Int.zero then rs#r2 else rs#r1
           | _ => Vundef
           end in
-      Next (nextinstr (rs#rd <- v)) m
+      Next (nextinstr (rs #rd <- v #GPR0 <- Vundef)) m
   | Plbz rd cst r1 =>
       load1 Mint8unsigned rd cst r1 rs m
   | Plbzx rd r1 r2 =>

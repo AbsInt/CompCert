@@ -56,6 +56,15 @@ let emit_loadimm r n =
 let emit_addimm rd rs n =
   List.iter emit (Asmgen.addimm rd rs n [])
 
+(* Numbering of bits in the CR register *)
+
+let num_crbit = function
+  | CRbit_0 -> 0
+  | CRbit_1 -> 1
+  | CRbit_2 -> 2
+  | CRbit_3 -> 3
+  | CRbit_6 -> 6
+
 (* Handling of annotations *)
 
 let expand_annot_val kind txt targ args res =
@@ -76,8 +85,6 @@ let expand_annot_val kind txt targ args res =
    (not so much on G5, but clearly so on Power7).
    So, use 64-bit accesses only if alignment >= 4.
    Note that lfd and stfd cannot trap on ill-formed floats. *)
-
-
 
 let offset_in_range ofs =
   Int.eq (Asmgen.high_s ofs) _0
@@ -410,9 +417,20 @@ let expand_builtin_va_start r =
 let expand_int64_arith conflict rl fn =
   if conflict then (fn GPR0; emit (Pmr(rl, GPR0))) else fn rl
 
-(* Expansion of integer conditional moves (__builtin_*sel) *)
+(* Expansion of integer conditional moves (__builtin_*sel and Pisel) *)
 (* The generated code works equally well with 32-bit integer registers
    and with 64-bit integer registers. *)
+
+let expand_integer_cond_move_1 a2 a3 res =
+  (* GPR0 is -1 (all ones) if condition is true, 0 if it is false *)
+  if res <> a3 then begin
+    emit (Pand_ (res, a2, GPR0));
+    emit (Pandc (GPR0, a3, GPR0))
+  end else begin
+    emit (Pandc (res, a3, GPR0));
+    emit (Pand_ (GPR0, a2, GPR0))
+  end;
+  emit (Por (res, res, GPR0))
 
 let expand_integer_cond_move a1 a2 a3 res =
   if a2 = a3 then
@@ -423,15 +441,22 @@ let expand_integer_cond_move a1 a2 a3 res =
   end else begin
     (* a1 has type _Bool, hence it is 0 or 1 *)
     emit (Psubfic (GPR0, a1, Cint _0));
-    (* r0 = -1 (all ones) if a1 is true, r0 = 0 if a1 is false *)
-    if res <> a3 then begin
-      emit (Pand_ (res, a2, GPR0));
-      emit (Pandc (GPR0, a3, GPR0))
-    end else begin
-      emit (Pandc (res, a3, GPR0));
-      emit (Pand_ (GPR0, a2, GPR0))
-    end;
-    emit (Por (res, res, GPR0))
+    expand_integer_cond_move_1 a2 a3 res
+  end
+
+(* Symmetrically, we emulate the "isel" instruction on PPC processors
+   that do not have it. *)
+
+let expand_isel bit a2 a3 res =
+  if a2 = a3 then
+    emit (Pmr (res, a2))
+  else if eref then
+    emit (Pisel (res, a2, a3, bit))
+  else begin
+    emit (Pmfcr GPR0);
+    emit (Prlwinm(GPR0, GPR0, Z.of_uint (1 + num_crbit bit), _1));
+    emit (Psubfic (GPR0, GPR0, Cint _0));
+    expand_integer_cond_move_1 a2 a3 res
   end
 
 (* Convert integer constant into GPR with corresponding number *)
@@ -772,13 +797,6 @@ let set_cr6 sg =
 
 (* Expand instructions *)
 
-let num_crbit = function
-  | CRbit_0 -> 0
-  | CRbit_1 -> 1
-  | CRbit_2 -> 2
-  | CRbit_3 -> 3
-  | CRbit_6 -> 6
-
 let expand_instruction instr =
   match instr with
   | Pallocframe(sz, ofs,retofs) ->
@@ -874,6 +892,8 @@ let expand_instruction instr =
       emit (Pcfi_adjust _m8);
   | Pfxdp(r1, r2) ->
       if r1 <> r2 then emit(Pfmr(r1, r2))
+  | Pisel(rd, r1, r2, bit) ->
+      expand_isel bit r1 r2 rd
   | Plmake(r1, rhi, rlo) ->
       if r1 = rlo then
         emit (Prldimi(r1, rhi, _32L, upper32))
