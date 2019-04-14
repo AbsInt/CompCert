@@ -860,6 +860,13 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Val.subf rs#r1 rs#r2))) m
   | Pfsubs rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.subfs rs#r1 rs#r2))) m
+  | Pisel rd r1 r2 bit =>
+      let v :=
+          match rs#(reg_of_crbit bit) with
+          | Vint n => if Int.eq n Int.zero then rs#r2 else rs#r1
+          | _ => Vundef
+          end in
+      Next (nextinstr (rs#rd <- v)) m
   | Plbz rd cst r1 =>
       load1 Mint8unsigned rd cst r1 rs m
   | Plbzx rd r1 r2 =>
@@ -1073,7 +1080,6 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfrsqrte _ _
   | Pfres _ _
   | Pfsel _ _ _ _
-  | Pisel _ _ _ _
   | Plwarx _ _ _
   | Plwbrx _ _ _
   | Picbi _ _
