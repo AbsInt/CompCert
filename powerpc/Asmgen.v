@@ -404,6 +404,18 @@ Definition transl_cond_op
          else Pxori r' r' (Cint Int.one) :: k)
   end.
 
+(** Translation of a select operation *)
+
+Definition transl_select_op
+              (cond: condition) (args: list mreg) (r1 r2 rd: ireg) (k: code) :=
+  if ireg_eq r1 r2 then
+    OK (Pmr rd r1 :: k)
+  else
+   (let p := crbit_for_cond cond in
+    let r1' := if snd p then r1 else r2 in
+    let r2' := if snd p then r2 else r1 in
+    transl_cond cond args (Pisel rd r1' r2' (fst p) :: k)).
+
 (** Translation of the arithmetic operation [r <- op(args)].
   The corresponding instructions are prepended to [k]. *)
 
@@ -610,6 +622,10 @@ Definition transl_op
       do r1 <- ireg_of a1; do r <- ireg_of res; OK (Plhi r r1 :: k)
   | Ocmp cmp, _ =>
       transl_cond_op cmp args res k
+  | Osel cmp ty, a1 :: a2 :: args =>
+      assertion (typ_eq ty Tint || typ_eq ty Tlong);
+      do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- ireg_of res;
+      transl_select_op cmp args r1 r2 r k
 (*c PPC64 operations *)
   | Olongconst n, nil =>
       do r <- ireg_of res; OK (loadimm64 r n k)

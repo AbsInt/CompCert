@@ -110,6 +110,10 @@ let print_operation reg pp = function
   | Olowlong, [r1] -> fprintf pp "lowlong(%a)" reg r1
   | Ohighlong, [r1] -> fprintf pp "highlong(%a)" reg r1
   | Ocmp c, args -> print_condition reg pp (c, args)
+  | Osel (c, ty), r1::r2::args ->
+      fprintf pp "%a ?%s %a : %a"
+         (print_condition reg) (c, args)
+         (PrintAST.name_of_type ty) reg r1 reg r2
   | Olongconst n, [] -> fprintf pp "%LdL" (camlint64_of_coqint n)
   | Ocast32signed, [r1] -> fprintf pp "int32signed(%a)" reg r1
   | Ocast32unsigned, [r1] -> fprintf pp "int32unsigned(%a)" reg r1

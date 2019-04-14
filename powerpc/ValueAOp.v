@@ -141,6 +141,7 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Olowlong, v1::nil => loword v1
   | Ohighlong, v1::nil => hiword v1
   | Ocmp c, _ => of_optbool (eval_static_condition c vl)
+  | Osel c ty, v1::v2::vl => select (eval_static_condition c vl) v1 v2
   | _, _ => Vbot
   end.
 
@@ -211,6 +212,7 @@ Proof.
   apply rolml_sound; auto.
   apply floatofwords_sound; auto.
   apply of_optbool_sound. eapply eval_static_condition_sound; eauto.
+  apply select_sound; auto. eapply eval_static_condition_sound; eauto.
 Qed.
 
 End SOUNDNESS.

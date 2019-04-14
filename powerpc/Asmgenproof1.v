@@ -1258,6 +1258,35 @@ Proof.
   intuition Simpl.
   rewrite RES1. destruct (eval_condition c rs ## (preg_of ## rl) m). destruct b; auto. auto.
 Qed.
+  
+Lemma transl_select_op_correct:
+  forall cond args ty r1 r2 rd k rs m c,
+  transl_select_op cond args r1 r2 rd k = OK c ->
+  important_preg r1 = true -> important_preg r2 = true ->
+  exists rs',
+  exec_straight ge fn c rs m k rs' m
+  /\ Val.lessdef (Val.select (eval_condition cond (map rs (map preg_of args)) m) rs#r1 rs#r2 ty) rs'#rd
+  /\ forall r, important_preg r = true  -> r <> rd -> rs'#r = rs#r.
+Proof.
+  intros until c.  intros TR IMP1 IMP2.
+  unfold transl_select_op in TR.
+  destruct (ireg_eq r1 r2).
+  - inv TR. econstructor; split; [|split].
+    + apply exec_straight_one. simpl; eauto. auto.
+    + Simpl. destruct (eval_condition cond rs ## (preg_of ## args) m) as [[]|]; simpl; auto using Val.lessdef_normalize.
+    + intros; Simpl.
+  - destruct (transl_cond_correct_1 cond args _ rs m _ TR) as (rs1 & A & B & C).
+    set (bit := fst (crbit_for_cond cond)) in *.
+    set (dir := snd (crbit_for_cond cond)) in *.
+    set (ob := eval_condition cond rs##(preg_of##args) m) in *.
+    econstructor; split; [|split].
+    + eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto.
+      reflexivity.
+    + Simpl.
+      rewrite <- (C r1), <- (C r2) by auto.
+      rewrite B. destruct dir; destruct ob as [[]|]; simpl; auto using Val.lessdef_normalize.
+    + intros. Simpl.
+Qed.
 
 (** Translation of arithmetic operations. *)
 
@@ -1455,6 +1484,12 @@ Opaque Val.add.
   (* Ocmp *)
 - destruct (transl_cond_op_correct c0 args res k rs m c) as [rs' [A [B C]]]; auto.
   exists rs'; auto with asmgen.
+  (* Osel *)
+- assert (X: forall mr r, ireg_of mr = OK r -> important_preg r = true).
+  { intros. apply ireg_of_eq in H. apply important_data_preg_1. rewrite <- H.
+    auto with asmgen. }
+  destruct (transl_select_op_correct _ _ t _ _ _ _ rs m _ EQ3) as (rs' & A & B & C);
+  eauto.
 Qed.
 
 Lemma transl_op_correct:
