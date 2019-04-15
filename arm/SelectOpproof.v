@@ -735,6 +735,20 @@ Proof.
   intros; red; intros. unfold compfs. TrivialExists.
 Qed.
 
+Theorem eval_select:
+  forall le ty cond al vl a1 v1 a2 v2 a b,
+  select ty cond al a1 a2 = Some a ->
+  eval_exprlist ge sp e m le al vl ->
+  eval_expr ge sp e m le a1 v1 ->
+  eval_expr ge sp e m le a2 v2 ->
+  eval_condition cond vl m = Some b ->
+  exists v, 
+     eval_expr ge sp e m le a v
+  /\ Val.lessdef (Val.select (Some b) v1 v2 ty) v.
+Proof.
+  unfold select; intros; inv H. rewrite <- H3; TrivialExists. 
+Qed.
+
 Theorem eval_cast8signed: unary_constructor_sound cast8signed (Val.sign_ext 8).
 Proof.
   red; intros until x. unfold cast8signed; case (cast8signed_match a); intros.

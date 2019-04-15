@@ -220,6 +220,7 @@ Inductive instruction : Type :=
   | Plabel: label -> instruction                    (**r define a code label *)
   | Ploadsymbol: ireg -> ident -> ptrofs -> instruction (**r load the address of a symbol *)
   | Pmovite: testcond -> ireg -> shift_op -> shift_op -> instruction (**r integer conditional move *)
+  | Pfmovite: testcond -> freg -> freg -> freg -> instruction (**r FP conditional move *)
   | Pbtbl: ireg -> list label -> instruction       (**r N-way branch through a jump table *)
   | Pbuiltin: external_function -> list (builtin_arg preg) -> builtin_res preg -> instruction (**r built-in function (pseudo) *)
   | Padc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
@@ -780,6 +781,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
         match eval_testcond cond rs with
         | Some true => eval_shift_op ifso rs
         | Some false => eval_shift_op ifnot rs
+        | None => Vundef
+        end in
+      Next (nextinstr (rs#r1 <- v)) m
+  | Pfmovite cond r1 ifso ifnot =>
+      let v :=
+        match eval_testcond cond rs with
+        | Some true => rs#ifso
+        | Some false => rs#ifnot
         | None => Vundef
         end in
       Next (nextinstr (rs#r1 <- v)) m

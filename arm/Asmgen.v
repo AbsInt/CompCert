@@ -555,6 +555,19 @@ Definition transl_op
       do r <- ireg_of res;
       transl_cond cmp args
         (Pmovite (cond_for_cond cmp) r (SOimm Int.one) (SOimm Int.zero) :: k)
+  | Osel cmp ty, a1 :: a2 :: args =>
+      match preg_of res with
+      | IR r => 
+          do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+          transl_cond cmp args
+            (Pmovite (cond_for_cond cmp) r (SOreg r1) (SOreg r2) :: k)
+      | FR r =>
+          do r1 <- freg_of a1; do r2 <- freg_of a2;
+          transl_cond cmp args
+            (Pfmovite (cond_for_cond cmp) r r1 r2 :: k)
+      | _ =>
+          Error(msg "Asmgen.Osel")
+      end
   | _, _ =>
       Error(msg "Asmgen.transl_op")
   end.
