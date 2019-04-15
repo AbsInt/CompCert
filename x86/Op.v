@@ -167,7 +167,9 @@ Inductive operation : Type :=
   | Olongofsingle            (**r [rd = signed_long_of_float32(r1)] *)
   | Osingleoflong            (**r [rd = float32_of_signed_long(r1)] *)
 (*c Boolean tests: *)
-  | Ocmp (cond: condition).  (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
+  | Ocmp (cond: condition)  (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
+  | Osel: condition -> typ -> operation.
+                             (**r [rd = rs1] if condition holds, [rd = rs2] otherwise. *)
 
 (** Comparison functions (used in modules [CSE] and [Allocation]). *)
 
@@ -186,7 +188,7 @@ Defined.
 
 Definition beq_operation: forall (x y: operation), bool.
 Proof.
-  generalize Int.eq_dec Int64.eq_dec Float.eq_dec Float32.eq_dec ident_eq eq_addressing eq_condition; boolean_equality.
+  generalize Int.eq_dec Int64.eq_dec Float.eq_dec Float32.eq_dec ident_eq typ_eq eq_addressing eq_condition; boolean_equality.
 Defined.
 
 Definition eq_operation: forall (x y: operation), {x=y} + {x<>y}.
@@ -407,6 +409,7 @@ Definition eval_operation
   | Olongofsingle, v1::nil => Val.longofsingle v1
   | Osingleoflong, v1::nil => Val.singleoflong v1
   | Ocmp c, _ => Some(Val.of_optbool (eval_condition c vl m))
+  | Osel c ty, v1::v2::vl => Some(Val.select (eval_condition c vl m) v1 v2 ty)
   | _, _ => None
   end.
 
@@ -578,6 +581,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Olongofsingle => (Tsingle :: nil, Tlong)
   | Osingleoflong => (Tlong :: nil, Tsingle)
   | Ocmp c => (type_of_condition c, Tint)
+  | Osel c ty => (ty :: ty :: type_of_condition c, ty)
   end.
 
 (** Weak type soundness results for [eval_operation]:
@@ -735,6 +739,7 @@ Proof with (try exact I; try reflexivity).
   destruct v0; simpl in H0; inv H0. destruct (Float32.to_long f); inv H2...
   destruct v0; simpl in H0; inv H0...
   destruct (eval_condition cond vl m); simpl... destruct b...
+  unfold Val.select. destruct (eval_condition c vl m). apply Val.normalize_type. exact I.
 Qed.
 
 End SOUNDNESS.
@@ -958,23 +963,42 @@ Definition is_trivial_op (op: operation) : bool :=
 
 (** Operations that depend on the memory state. *)
 
-Definition op_depends_on_memory (op: operation) : bool :=
-  match op with
-  | Ocmp (Ccompu _) => negb Archi.ptr64
-  | Ocmp (Ccompuimm _ _) => negb Archi.ptr64
-  | Ocmp (Ccomplu _) => Archi.ptr64
-  | Ocmp (Ccompluimm _ _) => Archi.ptr64
+Definition condition_depends_on_memory (c: condition) : bool :=
+  match c with
+  | Ccompu _ => negb Archi.ptr64
+  | Ccompuimm _ _ => negb Archi.ptr64
+  | Ccomplu _ => Archi.ptr64
+  | Ccompluimm _ _ => Archi.ptr64
   | _ => false
   end.
+
+Definition op_depends_on_memory (op: operation) : bool :=
+  match op with
+  | Ocmp c => condition_depends_on_memory c
+  | Osel c ty => condition_depends_on_memory c
+  | _ => false
+  end.
+
+Lemma condition_depends_on_memory_correct:
+  forall c args m1 m2,
+  condition_depends_on_memory c = false ->
+  eval_condition c args m1 = eval_condition c args m2.
+Proof.
+  intros until m2. 
+  destruct c; simpl; intros SF; auto; rewrite ? negb_false_iff in SF;
+  unfold Val.cmpu_bool, Val.cmplu_bool; rewrite SF; reflexivity.
+Qed.
 
 Lemma op_depends_on_memory_correct:
   forall (F V: Type) (ge: Genv.t F V) sp op args m1 m2,
   op_depends_on_memory op = false ->
   eval_operation ge sp op args m1 = eval_operation ge sp op args m2.
 Proof.
-  intros until m2. destruct op; simpl; try congruence.
-  destruct cond; simpl; intros SF; auto; rewrite ? negb_false_iff in SF;
-  unfold Val.cmpu_bool, Val.cmplu_bool; rewrite SF; reflexivity.
+  intros until m2. destruct op; simpl; try congruence; intros C.
+- f_equal; f_equal; apply condition_depends_on_memory_correct; auto.
+- destruct args; auto. destruct args; auto.
+  rewrite (condition_depends_on_memory_correct c args m1 m2 C).
+  auto.
 Qed.
 
 (** Global variables mentioned in an operation or addressing mode *)
@@ -1290,6 +1314,9 @@ Proof.
   exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.
   destruct b; simpl; constructor.
   simpl; constructor.
+  apply Val.select_inject; auto.  
+  destruct (eval_condition c vl1 m1) eqn:?; auto.
+  right; symmetry; eapply eval_condition_inj; eauto.
 Qed.
 
 End EVAL_COMPAT.

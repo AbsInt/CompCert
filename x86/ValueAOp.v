@@ -160,6 +160,7 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Olongofsingle, v1::nil => longofsingle v1
   | Osingleoflong, v1::nil => singleoflong v1
   | Ocmp c, _ => of_optbool (eval_static_condition c vl)
+  | Osel c ty, v1::v2::vl => select (eval_static_condition c vl) v1 v2
   | _, _ => Vbot
   end.
 
@@ -258,6 +259,7 @@ Proof.
   eapply eval_static_addressing_32_sound; eauto.
   eapply eval_static_addressing_64_sound; eauto.
   apply of_optbool_sound. eapply eval_static_condition_sound; eauto.
+  apply select_sound; auto. eapply eval_static_condition_sound; eauto.
 Qed.
 
 End SOUNDNESS.

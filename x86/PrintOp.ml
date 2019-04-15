@@ -164,6 +164,10 @@ let print_operation reg pp = function
   | Olongofsingle, [r1] -> fprintf pp "longofsingle(%a)" reg r1
   | Osingleoflong, [r1] -> fprintf pp "singleoflong(%a)" reg r1
   | Ocmp c, args -> print_condition reg pp (c, args)
+  | Osel (c, ty), r1::r2::args ->
+      fprintf pp "%a ?%s %a : %a"
+         (print_condition reg) (c, args)
+         (PrintAST.name_of_type ty) reg r1 reg r2
   | _ -> fprintf pp "<bad operator>"
 
 
