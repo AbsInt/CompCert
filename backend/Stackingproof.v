@@ -2116,11 +2116,11 @@ Proof.
   constructor. red; intros. rewrite H3, loc_arguments_main in H. contradiction.
   red; simpl; auto.
   simpl. rewrite sep_pure. split; auto. split;[|split].
-  eapply Genv.initmem_inject; eauto.
-  simpl. exists (Mem.nextblock m0); split. apply Ple_refl.
+  unfold j. erewrite <- Genv.init_mem_genv_next; eauto. eapply Genv.initmem_inject; eauto.
+  simpl. exists (Mem.nextblock m0); split. apply Block.le_refl.
   unfold j, Mem.flat_inj; constructor; intros.
     apply pred_dec_true; auto.
-    destruct (plt b1 (Mem.nextblock m0)); congruence.
+    destruct (Block.lt_dec b1 (Mem.nextblock m0)); congruence.
     change (Mem.valid_block m0 b0). eapply Genv.find_symbol_not_fresh; eauto.
     change (Mem.valid_block m0 b0). eapply Genv.find_funct_ptr_not_fresh; eauto.
     change (Mem.valid_block m0 b0). eapply Genv.find_var_info_not_fresh; eauto.

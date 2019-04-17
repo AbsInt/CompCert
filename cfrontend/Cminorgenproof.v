@@ -210,12 +210,12 @@ Record match_env (f: meminj) (cenv: compilenv)
 
 (** [lo, hi] is a proper interval. *)
     me_low_high:
-      Ple lo hi;
+      Block.le lo hi;
 
 (** Every block appearing in the C#minor environment [e] must be
   in the range [lo, hi]. *)
     me_bounded:
-      forall id b sz, PTree.get id e = Some(b, sz) -> Ple lo b /\ Plt b hi;
+      forall id b sz, PTree.get id e = Some(b, sz) -> Block.le lo b /\ Block.lt b hi;
 
 (** All blocks mapped to sub-blocks of the Cminor stack data must be
     images of variables from the C#minor environment [e] *)
@@ -229,7 +229,7 @@ Record match_env (f: meminj) (cenv: compilenv)
   (i.e. allocated before the stack data for the current Cminor function). *)
     me_incr:
       forall b tb delta,
-      f b = Some(tb, delta) -> Plt b lo -> Plt tb sp
+      f b = Some(tb, delta) -> Block.lt b lo -> Block.lt tb sp
   }.
 
 Ltac geninv x :=
@@ -240,7 +240,7 @@ Lemma match_env_invariant:
   match_env f1 cenv e sp lo hi ->
   inject_incr f1 f2 ->
   (forall b delta, f2 b = Some(sp, delta) -> f1 b = Some(sp, delta)) ->
-  (forall b, Plt b lo -> f2 b = f1 b) ->
+  (forall b, Block.lt b lo -> f2 b = f1 b) ->
   match_env f2 cenv e sp lo hi.
 Proof.
   intros. destruct H. constructor; auto.
@@ -282,12 +282,12 @@ Lemma match_env_external_call:
   match_env f1 cenv e sp lo hi ->
   inject_incr f1 f2 ->
   inject_separated f1 f2 m1 m1' ->
-  Ple hi (Mem.nextblock m1) -> Plt sp (Mem.nextblock m1') ->
+  Block.le hi (Mem.nextblock m1) -> Block.lt sp (Mem.nextblock m1') ->
   match_env f2 cenv e sp lo hi.
 Proof.
   intros. apply match_env_invariant with f1; auto.
   intros. eapply inject_incr_separated_same'; eauto.
-  intros. eapply inject_incr_separated_same; eauto. red. destruct H. xomega.
+  intros. eapply inject_incr_separated_same; eauto. red. destruct H. blomega.
 Qed.
 
 (** [match_env] and allocations *)
@@ -317,18 +317,18 @@ Proof.
   constructor; eauto.
   constructor.
 (* low-high *)
-  rewrite NEXTBLOCK; xomega.
+  rewrite NEXTBLOCK; blomega.
 (* bounded *)
   intros. rewrite PTree.gsspec in H. destruct (peq id0 id).
-  inv H. rewrite NEXTBLOCK; xomega.
-  exploit me_bounded0; eauto. rewrite NEXTBLOCK; xomega.
+  inv H. rewrite NEXTBLOCK; blomega.
+  exploit me_bounded0; eauto. rewrite NEXTBLOCK; intuition blomega.
 (* inv *)
   intros. destruct (eq_block b (Mem.nextblock m1)).
   subst b. rewrite SAME in H; inv H. exists id; exists sz. apply PTree.gss.
   rewrite OTHER in H; auto. exploit me_inv0; eauto.
   intros [id1 [sz1 EQ]]. exists id1; exists sz1. rewrite PTree.gso; auto. congruence.
 (* incr *)
-  intros. rewrite OTHER in H. eauto. unfold block in *; xomega.
+  intros. rewrite OTHER in H. eauto. unfold block in *; blomega.
 Qed.
 
 (** The sizes of blocks appearing in [e] are respected. *)
@@ -368,7 +368,7 @@ Lemma padding_freeable_invariant:
   padding_freeable f1 e tm1 sp sz ->
   match_env f1 cenv e sp lo hi ->
   (forall ofs, Mem.perm tm1 sp ofs Cur Freeable -> Mem.perm tm2 sp ofs Cur Freeable) ->
-  (forall b, Plt b hi -> f2 b = f1 b) ->
+  (forall b, Block.lt b hi -> f2 b = f1 b) ->
   padding_freeable f2 e tm2 sp sz.
 Proof.
   intros; red; intros.
@@ -423,11 +423,11 @@ Qed.
 
 Inductive match_globalenvs (f: meminj) (bound: block): Prop :=
   | mk_match_globalenvs
-      (DOMAIN: forall b, Plt b bound -> f b = Some(b, 0))
-      (IMAGE: forall b1 b2 delta, f b1 = Some(b2, delta) -> Plt b2 bound -> b1 = b2)
-      (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> Plt b bound)
-      (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> Plt b bound)
-      (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> Plt b bound).
+      (DOMAIN: forall b, Block.lt b bound -> f b = Some(b, 0))
+      (IMAGE: forall b1 b2 delta, f b1 = Some(b2, delta) -> Block.lt b2 bound -> b1 = b2)
+      (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> Block.lt b bound)
+      (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> Block.lt b bound)
+      (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> Block.lt b bound).
 
 Remark inj_preserves_globals:
   forall f hi,
@@ -473,12 +473,12 @@ Inductive match_callstack (f: meminj) (m: mem) (tm: mem):
   | mcs_nil:
       forall hi bound tbound,
       match_globalenvs f hi ->
-      Ple hi bound -> Ple hi tbound ->
+      Block.le hi bound -> Block.le hi tbound ->
       match_callstack f m tm nil bound tbound
   | mcs_cons:
       forall cenv tf e le te sp lo hi cs bound tbound
-        (BOUND: Ple hi bound)
-        (TBOUND: Plt sp tbound)
+        (BOUND: Block.le hi bound)
+        (TBOUND: Block.lt sp tbound)
         (MTMP: match_temps f le te)
         (MENV: match_env f cenv e sp lo hi)
         (BOUND: match_bounds e m)
@@ -502,44 +502,44 @@ Lemma match_callstack_invariant:
   forall f1 m1 tm1 f2 m2 tm2 cs bound tbound,
   match_callstack f1 m1 tm1 cs bound tbound ->
   inject_incr f1 f2 ->
-  (forall b ofs p, Plt b bound -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p) ->
-  (forall sp ofs, Plt sp tbound -> Mem.perm tm1 sp ofs Cur Freeable -> Mem.perm tm2 sp ofs Cur Freeable) ->
-  (forall b, Plt b bound -> f2 b = f1 b) ->
-  (forall b b' delta, f2 b = Some(b', delta) -> Plt b' tbound -> f1 b = Some(b', delta)) ->
+  (forall b ofs p, Block.lt b bound -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p) ->
+  (forall sp ofs, Block.lt sp tbound -> Mem.perm tm1 sp ofs Cur Freeable -> Mem.perm tm2 sp ofs Cur Freeable) ->
+  (forall b, Block.lt b bound -> f2 b = f1 b) ->
+  (forall b b' delta, f2 b = Some(b', delta) -> Block.lt b' tbound -> f1 b = Some(b', delta)) ->
   match_callstack f2 m2 tm2 cs bound tbound.
 Proof.
   induction 1; intros.
   (* base case *)
   econstructor; eauto.
   inv H. constructor; intros; eauto.
-  eapply IMAGE; eauto. eapply H6; eauto. xomega.
+  eapply IMAGE; eauto. eapply H6; eauto. blomega.
   (* inductive case *)
-  assert (Ple lo hi) by (eapply me_low_high; eauto).
+  assert (Block.le lo hi) by (eapply me_low_high; eauto).
   econstructor; eauto.
   eapply match_temps_invariant; eauto.
   eapply match_env_invariant; eauto.
-    intros. apply H3. xomega.
+    intros. apply H3. blomega.
   eapply match_bounds_invariant; eauto.
     intros. eapply H1; eauto.
-    exploit me_bounded; eauto. xomega.
+    exploit me_bounded; eauto. intuition blomega.
   eapply padding_freeable_invariant; eauto.
-    intros. apply H3. xomega.
+    intros. apply H3. blomega.
   eapply IHmatch_callstack; eauto.
-    intros. eapply H1; eauto. xomega.
-    intros. eapply H2; eauto. xomega.
-    intros. eapply H3; eauto. xomega.
-    intros. eapply H4; eauto. xomega.
+    intros. eapply H1; eauto. blomega.
+    intros. eapply H2; eauto. blomega.
+    intros. eapply H3; eauto. blomega.
+    intros. eapply H4; eauto. blomega.
 Qed.
 
 Lemma match_callstack_incr_bound:
   forall f m tm cs bound tbound bound' tbound',
   match_callstack f m tm cs bound tbound ->
-  Ple bound bound' -> Ple tbound tbound' ->
+  Block.le bound bound' -> Block.le tbound tbound' ->
   match_callstack f m tm cs bound' tbound'.
 Proof.
   intros. inv H.
-  econstructor; eauto. xomega. xomega.
-  constructor; auto. xomega. xomega.
+  econstructor; eauto. blomega. blomega.
+  constructor; auto. blomega. blomega.
 Qed.
 
 (** Assigning a temporary variable. *)
@@ -606,7 +606,7 @@ Proof.
   apply match_callstack_incr_bound with lo sp; try omega.
   apply match_callstack_invariant with f m tm; auto.
   intros. eapply perm_freelist; eauto.
-  intros. eapply Mem.perm_free_1; eauto. left; unfold block; xomega. xomega. xomega.
+  intros. eapply Mem.perm_free_1; eauto. left; unfold block; blomega. blomega. blomega.
   eapply Mem.free_inject; eauto.
   intros. exploit me_inv0; eauto. intros [id [sz A]].
   exists 0; exists sz; split.
@@ -625,7 +625,7 @@ Lemma match_callstack_external_call:
   (forall b ofs p, Mem.valid_block m1 b -> Mem.perm m2 b ofs Max p -> Mem.perm m1 b ofs Max p) ->
   forall cs bound tbound,
   match_callstack f1 m1 m1' cs bound tbound ->
-  Ple bound (Mem.nextblock m1) -> Ple tbound (Mem.nextblock m1') ->
+  Block.le bound (Mem.nextblock m1) -> Block.le tbound (Mem.nextblock m1') ->
   match_callstack f2 m2 m2' cs bound tbound.
 Proof.
   intros until m2'.
@@ -636,21 +636,21 @@ Proof.
   inv H. constructor; auto.
   intros. case_eq (f1 b1).
   intros [b2' delta'] EQ. rewrite (INCR _ _ _ EQ) in H. inv H. eauto.
-  intro EQ. exploit SEPARATED; eauto. intros [A B]. elim B. red. xomega.
+  intro EQ. exploit SEPARATED; eauto. intros [A B]. elim B. red. blomega.
 (* inductive case *)
   constructor. auto. auto.
   eapply match_temps_invariant; eauto.
   eapply match_env_invariant; eauto.
   red in SEPARATED. intros. destruct (f1 b) as [[b' delta']|] eqn:?.
   exploit INCR; eauto. congruence.
-  exploit SEPARATED; eauto. intros [A B]. elim B. red. xomega.
-  intros. assert (Ple lo hi) by (eapply me_low_high; eauto).
+  exploit SEPARATED; eauto. intros [A B]. elim B. red. blomega.
+  intros. assert (Block.le lo hi) by (eapply me_low_high; eauto).
   destruct (f1 b) as [[b' delta']|] eqn:?.
   apply INCR; auto.
   destruct (f2 b) as [[b' delta']|] eqn:?; auto.
-  exploit SEPARATED; eauto. intros [A B]. elim A. red. xomega.
+  exploit SEPARATED; eauto. intros [A B]. elim A. red. blomega.
   eapply match_bounds_invariant; eauto.
-  intros. eapply MAXPERMS; eauto. red. exploit me_bounded; eauto. xomega.
+  intros. eapply MAXPERMS; eauto. red. exploit me_bounded; eauto. intuition blomega.
   (* padding-freeable *)
   red; intros.
   destruct (is_reachable_from_env_dec f1 e sp ofs).
@@ -663,7 +663,7 @@ Proof.
   apply is_reachable_intro with id b0 lv delta; auto; omega.
   eauto with mem.
   (* induction *)
-  eapply IHmatch_callstack; eauto. inv MENV; xomega. xomega.
+  eapply IHmatch_callstack; eauto. inv MENV; blomega. blomega.
 Qed.
 
 (** [match_callstack] and allocations *)
@@ -683,12 +683,12 @@ Proof.
   exploit Mem.nextblock_alloc; eauto. intros NEXTBLOCK.
   exploit Mem.alloc_result; eauto. intros RES.
   constructor.
-  xomega.
-  unfold block in *; xomega.
+  blomega.
+  rewrite NEXTBLOCK, RES. intuition blomega.
   auto.
   constructor; intros.
     rewrite H3. rewrite PTree.gempty. constructor.
-    xomega.
+    blomega.
     rewrite PTree.gempty in H4; discriminate.
     eelim Mem.fresh_block_alloc; eauto. eapply Mem.valid_block_inject_2; eauto.
     rewrite RES. change (Mem.valid_block tm tb). eapply Mem.valid_block_inject_2; eauto.
@@ -717,25 +717,25 @@ Proof.
   intros. inv H.
   exploit Mem.nextblock_alloc; eauto. intros NEXTBLOCK.
   exploit Mem.alloc_result; eauto. intros RES.
-  assert (LO: Ple lo (Mem.nextblock m1)) by (eapply me_low_high; eauto).
+  assert (LO: Block.le lo (Mem.nextblock m1)) by (eapply me_low_high; eauto).
   constructor.
-  xomega.
+  blomega.
   auto.
   eapply match_temps_invariant; eauto.
   eapply match_env_alloc; eauto.
   red; intros. rewrite PTree.gsspec in H. destruct (peq id0 id).
   inversion H. subst b0 sz0 id0. eapply Mem.perm_alloc_3; eauto.
   eapply BOUND0; eauto. eapply Mem.perm_alloc_4; eauto.
-  exploit me_bounded; eauto. unfold block in *; xomega.
+  exploit me_bounded; eauto. intuition subst. apply Blt_ne in H10. congruence.
   red; intros. exploit PERM; eauto. intros [A|A]. auto. right.
   inv A. apply is_reachable_intro with id0 b0 sz0 delta; auto.
   rewrite PTree.gso. auto. congruence.
   eapply match_callstack_invariant with (m1 := m1); eauto.
   intros. eapply Mem.perm_alloc_4; eauto.
-  unfold block in *; xomega.
-  intros. apply H4. unfold block in *; xomega.
+  eapply Blt_ne. subst; blomega.
+  intros. apply H4. eapply Blt_ne. subst; blomega.
   intros. destruct (eq_block b0 b).
-  subst b0. rewrite H3 in H. inv H. xomegaContradiction.
+  subst b0. rewrite H3 in H. inv H. apply Block.lt_strict in H6; easy.
   rewrite H4 in H; auto.
 Qed.
 
@@ -2039,7 +2039,7 @@ Proof.
     apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
     eapply match_callstack_external_call; eauto.
     intros. eapply external_call_max_perm; eauto.
-    xomega. xomega.
+    blomega. blomega.
     eapply external_call_nextblock; eauto.
     eapply external_call_nextblock; eauto.
   econstructor; eauto.
@@ -2191,7 +2191,7 @@ Opaque PTree.set.
   apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
   eapply match_callstack_external_call; eauto.
   intros. eapply external_call_max_perm; eauto.
-  xomega. xomega.
+  blomega. blomega.
   eapply external_call_nextblock; eauto.
   eapply external_call_nextblock; eauto.
 
@@ -2211,7 +2211,7 @@ Proof.
   intros. constructor.
   intros. unfold Mem.flat_inj. apply pred_dec_true; auto.
   intros. unfold Mem.flat_inj in H0.
-  destruct (plt b1 (Mem.nextblock m)); congruence.
+  destruct (Block.lt_dec b1 (Mem.nextblock m)); congruence.
   intros. eapply Genv.find_symbol_not_fresh; eauto.
   intros. eapply Genv.find_funct_ptr_not_fresh; eauto.
   intros. eapply Genv.find_var_info_not_fresh; eauto.
@@ -2234,8 +2234,9 @@ Proof.
   rewrite <- H2. apply sig_preserved; auto.
   eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := PTree.empty Z).
   auto.
+  erewrite <- Genv.init_mem_genv_next; eauto.
   eapply Genv.initmem_inject; eauto.
-  apply mcs_nil with (Mem.nextblock m0). apply match_globalenvs_init; auto. xomega. xomega.
+  apply mcs_nil with (Mem.nextblock m0). apply match_globalenvs_init; auto. blomega. blomega.
   constructor. red; auto.
   constructor.
 Qed.

@@ -62,6 +62,14 @@ Extraction NoInline Memory.Mem.valid_pointer.
 (* Errors *)
 Extraction Inline Errors.bind Errors.bind2.
 
+(* AST *)
+Extract Inlined Constant AST.string_of_ident =>
+  "(fun i -> Camlcoq.coqstring_of_camlstring (Camlcoq.extern_atom i))".
+
+(* BlockNames *)
+Extract Inlined Constant BlockNames.string_of_pos =>
+  "(fun p -> Camlcoq.coqstring_of_camlstring (Printf.sprintf ""%ld"" (Camlcoq.P.to_int32 p)))".
+
 (* Iteration *)
 
 Extract Constant Iteration.GenIter.iterate =>
@@ -167,6 +175,7 @@ Set Extraction AccessOpaque.
 Cd "extraction".
 
 Separate Extraction
+   BlockNames.block_compare
    Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
    Ctypes.merge_attributes Ctypes.remove_attributes Ctypes.build_composite_env

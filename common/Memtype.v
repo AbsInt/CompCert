@@ -93,6 +93,8 @@ Parameter mem: Type.
 (** [empty] is the initial memory state. *)
 Parameter empty: mem.
 
+Parameter alloc_at: forall (m: mem) (b: block) (lo hi: Z), mem.
+
 (** [alloc m lo hi] allocates a fresh block of size [hi - lo] bytes.
   Valid offsets in this block are between [lo] included and [hi] excluded.
   These offsets are writable in the returned memory state.
@@ -175,7 +177,9 @@ Parameter drop_perm: forall (m: mem) (b: block) (lo hi: Z) (p: permission), opti
 
 Parameter nextblock: mem -> block.
 
-Definition valid_block (m: mem) (b: block) := Plt b (nextblock m).
+Axiom init_nextblock: forall m, Block.le Block.init (nextblock m).
+
+Definition valid_block (m: mem) (b: block) := Block.lt b (nextblock m).
 
 Axiom valid_not_valid_diff:
   forall m b b', valid_block m b -> ~(valid_block m b') -> b <> b'.
@@ -275,7 +279,7 @@ Axiom valid_pointer_implies:
 
 (** ** Properties of the initial memory state. *)
 
-Axiom nextblock_empty: nextblock empty = 1%positive.
+Axiom nextblock_empty: nextblock empty = Block.init.
 Axiom perm_empty: forall b ofs k p, ~perm empty b ofs k p.
 Axiom valid_access_empty:
   forall chunk b ofs p, ~valid_access empty chunk b ofs p.
@@ -592,6 +596,21 @@ Axiom storebytes_split:
      storebytes m b ofs bytes1 = Some m1
   /\ storebytes m1 b (ofs + Z.of_nat(length bytes1)) bytes2 = Some m2.
 
+(** ** Properties of [alloc_at] *)
+
+Axiom nextblock_alloc_at:
+  forall m1 b lo hi m2, alloc_at m1 b lo hi = m2 -> nextblock m2 = nextblock m1.
+
+Axiom perm_alloc_at_1:
+  forall m1 b lo hi m2, alloc_at m1 b lo hi = m2 ->
+  forall b' ofs k p, b' <> b -> perm m1 b' ofs k p -> perm m2 b' ofs k p.
+Axiom perm_alloc_at_2:
+  forall m1 b lo hi m2, alloc_at m1 b lo hi = m2 -> valid_block m1 b ->
+  forall ofs k, lo <= ofs < hi -> perm m2 b ofs k Freeable.
+Axiom perm_alloc_at_3:
+  forall m1 b lo hi m2, alloc_at m1 b lo hi = m2 ->
+  forall ofs k p, perm m2 b ofs k p -> lo <= ofs < hi.
+
 (** ** Properties of [alloc]. *)
 
 (** The identifier of the freshly allocated block is the next block
@@ -605,7 +624,7 @@ Axiom alloc_result:
 
 Axiom nextblock_alloc:
   forall m1 lo hi m2 b, alloc m1 lo hi = (m2, b) ->
-  nextblock m2 = Pos.succ (nextblock m1).
+  nextblock m2 = Block.succ (nextblock m1).
 
 Axiom valid_block_alloc:
   forall m1 lo hi m2 b, alloc m1 lo hi = (m2, b) ->
@@ -1198,37 +1217,36 @@ Axiom drop_outside_inject:
 (** Memory states that inject into themselves. *)
 
 Definition flat_inj (thr: block) : meminj :=
-  fun (b: block) => if plt b thr then Some(b, 0) else None.
+  fun (b: block) => if Block.lt_dec b thr then Some(b, 0) else None.
 
-Parameter inject_neutral: forall (thr: block) (m: mem), Prop.
+Parameter inject_neutral: forall (m: mem), Prop.
 
 Axiom neutral_inject:
-  forall m, inject_neutral (nextblock m) m ->
-  inject (flat_inj (nextblock m)) m m.
+  forall m, inject_neutral m ->
+  inject (flat_inj Block.init) m m.
 
 Axiom empty_inject_neutral:
-  forall thr, inject_neutral thr empty.
+  inject_neutral empty.
 
-Axiom alloc_inject_neutral:
-  forall thr m lo hi b m',
-  alloc m lo hi = (m', b) ->
-  inject_neutral thr m ->
-  Plt (nextblock m) thr ->
-  inject_neutral thr m'.
+Axiom alloc_at_inject_neutral:
+  forall b m lo hi,
+  inject_neutral m ->
+  Block.lt b Block.init ->
+  inject_neutral (alloc_at m b lo hi).
 
 Axiom store_inject_neutral:
-  forall chunk m b ofs v m' thr,
+  forall chunk m b ofs v m',
   store chunk m b ofs v = Some m' ->
-  inject_neutral thr m ->
-  Plt b thr ->
-  Val.inject (flat_inj thr) v v ->
-  inject_neutral thr m'.
+  inject_neutral m ->
+  Block.lt b Block.init ->
+  Val.inject (flat_inj Block.init) v v ->
+  inject_neutral m'.
 
 Axiom drop_inject_neutral:
-  forall m b lo hi p m' thr,
+  forall m b lo hi p m',
   drop_perm m b lo hi p = Some m' ->
-  inject_neutral thr m ->
-  Plt b thr ->
-  inject_neutral thr m'.
+  inject_neutral m ->
+  Block.lt b Block.init ->
+  inject_neutral m'.
 
 End MEM.

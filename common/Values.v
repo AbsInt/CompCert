@@ -20,9 +20,10 @@ Require Import Coqlib.
 Require Import AST.
 Require Import Integers.
 Require Import Floats.
+Require Export BlockNames.
 
-Definition block : Type := positive.
-Definition eq_block := peq.
+Definition block : Type := Block.t.
+Definition eq_block := Block.eq.
 
 (** A value is either:
 - a machine integer;

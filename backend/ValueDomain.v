@@ -34,10 +34,10 @@ Record block_classification : Type := BC {
 }.
 
 Definition bc_below (bc: block_classification) (bound: block) : Prop :=
-  forall b, bc b <> BCinvalid -> Plt b bound.
+  forall b, bc b <> BCinvalid -> Block.lt b bound.
 
 Lemma bc_below_invalid:
-  forall b bc bound, ~Plt b bound -> bc_below bc bound -> bc b = BCinvalid.
+  forall b bc bound, ~Block.lt b bound -> bc_below bc bound -> bc b = BCinvalid.
 Proof.
   intros. destruct (block_class_eq (bc b) BCinvalid); auto.
   elim H. apply H0; auto.
@@ -1115,7 +1115,7 @@ Qed.
 
 Definition genv_match (ge: genv) : Prop :=
   (forall id b, Genv.find_symbol ge id = Some b <-> bc b = BCglob id)
-/\(forall b, Plt b (Genv.genv_next ge) -> bc b <> BCinvalid /\ bc b <> BCstack).
+/\(forall b, Block.lt b Block.init -> bc b <> BCinvalid /\ bc b <> BCstack).
 
 Lemma symbol_address_sound:
   forall ge id ofs,
@@ -4058,7 +4058,7 @@ Lemma mmatch_ext:
   forall m am m',
   mmatch m am ->
   (forall b ofs n bytes, bc b <> BCinvalid -> n >= 0 -> Mem.loadbytes m' b ofs n = Some bytes -> Mem.loadbytes m b ofs n = Some bytes) ->
-  Ple (Mem.nextblock m) (Mem.nextblock m') ->
+  Block.le (Mem.nextblock m) (Mem.nextblock m') ->
   mmatch m' am.
 Proof.
   intros. inv H. constructor; intros.
@@ -4066,7 +4066,7 @@ Proof.
 - apply bmatch_ext with m; eauto with va.
 - apply smatch_ext with m; auto with va.
 - apply smatch_ext with m; auto with va.
-- red; intros. exploit mmatch_below0; eauto. xomega.
+- red; intros. exploit mmatch_below0; eauto; blomega.
 Qed.
 
 Lemma mmatch_free:
@@ -4077,7 +4077,7 @@ Lemma mmatch_free:
 Proof.
   intros. apply mmatch_ext with m; auto.
   intros. eapply Mem.loadbytes_free_2; eauto.
-  erewrite <- Mem.nextblock_free by eauto. xomega.
+  erewrite <- Mem.nextblock_free by eauto. apply Block.le_refl.
 Qed.
 
 Lemma mmatch_top':
@@ -4296,7 +4296,7 @@ Proof.
 - (* contents *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
   rewrite Z.add_0_r.
-  set (mv := ZMap.get ofs (PMap.get b1 (Mem.mem_contents m))).
+  set (mv := ZMap.get ofs (BMap.get b1 (Mem.mem_contents m))).
   assert (Mem.loadbytes m b1 ofs 1 = Some (mv :: nil)).
   {
     Local Transparent Mem.loadbytes.
@@ -4334,7 +4334,9 @@ Proof.
   intros. destruct H as [A B].
   split. intros. apply inj_of_bc_valid. rewrite A in H. congruence.
   split. intros. apply inj_of_bc_valid. apply B.
-    rewrite Genv.find_var_info_iff in H. eapply Genv.genv_defs_range; eauto.
+    rewrite Genv.find_var_info_iff in H. unfold Genv.find_def in H.
+    destruct (Block.ident_of b) eqn:Hb; try congruence.
+    apply Block.ident_of_inv in Hb; subst. apply Block.lt_glob_init.
   intros. exploit inj_of_bc_inv; eauto. intros (P & Q & R). auto.
 Qed.
 

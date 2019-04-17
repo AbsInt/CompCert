@@ -77,7 +77,6 @@ Record t: Type := mksenv {
   public_symbol: ident -> bool;
   invert_symbol: block -> option ident;
   block_is_volatile: block -> bool;
-  nextblock: block;
   (** Properties *)
   find_symbol_injective:
     forall id1 id2 b, find_symbol id1 = Some b -> find_symbol id2 = Some b -> id1 = id2;
@@ -88,9 +87,9 @@ Record t: Type := mksenv {
   public_symbol_exists:
     forall id, public_symbol id = true -> exists b, find_symbol id = Some b;
   find_symbol_below:
-    forall id b, find_symbol id = Some b -> Plt b nextblock;
+    forall id b, find_symbol id = Some b -> Block.lt b Block.init;
   block_is_volatile_below:
-    forall b, block_is_volatile b = true -> Plt b nextblock
+    forall b, block_is_volatile b = true -> Block.lt b Block.init;
 }.
 
 Definition symbol_address (ge: t) (id: ident) (ofs: ptrofs) : val :=
@@ -146,13 +145,7 @@ Variable V: Type.  (**r The type of information attached to variables *)
 
 Record t: Type := mkgenv {
   genv_public: list ident;              (**r which symbol names are public *)
-  genv_symb: PTree.t block;             (**r mapping symbol -> block *)
-  genv_defs: PTree.t (globdef F V);     (**r mapping block -> definition *)
-  genv_next: block;                     (**r next symbol pointer *)
-  genv_symb_range: forall id b, PTree.get id genv_symb = Some b -> Plt b genv_next;
-  genv_defs_range: forall b g, PTree.get b genv_defs = Some g -> Plt b genv_next;
-  genv_vars_inj: forall id1 id2 b,
-    PTree.get id1 genv_symb = Some b -> PTree.get id2 genv_symb = Some b -> id1 = id2
+  genv_defs: PTree.t (globdef F V);     (**r mapping ident -> definition *)
 }.
 
 (** ** Lookup functions *)
@@ -160,7 +153,36 @@ Record t: Type := mkgenv {
 (** [find_symbol ge id] returns the block associated with the given name, if any *)
 
 Definition find_symbol (ge: t) (id: ident) : option block :=
-  PTree.get id ge.(genv_symb).
+  match ge.(genv_defs) ! id with
+  | Some _ => Some (Block.glob id)
+  | None => None
+  end.
+
+Theorem genv_symb_range:
+  forall ge id b,
+  find_symbol ge id = Some b ->
+  Block.lt b Block.init.
+Proof.
+  intros until b.
+  unfold find_symbol.
+  destruct (_ ! id); try discriminate.
+  inversion 1.
+  apply Block.lt_glob_init.
+Qed.
+
+Theorem genv_vars_inj:
+  forall ge id1 id2 b,
+  find_symbol ge id1 = Some b ->
+  find_symbol ge id2 = Some b ->
+  id1 = id2.
+Proof.
+  unfold find_symbol.
+  intros.
+  destruct (_ ! id1); try discriminate.
+  destruct (_ ! id2); try discriminate.
+  apply Block.glob_inj.
+  congruence.
+Qed.
 
 (** [symbol_address ge id ofs] returns a pointer into the block associated
   with [id], at byte offset [ofs].  [Vundef] is returned if no block is associated
@@ -183,7 +205,23 @@ Definition public_symbol (ge: t) (id: ident) : bool :=
 (** [find_def ge b] returns the global definition associated with the given address. *)
 
 Definition find_def (ge: t) (b: block) : option (globdef F V) :=
-  PTree.get b ge.(genv_defs).
+  match Block.ident_of b with
+    Some i => PTree.get i ge.(genv_defs)
+  | None => None
+  end.
+
+Theorem genv_defs_range:
+  forall ge id b,
+  find_def ge id = Some b ->
+  Block.lt id Block.init.
+Proof.
+  intros until b.
+  unfold find_def.
+  destruct (Block.ident_of id) eqn:Hb; try discriminate.
+  intros _.
+  apply Block.ident_of_inv in Hb; subst.
+  apply Block.lt_glob_init.
+Qed.
 
 (** [find_funct_ptr ge b] returns the function description associated with
     the given address. *)
@@ -203,9 +241,10 @@ Definition find_funct (ge: t) (v: val) : option F :=
 (** [invert_symbol ge b] returns the name associated with the given block, if any *)
 
 Definition invert_symbol (ge: t) (b: block) : option ident :=
-  PTree.fold
-    (fun res id b' => if eq_block b b' then Some id else res)
-    ge.(genv_symb) None.
+  match Block.ident_of b with
+  | Some i => if ge.(genv_defs) ! i then Some i else None
+  | None => None
+  end.
 
 (** [find_var_info ge b] returns the information attached to the variable
    at address [b]. *)
@@ -224,33 +263,10 @@ Definition block_is_volatile (ge: t) (b: block) : bool :=
 
 (** ** Constructing the global environment *)
 
-Program Definition add_global (ge: t) (idg: ident * globdef F V) : t :=
+Definition add_global (ge: t) (idg: ident * globdef F V) : t :=
   @mkgenv
     ge.(genv_public)
-    (PTree.set idg#1 ge.(genv_next) ge.(genv_symb))
-    (PTree.set ge.(genv_next) idg#2 ge.(genv_defs))
-    (Pos.succ ge.(genv_next))
-    _ _ _.
-Next Obligation.
-  destruct ge; simpl in *.
-  rewrite PTree.gsspec in H. destruct (peq id i). inv H. apply Plt_succ.
-  apply Plt_trans_succ; eauto.
-Qed.
-Next Obligation.
-  destruct ge; simpl in *.
-  rewrite PTree.gsspec in H. destruct (peq b genv_next0).
-  inv H. apply Plt_succ.
-  apply Plt_trans_succ; eauto.
-Qed.
-Next Obligation.
-  destruct ge; simpl in *.
-  rewrite PTree.gsspec in H. rewrite PTree.gsspec in H0.
-  destruct (peq id1 i); destruct (peq id2 i).
-  congruence.
-  inv H. eelim Plt_strict. eapply genv_symb_range0; eauto.
-  inv H0. eelim Plt_strict. eapply genv_symb_range0; eauto.
-  eauto.
-Qed.
+    (PTree.set idg#1 idg#2 ge.(genv_defs)).
 
 Definition add_globals (ge: t) (gl: list (ident * globdef F V)) : t :=
   List.fold_left add_global gl ge.
@@ -262,17 +278,8 @@ Proof.
   intros. apply fold_left_app.
 Qed.
 
-Program Definition empty_genv (pub: list ident): t :=
-  @mkgenv pub (PTree.empty _) (PTree.empty _) 1%positive _ _ _.
-Next Obligation.
-  rewrite PTree.gempty in H. discriminate.
-Qed.
-Next Obligation.
-  rewrite PTree.gempty in H. discriminate.
-Qed.
-Next Obligation.
-  rewrite PTree.gempty in H. discriminate.
-Qed.
+Definition empty_genv (pub: list ident): t :=
+  @mkgenv pub (PTree.empty _).
 
 Definition globalenv (p: program F V) :=
   add_globals (empty_genv p.(prog_public)) p.(prog_defs).
@@ -421,7 +428,7 @@ Theorem find_def_symbol:
   (prog_defmap p)!id = Some g <-> exists b, find_symbol (globalenv p) id = Some b /\ find_def (globalenv p) b = Some g.
 Proof.
   intros.
-  set (P := fun m ge => m!id = Some g <-> exists b, find_symbol ge id = Some b /\ find_def ge b = Some g).
+  set (P := fun m ge => m!id = ge.(genv_defs)!id).
   assert (REC: forall l m ge,
             P m ge ->
             P (fold_left (fun m idg => PTree.set idg#1 idg#2 m) l m)
@@ -429,20 +436,17 @@ Proof.
   { induction l as [ | [id1 g1] l]; intros; simpl.
   - auto.
   - apply IHl. unfold P, add_global, find_symbol, find_def; simpl.
-    rewrite ! PTree.gsspec. destruct (peq id id1).
-    + subst id1. split; intros.
-      inv H0. exists (genv_next ge); split; auto. apply PTree.gss.
-      destruct H0 as (b & A & B). inv A. rewrite PTree.gss in B. auto.
-    + red in H; rewrite H. split.
-      intros (b & A & B). exists b; split; auto. rewrite PTree.gso; auto.
-      apply Plt_ne. eapply genv_symb_range; eauto.
-      intros (b & A & B). rewrite PTree.gso in B. exists b; auto.
-      apply Plt_ne. eapply genv_symb_range; eauto.
+    rewrite ! PTree.gsspec. destruct (peq id id1); auto.
   }
-  apply REC. unfold P, find_symbol, find_def; simpl.
-  rewrite ! PTree.gempty. split.
-  congruence.
-  intros (b & A & B); congruence.
+  setoid_rewrite REC. instantiate (1 := empty_genv (prog_public p)).
+  - unfold globalenv, find_symbol, find_def. clear.
+    split.
+    + exists (Block.glob id). rewrite Block.ident_of_glob.
+      destruct PTree.get; eauto. discriminate.
+    + intros (b & Hb & Hg).
+      destruct PTree.get eqn:H; try discriminate.
+      inv Hb. rewrite Block.ident_of_glob in Hg. congruence.
+  - unfold P. rewrite !PTree.gempty. reflexivity.
 Qed.
 
 Theorem find_symbol_exists:
@@ -480,11 +484,14 @@ Proof.
   intros until g. unfold globalenv. apply add_globals_preserves.
 (* preserves *)
   unfold find_def; simpl; intros.
-  rewrite PTree.gsspec in H1. destruct (peq b (genv_next ge)).
+  destruct (Block.ident_of b) eqn:Hb; try congruence.
+  rewrite PTree.gsspec in H1. destruct (peq i id).
   inv H1. exists id; auto.
   auto.
 (* base *)
-  unfold find_def; simpl; intros. rewrite PTree.gempty in H. discriminate.
+  unfold find_def; simpl; intros.
+  destruct (Block.ident_of b) eqn: Hb; try congruence.
+  rewrite PTree.gempty in H. discriminate.
 Qed.
 
 Corollary find_funct_ptr_inversion:
@@ -530,7 +537,12 @@ Theorem global_addresses_distinct:
   find_symbol ge id2 = Some b2 ->
   b1 <> b2.
 Proof.
-  intros. red; intros; subst. elim H. destruct ge. eauto.
+  intros. red; intros; subst. elim H.
+  unfold find_symbol in *.
+  destruct (_ ! id1); try discriminate.
+  destruct (_ ! id2); try discriminate.
+  apply Block.glob_inj.
+  congruence.
 Qed.
 
 Theorem invert_find_symbol:
@@ -538,44 +550,20 @@ Theorem invert_find_symbol:
   invert_symbol ge b = Some id -> find_symbol ge id = Some b.
 Proof.
   intros until b; unfold find_symbol, invert_symbol.
-  apply PTree_Properties.fold_rec.
-  intros. rewrite H in H0; auto.
-  congruence.
-  intros. destruct (eq_block b v). inv H2. apply PTree.gss.
-  rewrite PTree.gsspec. destruct (peq id k).
-  subst. assert (m!k = Some b) by auto. congruence.
-  auto.
+  destruct (Block.ident_of b) eqn:Hb; try discriminate.
+  apply Block.ident_of_inv in Hb; subst.
+  destruct (_ ! i) eqn:Hi; try discriminate.
+  inversion 1. subst. rewrite Hi. reflexivity.
 Qed.
 
 Theorem find_invert_symbol:
   forall ge id b,
   find_symbol ge id = Some b -> invert_symbol ge b = Some id.
 Proof.
-  intros until b.
-  assert (find_symbol ge id = Some b -> exists id', invert_symbol ge b = Some id').
-  unfold find_symbol, invert_symbol.
-  apply PTree_Properties.fold_rec.
-  intros. rewrite H in H0; auto.
-  rewrite PTree.gempty; congruence.
-  intros. destruct (eq_block b v). exists k; auto.
-  rewrite PTree.gsspec in H2. destruct (peq id k).
-  inv H2. congruence. auto.
-
-  intros; exploit H; eauto. intros [id' A].
-  assert (id = id'). eapply genv_vars_inj; eauto. apply invert_find_symbol; auto.
-  congruence.
-Qed.
-
-Definition advance_next (gl: list (ident * globdef F V)) (x: positive) :=
-  List.fold_left (fun n g => Pos.succ n) gl x.
-
-Remark genv_next_add_globals:
-  forall gl ge,
-  genv_next (add_globals ge gl) = advance_next gl (genv_next ge).
-Proof.
-  induction gl; simpl; intros.
-  auto.
-  rewrite IHgl. auto.
+  intros until b; unfold find_symbol, invert_symbol.
+  destruct (_ ! id) eqn:Hid; try discriminate.
+  intros H. inv H. rewrite Block.ident_of_glob.
+  rewrite Hid. reflexivity.
 Qed.
 
 Remark genv_public_add_globals:
@@ -594,10 +582,12 @@ Proof.
 Qed.
 
 Theorem block_is_volatile_below:
-  forall ge b, block_is_volatile ge b = true ->  Plt b ge.(genv_next).
+  forall ge b, block_is_volatile ge b = true -> Block.lt b Block.init.
 Proof.
   unfold block_is_volatile; intros. destruct (find_var_info ge b) as [gv|] eqn:FV.
-  rewrite find_var_info_iff in FV. eapply genv_defs_range; eauto.
+  rewrite find_var_info_iff in FV.
+  unfold find_def in FV. destruct (Block.ident_of b) eqn:Hb; try discriminate.
+  apply Block.ident_of_inv in Hb; subst. apply Block.lt_glob_init.
   discriminate.
 Qed.
 
@@ -609,7 +599,6 @@ Definition to_senv (ge: t) : Senv.t :=
     (public_symbol ge)
     (invert_symbol ge)
     (block_is_volatile ge)
-    ge.(genv_next)
     ge.(genv_vars_inj)
     (invert_find_symbol ge)
     (find_invert_symbol ge)
@@ -658,12 +647,14 @@ Definition perm_globvar (gv: globvar V) : permission :=
 Definition alloc_global (m: mem) (idg: ident * globdef F V): option mem :=
   match idg with
   | (id, Gfun f) =>
-      let (m1, b) := Mem.alloc m 0 1 in
+      let b := Block.glob id in
+      let m1 := Mem.alloc_at m b 0 1 in
       Mem.drop_perm m1 b 0 1 Nonempty
   | (id, Gvar v) =>
       let init := v.(gvar_init) in
       let sz := init_data_list_size init in
-      let (m1, b) := Mem.alloc m 0 sz in
+      let b := Block.glob id in
+      let m1 := Mem.alloc_at m b 0 sz in
       match store_zeros m1 b 0 sz with
       | None => None
       | Some m2 =>
@@ -722,34 +713,34 @@ Qed.
 Remark alloc_global_nextblock:
   forall g m m',
   alloc_global m g = Some m' ->
-  Mem.nextblock m' = Pos.succ(Mem.nextblock m).
+  Mem.nextblock m' = Mem.nextblock m.
 Proof.
   unfold alloc_global. intros.
   destruct g as [id [f|v]].
   (* function *)
-  destruct (Mem.alloc m 0 1) as [m1 b] eqn:?.
-  erewrite Mem.nextblock_drop; eauto. erewrite Mem.nextblock_alloc; eauto.
+  apply Mem.nextblock_drop in H. rewrite H. eapply Mem.nextblock_alloc_at; auto.
   (* variable *)
   set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
+  set (b := Block.glob id) in *.
+  set (m1 := Mem.alloc_at m b 0 sz) in *.
   destruct (store_zeros m1 b 0 sz) as [m2|] eqn:?; try discriminate.
   destruct (store_init_data_list m2 b 0 init) as [m3|] eqn:?; try discriminate.
-  erewrite Mem.nextblock_drop; eauto.
-  erewrite store_init_data_list_nextblock; eauto.
-  erewrite store_zeros_nextblock; eauto.
-  erewrite Mem.nextblock_alloc; eauto.
+  apply Mem.nextblock_drop in H. rewrite H.
+  apply store_init_data_list_nextblock in Heqo0. rewrite Heqo0.
+  apply store_zeros_nextblock in Heqo. rewrite Heqo.
+  unfold m1; erewrite Mem.nextblock_alloc_at; eauto.
 Qed.
 
 Remark alloc_globals_nextblock:
   forall gl m m',
   alloc_globals m gl = Some m' ->
-  Mem.nextblock m' = advance_next gl (Mem.nextblock m).
+  Mem.nextblock m' = Mem.nextblock m.
 Proof.
   induction gl; simpl; intros.
   congruence.
   destruct (alloc_global m a) as [m1|] eqn:?; try discriminate.
-  erewrite IHgl; eauto. erewrite alloc_global_nextblock; eauto.
+  erewrite (IHgl m1 m'); eauto. erewrite alloc_global_nextblock; eauto.
 Qed.
 
 (** Permissions *)
@@ -791,51 +782,6 @@ Proof.
   transitivity (Mem.perm m1 b' q k prm).
   eapply store_init_data_perm; eauto.
   eapply IHidl; eauto.
-Qed.
-
-Remark alloc_global_perm:
-  forall k prm b' q idg m m',
-  alloc_global m idg = Some m' ->
-  Mem.valid_block m b' ->
-  (Mem.perm m b' q k prm <-> Mem.perm m' b' q k prm).
-Proof.
-  intros. destruct idg as [id [f|v]]; simpl in H.
-  (* function *)
-  destruct (Mem.alloc m 0 1) as [m1 b] eqn:?.
-  assert (b' <> b). apply Mem.valid_not_valid_diff with m; eauto with mem.
-  split; intros.
-  eapply Mem.perm_drop_3; eauto. eapply Mem.perm_alloc_1; eauto.
-  eapply Mem.perm_alloc_4; eauto. eapply Mem.perm_drop_4; eauto.
-  (* variable *)
-  set (init := gvar_init v) in *.
-  set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
-  destruct (store_zeros m1 b 0 sz) as [m2|] eqn:?; try discriminate.
-  destruct (store_init_data_list m2 b 0 init) as [m3|] eqn:?; try discriminate.
-  assert (b' <> b). apply Mem.valid_not_valid_diff with m; eauto with mem.
-  split; intros.
-  eapply Mem.perm_drop_3; eauto.
-  erewrite <- store_init_data_list_perm; [idtac|eauto].
-  erewrite <- store_zeros_perm; [idtac|eauto].
-  eapply Mem.perm_alloc_1; eauto.
-  eapply Mem.perm_alloc_4; eauto.
-  erewrite store_zeros_perm; [idtac|eauto].
-  erewrite store_init_data_list_perm; [idtac|eauto].
-  eapply Mem.perm_drop_4; eauto.
-Qed.
-
-Remark alloc_globals_perm:
-  forall k prm b' q gl m m',
-  alloc_globals m gl = Some m' ->
-  Mem.valid_block m b' ->
-  (Mem.perm m b' q k prm <-> Mem.perm m' b' q k prm).
-Proof.
-  induction gl.
-  simpl; intros. inv H. tauto.
-  simpl; intros. destruct (alloc_global m a) as [m1|] eqn:?; try discriminate.
-  erewrite alloc_global_perm; eauto. eapply IHgl; eauto.
-  unfold Mem.valid_block in *. erewrite alloc_global_nextblock; eauto.
-  apply Plt_trans_succ; auto.
 Qed.
 
 (** Data preservation properties *)
@@ -1109,47 +1055,36 @@ Qed.
 Remark alloc_global_unchanged:
   forall (P: block -> Z -> Prop) m id g m',
   alloc_global m (id, g) = Some m' ->
+  (forall ofs, ~ P (Block.glob id) ofs) ->
   Mem.unchanged_on P m m'.
 Proof.
   intros. destruct g as [f|v]; simpl in H.
 - (* function *)
-  destruct (Mem.alloc m 0 1) as [m1 b] eqn:?.
+  set (b := Block.glob id) in *.
+  set (m1 := Mem.alloc_at m b 0 1) in *.
   set (Q := fun b' (ofs: Z) => b' <> b).
   apply Mem.unchanged_on_implies with Q.
   apply Mem.unchanged_on_trans with m1.
-  eapply Mem.alloc_unchanged_on; eauto.
+  eapply Mem.alloc_at_unchanged_on; eauto. reflexivity.
   eapply Mem.drop_perm_unchanged_on; eauto.
-  intros; red. apply Mem.valid_not_valid_diff with m; eauto with mem.
+  intros; red. intro; subst; eapply H0; eauto.
 - (* variable *)
   set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
+  set (b := Block.glob id) in *.
+  set (m1 := Mem.alloc_at m b 0 sz) in *.
   destruct (store_zeros m1 b 0 sz) as [m2|] eqn:?; try discriminate.
   destruct (store_init_data_list m2 b 0 init) as [m3|] eqn:?; try discriminate.
   set (Q := fun b' (ofs: Z) => b' <> b).
   apply Mem.unchanged_on_implies with Q.
   apply Mem.unchanged_on_trans with m1.
-  eapply Mem.alloc_unchanged_on; eauto.
+  eapply Mem.alloc_at_unchanged_on; eauto. reflexivity.
   apply Mem.unchanged_on_trans with m2.
   eapply store_zeros_unchanged; eauto.
   apply Mem.unchanged_on_trans with m3.
   eapply store_init_data_list_unchanged; eauto.
   eapply Mem.drop_perm_unchanged_on; eauto.
-  intros; red. apply Mem.valid_not_valid_diff with m; eauto with mem.
-Qed.
-
-Remark alloc_globals_unchanged:
-  forall (P: block -> Z -> Prop) gl m m',
-  alloc_globals m gl = Some m' ->
-  Mem.unchanged_on P m m'.
-Proof.
-  induction gl; simpl; intros.
-- inv H. apply Mem.unchanged_on_refl.
-- destruct (alloc_global m a) as [m''|] eqn:?; try discriminate.
-  destruct a as [id g].
-  apply Mem.unchanged_on_trans with m''.
-  eapply alloc_global_unchanged; eauto.
-  apply IHgl; auto.
+  intros; red. intro; subst; eapply H0; eauto.
 Qed.
 
 Remark load_store_init_data_invariant:
@@ -1180,37 +1115,35 @@ Definition globals_initialized (g: t) (m: mem) :=
 
 Lemma alloc_global_initialized:
   forall g m id gd m',
-  genv_next g = Mem.nextblock m ->
   alloc_global m (id, gd) = Some m' ->
   globals_initialized g m ->
-     globals_initialized (add_global g (id, gd)) m'
-  /\ genv_next (add_global g (id, gd)) = Mem.nextblock m'.
+  globals_initialized (add_global g (id, gd)) m'.
 Proof.
-  intros.
-  exploit alloc_global_nextblock; eauto. intros NB. split.
+  intros g m id gd m' AG GI.
 - (* globals-initialized *)
-  red; intros. unfold find_def in H2; simpl in H2.
-  rewrite PTree.gsspec in H2. destruct (peq b (genv_next g)).
-+ inv H2. destruct gd0 as [f|v]; simpl in H0.
-* destruct (Mem.alloc m 0 1) as [m1 b] eqn:ALLOC.
-  exploit Mem.alloc_result; eauto. intros RES.
-  rewrite H, <- RES. split.
+  red; intros b gd0 FD.
+  unfold find_def in FD; simpl in FD.
+  destruct (Block.ident_of b) eqn: Hb; try congruence.
+  rewrite PTree.gsspec in FD. destruct (peq i id).
++ inv FD. destruct gd0 as [f|v]; simpl in AG.
+* apply Block.ident_of_inv in Hb; subst.
+  split.
   eapply Mem.perm_drop_1; eauto. omega.
-  intros.
-  assert (0 <= ofs < 1). { eapply Mem.perm_alloc_3; eauto. eapply Mem.perm_drop_4; eauto. }
+  intros ofs k p PERM.
+  assert (0 <= ofs < 1). { eapply Mem.perm_alloc_at_3; eauto. eapply Mem.perm_drop_4; eauto. }
   exploit Mem.perm_drop_2; eauto. intros ORD.
   split. omega. inv ORD; auto.
-* set (init := gvar_init v) in *.
+* apply Block.ident_of_inv in Hb; subst.
+  set (b := Block.glob id) in *.
+  set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
+  set (m1 := Mem.alloc_at m b 0 sz) in *.
   destruct (store_zeros m1 b 0 sz) as [m2|] eqn:?; try discriminate.
   destruct (store_init_data_list m2 b 0 init) as [m3|] eqn:?; try discriminate.
-  exploit Mem.alloc_result; eauto. intro RES.
-  replace (genv_next g) with b by congruence.
   split. red; intros. eapply Mem.perm_drop_1; eauto.
   split. intros.
   assert (0 <= ofs < sz).
-  { eapply Mem.perm_alloc_3; eauto.
+  { eapply Mem.perm_alloc_at_3; eauto.
     erewrite store_zeros_perm by eauto.
     erewrite store_init_data_list_perm by eauto.
     eapply Mem.perm_drop_4; eauto. }
@@ -1227,35 +1160,41 @@ Proof.
   unfold perm_globvar. rewrite NOTVOL. destruct (gvar_readonly v); auto with mem.
   eapply store_init_data_list_loadbytes; eauto.
   eapply store_zeros_loadbytes; eauto.
-+ assert (U: Mem.unchanged_on (fun _ _ => True) m m') by (eapply alloc_global_unchanged; eauto).
++ assert (U: Mem.unchanged_on (fun b' _ => Block.glob id <> b') m m')
+    by (eapply alloc_global_unchanged; eauto).
   assert (VALID: Mem.valid_block m b).
-  { red. rewrite <- H. eapply genv_defs_range; eauto. }
-  exploit H1; eauto.
+  { red. apply Block.ident_of_inv in Hb; subst.
+    eapply Block.lt_le_trans. apply Block.lt_glob_init.
+    apply Mem.init_nextblock. }
+  exploit GI; eauto. unfold find_def. rewrite Hb; eauto.
+  assert (DIFF: b <> Block.glob id).
+  {
+    apply Block.ident_of_inv in Hb; subst.
+    intro GlobEq; apply Block.glob_inj in GlobEq; congruence.
+  }
   destruct gd0 as [f|v].
 * intros [A B]; split; intros.
-  eapply Mem.perm_unchanged_on; eauto. exact I.
-  eapply B. eapply Mem.perm_unchanged_on_2; eauto. exact I.
+  eapply Mem.perm_unchanged_on; eauto. congruence.
+  eapply B. eapply Mem.perm_unchanged_on_2; eauto. congruence.
 * intros (A & B & C & D). split; [| split; [| split]].
-  red; intros. eapply Mem.perm_unchanged_on; eauto. exact I.
-  intros. eapply B. eapply Mem.perm_unchanged_on_2; eauto. exact I.
+  red; intros. eapply Mem.perm_unchanged_on; eauto. congruence.
+  intros. eapply B. eapply Mem.perm_unchanged_on_2; eauto. congruence.
   intros. apply load_store_init_data_invariant with m; auto.
-  intros. eapply Mem.load_unchanged_on_1; eauto. intros; exact I.
-  intros. eapply Mem.loadbytes_unchanged_on; eauto. intros; exact I.
-- simpl. congruence.
+  intros. eapply Mem.load_unchanged_on_1; eauto. congruence.
+  intros. eapply Mem.loadbytes_unchanged_on; eauto. congruence.
 Qed.
 
 Lemma alloc_globals_initialized:
   forall gl ge m m',
   alloc_globals m gl = Some m' ->
-  genv_next ge = Mem.nextblock m ->
   globals_initialized ge m ->
   globals_initialized (add_globals ge gl) m'.
 Proof.
   induction gl; simpl; intros.
 - inv H; auto.
 - destruct a as [id g]. destruct (alloc_global m (id, g)) as [m1|] eqn:?; try discriminate.
-  exploit alloc_global_initialized; eauto. intros [P Q].
-  eapply IHgl; eauto.
+  eapply IHgl. eauto.
+  eapply alloc_global_initialized; eauto.
 Qed.
 
 End INITMEM.
@@ -1265,12 +1204,10 @@ Definition init_mem (p: program F V) :=
 
 Lemma init_mem_genv_next: forall p m,
   init_mem p = Some m ->
-  genv_next (globalenv p) = Mem.nextblock m.
+  Block.init = Mem.nextblock m.
 Proof.
   unfold init_mem; intros.
-  exploit alloc_globals_nextblock; eauto. rewrite Mem.nextblock_empty. intro.
-  generalize (genv_next_add_globals (prog_defs p) (empty_genv (prog_public p))).
-  fold (globalenv p). simpl genv_next. intros. congruence.
+  exploit alloc_globals_nextblock; eauto.
 Qed.
 
 Theorem find_symbol_not_fresh:
@@ -1288,7 +1225,8 @@ Theorem find_def_not_fresh:
   find_def (globalenv p) b = Some g -> Mem.valid_block m b.
 Proof.
   intros. red. erewrite <- init_mem_genv_next; eauto.
-  eapply genv_defs_range; eauto.
+  unfold find_def in H0. destruct (Block.ident_of b) eqn: Hb; try congruence.
+  apply Block.ident_of_inv in Hb; subst; apply Block.lt_glob_init.
 Qed.
 
 Theorem find_funct_ptr_not_fresh:
@@ -1314,8 +1252,9 @@ Lemma init_mem_characterization_gen:
 Proof.
   intros. apply alloc_globals_initialized with Mem.empty.
   auto.
-  rewrite Mem.nextblock_empty. auto.
-  red; intros. unfold find_def in H0; simpl in H0; rewrite PTree.gempty in H0; discriminate.
+  red; intros. unfold find_def in H0.
+  destruct (Block.ident_of b) eqn: Hb; try congruence.
+  simpl in H0; rewrite PTree.gempty in H0; discriminate.
 Qed.
 
 Theorem init_mem_characterization:
@@ -1350,15 +1289,13 @@ Qed.
 Section INITMEM_INJ.
 
 Variable ge: t.
-Variable thr: block.
-Hypothesis symb_inject: forall id b, find_symbol ge id = Some b -> Plt b thr.
 
 Lemma store_zeros_neutral:
   forall m b p n m',
-  Mem.inject_neutral thr m ->
-  Plt b thr ->
+  Mem.inject_neutral m ->
+  Block.lt b Block.init ->
   store_zeros m b p n = Some m' ->
-  Mem.inject_neutral thr m'.
+  Mem.inject_neutral m'.
 Proof.
   intros until n. functional induction (store_zeros m b p n); intros.
   inv H1; auto.
@@ -1368,26 +1305,28 @@ Qed.
 
 Lemma store_init_data_neutral:
   forall m b p id m',
-  Mem.inject_neutral thr m ->
-  Plt b thr ->
+  Mem.inject_neutral m ->
+  Block.lt b Block.init ->
   store_init_data ge m b p id = Some m' ->
-  Mem.inject_neutral thr m'.
+  Mem.inject_neutral m'.
 Proof.
   intros.
   destruct id; simpl in H1; try (eapply Mem.store_inject_neutral; eauto; fail).
   congruence.
   destruct (find_symbol ge i) as [b'|] eqn:E; try discriminate.
   eapply Mem.store_inject_neutral; eauto.
-  econstructor. unfold Mem.flat_inj. apply pred_dec_true; auto. eauto.
+  econstructor. unfold Mem.flat_inj. apply pred_dec_true; auto.
+  unfold find_symbol in E. destruct (_ ! i); try discriminate. inv E.
+  apply Block.lt_glob_init.
   rewrite Ptrofs.add_zero. auto.
 Qed.
 
 Lemma store_init_data_list_neutral:
   forall b idl m p m',
-  Mem.inject_neutral thr m ->
-  Plt b thr ->
+  Mem.inject_neutral m ->
+  Block.lt b Block.init ->
   store_init_data_list ge m b p idl = Some m' ->
-  Mem.inject_neutral thr m'.
+  Mem.inject_neutral m'.
 Proof.
   induction idl; simpl; intros.
   congruence.
@@ -1398,51 +1337,40 @@ Qed.
 Lemma alloc_global_neutral:
   forall idg m m',
   alloc_global ge m idg = Some m' ->
-  Mem.inject_neutral thr m ->
-  Plt (Mem.nextblock m) thr ->
-  Mem.inject_neutral thr m'.
+  Mem.inject_neutral m ->
+  Mem.inject_neutral m'.
 Proof.
   intros. destruct idg as [id [f|v]]; simpl in H.
-  (* function *)
-  destruct (Mem.alloc m 0 1) as [m1 b] eqn:?.
-  assert (Plt b thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
+  - (* function *)
+  set (b := Block.glob id) in *.
+  assert (LT: Block.lt b Block.init) by (apply Block.lt_glob_init).
   eapply Mem.drop_inject_neutral; eauto.
-  eapply Mem.alloc_inject_neutral; eauto.
-  (* variable *)
+  eapply Mem.alloc_at_inject_neutral; eauto.
+  - (* variable *)
   set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
+  set (b := Block.glob id) in *.
+  set (m1 := Mem.alloc_at m b 0 sz) in *.
   destruct (store_zeros m1 b 0 sz) as [m2|] eqn:?; try discriminate.
   destruct (store_init_data_list ge m2 b 0 init) as [m3|] eqn:?; try discriminate.
-  assert (Plt b thr). rewrite (Mem.alloc_result _ _ _ _ _ Heqp). auto.
+  assert (Block.lt b Block.init). apply Block.lt_glob_init.
   eapply Mem.drop_inject_neutral; eauto.
   eapply store_init_data_list_neutral with (m := m2) (b := b); eauto.
   eapply store_zeros_neutral with (m := m1); eauto.
-  eapply Mem.alloc_inject_neutral; eauto.
-Qed.
-
-Remark advance_next_le: forall gl x, Ple x (advance_next gl x).
-Proof.
-  induction gl; simpl; intros.
-  apply Ple_refl.
-  apply Ple_trans with (Pos.succ x). apply Ple_succ. eauto.
+  eapply Mem.alloc_at_inject_neutral; eauto.
 Qed.
 
 Lemma alloc_globals_neutral:
   forall gl m m',
   alloc_globals ge m gl = Some m' ->
-  Mem.inject_neutral thr m ->
-  Ple (Mem.nextblock m') thr ->
-  Mem.inject_neutral thr m'.
+  Mem.inject_neutral m ->
+  Mem.inject_neutral m'.
 Proof.
   induction gl; intros.
   simpl in *. congruence.
   exploit alloc_globals_nextblock; eauto. intros EQ.
   simpl in *. destruct (alloc_global ge m a) as [m1|] eqn:E; try discriminate.
   exploit alloc_global_neutral; eauto.
-  assert (Ple (Pos.succ (Mem.nextblock m)) (Mem.nextblock m')).
-  { rewrite EQ. apply advance_next_le. }
-  unfold Plt, Ple in *; zify; omega.
 Qed.
 
 End INITMEM_INJ.
@@ -1450,14 +1378,12 @@ End INITMEM_INJ.
 Theorem initmem_inject:
   forall p m,
   init_mem p = Some m ->
-  Mem.inject (Mem.flat_inj (Mem.nextblock m)) m m.
+  Mem.inject (Mem.flat_inj Block.init) m m.
 Proof.
   unfold init_mem; intros.
   apply Mem.neutral_inject.
   eapply alloc_globals_neutral; eauto.
-  intros. exploit find_symbol_not_fresh; eauto.
   apply Mem.empty_inject_neutral.
-  apply Ple_refl.
 Qed.
 
 (** ** Sufficient and necessary conditions for the initial memory to exist. *)
@@ -1545,7 +1471,8 @@ Proof.
   destruct H0.
 + subst idg1; simpl in A.
   set (il := gvar_init v) in *. set (sz := init_data_list_size il) in *.
-  destruct (Mem.alloc m 0 sz) as [m1 b].
+  set (b := Block.glob id) in *.
+  set (m1 := Mem.alloc_at m b 0 sz) in *.
   destruct (store_zeros m1 b 0 sz) as [m2|]; try discriminate.
   destruct (store_init_data_list ge m2 b 0 il) as [m3|] eqn:B; try discriminate.
   split. eapply store_init_data_list_aligned; eauto. intros; eapply store_init_data_list_free_idents; eauto.
@@ -1582,8 +1509,9 @@ Proof.
           init_data_size i = size_chunk chunk ->
           init_data_alignment i = align_chunk chunk ->
           exists m', Mem.store chunk m b p v = Some m').
-  { intros. destruct (Mem.valid_access_store m chunk b p v) as (m' & STORE).
-    split. rewrite <- H2; auto. rewrite <- H3; auto.
+  { intros chunk v SZ ALI.
+    destruct (Mem.valid_access_store m chunk b p v) as (m' & STORE).
+    split. rewrite <- SZ; auto. rewrite <- ALI; auto.
     exists m'; auto. }
   destruct i; eauto.
   simpl. exists m; auto.
@@ -1620,14 +1548,19 @@ Lemma alloc_global_exists:
   exists m', alloc_global ge m idg = Some m'.
 Proof.
   intros m [id [f|v]]; intros; simpl.
-- destruct (Mem.alloc m 0 1) as [m1 b] eqn:ALLOC.
+- set (b := Block.glob id) in *.
+  set (m1 := Mem.alloc_at m b 0 1) in *.
   destruct (Mem.range_perm_drop_2 m1 b 0 1 Nonempty) as [m2 DROP].
-  red; intros; eapply Mem.perm_alloc_2; eauto.
+  red; intros; eapply Mem.perm_alloc_at_2; eauto. reflexivity.
+  red. eapply Block.lt_le_trans. apply Block.lt_glob_init. apply Mem.init_nextblock.
   exists m2; auto.
 - destruct H as [P Q].
   set (sz := init_data_list_size (gvar_init v)).
-  destruct (Mem.alloc m 0 sz) as [m1 b] eqn:ALLOC.
-  assert (P1: Mem.range_perm m1 b 0 sz Cur Freeable) by (red; intros; eapply Mem.perm_alloc_2; eauto).
+  set (b := Block.glob id) in *.
+  set (m1 := Mem.alloc_at m b 0 sz) in *.
+  assert (P1: Mem.range_perm m1 b 0 sz Cur Freeable).
+  red; intros; eapply Mem.perm_alloc_at_2; eauto. reflexivity.
+  red. eapply Block.lt_le_trans. apply Block.lt_glob_init. apply Mem.init_nextblock.
   destruct (@store_zeros_exists m1 b 0 sz) as [m2 ZEROS].
   red; intros. apply Mem.perm_implies with Freeable; auto with mem.
   rewrite ZEROS.
@@ -1669,10 +1602,6 @@ Section MATCH_GENVS.
 Context {A B V W: Type} (R: globdef A V -> globdef B W -> Prop).
 
 Record match_genvs (ge1: t A V) (ge2: t B W): Prop := {
-  mge_next:
-    genv_next ge2 = genv_next ge1;
-  mge_symb:
-    forall id, PTree.get id (genv_symb ge2) = PTree.get id (genv_symb ge1);
   mge_defs:
     forall b, option_rel R (PTree.get b (genv_defs ge1)) (PTree.get b (genv_defs ge2))
 }.
@@ -1684,11 +1613,9 @@ Lemma add_global_match:
   match_genvs (add_global ge1 (id, g1)) (add_global ge2 (id, g2)).
 Proof.
   intros. destruct H. constructor; simpl; intros.
-- congruence.
-- rewrite mge_next0, ! PTree.gsspec. destruct (peq id0 id); auto.
-- rewrite mge_next0, ! PTree.gsspec. destruct (peq b (genv_next ge1)).
+  rewrite ! PTree.gsspec.
+  destruct (peq b id); auto.
   constructor; auto.
-  auto.
 Qed.
 
 Lemma add_globals_match:
@@ -1725,7 +1652,12 @@ Qed.
 Theorem find_def_match_2:
   forall b, option_rel (match_globdef match_fundef match_varinfo ctx)
                        (find_def (globalenv p) b) (find_def (globalenv tp) b).
-Proof (mge_defs globalenvs_match).
+Proof.
+  intros b.
+  unfold find_def.
+  destruct (Block.ident_of b) eqn:Hb; try constructor.
+  apply (mge_defs globalenvs_match).
+Qed.
 
 Theorem find_def_match:
   forall b g,
@@ -1775,7 +1707,8 @@ Theorem find_symbol_match:
   forall (s : ident),
   find_symbol (globalenv tp) s = find_symbol (globalenv p) s.
 Proof.
-  intros. destruct globalenvs_match. apply mge_symb0.
+  unfold find_symbol.
+  intros. destruct globalenvs_match. destruct (mge_defs0 s); reflexivity.
 Qed.
 
 Theorem senv_match:
@@ -1787,9 +1720,11 @@ Proof.
   rewrite ! globalenv_public.
   destruct progmatch as (P & Q & R). rewrite R. auto.
 - intros. unfold block_is_volatile.
-  destruct globalenvs_match as [P Q R]. specialize (R b).
+  destruct globalenvs_match as [P].
   unfold find_var_info, find_def.
-  inv R; auto.
+  destruct (Block.ident_of b) eqn:Hb; auto.
+  specialize (P i).
+  inv P; auto.
   inv H1; auto.
   inv H2; auto.
 Qed.
@@ -1822,7 +1757,8 @@ Proof.
   - auto.
   - inv H; simpl in *.
     set (sz := init_data_list_size init) in *.
-    destruct (Mem.alloc m 0 sz) as [m2 b] eqn:?.
+    set (b := Block.glob id1) in *.
+    set (m2 := Mem.alloc_at m b 0 sz) in *.
     destruct (store_zeros m2 b 0 sz) as [m3|] eqn:?; try discriminate.
     destruct (store_init_data_list (globalenv p) m3 b 0 init) as [m4|] eqn:?; try discriminate.
     erewrite store_init_data_list_match; eauto.

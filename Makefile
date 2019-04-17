@@ -60,7 +60,7 @@ VLIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
 # Parts common to the front-ends and the back-end (in common/)
 
 COMMON=Errors.v AST.v Linking.v \
-  Events.v Globalenvs.v Memdata.v Memtype.v Memory.v \
+  Events.v Globalenvs.v Memdata.v Memtype.v Memory.v BlockNames.v \
   Values.v Smallstep.v Behaviors.v Switch.v Determinism.v Unityping.v \
   Separation.v
 

@@ -23,6 +23,7 @@ open Events
 open Ctypes
 open Csyntax
 open Csem
+open BlockNames
 
 (* Configuration *)
 
@@ -228,7 +229,7 @@ let mem_state = function
 
 let compare_state s1 s2 =
   if s1 == s2 then 0 else
-  let c = P.compare (mem_state s1).Mem.nextblock (mem_state s2).Mem.nextblock in
+  let c = Z.to_int (BlockNames.block_compare (mem_state s1).Mem.nextblock (mem_state s2).Mem.nextblock) in
   if c <> 0 then c else begin
   match s1, s2 with
   | State(f1,s1,k1,e1,m1), State(f2,s2,k2,e2,m2) ->
@@ -316,7 +317,7 @@ let format_value m flags length conv arg =
   | 's', "", _ ->
       "<pointer argument expected>"
   | 'p', "", Vptr(blk, ofs) ->
-      Printf.sprintf "<%ld%+ld>" (P.to_int32 blk) (camlint_of_coqint ofs)
+      Printf.sprintf "<%s%+ld>" (camlstring_of_coqstring (Block.to_string blk)) (camlint_of_coqint ofs)
   | 'p', "", Vint i ->
       format_int32 (flags ^ "x") (camlint_of_coqint i)
   | 'p', "", _ ->

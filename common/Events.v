@@ -1460,12 +1460,12 @@ Definition external_call_determ ef := ec_determ (external_call_spec ef).
 Lemma external_call_nextblock:
   forall ef ge vargs m1 t vres m2,
   external_call ef ge vargs m1 t vres m2 ->
-  Ple (Mem.nextblock m1) (Mem.nextblock m2).
+  Block.le (Mem.nextblock m1) (Mem.nextblock m2).
 Proof.
-  intros. destruct (plt (Mem.nextblock m2) (Mem.nextblock m1)).
+  intros. destruct (Block.lt_dec (Mem.nextblock m2) (Mem.nextblock m1)).
   exploit external_call_valid_block; eauto. intros.
-  eelim Plt_strict; eauto.
-  unfold Plt, Ple in *; zify; omega.
+  eelim Block.lt_strict; eauto.
+  apply Block.nlt_le; eauto.
 Qed.
 
 (** Special case of [external_call_mem_inject_gen] (for backward compatibility) *)

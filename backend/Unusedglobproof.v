@@ -682,15 +682,15 @@ Inductive match_stacks (j: meminj):
         list stackframe -> list stackframe -> block -> block -> Prop :=
   | match_stacks_nil: forall bound tbound,
       meminj_preserves_globals j ->
-      Ple (Genv.genv_next ge) bound -> Ple (Genv.genv_next tge) tbound ->
+      Block.le Block.init bound -> Block.le Block.init tbound ->
       match_stacks j nil nil bound tbound
   | match_stacks_cons: forall res f sp pc rs s tsp trs ts bound tbound
          (STACKS: match_stacks j s ts sp tsp)
          (KEPT: forall id, ref_function f id -> kept id)
          (SPINJ: j sp = Some(tsp, 0))
          (REGINJ: regset_inject j rs trs)
-         (BELOW: Plt sp bound)
-         (TBELOW: Plt tsp tbound),
+         (BELOW: Block.lt sp bound)
+         (TBELOW: Block.lt tsp tbound),
       match_stacks j (Stackframe res f (Vptr sp Ptrofs.zero) pc rs :: s)
                      (Stackframe res f (Vptr tsp Ptrofs.zero) pc trs :: ts)
                      bound tbound.
@@ -707,22 +707,22 @@ Lemma match_stacks_incr:
   forall j j', inject_incr j j' ->
   forall s ts bound tbound, match_stacks j s ts bound tbound ->
   (forall b1 b2 delta,
-      j b1 = None -> j' b1 = Some(b2, delta) -> Ple bound b1 /\ Ple tbound b2) ->
+      j b1 = None -> j' b1 = Some(b2, delta) -> Block.le bound b1 /\ Block.le tbound b2) ->
   match_stacks j' s ts bound tbound.
 Proof.
   induction 2; intros.
-- assert (SAME: forall b b' delta, Plt b (Genv.genv_next ge) ->
+- assert (SAME: forall b b' delta, Block.lt b Block.init ->
                                    j' b = Some(b', delta) -> j b = Some(b', delta)).
   { intros. destruct (j b) as [[b1 delta1] | ] eqn: J.
     exploit H; eauto. congruence.
-    exploit H3; eauto. intros [A B]. elim (Plt_strict b).
-    eapply Plt_Ple_trans. eauto. eapply Ple_trans; eauto. }
-  assert (SAME': forall b b' delta, Plt b' (Genv.genv_next tge) ->
+    exploit H3; eauto. intros [A B]. elim (Block.lt_strict b).
+    eapply Block.lt_le_trans. eauto. eapply Block.le_trans. apply H1. eauto. }
+  assert (SAME': forall b b' delta, Block.lt b' Block.init ->
                                    j' b = Some(b', delta) -> j b = Some (b', delta)).
   { intros. destruct (j b) as [[b1 delta1] | ] eqn: J.
     exploit H; eauto. congruence.
-    exploit H3; eauto. intros [A B]. elim (Plt_strict b').
-    eapply Plt_Ple_trans. eauto. eapply Ple_trans; eauto. }
+    exploit H3; eauto. intros [A B]. elim (Block.lt_strict b').
+    eapply Block.lt_le_trans. eauto. eapply Block.le_trans; eauto. }
   constructor; auto.  constructor; intros.
   + exploit symbols_inject_1; eauto. apply SAME; auto.
     eapply Genv.genv_symb_range; eauto.
@@ -736,20 +736,20 @@ Proof.
     eapply Genv.genv_defs_range; eauto.
 - econstructor; eauto.
   apply IHmatch_stacks.
-  intros. exploit H1; eauto. intros [A B]. split; eapply Ple_trans; eauto.
-  apply Plt_Ple; auto. apply Plt_Ple; auto.
+  intros. exploit H1; eauto. intros [A B]. split; eapply Block.le_trans; eauto.
+  blomega. blomega.
   apply regset_inject_incr with j; auto.
 Qed.
 
 Lemma match_stacks_bound:
   forall j s ts bound tbound bound' tbound',
   match_stacks j s ts bound tbound ->
-  Ple bound bound' -> Ple tbound tbound' ->
+  Block.le bound bound' -> Block.le tbound tbound' ->
   match_stacks j s ts bound' tbound'.
 Proof.
   induction 1; intros.
-- constructor; auto. eapply Ple_trans; eauto. eapply Ple_trans; eauto.
-- econstructor; eauto. eapply Plt_Ple_trans; eauto. eapply Plt_Ple_trans; eauto.
+- constructor; auto. eapply Block.le_trans with bound; eauto. eapply Block.le_trans with tbound; eauto.
+- econstructor; eauto; blomega.
 Qed.
 
 Inductive match_states: state -> state -> Prop :=
@@ -961,9 +961,9 @@ Proof.
   eapply exec_Itailcall; eauto.
   econstructor; eauto.
   apply match_stacks_bound with stk tsp; auto.
-  apply Plt_Ple.
+  apply Block.lt_le.
   change (Mem.valid_block m' stk). eapply Mem.valid_block_inject_1; eauto.
-  apply Plt_Ple.
+  apply Block.lt_le.
   change (Mem.valid_block tm' tsp). eapply Mem.valid_block_inject_2; eauto.
   apply regs_inject; auto.
 
@@ -982,7 +982,9 @@ Proof.
   intros. exploit G; eauto. intros [U V].
   assert (Mem.valid_block m sp0) by (eapply Mem.valid_block_inject_1; eauto).
   assert (Mem.valid_block tm tsp) by (eapply Mem.valid_block_inject_2; eauto).
-  unfold Mem.valid_block in *; xomega.
+  unfold Mem.valid_block in *.
+  split; eapply Block.lt_le, Block.lt_le_trans; eauto.
+  apply Block.nlt_le; auto. apply Block.nlt_le; auto.
   apply set_res_inject; auto. apply regset_inject_incr with j; auto.
 
 - (* cond *)
@@ -1004,9 +1006,9 @@ Proof.
   eapply exec_Ireturn; eauto.
   econstructor; eauto.
   apply match_stacks_bound with stk tsp; auto.
-  apply Plt_Ple.
+  apply Block.lt_le.
   change (Mem.valid_block m' stk). eapply Mem.valid_block_inject_1; eauto.
-  apply Plt_Ple.
+  apply Block.lt_le.
   change (Mem.valid_block tm' tsp). eapply Mem.valid_block_inject_2; eauto.
   destruct or; simpl; auto.
 
@@ -1019,7 +1021,7 @@ Proof.
   { rewrite STK, TSTK.
     apply match_stacks_incr with j; auto.
     intros. destruct (eq_block b1 stk).
-    subst b1. rewrite F in H1; inv H1. split; apply Ple_refl.
+    subst b1. rewrite F in H1; inv H1. split; apply Block.le_refl.
     rewrite G in H1 by auto. congruence. }
   econstructor; split.
   eapply exec_function_internal; eauto.
@@ -1036,7 +1038,8 @@ Proof.
   apply match_stacks_bound with (Mem.nextblock m) (Mem.nextblock tm).
   apply match_stacks_incr with j; auto.
   intros. exploit G; eauto. intros [P Q].
-  unfold Mem.valid_block in *; xomega.
+  unfold Mem.valid_block in *.
+  split; apply Block.nlt_le; auto.
   eapply external_call_nextblock; eauto.
   eapply external_call_nextblock; eauto.
 
@@ -1051,17 +1054,17 @@ Qed.
 (*
 Remark genv_find_def_exists:
   forall (F V: Type) (p: AST.program F V) b,
-  Plt b (Genv.genv_next (Genv.globalenv p)) ->
+  Block.lt b (Genv.genv_next (Genv.globalenv p)) ->
   exists gd, Genv.find_def (Genv.globalenv p) b = Some gd.
 Proof.
   intros until b.
   set (P := fun (g: Genv.t F V) =>
-        Plt b (Genv.genv_next g) -> exists gd, (Genv.genv_defs g)!b = Some gd).
+        Block.lt b (Genv.genv_next g) -> exists gd, (Genv.genv_defs g)!b = Some gd).
   assert (forall l g, P g -> P (Genv.add_globals g l)).
   { induction l as [ | [id1 g1] l]; simpl; intros.
   - auto.
-  - apply IHl. unfold Genv.add_global, P; simpl. intros LT. apply Plt_succ_inv in LT. destruct LT.
-  + rewrite PTree.gso. apply H; auto. apply Plt_ne; auto.
+  - apply IHl. unfold Genv.add_global, P; simpl. intros LT. apply Block.lt_succ_inv in LT. destruct LT.
+  + rewrite PTree.gso. apply H; auto. apply Block.lt_ne; auto.
   + rewrite H0. rewrite PTree.gss. exists g1; auto. }
   apply H. red; simpl; intros. exfalso; xomega.
 Qed.
@@ -1241,8 +1244,8 @@ Proof.
   fold tge. erewrite match_prog_main by eauto. auto.
   econstructor; eauto.
   constructor. auto.
-  erewrite <- Genv.init_mem_genv_next by eauto. apply Ple_refl.
-  erewrite <- Genv.init_mem_genv_next by eauto. apply Ple_refl.
+  erewrite <- Genv.init_mem_genv_next by eauto. apply Block.le_refl.
+  erewrite <- Genv.init_mem_genv_next by eauto. apply Block.le_refl.
 Qed.
 
 Lemma transf_final_states:

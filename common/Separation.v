@@ -798,18 +798,18 @@ Qed.
 
 Inductive globalenv_preserved {F V: Type} (ge: Genv.t F V) (j: meminj) (bound: block) : Prop :=
   | globalenv_preserved_intro
-      (DOMAIN: forall b, Plt b bound -> j b = Some(b, 0))
-      (IMAGE: forall b1 b2 delta, j b1 = Some(b2, delta) -> Plt b2 bound -> b1 = b2)
-      (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> Plt b bound)
-      (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> Plt b bound)
-      (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> Plt b bound).
+      (DOMAIN: forall b, Block.lt b bound -> j b = Some(b, 0))
+      (IMAGE: forall b1 b2 delta, j b1 = Some(b2, delta) -> Block.lt b2 bound -> b1 = b2)
+      (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> Block.lt b bound)
+      (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> Block.lt b bound)
+      (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> Block.lt b bound).
 
 Program Definition globalenv_inject {F V: Type} (ge: Genv.t F V) (j: meminj) : massert := {|
-  m_pred := fun m => exists bound, Ple bound (Mem.nextblock m) /\ globalenv_preserved ge j bound;
+  m_pred := fun m => exists bound, Block.le bound (Mem.nextblock m) /\ globalenv_preserved ge j bound;
   m_footprint := fun b ofs => False
 |}.
 Next Obligation.
-  rename H into bound. exists bound; split; auto. eapply Ple_trans; eauto. eapply Mem.unchanged_on_nextblock; eauto.
+  rename H into bound. exists bound; split; auto. eapply Block.le_trans; eauto. eapply Mem.unchanged_on_nextblock; eauto.
 Qed.
 Next Obligation.
   tauto.
@@ -841,7 +841,7 @@ Proof.
 - eauto.
 - destruct (j b1) as [[b0 delta0]|] eqn:JB1.
 + erewrite H in H1 by eauto. inv H1. eauto.
-+ exploit H0; eauto. intros (X & Y). elim Y. apply Pos.lt_le_trans with bound; auto.
++ exploit H0; eauto. intros (X & Y). elim Y. apply Block.lt_le_trans with bound; auto.
 - eauto.
 - eauto.
 - eauto.
