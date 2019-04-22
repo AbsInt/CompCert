@@ -211,6 +211,21 @@ Definition one  := repr 1.
 Definition mone := repr (-1).
 Definition iwordsize := repr zwordsize.
 
+Lemma unsigned_inj : forall x y : int,
+    unsigned x = unsigned y -> x = y.
+Proof.
+  intros [xval Hxrange] [yal Hyrange] E.
+  cbn in E. subst.
+  replace Hxrange with Hyrange; [subst; reflexivity|].
+  destruct Hxrange; destruct Hyrange.
+  f_equal; apply eq_proofs_unicity;
+    intros [] [];
+      match goal with
+      | |- ?x = ?x \/ ?x <> ?x => left; reflexivity
+      | |- ?x = ?y \/ ?x <> ?y => right; intro c; inversion c
+      end.
+Qed.
+
 Lemma mkint_eq:
   forall x y Px Py, x = y -> mkint x Px = mkint y Py.
 Proof.
