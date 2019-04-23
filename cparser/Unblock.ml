@@ -340,7 +340,6 @@ and unblock_block env ctx ploc = function
 
 let unblock_fundef env f =
   local_variables := [];
-  next_scope_id := 0;
   curr_fun_id:= f.fd_name.stamp;
   (* TODO: register the parameters as being declared in function scope *)
   let body = unblock_stmt env [] no_loc f.fd_body in
@@ -398,5 +397,6 @@ let rec unblock_glob env accu = function
 (* Entry point *)
 
 let program p =
+  next_scope_id := 0;
   {gloc = no_loc; gdesc = Gdecl(Storage_extern, debug_id, debug_ty, None)} ::
   unblock_glob (Builtins.environment()) [] p

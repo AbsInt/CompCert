@@ -244,6 +244,9 @@ module DwarfPrinter(Target: DWARF_TARGET):
     (* Mapping from abbreviation string to abbreviaton id *)
     let abbrev_mapping: (string,int) Hashtbl.t = Hashtbl.create 7
 
+    (* Mapping from abbreviation range id to label *)
+    let range_labels : (int, int) Hashtbl.t = Hashtbl.create 7
+
     (* Look up the id of the abbreviation and add it if it is missing *)
     let get_abbrev entity has_sibling =
       let abbrev_string = abbrev_string_of_entity entity has_sibling in
@@ -439,8 +442,11 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | Pc_pair (l,h) ->
           print_addr oc "DW_AT_low_pc" l;
           print_addr oc "DW_AT_high_pc" h
-      | Offset i -> fprintf oc "	.4byte		%a+0x%d%a\n"
-            label !debug_ranges_addr i print_comment "DW_AT_ranges"
+      | Offset i ->
+        let lbl = new_label () in
+        Hashtbl.add range_labels i lbl;
+        fprintf oc "	.4byte		%a%a\n"
+          label lbl print_comment "DW_AT_ranges"
       | _ -> ()
 
     let print_compilation_unit oc tag =
@@ -641,14 +647,23 @@ module DwarfPrinter(Target: DWARF_TARGET):
       end
 
     let print_ranges oc r =
+      let print_range_entry = function
+        | AddressRange l ->
+          List.iter (fun (b,e) ->
+              fprintf oc "	%s		%a\n" address label b;
+              fprintf oc "	%s		%a\n" address label e) l;
+        | OffsetRange (start, l) ->
+          List.iter (fun (b,e) ->
+              fprintf oc "	%s		%a-%a\n" address label b label start;
+              fprintf oc "	%s		%a-%a\n" address label e label start) l
+      in
       section oc Section_debug_ranges;
       print_label oc !debug_ranges_addr;
-      List.iter (fun l ->
-        List.iter (fun (b,e) ->
-          fprintf oc "	%s		%a\n" address label b;
-          fprintf oc "	%s		%a\n" address label e) l;
-        fprintf oc "	%s	0\n" address;
-        fprintf oc "	%s	0\n" address) r
+      List.iter (fun (lbl,l) ->
+          print_label oc (Hashtbl.find range_labels lbl);
+          print_range_entry l;
+          fprintf oc "	%s	0\n" address;
+          fprintf oc "	%s	0\n" address)  r
 
     let print_gnu_entries oc cp (lpc,loc) s r =
       compute_abbrev cp;
@@ -679,6 +694,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
     (* Print the debug info and abbrev section *)
     let print_debug oc debug =
       Hashtbl.clear abbrev_mapping;
+      Hashtbl.clear range_labels;
       Hashtbl.clear loc_labels;
       match debug with
       | Diab entries -> print_diab_entries oc entries

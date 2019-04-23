@@ -23,7 +23,7 @@ val get_type: int -> debug_types
 
 val fold_types: (int -> debug_types -> 'a -> 'a) -> 'a -> 'a
 
-val is_variable_printed: string -> bool
+val is_symbol_printed: string -> bool
 
 val variable_location: atom -> atom -> var_location
 
