@@ -1208,7 +1208,7 @@ Proof.
   assert (RPDST: Mem.range_perm m1 bdst (Ptrofs.unsigned odst) (Ptrofs.unsigned odst + sz) Cur Nonempty).
     replace sz with (Z.of_nat (length bytes)).
     eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
-    rewrite LEN. apply nat_of_Z_eq. omega.
+    rewrite LEN. apply Z2Nat.id. omega.
   assert (PSRC: Mem.perm m1 bsrc (Ptrofs.unsigned osrc) Cur Nonempty).
     apply RPSRC. omega.
   assert (PDST: Mem.perm m1 bdst (Ptrofs.unsigned odst) Cur Nonempty).

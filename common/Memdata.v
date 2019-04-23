@@ -50,7 +50,7 @@ Proof.
 Qed.
 
 Definition size_chunk_nat (chunk: memory_chunk) : nat :=
-  nat_of_Z(size_chunk chunk).
+  Z.to_nat(size_chunk chunk).
 
 Lemma size_chunk_conv:
   forall chunk, size_chunk chunk = Z.of_nat (size_chunk_nat chunk).

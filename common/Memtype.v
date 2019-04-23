@@ -358,7 +358,7 @@ Axiom load_loadbytes:
 Axiom loadbytes_length:
   forall m b ofs n bytes,
   loadbytes m b ofs n = Some bytes ->
-  length bytes = nat_of_Z n.
+  length bytes = Z.to_nat n.
 
 Axiom loadbytes_empty:
   forall m b ofs n,

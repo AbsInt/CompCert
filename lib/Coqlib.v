@@ -577,42 +577,19 @@ Qed.
 
 (** Conversion from [Z] to [nat]. *)
 
-Definition nat_of_Z: Z -> nat := Z.to_nat.
-
-Lemma nat_of_Z_of_nat:
-  forall n, nat_of_Z (Z.of_nat n) = n.
-Proof.
-  exact Nat2Z.id.
-Qed.
-
-Lemma nat_of_Z_max:
-  forall z, Z.of_nat (nat_of_Z z) = Z.max z 0.
-Proof.
-  intros. unfold Z.max. destruct z; simpl; auto.
-  change (Z.of_nat (Z.to_nat (Zpos p)) = Zpos p).
-  apply Z2Nat.id. compute; intuition congruence.
-Qed.
-
-Lemma nat_of_Z_eq:
-  forall z, z >= 0 -> Z.of_nat (nat_of_Z z) = z.
-Proof.
-  unfold nat_of_Z; intros. apply Z2Nat.id. omega.
-Qed.
-
-Lemma nat_of_Z_neg:
-  forall n, n <= 0 -> nat_of_Z n = O.
+Lemma Z_to_nat_neg:
+  forall n, n <= 0 -> Z.to_nat n = O.
 Proof.
   destruct n; unfold Z.le; simpl; auto. congruence.
 Qed.
 
-Lemma nat_of_Z_plus:
-  forall p q,
-  p >= 0 -> q >= 0 ->
-  nat_of_Z (p + q) = (nat_of_Z p + nat_of_Z q)%nat.
+Lemma Z_to_nat_max:
+  forall z, Z.of_nat (Z.to_nat z) = Z.max z 0.
 Proof.
-  unfold nat_of_Z; intros. apply Z2Nat.inj_add; omega.
+  intros. destruct (zle 0 z).
+- rewrite Z2Nat.id by auto. xomega.
+- rewrite Z_to_nat_neg by omega. xomega.
 Qed.
-
 
 (** Alignment: [align n amount] returns the smallest multiple of [amount]
   greater than or equal to [n]. *)

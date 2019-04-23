@@ -3134,7 +3134,7 @@ Proof.
     omega.
     intros (bytes1 & bytes2 & LOAD1 & LOAD2 & CONCAT).
     subst bytes.
-    exploit Mem.loadbytes_length. eexact LOAD1. change (nat_of_Z 1) with 1%nat. intros LENGTH1.
+    exploit Mem.loadbytes_length. eexact LOAD1. change (Z.to_nat 1) with 1%nat. intros LENGTH1.
     rewrite in_app_iff in IN. destruct IN.
   * destruct bytes1; try discriminate. destruct bytes1; try discriminate.
     simpl in H. destruct H; try contradiction. subst m0.
@@ -3492,7 +3492,7 @@ Qed.
 Lemma ablock_storebytes_sound:
   forall m b ofs bytes m' p ab sz,
   Mem.storebytes m b ofs bytes = Some m' ->
-  length bytes = nat_of_Z sz ->
+  length bytes = Z.to_nat sz ->
   (forall b' ofs' q i, In (Fragment (Vptr b' ofs') q i) bytes -> pmatch b' ofs' p) ->
   bmatch m b ab ->
   bmatch m' b (ablock_storebytes ab p ofs sz).
@@ -3509,7 +3509,7 @@ Proof.
   exploit ablock_storebytes_contents; eauto. intros [A B].
   assert (Mem.load chunk' m b ofs' = Some v').
   { rewrite <- LOAD'; symmetry. eapply Mem.load_storebytes_other; eauto.
-    rewrite U. rewrite LENGTH. rewrite nat_of_Z_max. right; omega. }
+    rewrite U. rewrite LENGTH. rewrite Z_to_nat_max. right; omega. }
   exploit BM2; eauto. unfold ablock_load. rewrite A. rewrite COMPAT. auto.
 Qed.
 
@@ -3992,7 +3992,7 @@ Theorem storebytes_sound:
   Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
   mmatch m am ->
   pmatch b ofs p ->
-  length bytes = nat_of_Z sz ->
+  length bytes = Z.to_nat sz ->
   (forall b' ofs' qt i, In (Fragment (Vptr b' ofs') qt i) bytes -> pmatch b' ofs' q) ->
   mmatch m' (storebytes am p sz q).
 Proof.

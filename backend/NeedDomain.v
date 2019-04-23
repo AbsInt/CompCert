@@ -327,9 +327,9 @@ Lemma eqmod_iagree:
   Int.eqmod (two_p (Int.size m)) x y ->
   iagree (Int.repr x) (Int.repr y) m.
 Proof.
-  intros. set (p := nat_of_Z (Int.size m)).
+  intros. set (p := Z.to_nat (Int.size m)).
   generalize (Int.size_range m); intros RANGE.
-  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply nat_of_Z_eq. omega. }
+  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply Z2Nat.id. omega. }
   rewrite EQ in H; rewrite <- two_power_nat_two_p in H.
   red; intros. rewrite ! Int.testbit_repr by auto.
   destruct (zlt i (Int.size m)).
@@ -345,9 +345,9 @@ Lemma iagree_eqmod:
   iagree x y (complete_mask m) ->
   Int.eqmod (two_p (Int.size m)) (Int.unsigned x) (Int.unsigned y).
 Proof.
-  intros. set (p := nat_of_Z (Int.size m)).
+  intros. set (p := Z.to_nat (Int.size m)).
   generalize (Int.size_range m); intros RANGE.
-  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply nat_of_Z_eq. omega. }
+  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply Z2Nat.id. omega. }
   rewrite EQ; rewrite <- two_power_nat_two_p.
   apply Int.eqmod_same_bits. intros. apply H. omega.
   unfold complete_mask. rewrite Int.bits_zero_ext by omega.
