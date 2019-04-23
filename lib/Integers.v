@@ -539,7 +539,7 @@ Lemma eqmod_small_eq:
 Proof.
   intros x y [k EQ] I1 I2.
   generalize (Zdiv_unique _ _ _ _ EQ I2). intro.
-  rewrite (Zdiv_small x modul I1) in H. subst k. omega.
+  rewrite (Z.div_small x modul I1) in H. subst k. omega.
 Qed.
 
 Lemma eqmod_mod_eq:
@@ -712,7 +712,7 @@ Theorem repr_unsigned:
   forall i, repr (unsigned i) = i.
 Proof.
   destruct i; simpl. unfold repr. apply mkint_eq.
-  rewrite Z_mod_modulus_eq. apply Zmod_small; omega.
+  rewrite Z_mod_modulus_eq. apply Z.mod_small; omega.
 Qed.
 Hint Resolve repr_unsigned: ints.
 
@@ -735,7 +735,7 @@ Theorem unsigned_repr:
   forall z, 0 <= z <= max_unsigned -> unsigned (repr z) = z.
 Proof.
   intros. rewrite unsigned_repr_eq.
-  apply Zmod_small. unfold max_unsigned in H. omega.
+  apply Z.mod_small. unfold max_unsigned in H. omega.
 Qed.
 Hint Resolve unsigned_repr: ints.
 
@@ -782,7 +782,7 @@ Qed.
 
 Theorem unsigned_one: unsigned one = 1.
 Proof.
-  unfold one; rewrite unsigned_repr_eq. apply Zmod_small. split. omega.
+  unfold one; rewrite unsigned_repr_eq. apply Z.mod_small. split. omega.
   unfold modulus. replace wordsize with (S(Init.Nat.pred wordsize)).
   rewrite two_power_nat_S. generalize (two_power_nat_pos (Init.Nat.pred wordsize)).
   omega.
@@ -793,7 +793,7 @@ Theorem unsigned_mone: unsigned mone = modulus - 1.
 Proof.
   unfold mone; rewrite unsigned_repr_eq.
   replace (-1) with ((modulus - 1) + (-1) * modulus).
-  rewrite Z_mod_plus_full. apply Zmod_small.
+  rewrite Z_mod_plus_full. apply Z.mod_small.
   generalize modulus_pos. omega. omega.
 Qed.
 
@@ -825,7 +825,7 @@ Qed.
 Theorem unsigned_repr_wordsize:
   unsigned iwordsize = zwordsize.
 Proof.
-  unfold iwordsize; rewrite unsigned_repr_eq. apply Zmod_small.
+  unfold iwordsize; rewrite unsigned_repr_eq. apply Z.mod_small.
   generalize wordsize_pos wordsize_max_unsigned; unfold max_unsigned; omega.
 Qed.
 
@@ -2464,7 +2464,7 @@ Proof.
   - rewrite andb_false_r; auto.
   - generalize (unsigned_range n); intros.
     rewrite bits_mone. rewrite andb_true_r. f_equal.
-    symmetry. apply Zmod_small. omega.
+    symmetry. apply Z.mod_small. omega.
     omega.
 Qed.
 
@@ -2491,7 +2491,7 @@ Theorem rol_zero:
   rol x zero = x.
 Proof.
   bit_solve. f_equal. rewrite unsigned_zero. rewrite Z.sub_0_r.
-  apply Zmod_small; auto.
+  apply Z.mod_small; auto.
 Qed.
 
 Lemma bitwise_binop_rol:
@@ -2616,14 +2616,14 @@ Proof.
   rewrite !testbit_repr; auto.
   rewrite !Z.lor_spec. rewrite orb_comm. f_equal; apply same_bits_eqm; auto.
   - apply eqm_unsigned_repr_r. apply eqm_refl2. f_equal.
-    rewrite Zmod_small; auto.
+    rewrite Z.mod_small; auto.
     assert (unsigned (add y z) = zwordsize).
       rewrite H1. apply unsigned_repr_wordsize.
     unfold add in H5. rewrite unsigned_repr in H5.
     omega.
     generalize two_wordsize_max_unsigned; omega.
   - apply eqm_unsigned_repr_r. apply eqm_refl2. f_equal.
-    apply Zmod_small; auto.
+    apply Z.mod_small; auto.
 Qed.
 
 (** ** Properties of [Z_one_bits] and [is_power2]. *)

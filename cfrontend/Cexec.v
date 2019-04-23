@@ -292,7 +292,6 @@ Remark check_assign_copy:
   { assign_copy_ok ty b ofs b' ofs' } + {~ assign_copy_ok ty b ofs b' ofs' }.
 Proof with try (right; intuition omega).
   intros. unfold assign_copy_ok.
-  assert (alignof_blockcopy ge ty > 0) by apply alignof_blockcopy_pos.
   destruct (Zdivide_dec (alignof_blockcopy ge ty) (Ptrofs.unsigned ofs')); auto...
   destruct (Zdivide_dec (alignof_blockcopy ge ty) (Ptrofs.unsigned ofs)); auto...
   assert (Y: {b' <> b \/

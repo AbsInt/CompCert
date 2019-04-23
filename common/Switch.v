@@ -288,10 +288,10 @@ Lemma validate_jumptable_correct:
 Proof.
   intros.
   rewrite (validate_jumptable_correct_rec cases tbl ofs); auto.
-- f_equal. f_equal. rewrite Zmod_small. omega.
+- f_equal. f_equal. rewrite Z.mod_small. omega.
   destruct (zle ofs v). omega.
   assert (M: ((v - ofs) + 1 * modulus) mod modulus = (v - ofs) + modulus).
-  { rewrite Zmod_small. omega. omega. }
+  { rewrite Z.mod_small. omega. omega. }
   rewrite Z_mod_plus in M by auto. rewrite M in H0. omega.
 - generalize (Z_mod_lt (v - ofs) modulus modulus_pos). omega.
 Qed.
@@ -331,7 +331,7 @@ Proof.
   rewrite (split_between_prop v _ _ _ _ _ _ EQ).
   assert (0 <= (v - ofs) mod modulus < modulus) by (apply Z_mod_lt; omega).
   destruct (zlt ((v - ofs) mod modulus) sz).
-  rewrite Zmod_small by omega. eapply validate_jumptable_correct; eauto.
+  rewrite Z.mod_small by omega. eapply validate_jumptable_correct; eauto.
   eapply IHt; eauto.
 Qed.
 

@@ -258,14 +258,14 @@ Lemma decode_encode_int_4:
   forall x, Int.repr (decode_int (encode_int 4 (Int.unsigned x))) = x.
 Proof.
   intros. rewrite decode_encode_int. transitivity (Int.repr (Int.unsigned x)).
-  decEq. apply Zmod_small. apply Int.unsigned_range. apply Int.repr_unsigned.
+  decEq. apply Z.mod_small. apply Int.unsigned_range. apply Int.repr_unsigned.
 Qed.
 
 Lemma decode_encode_int_8:
   forall x, Int64.repr (decode_int (encode_int 8 (Int64.unsigned x))) = x.
 Proof.
   intros. rewrite decode_encode_int. transitivity (Int64.repr (Int64.unsigned x)).
-  decEq. apply Zmod_small. apply Int64.unsigned_range. apply Int64.repr_unsigned.
+  decEq. apply Z.mod_small. apply Int64.unsigned_range. apply Int64.repr_unsigned.
 Qed.
 
 (** A length-[n] encoding depends only on the low [8*n] bits of the integer. *)

@@ -702,7 +702,7 @@ Proof.
 - intros. assert (0 <= ofs < sz2) by (eapply Mem.perm_alloc_3; eauto). omega.
 - intros. apply Mem.perm_implies with Freeable; auto with mem.
   eapply Mem.perm_alloc_2; eauto. xomega.
-- red; intros. apply Zdivides_trans with 8; auto.
+- red; intros. apply Z.divide_trans with 8; auto.
   exists (8 / align_chunk chunk). destruct chunk; reflexivity.
 - intros. elim FRESH2. eapply Mem.valid_block_inject_2; eauto.
 - intros (j' & INJ' & J1 & J2 & J3).

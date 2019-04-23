@@ -1218,7 +1218,7 @@ Proof.
   set (m := n mod 2^p + (2^p-1)) in *.
   assert (C: m / 2^p = if zeq (n mod 2^p) 0 then 0 else 1).
   { unfold m. destruct (zeq (n mod 2^p) 0).
-    rewrite e. apply Zdiv_small. omega.
+    rewrite e. apply Z.div_small. omega.
     eapply Zdiv_unique with (n mod 2^p - 1). ring. omega. }
   assert (D: Z.testbit m p = if zeq (n mod 2^p) 0 then false else true).
   { destruct (zeq (n mod 2^p) 0).
@@ -1226,7 +1226,7 @@ Proof.
     apply Z.testbit_true; auto. rewrite C; auto. }
   assert (E: forall i, p < i -> Z.testbit m i = false).
   { intros. apply Z.testbit_false. omega.
-    replace (m / 2^i) with 0. auto. symmetry. apply Zdiv_small.
+    replace (m / 2^i) with 0. auto. symmetry. apply Z.div_small.
     unfold m. split. omega. apply Z.lt_le_trans with (2 * 2^p). omega.
     change 2 with (2^1) at 1. rewrite <- (Zpower_plus radix2) by omega.
     apply Zpower_le. omega. }

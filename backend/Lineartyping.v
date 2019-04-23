@@ -39,7 +39,7 @@ Definition slot_valid (sl: slot) (ofs: Z) (ty: typ): bool :=
   | Outgoing => zle 0 ofs
   | Incoming => In_dec Loc.eq (S Incoming ofs ty) (regs_of_rpairs (loc_parameters funct.(fn_sig)))
   end
-  && Zdivide_dec (typealign ty) ofs (typealign_pos ty).
+  && Zdivide_dec (typealign ty) ofs.
 
 Definition slot_writable (sl: slot) : bool :=
   match sl with

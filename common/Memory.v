@@ -284,7 +284,7 @@ Lemma valid_access_dec:
 Proof.
   intros.
   destruct (range_perm_dec m b ofs (ofs + size_chunk chunk) Cur p).
-  destruct (Zdivide_dec (align_chunk chunk) ofs (align_chunk_pos chunk)).
+  destruct (Zdivide_dec (align_chunk chunk) ofs).
   left; constructor; auto.
   right; red; intro V; inv V; contradiction.
   right; red; intro V; inv V; contradiction.
@@ -887,11 +887,11 @@ Proof.
   intros (bytes1 & bytes2 & LB1 & LB2 & APP).
   change 4 with (size_chunk Mint32) in LB1.
   exploit loadbytes_load. eexact LB1.
-  simpl. apply Zdivides_trans with 8; auto. exists 2; auto.
+  simpl. apply Z.divide_trans with 8; auto. exists 2; auto.
   intros L1.
   change 4 with (size_chunk Mint32) in LB2.
   exploit loadbytes_load. eexact LB2.
-  simpl. apply Z.divide_add_r. apply Zdivides_trans with 8; auto. exists 2; auto. exists 1; auto.
+  simpl. apply Z.divide_add_r. apply Z.divide_trans with 8; auto. exists 2; auto. exists 1; auto.
   intros L2.
   exists (decode_val Mint32 (if Archi.big_endian then bytes1 else bytes2));
   exists (decode_val Mint32 (if Archi.big_endian then bytes2 else bytes1)).
@@ -1644,9 +1644,9 @@ Proof.
   rewrite encode_val_length in SB2. simpl in SB2.
   exists m1; split.
   apply storebytes_store. exact SB1.
-  simpl. apply Zdivides_trans with 8; auto. exists 2; auto.
+  simpl. apply Z.divide_trans with 8; auto. exists 2; auto.
   apply storebytes_store. exact SB2.
-  simpl. apply Z.divide_add_r. apply Zdivides_trans with 8; auto. exists 2; auto. exists 1; auto.
+  simpl. apply Z.divide_add_r. apply Z.divide_trans with 8; auto. exists 2; auto. exists 1; auto.
 Qed.
 
 Theorem storev_int64_split:

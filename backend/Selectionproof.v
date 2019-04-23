@@ -506,7 +506,7 @@ Proof.
   unfold Int.sub. rewrite Int.unsigned_repr_eq. f_equal. f_equal.
   apply Int.unsigned_repr. unfold Int.max_unsigned; omega.
 - intros until i0; intros EVAL R. exists v; split; auto.
-  inv R. rewrite Zmod_small by (apply Int.unsigned_range). constructor.
+  inv R. rewrite Z.mod_small by (apply Int.unsigned_range). constructor.
 - constructor.
 - apply Int.unsigned_range.
 Qed.

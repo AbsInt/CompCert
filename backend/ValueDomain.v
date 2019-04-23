@@ -1492,12 +1492,12 @@ Proof.
   inv H; auto with va.
 - apply vmatch_uns. red; intros. rewrite Int.bits_rol by auto.
   generalize (Int.unsigned_range n); intros.
-  rewrite Zmod_small by omega.
+  rewrite Z.mod_small by omega.
   apply H1. omega. omega.
 - destruct (zlt n0 Int.zwordsize); auto with va.
   apply vmatch_sgn. red; intros. rewrite ! Int.bits_rol by omega.
   generalize (Int.unsigned_range n); intros.
-  rewrite ! Zmod_small by omega.
+  rewrite ! Z.mod_small by omega.
   rewrite H1 by omega. symmetry. rewrite H1 by omega. auto.
 - destruct (zlt n0 Int.zwordsize); auto with va.
 Qed.

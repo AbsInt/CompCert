@@ -532,7 +532,7 @@ Lemma mk_shift_amount_eq:
   forall n, Int.ltu n Int.iwordsize = true -> s_amount (mk_shift_amount n) = n.
 Proof.
   intros; simpl. unfold Int.modu. transitivity (Int.repr (Int.unsigned n)).
-  decEq. apply Zmod_small. apply Int.ltu_inv; auto.
+  decEq. apply Z.mod_small. apply Int.ltu_inv; auto.
   apply Int.repr_unsigned.
 Qed.
 

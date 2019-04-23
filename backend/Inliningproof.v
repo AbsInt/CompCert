@@ -755,13 +755,13 @@ Proof.
   assert (2 <= sz -> (2 | n)). intros.
     destruct (zle sz 1). omegaContradiction.
     destruct (zle sz 2). auto.
-    destruct (zle sz 4). apply Zdivides_trans with 4; auto. exists 2; auto.
-    apply Zdivides_trans with 8; auto. exists 4; auto.
+    destruct (zle sz 4). apply Z.divide_trans with 4; auto. exists 2; auto.
+    apply Z.divide_trans with 8; auto. exists 4; auto.
   assert (4 <= sz -> (4 | n)). intros.
     destruct (zle sz 1). omegaContradiction.
     destruct (zle sz 2). omegaContradiction.
     destruct (zle sz 4). auto.
-    apply Zdivides_trans with 8; auto. exists 2; auto.
+    apply Z.divide_trans with 8; auto. exists 2; auto.
   assert (8 <= sz -> (8 | n)). intros.
     destruct (zle sz 1). omegaContradiction.
     destruct (zle sz 2). omegaContradiction.
