@@ -16,6 +16,7 @@ Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.
 Require Import AST.
+Require Import Zbits.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
@@ -355,7 +356,7 @@ Proof.
   rewrite Int.and_assoc. change 65535 with (two_p 16 - 1). rewrite Int.and_idem.
   apply Int.same_bits_eq; intros.
   rewrite Int.bits_or, Int.bits_and, Int.bits_shl, Int.testbit_repr by auto.
-  rewrite Int.Ztestbit_two_p_m1 by omega. change (Int.unsigned (Int.repr 16)) with 16.
+  rewrite Ztestbit_two_p_m1 by omega. change (Int.unsigned (Int.repr 16)) with 16.
   destruct (zlt i 16).
   rewrite andb_true_r, orb_false_r; auto.
   rewrite andb_false_r; simpl. rewrite Int.bits_shru by omega.

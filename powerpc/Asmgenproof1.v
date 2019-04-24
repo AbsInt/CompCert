@@ -16,6 +16,7 @@ Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.
 Require Import AST.
+Require Import Zbits.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
@@ -80,13 +81,13 @@ Proof.
     unfold Int.modu, Int.zero. decEq.
     change 0 with (0 mod 65536).
     change (Int.unsigned (Int.repr 65536)) with 65536.
-    apply Int.eqmod_mod_eq. omega.
-    unfold x, low_s. eapply Int.eqmod_trans.
-    apply Int.eqmod_divides with Int.modulus.
+    apply eqmod_mod_eq. omega.
+    unfold x, low_s. eapply eqmod_trans.
+    apply  eqmod_divides with Int.modulus.
     unfold Int.sub. apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl.
     exists 65536. compute; auto.
     replace 0 with (Int.unsigned n - Int.unsigned n) by omega.
-    apply Int.eqmod_sub. apply Int.eqmod_refl. apply Int.eqmod_sign_ext'.
+    apply eqmod_sub. apply eqmod_refl. apply Int.eqmod_sign_ext'.
     compute; auto.
   rewrite H0 in H. rewrite Int.add_zero in H.
   rewrite <- H. unfold x. rewrite Int.sub_add_opp. rewrite Int.add_assoc.

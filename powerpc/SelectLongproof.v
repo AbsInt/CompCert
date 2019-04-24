@@ -12,7 +12,7 @@
 
 (** Correctness of instruction selection for 64-bit integer operations *)
 
-Require Import String Coqlib Maps Integers Floats Errors.
+Require Import String Coqlib Maps Zbits Integers Floats Errors.
 Require Archi.
 Require Import AST Values Memory Globalenvs Events.
 Require Import Cminor Op CminorSel.
@@ -221,11 +221,11 @@ Proof.
   change (Int64.unsigned Int64.iwordsize) with 64.
   f_equal.
   rewrite Int.unsigned_repr. 
-  apply Int.eqmod_mod_eq. omega. 
-  apply Int.eqmod_trans with a.
-  apply Int.eqmod_divides with Int.modulus. apply Int.eqm_sym. apply Int.eqm_unsigned_repr.
+  apply eqmod_mod_eq. omega. 
+  apply eqmod_trans with a.
+  apply eqmod_divides with Int.modulus. apply Int.eqm_sym. apply Int.eqm_unsigned_repr.
   exists (two_p (32-6)); auto.
-  apply Int.eqmod_divides with Int64.modulus. apply Int64.eqm_unsigned_repr.
+  apply eqmod_divides with Int64.modulus. apply Int64.eqm_unsigned_repr.
   exists (two_p (64-6)); auto.
   assert (0 <= Int.unsigned (Int.repr a) mod 64 < 64) by (apply Z_mod_lt; omega).
   assert (64 < Int.max_unsigned) by (compute; auto).

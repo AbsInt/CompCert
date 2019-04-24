@@ -17,6 +17,7 @@
 (** In-memory representation of values. *)
 
 Require Import Coqlib.
+Require Import Zbits.
 Require Archi.
 Require Import AST.
 Require Import Integers.
@@ -272,7 +273,7 @@ Qed.
 
 Lemma bytes_of_int_mod:
   forall n x y,
-  Int.eqmod (two_p (Z.of_nat n * 8)) x y ->
+  eqmod (two_p (Z.of_nat n * 8)) x y ->
   bytes_of_int n x = bytes_of_int n y.
 Proof.
   induction n.
@@ -284,7 +285,7 @@ Proof.
   intro EQM.
   simpl; decEq.
   apply Byte.eqm_samerepr. red.
-  eapply Int.eqmod_divides; eauto. apply Z.divide_factor_r.
+  eapply eqmod_divides; eauto. apply Z.divide_factor_r.
   apply IHn.
   destruct EQM as [k EQ]. exists k. rewrite EQ.
   rewrite <- Z_div_plus_full_l. decEq. change (two_p 8) with 256. ring. omega.
@@ -292,7 +293,7 @@ Qed.
 
 Lemma encode_int_8_mod:
   forall x y,
-  Int.eqmod (two_p 8) x y ->
+  eqmod (two_p 8) x y ->
   encode_int 1%nat x = encode_int 1%nat y.
 Proof.
   intros. unfold encode_int. decEq. apply bytes_of_int_mod. auto.
@@ -300,7 +301,7 @@ Qed.
 
 Lemma encode_int_16_mod:
   forall x y,
-  Int.eqmod (two_p 16) x y ->
+  eqmod (two_p 16) x y ->
   encode_int 2%nat x = encode_int 2%nat y.
 Proof.
   intros. unfold encode_int. decEq. apply bytes_of_int_mod. auto.

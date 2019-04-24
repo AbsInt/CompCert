@@ -16,8 +16,7 @@
 
 (** Formalization of floating-point numbers, using the Flocq library. *)
 
-Require Import Coqlib.
-Require Import Integers.
+Require Import Coqlib Zbits Integers.
 (*From Flocq*)
 Require Import Binary Bits Core.
 Require Import Fappli_IEEE_extra.
@@ -1356,9 +1355,9 @@ Proof.
   rewrite Int64.testbit_repr by auto. f_equal. f_equal. unfold Int64.and.
   change (Int64.unsigned (Int64.repr 2047)) with 2047.
   change 2047 with (Z.ones 11). rewrite ! Z.land_ones by omega.
-  rewrite Int64.unsigned_repr. apply Int64.eqmod_mod_eq.
+  rewrite Int64.unsigned_repr. apply eqmod_mod_eq.
   apply Z.lt_gt. apply (Zpower_gt_0 radix2); omega.
-  apply Int64.eqmod_divides with (2^64). apply Int64.eqm_signed_unsigned.
+  apply eqmod_divides with (2^64). apply Int64.eqm_signed_unsigned.
   exists (2^(64-11)); auto.
   exploit (Z_mod_lt (Int64.unsigned n) (2^11)). compute; auto.
   assert (2^11 < Int64.max_unsigned) by (compute; auto). omega.

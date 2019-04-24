@@ -11,7 +11,7 @@
 (* *********************************************************************)
 
 Require Import FunInd.
-Require Import Zwf Coqlib Maps Integers Floats Lattice.
+Require Import Zwf Coqlib Maps Zbits Integers Floats Lattice.
 Require Import Compopts AST.
 Require Import Values Memory Globalenvs Events.
 Require Import Registers RTL.
@@ -1670,7 +1670,7 @@ Proof.
   assert (UNS: forall i j, j <> Int.zero -> is_uns (usize j) (Int.modu i j)).
   {
     intros. apply is_uns_mon with (usize (Int.modu i j)); auto with va.
-    unfold usize, Int.size. apply Int.Zsize_monotone.
+    unfold usize, Int.size. apply Zsize_monotone.
     generalize (Int.unsigned_range_2 j); intros RANGE.
     assert (Int.unsigned j <> 0).
     { red; intros; elim H. rewrite <- (Int.repr_unsigned j). rewrite H0. auto. }

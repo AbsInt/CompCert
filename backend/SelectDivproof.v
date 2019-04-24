@@ -12,7 +12,7 @@
 
 (** Correctness of instruction selection for integer division *)
 
-Require Import Zquot Coqlib.
+Require Import Zquot Coqlib Zbits.
 Require Import AST Integers Floats Values Memory Globalenvs Events.
 Require Import Cminor Op CminorSel.
 Require Import SelectOp SelectOpproof SplitLong SplitLongproof SelectLong SelectLongproof SelectDiv.
@@ -378,7 +378,7 @@ Qed.
 Remark int64_shr'_div_two_p:
   forall x y, Int64.shr' x y = Int64.repr (Int64.signed x / two_p (Int.unsigned y)).
 Proof.
-  intros; unfold Int64.shr'. rewrite Int64.Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); omega.
+  intros; unfold Int64.shr'. rewrite Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); omega.
 Qed.
 
 Lemma divls_mul_shift_gen:
@@ -453,7 +453,7 @@ Qed.
 Remark int64_shru'_div_two_p:
   forall x y, Int64.shru' x y = Int64.repr (Int64.unsigned x / two_p (Int.unsigned y)).
 Proof.
-  intros; unfold Int64.shru'. rewrite Int64.Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); omega.
+  intros; unfold Int64.shru'. rewrite Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); omega.
 Qed.
 
 Theorem divlu_mul_shift:
