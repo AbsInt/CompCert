@@ -19,7 +19,7 @@
 Require Import Coqlib Zbits Integers.
 (*From Flocq*)
 Require Import Binary Bits Core.
-Require Import Fappli_IEEE_extra.
+Require Import IEEE754_extra.
 Require Import Program.
 Require Archi.
 
