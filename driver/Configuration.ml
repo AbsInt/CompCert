@@ -13,11 +13,11 @@
 open Printf
 
 let search_argv key =
-  let len = Array.length Sys.argv in
+  let len = Array.length Commandline.argv in
   let res: string option ref = ref None in
   for i = 1 to len - 2 do
-    if Sys.argv.(i) = key then
-      res := Some Sys.argv.(i + 1);
+    if Commandline.argv.(i) = key then
+      res := Some Commandline.argv.(i + 1);
   done;
   !res
 

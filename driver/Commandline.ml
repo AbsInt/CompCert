@@ -16,7 +16,6 @@
 (* Parsing of command-line flags and arguments *)
 
 open Printf
-open Responsefile
 
 type pattern =
   | Exact of string
@@ -114,14 +113,15 @@ let parse_array spec argv first last =
     end
   in parse first
 
-let argv : string array ref = ref [||]
+let argv =
+  try
+    Responsefile.expandargv Sys.argv
+  with Responsefile.Error msg | Sys_error msg ->
+    eprintf "Error while processing the command line: %s\n" msg;
+    exit 2
 
 let parse_cmdline spec =
-  try
-    argv := expandargv Sys.argv;
-    parse_array spec !argv 1 (Array.length !argv - 1)
-  with Responsefile.Error s ->
-    raise (CmdError s)
+  parse_array spec argv 1 (Array.length argv - 1)
 
 let long_int_action key s =
   let ls = String.length s

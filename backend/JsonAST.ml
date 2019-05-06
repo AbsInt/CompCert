@@ -129,9 +129,9 @@ let pp_ast pp pp_inst ast sourcename =
    let get_args () =
     let buf = Buffer.create 100 in
     Buffer.add_string buf Sys.executable_name;
-    for i = 1 to (Array.length  !Commandline.argv - 1) do
+    for i = 1 to (Array.length  Commandline.argv - 1) do
       Buffer.add_string buf " ";
-      Buffer.add_string buf (Responsefile.gnu_quote !Commandline.argv.(i));
+      Buffer.add_string buf (Responsefile.gnu_quote Commandline.argv.(i));
     done;
     Buffer.contents buf in
     let dump_compile_info pp () =
