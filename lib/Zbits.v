@@ -1026,3 +1026,60 @@ Proof.
   exploit (Zsize_interval_1 y). omega.
   omega.
 Qed.
+
+(** ** Bit insertion, bit extraction *)
+
+(** Extract and optionally sign-extend bits [from...from+len-1] of [x] *)
+Definition Zextract_u (x: Z) (from: Z) (len: Z) : Z :=
+  Zzero_ext len (Z.shiftr x from).
+
+Definition Zextract_s (x: Z) (from: Z) (len: Z) : Z :=
+  Zsign_ext len (Z.shiftr x from).
+
+Lemma Zextract_u_spec:
+  forall x from len i,
+  0 <= from -> 0 <= len -> 0 <= i ->
+  Z.testbit (Zextract_u x from len) i =
+  if zlt i len then Z.testbit x (from + i) else false.
+Proof.
+  unfold Zextract_u; intros. rewrite Zzero_ext_spec, Z.shiftr_spec by auto.
+  rewrite Z.add_comm. auto.
+Qed.
+
+Lemma Zextract_s_spec:
+  forall x from len i,
+  0 <= from -> 0 < len -> 0 <= i ->
+  Z.testbit (Zextract_s x from len) i =
+  Z.testbit x (from + (if zlt i len then i else len - 1)).
+Proof.
+  unfold Zextract_s; intros. rewrite Zsign_ext_spec by auto. rewrite Z.shiftr_spec.
+  rewrite Z.add_comm. auto.
+  destruct (zlt i len); omega.
+Qed.
+
+(** Insert bits [0...len-1] of [y] into bits [to...to+len-1] of [x] *)
+
+Definition Zinsert (x y: Z) (to: Z) (len: Z) : Z :=
+  let mask := Z.shiftl (two_p len - 1) to in
+  Z.lor (Z.land (Z.shiftl y to) mask) (Z.ldiff x mask).
+
+Lemma Zinsert_spec:
+  forall x y to len i,
+  0 <= to -> 0 <= len -> 0 <= i ->
+  Z.testbit (Zinsert x y to len) i =
+    if zle to i && zlt i (to + len)
+    then Z.testbit y (i - to)
+    else Z.testbit x i.
+Proof.
+  unfold Zinsert; intros. set (mask := two_p len - 1).
+  assert (M: forall j, 0 <= j -> Z.testbit mask j = if zlt j len then true else false).
+  { intros; apply Ztestbit_two_p_m1; auto. }
+  rewrite Z.lor_spec, Z.land_spec, Z.ldiff_spec by auto. 
+  destruct (zle to i).
+- rewrite ! Z.shiftl_spec by auto. rewrite ! M by omega. 
+  unfold proj_sumbool; destruct (zlt (i - to) len); simpl;
+  rewrite andb_true_r, andb_false_r.
++ rewrite zlt_true by omega. apply orb_false_r.
++ rewrite zlt_false by omega; auto.
+- rewrite ! Z.shiftl_spec_low by omega. simpl. apply andb_true_r.
+Qed.
