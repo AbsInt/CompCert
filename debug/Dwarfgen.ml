@@ -544,7 +544,7 @@ let diab_file_loc sec (f,l)  =
 let prod_name =
   let version_string =
     if Version.buildnr <> "" && Version.tag <> "" then
-      Printf.sprintf "%s, Build: %s, Tag: %s" Version.version Version.buildnr Version.tag
+      Printf.sprintf "Release: %s, Build: %s, Tag: %s" Version.version Version.buildnr Version.tag
     else
       Version.version in
   Printf.sprintf "AbsInt Angewandte Informatik GmbH:CompCert Version %s:(%s,%s,%s,%s)"
