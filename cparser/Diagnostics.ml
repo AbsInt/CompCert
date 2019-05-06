@@ -18,6 +18,10 @@
 open Format
 open Commandline
 
+(* Ensure that the error formatter is flushed at exit *)
+let _ =
+  at_exit (pp_print_flush err_formatter)
+
 (* Should errors be treated as fatal *)
 let error_fatal = ref false
 
