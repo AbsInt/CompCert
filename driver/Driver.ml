@@ -262,6 +262,10 @@ let num_input_files = ref 0
 let cmdline_actions =
   let f_opt name ref =
     [Exact("-f" ^ name), Set ref; Exact("-fno-" ^ name), Unset ref] in
+  let check_align n =
+    if n <= 0 || ((n land (n - 1)) <> 0) then
+      error no_loc "requested alignment %d is not a power of 2" n
+    in
   [
 (* Getting help *)
   Exact "-help", Unit print_usage_and_exit;
@@ -297,9 +301,9 @@ let cmdline_actions =
   Exact "-fsmall-data", Integer(fun n -> option_small_data := n);
   Exact "-fsmall-const", Integer(fun n -> option_small_const := n);
   Exact "-ffloat-const-prop", Integer(fun n -> option_ffloatconstprop := n);
-  Exact "-falign-functions", Integer(fun n -> option_falignfunctions := Some n);
-  Exact "-falign-branch-targets", Integer(fun n -> option_falignbranchtargets := n);
-  Exact "-falign-cond-branches", Integer(fun n -> option_faligncondbranchs := n);] @
+  Exact "-falign-functions", Integer(fun n -> check_align n; option_falignfunctions := Some n);
+  Exact "-falign-branch-targets", Integer(fun n -> check_align n; option_falignbranchtargets := n);
+  Exact "-falign-cond-branches", Integer(fun n -> check_align n; option_faligncondbranchs := n);] @
 (* Target processor options *)
   (if Configuration.arch = "arm" then
     if Configuration.model = "armv6" then
