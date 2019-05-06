@@ -23,11 +23,18 @@ module SSet = Set.Make(String)
 let lexicon : (string, Cabs.cabsloc -> token) Hashtbl.t = Hashtbl.create 17
 let ignored_keywords : SSet.t ref = ref SSet.empty
 
+let reserved_keyword loc id =
+  Diagnostics.fatal_error (loc.Cabs.filename, loc.Cabs.lineno)
+    "illegal use of reserved keyword `%s'" id
+
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
-    [ ("_Alignas", fun loc -> ALIGNAS loc);
+    [ 
+      ("_Alignas", fun loc -> ALIGNAS loc);
       ("_Alignof", fun loc -> ALIGNOF loc);
       ("_Bool", fun loc -> UNDERSCORE_BOOL loc);
+      ("_Complex", fun loc -> reserved_keyword loc "_Complex");
+      ("_Imaginary", fun loc -> reserved_keyword loc "_Imaginary");
       ("__alignof", fun loc -> ALIGNOF loc);
       ("__alignof__", fun loc -> ALIGNOF loc);
       ("__asm", fun loc -> ASM loc);
