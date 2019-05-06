@@ -566,7 +566,7 @@ assert (H : (Rabs ((rx - x) / x) <= u_ro / (1 + u_ro))%R).
     now rewrite (Rabs_Rinv _ Nzx); apply Rinv_le. }
   apply (Rmult_le_reg_r ((ufpx + Rabs (rx - x)) * (1 + u_ro))).
   { apply Rmult_lt_0_compat; lra. }
-  field_simplify; [unfold Rdiv; rewrite Rinv_1, !Rmult_1_r| |]; lra. }
+  field_simplify; [try unfold Rdiv; rewrite ?Rinv_1, ?Rmult_1_r| |]; lra. }
 revert H; unfold Rdiv; rewrite Rabs_mult, (Rabs_Rinv _ Nzx); intro H.
 apply (Rmult_le_reg_r (/ Rabs x)); [now apply Rinv_0_lt_compat, Rabs_pos_lt|].
 now apply (Rle_trans _ _ _ H); right; field; split; [apply Rabs_no_R0|lra].

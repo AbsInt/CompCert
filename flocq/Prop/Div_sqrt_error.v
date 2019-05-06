@@ -366,7 +366,7 @@ unfold Rdiv; apply (Rplus_le_reg_r (/ sqrt (1 + 2 * u_ro))); ring_simplify.
 apply (Rmult_le_reg_r (sqrt (1 + 4 * u_ro) * sqrt (1 + 2 * u_ro))).
 { apply Rmult_lt_0_compat; apply sqrt_lt_R0; lra. }
 field_simplify; [|split; apply Rgt_not_eq, Rlt_gt, sqrt_lt_R0; lra].
-unfold Rdiv; rewrite Rinv_1, !Rmult_1_r.
+try unfold Rdiv; rewrite ?Rinv_1, ?Rmult_1_r.
 apply Rsqr_incr_0_var; [|now apply Rmult_le_pos; apply sqrt_pos].
 rewrite <-sqrt_mult; [|lra|lra].
 rewrite Rsqr_sqrt; [|apply Rmult_le_pos; lra].
@@ -409,7 +409,7 @@ assert (Pu_ro := u_ro_pos beta prec).
 apply (Rmult_le_reg_r (sqrt (1 + 2 * u_ro) * (1 + u_ro))).
 { apply Rmult_lt_0_compat; [apply sqrt_lt_R0|]; lra. }
 field_simplify; [|lra|intro H; apply sqrt_eq_0 in H; lra].
-unfold Rdiv, Rminus; rewrite Rinv_1, !Rmult_1_r, !Rplus_assoc.
+try unfold Rdiv; unfold Rminus; rewrite ?Rinv_1, ?Rmult_1_r, !Rplus_assoc.
 rewrite <-(Rplus_0_r (sqrt _ * _)) at 2; apply Rplus_le_compat_l.
 apply (Rplus_le_reg_r (1 + u_ro)); ring_simplify.
 rewrite <-(sqrt_square (_ + 1)); [|lra]; apply sqrt_le_1_alt.
