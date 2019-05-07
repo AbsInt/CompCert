@@ -941,31 +941,7 @@ and elab_name_group loc env  (spec, namelist) =
     ((id, add_attributes_type a ty), env1) in
   (mmap elab_one_name env' namelist, sto)
 
-(* Elaboration of an init-name group *)
 
-and elab_init_name_group loc env (spec, namelist) =
-  let (sto, inl, noret, tydef, bty, env') =
-    elab_specifier ~only:(namelist=[]) loc env spec in
-  if noret && tydef then
-    error loc "'_Noreturn' can only appear on functions";
-  let elab_one_name env (Init_name (Name (id, decl, attr, loc), init)) =
-    let ((ty, _), env1) =
-      elab_type_declarator loc env bty decl in
-    let a = elab_attributes env attr in
-    let has_fun_typ = is_function_type env ty in
-    if inl && not has_fun_typ then
-      error loc "'inline' can only appear on functions";
-    let a' =
-      if noret then begin
-        warning loc Celeven_extension "_Noreturn functions are a C11 extension";
-        if not has_fun_typ then
-          error loc "'_Noreturn' can only appear on functions";
-        add_attributes [Attr("noreturn",[])] a
-      end else a in
-    if has_std_alignas env ty && has_fun_typ then
-      error loc "alignment specified for function '%s'" id;
-    ((id, add_attributes_type a' ty, init), env1) in
-  (mmap elab_one_name env' namelist, sto, tydef)
 
 (* Elaboration of a field group *)
 
@@ -2373,113 +2349,101 @@ let __func__type_and_init s =
 
 (* Elaboration of top-level and local definitions *)
 
-let enter_typedefs loc env sto dl =
-  if sto <> Storage_default then
-    error loc "non-default storage class on 'typedef' definition";
-  if dl = [] then
-    warning loc Missing_declarations "typedef requires a name";
-  List.fold_left (fun env (s, ty, init) ->
-    if init <> NO_INIT then
-      error loc "initializer in typedef";
-    if has_std_alignas env ty then
-      error loc "alignment specified for typedef '%s'" s;
-    List.iter
-      (fun a -> match class_of_attribute a with
-                | Attr_object | Attr_struct ->
-                    error loc "attribute '%s' not allowed in 'typedef'"
-                              (name_of_attribute a)
-                | _ -> ())
-      (attributes_of_type_no_expand ty);
-    match previous_def Env.lookup_typedef env s with
-    | Some (s',ty') when Env.in_current_scope env s' ->
-        if equal_types env ty ty' then begin
-          warning loc Celeven_extension "redefinition of typedef '%s' is a C11 extension" s;
-          env
-        end else begin
-          error loc "typedef redefinition with different types (%a vs %a)"
-            (print_typ env) ty (print_typ env) ty';
-          env
-        end
-    | _ ->
-        if redef Env.lookup_ident env s then
-          error loc "redefinition of '%s' as different kind of symbol" s;
-        let (id, env') = Env.enter_typedef env s ty in
-        check_reduced_alignment loc env' ty;
-        emit_elab env loc (Gtypedef(id, ty));
-        env') env dl
+let enter_typedef loc env sto (s, ty, init) =
+  if init <> NO_INIT then
+    error loc "initializer in typedef";
+  if has_std_alignas env ty then
+    error loc "alignment specified for typedef '%s'" s;
+  List.iter
+    (fun a -> match class_of_attribute a with
+       | Attr_object | Attr_struct ->
+         error loc "attribute '%s' not allowed in 'typedef'"
+           (name_of_attribute a)
+       | _ -> ())
+    (attributes_of_type_no_expand ty);
+  match previous_def Env.lookup_typedef env s with
+  | Some (s',ty') when Env.in_current_scope env s' ->
+    if equal_types env ty ty' then begin
+      warning loc Celeven_extension "redefinition of typedef '%s' is a C11 extension" s;
+      env
+    end
+    else begin
+      error loc "typedef redefinition with different types (%a vs %a)"
+        (print_typ env) ty (print_typ env) ty';
+      env
+    end
+  | _ ->
+    if redef Env.lookup_ident env s then
+      error loc "redefinition of '%s' as different kind of symbol" s;
+    let (id, env') = Env.enter_typedef env s ty in
+    check_reduced_alignment loc env' ty;
+    emit_elab env loc (Gtypedef(id, ty));
+    env'
 
-let enter_decdefs local nonstatic_inline loc env sto dl =
-  (* Sanity checks on storage class *)
-  if (sto = Storage_auto || sto = Storage_register) && not local then
-    fatal_error loc "illegal storage class %s on file-scoped variable"
-                    (name_of_storage_class sto);
-  if sto <> Storage_default && dl = [] then
-    warning loc Missing_declarations "declaration does not declare anything";
-  let enter_decdef (decls, env) (s, ty, init) =
-    let isfun = is_function_type env ty in
-    if sto = Storage_register && has_std_alignas env ty then
-      error loc "alignment specified for 'register' object '%s'" s;
-    if sto = Storage_extern && init <> NO_INIT then
-      error loc "'extern' declaration variable has an initializer";
-    if local && isfun then begin
-      match sto with
-      | Storage_static ->
-          error loc "function declared in block scope cannot have 'static' storage class"
-      | Storage_auto | Storage_register ->
-          error loc "illegal storage class %s on function"
-                    (name_of_storage_class sto)
+let enter_decdef local nonstatic_inline loc sto (decls, env) (s, ty, init) =
+  let isfun = is_function_type env ty in
+  if sto = Storage_register && has_std_alignas env ty then
+    error loc "alignment specified for 'register' object '%s'" s;
+  if sto = Storage_extern && init <> NO_INIT then
+    error loc "'extern' declaration variable has an initializer";
+  if local && isfun then begin
+    match sto with
+    | Storage_static ->
+      error loc "function declared in block scope cannot have 'static' storage class"
+    | Storage_auto | Storage_register ->
+      error loc "illegal storage class %s on function"
+        (name_of_storage_class sto)
+    | _ -> ()
+  end;
+  if is_qualified_array ty then
+    error loc "type qualifier used in array declarator outside of function prototype";
+  (* Local variable declarations with default storage are treated as 'auto'.
+     Local function declarations with default storage remain with
+     default storage. *)
+  let sto1 =
+    if local && sto = Storage_default && not isfun
+    then Storage_auto
+    else sto in
+  (* enter ident in environment with declared type, because
+     initializer can refer to the ident *)
+  let (id, sto', env1, ty, linkage) =
+    enter_or_refine_ident local loc env s sto1 ty in
+  if init <> NO_INIT && not local then
+    add_global_define loc s;
+  if not isfun && is_void_type env ty then
+    fatal_error loc "'%s' has incomplete type" s;
+  (* process the initializer *)
+  let (ty', init') = elab_initializer loc env1 s ty init in
+  (* update environment with refined type *)
+  let env2 = Env.add_ident env1 id sto' ty' in
+  (* check for incomplete type *)
+  if not isfun && wrap incomplete_type loc env ty' then
+    if not local && sto' = Storage_static then begin
+      warning loc Tentative_incomplete_static "tentative static definition with incomplete type";
+    end
+    else if local && sto' <> Storage_extern then
+      error loc "variable has incomplete type %a" (print_typ env) ty';
+  (* check if alignment is reduced *)
+  check_reduced_alignment loc env ty';
+  (* check for static variables in nonstatic inline functions *)
+  if local && nonstatic_inline
+     && sto' = Storage_static
+     && not (List.mem AConst (attributes_of_type env ty')) then
+    warning loc Static_in_inline "non-constant static local variable '%s' in inline function may be different in different files" s;
+  if local && not isfun && sto' <> Storage_extern && sto' <> Storage_static then
+    (* Local definition *)
+    ((sto', id, ty', init') :: decls, env2)
+  else begin
+    (* Global definition *)
+    emit_elab ~linkage env2 loc (Gdecl(sto', id, ty', init'));
+    (* Make sure the initializer is constant. *)
+    begin match init' with
+      | Some i when not (Ceval.is_constant_init env2 i) ->
+        error loc "initializer is not a compile-time constant"
       | _ -> ()
     end;
-    if is_qualified_array ty then
-      error loc "type qualifier used in array declarator outside of function prototype";
-    (* Local variable declarations with default storage are treated as 'auto'.
-       Local function declarations with default storage remain with
-       default storage. *)
-    let sto1 =
-      if local && sto = Storage_default && not isfun
-      then Storage_auto
-      else sto in
-    (* enter ident in environment with declared type, because
-       initializer can refer to the ident *)
-    let (id, sto', env1, ty, linkage) =
-      enter_or_refine_ident local loc env s sto1 ty in
-    if init <> NO_INIT && not local then
-      add_global_define loc s;
-    if not isfun && is_void_type env ty then
-      fatal_error loc "'%s' has incomplete type" s;
-    (* process the initializer *)
-    let (ty', init') = elab_initializer loc env1 s ty init in
-    (* update environment with refined type *)
-    let env2 = Env.add_ident env1 id sto' ty' in
-    (* check for incomplete type *)
-    if not isfun && wrap incomplete_type loc env ty' then
-      if not local && sto' = Storage_static then begin
-        warning loc Tentative_incomplete_static "tentative static definition with incomplete type";
-      end else if local && sto' <> Storage_extern then
-        error loc "variable has incomplete type %a" (print_typ env) ty';
-    (* check if alignment is reduced *)
-    check_reduced_alignment loc env ty';
-    (* check for static variables in nonstatic inline functions *)
-    if local && nonstatic_inline
-             && sto' = Storage_static
-             && not (List.mem AConst (attributes_of_type env ty')) then
-      warning loc Static_in_inline "non-constant static local variable '%s' in inline function may be different in different files" s;
-    if local && not isfun && sto' <> Storage_extern && sto' <> Storage_static then
-      (* Local definition *)
-      ((sto', id, ty', init') :: decls, env2)
-    else begin
-      (* Global definition *)
-      emit_elab ~linkage env2 loc (Gdecl(sto', id, ty', init'));
-      (* Make sure the initializer is constant. *)
-      begin match init' with
-      | Some i when not (Ceval.is_constant_init env2 i) ->
-          error loc "initializer is not a compile-time constant"
-      | _ -> ()
-      end;
-      (decls, env2)
-    end in
-  let (decls, env') = List.fold_left enter_decdef ([], env) dl in
-  (List.rev decls, env')
+    (decls, env2)
+  end
 
 (* Processing of K&R-style function definitions.  Synopsis:
       T f(X1, ..., Xn)
@@ -2735,6 +2699,51 @@ let elab_fundef genv spec name defs body loc =
   genv
 
 (* Definitions *)
+let elab_decdef (for_loop: bool) (local: bool) (nonstatic_inline: bool)
+                (env: Env.t) ((spec, namelist): Cabs.init_name_group)
+                (loc: Cabs.cabsloc) : decl list * Env.t =
+  let (sto, inl, noret, tydef, bty, env') =
+    elab_specifier ~only:(namelist=[]) loc env spec in
+  (* Sanity checks on storage class *)
+  if tydef then begin
+    if sto <> Storage_default then
+      error loc "non-default storage class on 'typedef' definition";
+    if namelist = [] then
+      warning loc Missing_declarations "typedef requires a name";
+  end else begin
+    if (sto = Storage_auto || sto = Storage_register) && not local then
+      fatal_error loc "illegal storage class %s on file-scoped variable"
+        (name_of_storage_class sto);
+    if sto <> Storage_default && namelist = [] then
+      warning loc Missing_declarations "declaration does not declare anything";
+  end;
+  let elab_one_name (decls, env) (Init_name (Name (id, decl, attr, loc), init)) =
+    let ((ty, _), env1) =
+      elab_type_declarator loc env bty decl in
+    let a = elab_attributes env attr in
+    let has_fun_typ = is_function_type env ty in
+    if for_loop && (has_fun_typ || sto = Storage_extern || sto = Storage_static || tydef) then
+      error loc "declaration of non-local variable in 'for' loop" ;
+    if has_fun_typ then begin
+      if noret then
+        warning loc Celeven_extension "_Noreturn functions are a C11 extension";
+    end else begin
+      if inl then
+        error loc "'inline' can only appear on functions";
+      if noret then
+        error loc "'_Noreturn' can only appear on functions";
+    end;
+    let a' = if noret then add_attributes [Attr ("noreturn", [])] a else a in
+    if has_std_alignas env ty && has_fun_typ then
+      error loc "alignment specified for function '%s'" id;
+    let decl = (id, add_attributes_type a' ty, init) in
+    if tydef then
+      (decls, enter_typedef loc env1 sto decl)
+    else
+      enter_decdef local nonstatic_inline loc sto (decls, env1) decl
+  in
+  let (decls, env') = List.fold_left elab_one_name ([],env') namelist in
+  (List.rev decls, env')
 
 let elab_definition (for_loop: bool) (local: bool) (nonstatic_inline: bool)
                     (env: Env.t) (def: Cabs.definition)
@@ -2749,18 +2758,7 @@ let elab_definition (for_loop: bool) (local: bool) (nonstatic_inline: bool)
 
   (* "int x = 12, y[10], *z" *)
   | DECDEF(init_name_group, loc) ->
-      let ((dl, env1), sto, tydef) =
-        elab_init_name_group loc env init_name_group in
-      if for_loop then begin
-        let fun_declaration = List.exists (fun (_, ty, _) -> is_function_type env ty) dl in
-        if fun_declaration || sto = Storage_extern || sto = Storage_static || tydef then
-          error loc "declaration of non-local variable in 'for' loop" ;
-      end;
-      if tydef then
-        let env2 = enter_typedefs loc env1 sto dl
-        in ([], env2)
-      else
-        enter_decdefs local nonstatic_inline loc env1 sto dl
+    elab_decdef for_loop local nonstatic_inline env init_name_group loc
 
   (* pragma *)
   | PRAGMA(s, loc) ->
