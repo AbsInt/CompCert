@@ -2794,6 +2794,132 @@ Proof.
   apply eqmod_sign_ext'; auto.
 Qed.
 
+(** Combinations of shifts and zero/sign extensions *)
+
+Lemma shl_zero_ext:
+  forall n m x, 0 <= n ->
+  shl (zero_ext n x) m = zero_ext (n + unsigned m) (shl x m).
+Proof.
+  intros. apply same_bits_eq; intros.
+  rewrite bits_zero_ext, ! bits_shl by omega.
+  destruct (zlt i (unsigned m)).
+- rewrite zlt_true by omega; auto.
+- rewrite bits_zero_ext by omega.
+  destruct (zlt (i - unsigned m) n); [rewrite zlt_true by omega|rewrite zlt_false by omega]; auto.
+Qed.
+
+Lemma shl_sign_ext:
+  forall n m x, 0 < n ->
+  shl (sign_ext n x) m = sign_ext (n + unsigned m) (shl x m).
+Proof.
+  intros. generalize (unsigned_range m); intros.
+  apply same_bits_eq; intros.
+  rewrite bits_sign_ext, ! bits_shl by omega.
+  destruct (zlt i (n + unsigned m)).
+- rewrite bits_shl by auto. destruct (zlt i (unsigned m)); auto.
+  rewrite bits_sign_ext by omega. f_equal. apply zlt_true. omega.
+- rewrite zlt_false by omega. rewrite bits_shl by omega. rewrite zlt_false by omega.
+  rewrite bits_sign_ext by omega. f_equal. rewrite zlt_false by omega. omega.
+Qed.
+
+Lemma shru_zero_ext:
+  forall n m x, 0 <= n ->
+  shru (zero_ext (n + unsigned m) x) m = zero_ext n (shru x m).
+Proof.
+  intros. bit_solve.
+- destruct (zlt (i + unsigned m) zwordsize).
+* destruct (zlt i n); [rewrite zlt_true by omega|rewrite zlt_false by omega]; auto.
+* destruct (zlt i n); auto.
+- generalize (unsigned_range m); omega.
+- omega.
+Qed.
+
+Lemma shru_zero_ext_0:
+  forall n m x, n <= unsigned m ->
+  shru (zero_ext n x) m = zero.
+Proof.
+  intros. bit_solve.
+- destruct (zlt (i + unsigned m) zwordsize); auto.
+  apply zlt_false. omega.
+- generalize (unsigned_range m); omega.
+Qed.
+
+Lemma shr_sign_ext:
+  forall n m x, 0 < n -> n + unsigned m < zwordsize ->
+  shr (sign_ext (n + unsigned m) x) m = sign_ext n (shr x m).
+Proof.
+  intros. generalize (unsigned_range m); intros.
+  apply same_bits_eq; intros.
+  rewrite bits_sign_ext, bits_shr by auto.
+  rewrite bits_sign_ext, bits_shr.
+- f_equal.
+  destruct (zlt i n), (zlt (i + unsigned m) zwordsize).
++ apply zlt_true; omega.
++ apply zlt_true; omega.
++ rewrite zlt_false by omega. rewrite zlt_true by omega. omega.
++ rewrite zlt_false by omega. rewrite zlt_true by omega. omega.
+- destruct (zlt i n); omega.
+- destruct (zlt (i + unsigned m) zwordsize); omega.
+Qed.
+
+Lemma zero_ext_shru_min:
+  forall s x n, ltu n iwordsize = true ->
+  zero_ext s (shru x n) = zero_ext (Z.min s (zwordsize - unsigned n)) (shru x n).
+Proof.
+  intros. apply ltu_iwordsize_inv in H.
+  apply Z.min_case_strong; intros; auto.
+  bit_solve; try omega.
+  destruct (zlt i (zwordsize - unsigned n)).
+  rewrite zlt_true by omega. auto.
+  destruct (zlt i s); auto. rewrite zlt_false by omega; auto.
+Qed.
+
+Lemma sign_ext_shr_min:
+  forall s x n, ltu n iwordsize = true ->
+  sign_ext s (shr x n) = sign_ext (Z.min s (zwordsize - unsigned n)) (shr x n).
+Proof.
+  intros. apply ltu_iwordsize_inv in H.
+  rewrite Z.min_comm. 
+  destruct (Z.min_spec (zwordsize - unsigned n) s) as [[A B] | [A B]]; rewrite B; auto.
+  apply same_bits_eq; intros. rewrite ! bits_sign_ext by auto.
+  destruct (zlt i (zwordsize - unsigned n)). 
+  rewrite zlt_true by omega. auto.
+  assert (C: testbit (shr x n) (zwordsize - unsigned n - 1) = testbit x (zwordsize - 1)).
+  { rewrite bits_shr by omega. rewrite zlt_true by omega. f_equal; omega. }
+  rewrite C. destruct (zlt i s); rewrite bits_shr by omega.
+  rewrite zlt_false by omega. auto.
+  rewrite zlt_false by omega. auto.
+Qed.
+
+Lemma shl_zero_ext_min:
+  forall s x n, ltu n iwordsize = true ->
+  shl (zero_ext s x) n = shl (zero_ext (Z.min s (zwordsize - unsigned n)) x) n.
+Proof.
+  intros. apply ltu_iwordsize_inv in H.
+  apply Z.min_case_strong; intros; auto.
+  apply same_bits_eq; intros. rewrite ! bits_shl by auto.
+  destruct (zlt i (unsigned n)); auto.
+  rewrite ! bits_zero_ext by omega.
+  destruct (zlt (i - unsigned n) s).
+  rewrite zlt_true by omega; auto.
+  rewrite zlt_false by omega; auto.
+Qed.
+
+Lemma shl_sign_ext_min:
+  forall s x n, ltu n iwordsize = true ->
+  shl (sign_ext s x) n = shl (sign_ext (Z.min s (zwordsize - unsigned n)) x) n.
+Proof.
+  intros. apply ltu_iwordsize_inv in H.
+  rewrite Z.min_comm. 
+  destruct (Z.min_spec (zwordsize - unsigned n) s) as [[A B] | [A B]]; rewrite B; auto.
+  apply same_bits_eq; intros. rewrite ! bits_shl by auto.
+  destruct (zlt i (unsigned n)); auto.
+  rewrite ! bits_sign_ext by omega. f_equal.
+  destruct (zlt (i - unsigned n) s).
+  rewrite zlt_true by omega; auto.
+  omegaContradiction.
+Qed.
+
 (** ** Properties of [one_bits] (decomposition in sum of powers of two) *)
 
 Theorem one_bits_range:
@@ -3510,6 +3636,129 @@ Proof.
   unfold shr, shr'. rewrite E; auto.
   unfold shr at 1, shr'. rewrite <- B; auto.
   unfold shr, shr'; rewrite <- A; auto.
+Qed.
+
+Lemma shl'_zero_ext:
+  forall n m x, 0 <= n ->
+  shl' (zero_ext n x) m = zero_ext (n + Int.unsigned m) (shl' x m).
+Proof.
+  intros. apply same_bits_eq; intros.
+  rewrite bits_zero_ext, ! bits_shl' by omega.
+  destruct (zlt i (Int.unsigned m)).
+- rewrite zlt_true by omega; auto.
+- rewrite bits_zero_ext by omega.
+  destruct (zlt (i - Int.unsigned m) n); [rewrite zlt_true by omega|rewrite zlt_false by omega]; auto.
+Qed.
+
+Lemma shl'_sign_ext:
+  forall n m x, 0 < n ->
+  shl' (sign_ext n x) m = sign_ext (n + Int.unsigned m) (shl' x m).
+Proof.
+  intros. generalize (Int.unsigned_range m); intros.
+  apply same_bits_eq; intros.
+  rewrite bits_sign_ext, ! bits_shl' by omega.
+  destruct (zlt i (n + Int.unsigned m)).
+- rewrite bits_shl' by auto. destruct (zlt i (Int.unsigned m)); auto.
+  rewrite bits_sign_ext by omega. f_equal. apply zlt_true. omega.
+- rewrite zlt_false by omega. rewrite bits_shl' by omega. rewrite zlt_false by omega.
+  rewrite bits_sign_ext by omega. f_equal. rewrite zlt_false by omega. omega.
+Qed.
+
+Lemma shru'_zero_ext:
+  forall n m x, 0 <= n ->
+  shru' (zero_ext (n + Int.unsigned m) x) m = zero_ext n (shru' x m).
+Proof.
+  intros. generalize (Int.unsigned_range m); intros.
+  bit_solve; [|omega]. rewrite bits_shru', bits_zero_ext, bits_shru' by omega.
+  destruct (zlt (i + Int.unsigned m) zwordsize).
+* destruct (zlt i n); [rewrite zlt_true by omega|rewrite zlt_false by omega]; auto.
+* destruct (zlt i n); auto.
+Qed.
+
+Lemma shru'_zero_ext_0:
+  forall n m x, n <= Int.unsigned m ->
+  shru' (zero_ext n x) m = zero.
+Proof.
+  intros. generalize (Int.unsigned_range m); intros.
+  bit_solve. rewrite bits_shru', bits_zero_ext by omega.
+  destruct (zlt (i + Int.unsigned m) zwordsize); auto.
+  apply zlt_false. omega.
+Qed.
+
+Lemma shr'_sign_ext:
+  forall n m x, 0 < n -> n + Int.unsigned m < zwordsize ->
+  shr' (sign_ext (n + Int.unsigned m) x) m = sign_ext n (shr' x m).
+Proof.
+  intros. generalize (Int.unsigned_range m); intros.
+  apply same_bits_eq; intros.
+  rewrite bits_sign_ext, bits_shr' by auto.
+  rewrite bits_sign_ext, bits_shr'.
+- f_equal.
+  destruct (zlt i n), (zlt (i + Int.unsigned m) zwordsize).
++ apply zlt_true; omega.
++ apply zlt_true; omega.
++ rewrite zlt_false by omega. rewrite zlt_true by omega. omega.
++ rewrite zlt_false by omega. rewrite zlt_true by omega. omega.
+- destruct (zlt i n); omega.
+- destruct (zlt (i + Int.unsigned m) zwordsize); omega.
+Qed.
+
+Lemma zero_ext_shru'_min:
+  forall s x n, Int.ltu n iwordsize' = true ->
+  zero_ext s (shru' x n) = zero_ext (Z.min s (zwordsize - Int.unsigned n)) (shru' x n).
+Proof.
+  intros. apply Int.ltu_inv in H. change (Int.unsigned iwordsize') with zwordsize in H.
+  apply Z.min_case_strong; intros; auto.
+  bit_solve; try omega. rewrite ! bits_shru' by omega. 
+  destruct (zlt i (zwordsize - Int.unsigned n)).
+  rewrite zlt_true by omega. auto.
+  destruct (zlt i s); auto. rewrite zlt_false by omega; auto.
+Qed.
+
+Lemma sign_ext_shr'_min:
+  forall s x n, Int.ltu n iwordsize' = true ->
+  sign_ext s (shr' x n) = sign_ext (Z.min s (zwordsize - Int.unsigned n)) (shr' x n).
+Proof.
+  intros. apply Int.ltu_inv in H. change (Int.unsigned iwordsize') with zwordsize in H.
+  rewrite Z.min_comm. 
+  destruct (Z.min_spec (zwordsize - Int.unsigned n) s) as [[A B] | [A B]]; rewrite B; auto.
+  apply same_bits_eq; intros. rewrite ! bits_sign_ext by auto.
+  destruct (zlt i (zwordsize - Int.unsigned n)). 
+  rewrite zlt_true by omega. auto.
+  assert (C: testbit (shr' x n) (zwordsize - Int.unsigned n - 1) = testbit x (zwordsize - 1)).
+  { rewrite bits_shr' by omega. rewrite zlt_true by omega. f_equal; omega. }
+  rewrite C. destruct (zlt i s); rewrite bits_shr' by omega.
+  rewrite zlt_false by omega. auto.
+  rewrite zlt_false by omega. auto.
+Qed.
+
+Lemma shl'_zero_ext_min:
+  forall s x n, Int.ltu n iwordsize' = true ->
+  shl' (zero_ext s x) n = shl' (zero_ext (Z.min s (zwordsize - Int.unsigned n)) x) n.
+Proof.
+  intros. apply Int.ltu_inv in H. change (Int.unsigned iwordsize') with zwordsize in H.
+  apply Z.min_case_strong; intros; auto.
+  apply same_bits_eq; intros. rewrite ! bits_shl' by auto.
+  destruct (zlt i (Int.unsigned n)); auto.
+  rewrite ! bits_zero_ext by omega.
+  destruct (zlt (i - Int.unsigned n) s).
+  rewrite zlt_true by omega; auto.
+  rewrite zlt_false by omega; auto.
+Qed.
+
+Lemma shl'_sign_ext_min:
+  forall s x n, Int.ltu n iwordsize' = true ->
+  shl' (sign_ext s x) n = shl' (sign_ext (Z.min s (zwordsize - Int.unsigned n)) x) n.
+Proof.
+  intros. apply Int.ltu_inv in H. change (Int.unsigned iwordsize') with zwordsize in H.
+  rewrite Z.min_comm. 
+  destruct (Z.min_spec (zwordsize - Int.unsigned n) s) as [[A B] | [A B]]; rewrite B; auto.
+  apply same_bits_eq; intros. rewrite ! bits_shl' by auto.
+  destruct (zlt i (Int.unsigned n)); auto.
+  rewrite ! bits_sign_ext by omega. f_equal.
+  destruct (zlt (i - Int.unsigned n) s).
+  rewrite zlt_true by omega; auto.
+  omegaContradiction.
 Qed.
 
 (** Powers of two with exponents given as 32-bit ints *)
