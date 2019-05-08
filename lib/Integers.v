@@ -1139,6 +1139,12 @@ Proof.
   intros. apply Ztestbit_above with wordsize; auto. apply unsigned_range.
 Qed.
 
+Lemma bits_below:
+  forall x i, i < 0 -> testbit x i = false.
+Proof.
+  intros. apply Z.testbit_neg_r; auto.
+Qed.
+
 Lemma bits_zero:
   forall i, testbit zero i = false.
 Proof.
@@ -2511,12 +2517,11 @@ Proof.
 Qed.
 
 Lemma bits_sign_ext:
-  forall n x i, 0 <= i < zwordsize -> 0 < n ->
+  forall n x i, 0 <= i < zwordsize ->
   testbit (sign_ext n x) i = testbit x (if zlt i n then i else n - 1).
 Proof.
   intros. unfold sign_ext.
-  rewrite testbit_repr; auto. rewrite Zsign_ext_spec. destruct (zlt i n); auto.
-  omega. auto.
+  rewrite testbit_repr; auto. apply Zsign_ext_spec. omega. 
 Qed.
 
 Hint Rewrite bits_zero_ext bits_sign_ext: ints.
@@ -2528,12 +2533,24 @@ Proof.
   rewrite bits_zero_ext. apply zlt_true. omega. omega.
 Qed.
 
+Theorem zero_ext_below:
+  forall n x, n <= 0 -> zero_ext n x = zero.
+Proof.
+  intros. bit_solve. destruct (zlt i n); auto. apply bits_below; omega. omega.
+Qed.
+
 Theorem sign_ext_above:
   forall n x, n >= zwordsize -> sign_ext n x = x.
 Proof.
   intros. apply same_bits_eq; intros.
   unfold sign_ext; rewrite testbit_repr; auto.
-  rewrite Zsign_ext_spec. rewrite zlt_true. auto. omega. omega. omega.
+  rewrite Zsign_ext_spec. rewrite zlt_true. auto. omega. omega.
+Qed.
+
+Theorem sign_ext_below:
+  forall n x, n <= 0 -> sign_ext n x = zero.
+Proof.
+  intros. bit_solve. apply bits_below. destruct (zlt i n); omega.
 Qed.
 
 Theorem zero_ext_and:
@@ -2570,7 +2587,7 @@ Proof.
 Qed.
 
 Theorem sign_ext_widen:
-  forall x n n', 0 < n  <= n' ->
+  forall x n n', 0 < n <= n' ->
   sign_ext n' (sign_ext n x) = sign_ext n x.
 Proof.
   intros. destruct (zlt n' zwordsize).
@@ -2578,9 +2595,8 @@ Proof.
   auto.
   rewrite (zlt_false _ i n).
   destruct (zlt (n' - 1) n); f_equal; omega.
-  omega. omega.
+  omega.
   destruct (zlt i n'); omega.
-  omega. omega.
   apply sign_ext_above; auto.
 Qed.
 
@@ -2594,7 +2610,6 @@ Proof.
   auto.
   rewrite !zlt_false. auto. omega. omega. omega.
   destruct (zlt i n'); omega.
-  omega.
   apply sign_ext_above; auto.
 Qed.
 
@@ -2614,9 +2629,7 @@ Theorem sign_ext_narrow:
 Proof.
   intros. destruct (zlt n zwordsize).
   bit_solve. destruct (zlt i n); f_equal; apply zlt_true; omega.
-  omega.
   destruct (zlt i n); omega.
-  omega. omega.
   rewrite (sign_ext_above n'). auto. omega.
 Qed.
 
@@ -2628,7 +2641,7 @@ Proof.
   bit_solve.
   destruct (zlt i n); auto.
   rewrite zlt_true; auto. omega.
-  omega. omega. omega.
+  omega. omega.
   rewrite sign_ext_above; auto.
 Qed.
 
@@ -2643,7 +2656,7 @@ Theorem sign_ext_idem:
 Proof.
   intros. apply sign_ext_widen. omega.
 Qed.
-
+ 
 Theorem sign_ext_zero_ext:
   forall n x, 0 < n -> sign_ext n (zero_ext n x) = sign_ext n x.
 Proof.
@@ -2706,7 +2719,7 @@ Proof.
   rewrite zlt_true. rewrite bits_shl. rewrite zlt_false. f_equal. omega.
   omega. omega. omega.
   rewrite zlt_false. rewrite bits_shl. rewrite zlt_false. f_equal. omega.
-  omega. omega. omega. omega. omega.
+  omega. omega. omega. omega.
 Qed.
 
 (** [zero_ext n x] is the unique integer congruent to [x] modulo [2^n]
@@ -2766,7 +2779,7 @@ Proof.
   apply eqmod_same_bits; intros.
   rewrite H0 in H1. rewrite H0.
   fold (testbit (sign_ext n x) i). rewrite bits_sign_ext.
-  rewrite zlt_true. auto. omega. omega. omega.
+  rewrite zlt_true. auto. omega. omega.
 Qed.
 
 Lemma eqmod_sign_ext:

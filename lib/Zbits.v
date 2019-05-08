@@ -557,7 +557,7 @@ Definition Zzero_ext (n: Z) (x: Z) : Z :=
 Definition Zsign_ext (n: Z) (x: Z) : Z :=
   Z.iter (Z.pred n)
     (fun rec x => Zshiftin (Z.odd x) (rec (Z.div2 x)))
-    (fun x => if Z.odd x then -1 else 0)
+    (fun x => if Z.odd x && zlt 0 n then -1 else 0)
     x.
 
 Lemma Ziter_base:
@@ -606,32 +606,34 @@ Proof.
 Qed.
 
 Lemma Zsign_ext_spec:
-  forall n x i, 0 <= i -> 0 < n ->
+  forall n x i, 0 <= i ->
   Z.testbit (Zsign_ext n x) i = Z.testbit x (if zlt i n then i else n - 1).
 Proof.
-  intros n0 x i I0 N0.
-  revert x i I0. pattern n0. apply Zlt_lower_bound_ind with (z := 1).
-  - unfold Zsign_ext. intros.
-    destruct (zeq x 1).
-    + subst x; simpl.
-      replace (if zlt i 1 then i else 0) with 0.
-      rewrite Ztestbit_base.
-      destruct (Z.odd x0).
-      apply Ztestbit_m1; auto.
-      apply Ztestbit_0.
-      destruct (zlt i 1); omega.
-    + set (x1 := Z.pred x). replace x1 with (Z.succ (Z.pred x1)).
-      rewrite Ziter_succ. rewrite Ztestbit_shiftin.
-      destruct (zeq i 0).
-      * subst i. rewrite zlt_true. rewrite Ztestbit_base; auto. omega.
-      * rewrite H. unfold x1. destruct (zlt (Z.pred i) (Z.pred x)).
-        rewrite zlt_true. rewrite (Ztestbit_eq i x0); auto. rewrite zeq_false; auto. omega.
-        rewrite zlt_false. rewrite (Ztestbit_eq (x - 1) x0). rewrite zeq_false; auto.
-        omega. omega. omega. unfold x1; omega. omega.
-      * omega.
-      * unfold x1; omega.
-      * omega.
-  - omega.
+  intros n0 x i I0. unfold Zsign_ext. 
+  unfold proj_sumbool; destruct (zlt 0 n0) as [N0|N0]; simpl.
+- revert x i I0. pattern n0. apply Zlt_lower_bound_ind with (z := 1); [ | omega ].
+  unfold Zsign_ext. intros.
+  destruct (zeq x 1).
+  + subst x; simpl.
+    replace (if zlt i 1 then i else 0) with 0.
+    rewrite Ztestbit_base.
+    destruct (Z.odd x0); [ apply Ztestbit_m1; auto | apply Ztestbit_0 ].
+    destruct (zlt i 1); omega.
+  + set (x1 := Z.pred x). replace x1 with (Z.succ (Z.pred x1)) by omega.
+    rewrite Ziter_succ by (unfold x1; omega). rewrite Ztestbit_shiftin by auto.
+    destruct (zeq i 0).
+    * subst i. rewrite zlt_true. rewrite Ztestbit_base; auto. omega.
+    * rewrite H by (unfold x1; omega).
+      unfold x1; destruct (zlt (Z.pred i) (Z.pred x)).
+      ** rewrite zlt_true by omega.
+         rewrite (Ztestbit_eq i x0) by omega.
+         rewrite zeq_false by omega. auto.
+      ** rewrite zlt_false by omega.
+         rewrite (Ztestbit_eq (x - 1) x0) by omega.
+         rewrite zeq_false by omega. auto.
+- rewrite Ziter_base by omega. rewrite andb_false_r. 
+  rewrite Z.testbit_0_l, Z.testbit_neg_r. auto.
+  destruct (zlt i n0); omega.
 Qed.
 
 (** [Zzero_ext n x] is [x modulo 2^n] *)
@@ -661,7 +663,7 @@ Qed.
 (** Relation between [Zsign_ext n x] and (Zzero_ext n x] *)
 
 Lemma Zsign_ext_zero_ext:
-  forall n, 0 < n -> forall x,
+  forall n, 0 <= n -> forall x,
   Zsign_ext n x = Zzero_ext n x - (if Z.testbit x (n - 1) then two_p n else 0).
 Proof.
   intros. apply equal_same_bits; intros.
@@ -698,12 +700,12 @@ Proof.
   assert (C: two_p n = 2 * two_p (n - 1)).
   { rewrite <- two_p_S by omega. f_equal; omega. }
   rewrite Zzero_ext_spec, zlt_true in B by omega.
-  rewrite Zsign_ext_zero_ext by auto. rewrite B.
+  rewrite Zsign_ext_zero_ext by omega. rewrite B.
   destruct (zlt (Zzero_ext n x) (two_p (n - 1))); omega.
 Qed.
 
 Lemma eqmod_Zsign_ext:
-  forall n x, 0 < n ->
+  forall n x, 0 <= n ->
   eqmod (two_p n) (Zsign_ext n x) x.
 Proof.
   intros. rewrite Zsign_ext_zero_ext by auto. 
