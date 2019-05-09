@@ -796,6 +796,89 @@ Proof.
   rewrite IHn. f_equal; omega. omega.
 Qed.
 
+(** ** Recognition of powers of two *)
+
+Fixpoint P_is_power2 (p: positive) : bool :=
+  match p with
+  | xH => true
+  | xO q => P_is_power2 q
+  | xI q => false
+  end.
+
+Definition Z_is_power2 (x: Z) : option Z :=
+  match x with
+  | Z0 => None
+  | Zpos p => if P_is_power2 p then Some (Z.log2 x) else None
+  | Zneg _ => None
+  end.
+
+Remark P_is_power2_sound:
+  forall p, P_is_power2 p = true -> Z.pos p = two_p (Z.log2 (Z.pos p)).
+Proof.
+  induction p; simpl P_is_power2; intros.
+- discriminate.
+- change (Z.pos p~0) with (2 * Z.pos p).  apply IHp in H.
+  rewrite Z.log2_double by xomega. rewrite two_p_S.  congruence.
+  apply Z.log2_nonneg.
+- reflexivity.
+Qed.
+ 
+Lemma Z_is_power2_sound:
+  forall x i, Z_is_power2 x = Some i -> x = two_p i /\ i = Z.log2 x.
+Proof.
+  unfold Z_is_power2; intros. destruct x; try discriminate.
+  destruct (P_is_power2 p) eqn:P; try discriminate.
+  apply P_is_power2_sound in P. rewrite P; split; congruence.
+Qed.
+
+Corollary Z_is_power2_range:
+  forall n x i,
+  0 <= n -> 0 <= x < two_p n -> Z_is_power2 x = Some i -> 0 <= i < n.
+Proof.
+  intros.
+  assert (x <> 0) by (red; intros; subst x; discriminate).
+  apply Z_is_power2_sound in H1. destruct H1 as [P Q]. subst i.
+  split. apply Z.log2_nonneg. apply Z.log2_lt_pow2. omega. rewrite <- two_p_equiv; tauto.
+Qed.
+
+Lemma Z_is_power2_complete:
+  forall i, 0 <= i -> Z_is_power2 (two_p i) = Some i.
+Proof.
+Opaque Z.log2.
+  assert (A: forall x i, Z_is_power2 x = Some i -> Z_is_power2 (2 * x) = Some (Z.succ i)).
+  { destruct x; simpl; intros; try discriminate.
+    change (2 * Z.pos p) with (Z.pos (xO p)); simpl.
+    destruct (P_is_power2 p); inv H. rewrite <- Z.log2_double by xomega. auto.
+  }
+  induction i using Znatlike_ind; intros.
+- replace i with 0 by omega. reflexivity.
+- rewrite two_p_S by omega. apply A. apply IHi; omega.
+Qed.
+
+Definition Z_is_power2m1 (x: Z) : option Z := Z_is_power2 (Z.succ x).
+
+Lemma Z_is_power2m1_sound:
+  forall x i, Z_is_power2m1 x = Some i -> x = two_p i - 1.
+Proof.
+  unfold Z_is_power2m1; intros. apply Z_is_power2_sound in H. omega.
+Qed.
+
+Lemma Z_is_power2m1_complete:
+  forall i, 0 <= i -> Z_is_power2m1 (two_p i - 1) = Some i.
+Proof.
+  intros. unfold Z_is_power2m1. replace (Z.succ (two_p i - 1)) with (two_p i) by omega.
+  apply Z_is_power2_complete; auto.
+Qed.
+
+Lemma Z_is_power2m1_range:
+  forall n x i,
+  0 <= n -> 0 <= x < two_p n -> Z_is_power2m1 x = Some i -> 0 <= i <= n.
+Proof.
+  intros. destruct (zeq x (two_p n - 1)).
+- subst x. rewrite Z_is_power2m1_complete in H1 by auto. inv H1; omega.
+- unfold Z_is_power2m1 in H1. apply (Z_is_power2_range n (Z.succ x) i) in H1; omega.
+Qed.
+
 (** ** Relation between bitwise operations and multiplications / divisions by powers of 2 *)
 
 (** Left shifts and multiplications by powers of 2. *)

@@ -268,9 +268,9 @@ Definition one_bits (x: int) : list int :=
 (** Recognition of powers of two. *)
 
 Definition is_power2 (x: int) : option int :=
-  match Z_one_bits wordsize (unsigned x) 0 with
-  | i :: nil => Some (repr i)
-  | _ => None
+  match Z_is_power2 (unsigned x) with
+  | Some i => Some (repr i)
+  | None => None
   end.
 
 (** Comparisons. *)
@@ -2146,21 +2146,27 @@ Qed.
 
 (** ** Properties of [is_power2]. *)
 
+Remark is_power2_inv:
+  forall n logn,
+  is_power2 n = Some logn ->
+  Z_is_power2 (unsigned n) = Some (unsigned logn) /\ 0 <= unsigned logn < zwordsize.
+Proof.
+  unfold is_power2; intros.
+  destruct (Z_is_power2 (unsigned n)) as [i|] eqn:E; inv H.
+  assert (0 <= i < zwordsize).
+  { apply Z_is_power2_range with (unsigned n). 
+    generalize wordsize_pos; omega.
+    rewrite <- modulus_power. apply unsigned_range.
+    auto. }
+  rewrite unsigned_repr; auto. generalize wordsize_max_unsigned; omega.
+Qed.
+
 Lemma is_power2_rng:
   forall n logn,
   is_power2 n = Some logn ->
   0 <= unsigned logn < zwordsize.
 Proof.
-  intros n logn. unfold is_power2.
-  generalize (Z_one_bits_range wordsize (unsigned n)).
-  destruct (Z_one_bits wordsize (unsigned n) 0).
-  intros; discriminate.
-  destruct l.
-  intros. injection H0; intro; subst logn; clear H0.
-  assert (0 <= z < zwordsize).
-  apply H. auto with coqlib.
-  rewrite unsigned_repr. auto. generalize wordsize_max_unsigned; omega.
-  intros; discriminate.
+  intros. apply (is_power2_inv n logn); auto.
 Qed.
 
 Theorem is_power2_range:
@@ -2176,18 +2182,8 @@ Lemma is_power2_correct:
   is_power2 n = Some logn ->
   unsigned n = two_p (unsigned logn).
 Proof.
-  intros n logn. unfold is_power2.
-  generalize (Z_one_bits_powerserie wordsize (unsigned n) (unsigned_range n)).
-  generalize (Z_one_bits_range wordsize (unsigned n)).
-  destruct (Z_one_bits wordsize (unsigned n) 0).
-  intros; discriminate.
-  destruct l.
-  intros. simpl in H0. injection H1; intros; subst logn; clear H1.
-  rewrite unsigned_repr. replace (two_p z) with (two_p z + 0).
-  auto. omega. elim (H z); change (Z.of_nat wordsize) with zwordsize; intros.
-  generalize wordsize_max_unsigned; omega.
-  auto with coqlib.
-  intros; discriminate.
+  intros. apply is_power2_inv in H. destruct H as [P Q].
+  apply Z_is_power2_sound in P. tauto.
 Qed.
 
 Remark two_p_range:
@@ -2207,7 +2203,7 @@ Lemma is_power2_two_p:
   is_power2 (repr (two_p n)) = Some (repr n).
 Proof.
   intros. unfold is_power2. rewrite unsigned_repr.
-  rewrite Z_one_bits_two_p. auto. auto.
+  rewrite Z_is_power2_complete by omega; auto.
   apply two_p_range. auto.
 Qed.
 
