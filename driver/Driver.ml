@@ -203,6 +203,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -falign-functions <n>  Set alignment (in bytes) of function entry points
   -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
   -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
+  -fcommon       Put uninitialized globals in the common section [on].
 |} ^
  target_help ^
  toolchain_help ^
@@ -304,6 +305,7 @@ let cmdline_actions =
   Exact "-falign-functions", Integer(fun n -> check_align n; option_falignfunctions := Some n);
   Exact "-falign-branch-targets", Integer(fun n -> check_align n; option_falignbranchtargets := n);
   Exact "-falign-cond-branches", Integer(fun n -> check_align n; option_faligncondbranchs := n);] @
+      f_opt "common" option_fcommon @
 (* Target processor options *)
   (if Configuration.arch = "arm" then
     if Configuration.model = "armv6" then
