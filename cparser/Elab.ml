@@ -1708,7 +1708,7 @@ let elab_expr ctx loc env a =
         error "arithmetic on a pointer to an incomplete type %a in binary '%c'" (print_typ env) ty s
   in
 
-  let check_static_var id sto ty =
+  let check_static_var env id sto ty =
     if ctx.ctx_nonstatic_inline
     && sto = Storage_static
     && List.mem AConst (attributes_of_type env ty)
@@ -1722,7 +1722,7 @@ let elab_expr ctx loc env a =
   | VARIABLE s ->
       begin match wrap Env.lookup_ident loc env s with
         | (id, Env.II_ident(sto, ty)) ->
-          check_static_var id sto ty;
+          check_static_var env id sto ty;
           { edesc = EVar id; etyp = ty },env
       | (id, Env.II_enum v) ->
           { edesc = EConst(CEnum(id, v)); etyp = TInt(enum_ikind, []) },env
@@ -1859,9 +1859,9 @@ let elab_expr ctx loc env a =
       { edesc = ECall(b1, bl'); etyp = res },env
 
   | UNARY(POSINCR, a1) ->
-      elab_pre_post_incr_decr Opostincr "increment" a1
+      elab_pre_post_incr_decr env Opostincr "increment" a1
   | UNARY(POSDECR, a1) ->
-      elab_pre_post_incr_decr Opostdecr "decrement" a1
+      elab_pre_post_incr_decr env Opostdecr "decrement" a1
 
 (* 6.5.4 Cast operators *)
 
@@ -2020,20 +2020,20 @@ let elab_expr ctx loc env a =
       end
 
   | UNARY(PREINCR, a1) ->
-      elab_pre_post_incr_decr Opreincr "increment" a1
+      elab_pre_post_incr_decr env Opreincr "increment" a1
   | UNARY(PREDECR, a1) ->
-      elab_pre_post_incr_decr Opredecr "decrement" a1
+      elab_pre_post_incr_decr env Opredecr "decrement" a1
 
 (* 6.5.5 to 6.5.12  Binary operator expressions *)
 
   | BINARY(MUL, a1, a2) ->
-      elab_binary_arithmetic "*" Omul a1 a2
+      elab_binary_arithmetic env "*" Omul a1 a2
 
   | BINARY(DIV, a1, a2) ->
-      elab_binary_arithmetic "/" Odiv a1 a2
+      elab_binary_arithmetic env "/" Odiv a1 a2
 
   | BINARY(MOD, a1, a2) ->
-      elab_binary_integer "%" Omod a1 a2
+      elab_binary_integer env "%" Omod a1 a2
 
   | BINARY(ADD, a1, a2) ->
       let b1,env = elab env a1 in
@@ -2083,37 +2083,37 @@ let elab_expr ctx loc env a =
       { edesc = EBinop(Osub, b1, b2, tyop); etyp = tyres },env
 
   | BINARY(SHL, a1, a2) ->
-      elab_shift "<<" Oshl a1 a2
+      elab_shift env "<<" Oshl a1 a2
 
   | BINARY(SHR, a1, a2) ->
-      elab_shift ">>" Oshr a1 a2
+      elab_shift env ">>" Oshr a1 a2
 
   | BINARY(EQ, a1, a2) ->
-      elab_comparison Oeq a1 a2
+      elab_comparison env Oeq a1 a2
   | BINARY(NE, a1, a2) ->
-      elab_comparison One a1 a2
+      elab_comparison env One a1 a2
   | BINARY(LT, a1, a2) ->
-      elab_comparison Olt a1 a2
+      elab_comparison env Olt a1 a2
   | BINARY(GT, a1, a2) ->
-      elab_comparison Ogt a1 a2
+      elab_comparison env Ogt a1 a2
   | BINARY(LE, a1, a2) ->
-      elab_comparison Ole a1 a2
+      elab_comparison env Ole a1 a2
   | BINARY(GE, a1, a2) ->
-      elab_comparison Oge a1 a2
+      elab_comparison env Oge a1 a2
 
   | BINARY(BAND, a1, a2) ->
-      elab_binary_integer "&" Oand a1 a2
+     elab_binary_integer env "&" Oand a1 a2
   | BINARY(BOR, a1, a2) ->
-      elab_binary_integer "|" Oor a1 a2
+     elab_binary_integer env "|" Oor a1 a2
   | BINARY(XOR, a1, a2) ->
-      elab_binary_integer "^" Oxor a1 a2
+     elab_binary_integer env "^" Oxor a1 a2
 
 (* 6.5.13 and 6.5.14 Logical operator expressions *)
 
   | BINARY(AND, a1, a2) ->
-      elab_logical_operator "&&" Ologand a1 a2
+      elab_logical_operator env "&&" Ologand a1 a2
   | BINARY(OR, a1, a2) ->
-      elab_logical_operator "||" Ologor a1 a2
+      elab_logical_operator env "||" Ologor a1 a2
 
 (* 6.5.15 Conditional expressions *)
   | QUESTION(a1, a2, a3) ->
@@ -2229,7 +2229,7 @@ let elab_expr ctx loc env a =
       { edesc = EBinop (Ocomma, b1, b2, ty2); etyp = ty2 },env
 
 (* Elaboration of pre- or post- increment/decrement *)
-  and elab_pre_post_incr_decr op msg a1 =
+  and elab_pre_post_incr_decr env op msg a1 =
     let b1,env = elab env a1 in
     if not (is_modifiable_lvalue env b1) then
       error "expression is not assignable";
@@ -2238,7 +2238,7 @@ let elab_expr ctx loc env a =
     { edesc = EUnop(op, b1); etyp = b1.etyp },env
 
 (* Elaboration of binary operators over integers *)
-  and elab_binary_integer msg op a1 a2 =
+  and elab_binary_integer env msg op a1 a2 =
     let b1,env = elab env a1 in
     let b2,env = elab env a2 in
     if not ((is_integer_type env b1.etyp) && (is_integer_type env b2.etyp)) then
@@ -2248,7 +2248,7 @@ let elab_expr ctx loc env a =
     { edesc = EBinop(op, b1, b2, tyres); etyp = tyres },env
 
 (* Elaboration of binary operators over arithmetic types *)
-  and elab_binary_arithmetic msg op a1 a2 =
+  and elab_binary_arithmetic env msg op a1 a2 =
     let b1,env = elab env a1 in
     let b2,env = elab env a2 in
     if not ((is_arith_type env b1.etyp) && (is_arith_type env b2.etyp)) then
@@ -2258,7 +2258,7 @@ let elab_expr ctx loc env a =
     { edesc = EBinop(op, b1, b2, tyres); etyp = tyres },env
 
 (* Elaboration of shift operators *)
-  and elab_shift msg op a1 a2 =
+  and elab_shift env msg op a1 a2 =
     let b1,env = elab env a1 in
     let b2,env = elab env a2 in
     if not ((is_integer_type env b1.etyp) && (is_integer_type env b2.etyp)) then
@@ -2268,7 +2268,7 @@ let elab_expr ctx loc env a =
     { edesc = EBinop(op, b1, b2, tyres); etyp = tyres },env
 
 (* Elaboration of comparisons *)
-  and elab_comparison op a1 a2 =
+  and elab_comparison env op a1 a2 =
       let b1,env = elab env a1 in
       let b2,env = elab env a2 in
       let resdesc =
@@ -2305,7 +2305,7 @@ let elab_expr ctx loc env a =
       { edesc = resdesc; etyp = TInt(IInt, []) },env
 
 (* Elaboration of && and || *)
-  and elab_logical_operator msg op a1 a2 =
+  and elab_logical_operator env msg op a1 a2 =
     let b1,env = elab env a1 in
     let b2,env = elab env a2 in
     if not ((is_scalar_type env b1.etyp) && (is_scalar_type env b2.etyp)) then
@@ -2887,48 +2887,49 @@ let rec elab_stmt env ctx s =
 (* 6.8.4 Conditional statements *)
 
   | If(a, s1, s2, loc) ->
-      let a',env = elab_expr ctx loc env a in
-      if not (is_scalar_type env a'.etyp) then
+      let a',env' = elab_expr ctx loc (Env.new_scope env) a in
+      if not (is_scalar_type env' a'.etyp) then
         error loc "controlling expression of 'if' does not have scalar type (%a invalid)"
-          (print_typ env) a'.etyp;
-      let s1',env = elab_stmt env ctx s1 in
-      let s2',env =
+          (print_typ env') a'.etyp;
+      let s1' = elab_stmt_new_scope env' ctx s1 in
+      let s2' =
         match s2 with
-          | None -> sskip,env
-          | Some s2 -> elab_stmt env ctx s2
+          | None -> sskip
+          | Some s2 -> elab_stmt_new_scope env' ctx s2
       in
       { sdesc = Sif(a', s1', s2'); sloc = elab_loc loc },env
 
 (* 6.8.5 Iterative statements *)
 
   | WHILE(a, s1, loc) ->
-      let a',env = elab_expr ctx loc env a in
-      if not (is_scalar_type env a'.etyp) then
+      let a',env' = elab_expr ctx loc (Env.new_scope env) a in
+      if not (is_scalar_type env' a'.etyp) then
         error loc "controlling expression of 'while' does not have scalar type (%a invalid)"
-          (print_typ env) a'.etyp;
-      let s1',env = elab_stmt env (ctx_loop ctx) s1 in
+          (print_typ env') a'.etyp;
+      let s1' = elab_stmt_new_scope env' (ctx_loop ctx) s1 in
       { sdesc = Swhile(a', s1'); sloc = elab_loc loc },env
 
   | DOWHILE(a, s1, loc) ->
-      let s1',env = elab_stmt env (ctx_loop ctx) s1 in
-      let a',env = elab_expr ctx loc env a in
-      if not (is_scalar_type env a'.etyp) then
+      let s1' = elab_stmt_new_scope env (ctx_loop ctx) s1 in
+      let a',env' = elab_expr ctx loc (Env.new_scope env) a in
+      if not (is_scalar_type env' a'.etyp) then
         error loc "controlling expression of 'while' does not have scalar type (%a invalid)"
-          (print_typ env) a'.etyp;
+          (print_typ env') a'.etyp;
       { sdesc = Sdowhile(s1', a'); sloc = elab_loc loc },env
 
   | FOR(fc, a2, a3, s1, loc) ->
+      let env' = Env.new_scope env in
       let (a1', env_decls, decls') =
         match fc with
         | Some (FC_EXP a1) ->
-            let a1,env = elab_for_expr ctx loc env (Some a1) in
+            let a1,env = elab_for_expr ctx loc env' (Some a1) in
             (a1, env, None)
         | None ->
-            let a1,env = elab_for_expr ctx loc env None in
+            let a1,env = elab_for_expr ctx loc env' None in
             (a1, env, None)
         | Some (FC_DECL def) ->
             let (dcl, env') = elab_definition true true ctx.ctx_nonstatic_inline
-                                              (Env.new_scope env) def in
+                                              env' def in
             let loc = elab_loc (Cabshelper.get_definitionloc def) in
             (sskip, env',
              Some(List.map (fun d -> {sdesc = Sdecl d; sloc = loc}) dcl)) in
@@ -2940,7 +2941,7 @@ let rec elab_stmt env ctx s =
       if not (is_scalar_type env_test a2'.etyp) then
         error loc "controlling expression of 'for' does not have scalar type (%a invalid)" (print_typ env) a2'.etyp;
       let a3',env_for = elab_for_expr ctx loc env_test a3 in
-      let s1',env_body = elab_stmt env_for (ctx_loop ctx) s1 in
+      let s1' = elab_stmt_new_scope env_for (ctx_loop ctx) s1 in
       let sfor = { sdesc = Sfor(a1', a2', a3', s1'); sloc = elab_loc loc } in
       begin match decls' with
       | None -> sfor,env
@@ -2949,11 +2950,11 @@ let rec elab_stmt env ctx s =
 
 (* 6.8.4 Switch statement *)
   | SWITCH(a, s1, loc) ->
-      let a',env = elab_expr ctx loc env a in
-      if not (is_integer_type env a'.etyp) then
+      let a',env' = elab_expr ctx loc (Env.new_scope env) a in
+      if not (is_integer_type env' a'.etyp) then
         error loc "controlling expression of 'switch' does not have integer type (%a invalid)"
-          (print_typ env) a'.etyp;
-      let s1',env = elab_stmt env (ctx_switch ctx) s1 in
+          (print_typ env') a'.etyp;
+      let s1' = elab_stmt_new_scope env' (ctx_switch ctx) s1 in
       check_switch_cases s1';
       { sdesc = Sswitch(a', s1'); sloc = elab_loc loc },env
 
@@ -3027,6 +3028,10 @@ let rec elab_stmt env ctx s =
   | DEFINITION def ->
       error (Cabshelper.get_definitionloc def) "ill-placed definition";
       sskip,env
+(* Elaborate a statement as a block whose scope is a strict subset of the scope
+   of its enclosing block. *)
+and elab_stmt_new_scope env ctx s =
+  fst (elab_stmt (Env.new_scope env) ctx s)
 
 and elab_block loc env ctx b =
   let b',_ = elab_block_body (Env.new_scope env) ctx b in
