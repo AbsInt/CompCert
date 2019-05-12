@@ -897,6 +897,32 @@ Proof.
   apply code_tail_next_int with i; auto.
 Qed.
 
+(** A variant that supports zero steps of execution *)
+
+Inductive exec_straight0: code -> regset -> mem ->
+                          code -> regset -> mem -> Prop :=
+  | exec_straight0_none:
+      forall c rs m,
+      exec_straight0 c rs m c rs m
+  | exec_straight0_step:
+      forall i c rs1 m1 rs2 m2 c' rs3 m3,
+      exec_instr ge fn i rs1 m1 = Next rs2 m2 ->
+      rs2#PC = Val.offset_ptr rs1#PC Ptrofs.one ->
+      exec_straight0 c rs2 m2 c' rs3 m3 ->
+      exec_straight0 (i :: c) rs1 m1 c' rs3 m3.
+
+Lemma exec_straight_step':
+  forall i c rs1 m1 rs2 m2 c' rs3 m3,
+  exec_instr ge fn i rs1 m1 = Next rs2 m2 ->
+  rs2#PC = Val.offset_ptr rs1#PC Ptrofs.one ->
+  exec_straight0 c rs2 m2 c' rs3 m3 ->
+  exec_straight (i :: c) rs1 m1 c' rs3 m3.
+Proof.
+  intros. revert i rs1 m1 H H0. revert H1. induction 1; intros.
+- apply exec_straight_one; auto.
+- eapply exec_straight_step; eauto.
+Qed.
+
 End STRAIGHTLINE.
 
 (** * Properties of the Mach call stack *)
