@@ -668,6 +668,11 @@ Proof.
   intros. generalize (eq_spec x y); case (eq x y); intros; congruence.
 Qed.
 
+Theorem same_if_eq: forall x y, eq x y = true -> x = y.
+Proof.
+  intros. generalize (eq_spec x y); rewrite H; auto.
+Qed.
+
 Theorem eq_signed:
   forall x y, eq x y = if zeq (signed x) (signed y) then true else false.
 Proof.
