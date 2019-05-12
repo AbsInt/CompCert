@@ -783,6 +783,18 @@ Definition rolml (v: val) (amount: int) (mask: int64): val :=
   | _ => Vundef
   end.
 
+Definition zero_ext_l (nbits: Z) (v: val) : val :=
+  match v with
+  | Vlong n => Vlong(Int64.zero_ext nbits n)
+  | _ => Vundef
+  end.
+
+Definition sign_ext_l (nbits: Z) (v: val) : val :=
+  match v with
+  | Vlong n => Vlong(Int64.sign_ext nbits n)
+  | _ => Vundef
+  end.
+
 (** Comparisons *)
 
 Section COMPARISONS.
