@@ -235,24 +235,24 @@ depend1: $(FILES) exportclight/Clightdefs.v
 	@$(COQDEP) $^ > .depend
 
 install:
-	install -d $(BINDIR)
-	install -m 0755 ./ccomp $(BINDIR)
-	install -d $(SHAREDIR)
-	install -m 0644 ./compcert.ini $(SHAREDIR)
-	install -d $(MANDIR)/man1
-	install -m 0644 ./doc/ccomp.1 $(MANDIR)/man1
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 0755 ./ccomp $(DESTDIR)$(BINDIR)
+	install -d $(DESTDIR)$(SHAREDIR)
+	install -m 0644 ./compcert.ini $(DESTDIR)$(SHAREDIR)
+	install -d $(DESTDIR)$(MANDIR)/man1
+	install -m 0644 ./doc/ccomp.1 $(DESTDIR)$(MANDIR)/man1
 	$(MAKE) -C runtime install
 ifeq ($(CLIGHTGEN),true)
-	install -m 0755 ./clightgen $(BINDIR)
+	install -m 0755 ./clightgen $(DESTDIR)$(BINDIR)
 endif
 ifeq ($(INSTALL_COQDEV),true)
-	install -d $(COQDEVDIR)
+	install -d $(DESTDIR)$(COQDEVDIR)
 	for d in $(DIRS); do \
-          install -d $(COQDEVDIR)/$$d && \
-          install -m 0644 $$d/*.vo $(COQDEVDIR)/$$d/; \
+          install -d $(DESTDIR)$(COQDEVDIR)/$$d && \
+          install -m 0644 $$d/*.vo $(DESTDIR)$(COQDEVDIR)/$$d/; \
 	done
-	install -m 0644 ./VERSION $(COQDEVDIR)
-	@(echo "To use, pass the following to coq_makefile or add the following to _CoqProject:"; echo "-R $(COQDEVDIR) compcert") > $(COQDEVDIR)/README
+	install -m 0644 ./VERSION $(DESTDIR)$(COQDEVDIR)
+	@(echo "To use, pass the following to coq_makefile or add the following to _CoqProject:"; echo "-R $(COQDEVDIR) compcert") > $(DESTDIR)$(COQDEVDIR)/README
 endif
 
 
