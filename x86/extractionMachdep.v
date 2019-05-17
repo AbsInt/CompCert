@@ -21,6 +21,8 @@ Require SelectOp ConstpropOp.
 
 Extract Constant SelectOp.symbol_is_external =>
   "fun id -> Configuration.system = ""macosx"" && C2C.atom_is_extern id".
+Extract Constant SelectOp.favor_branchless =>
+  "fun () -> !Clflags.option_ffavor_branchless".
 
 (* ConstpropOp *)
 

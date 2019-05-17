@@ -497,6 +497,8 @@ Nondetfunction floatofint (e: expr) :=
   | _ => Eop Ofloatofint (e ::: Enil)
   end.
 
+Parameter favor_branchless: unit -> bool.
+
 Definition intuoffloat (e: expr) :=
   Elet e
     (Elet (Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil)
@@ -508,11 +510,16 @@ Nondetfunction floatofintu (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.of_intu n)) Enil
   | _ =>
-    let f := Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil in
-    Elet e
-      (Econdition (CEcond (Ccompuimm Clt Float.ox8000_0000) (Eletvar O ::: Enil))
-        (floatofint (Eletvar O))
-        (addf (floatofint (addimm (Int.neg Float.ox8000_0000) (Eletvar O))) f))
+    if favor_branchless tt then
+      Elet e (subf 
+        (Eop Ofloatofint (andimm Float.ox7FFF_FFFF (Eletvar O) ::: Enil))
+        (Eop Ofloatofint (andimm Float.ox8000_0000 (Eletvar O) ::: Enil)))
+    else
+      let f := Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil in
+      Elet e
+        (Econdition (CEcond (Ccompuimm Clt Float.ox8000_0000) (Eletvar O ::: Enil))
+          (floatofint (Eletvar O))
+          (addf (floatofint (addimm (Int.neg Float.ox8000_0000) (Eletvar O))) f))
   end.
 
 Definition intofsingle (e: expr) := Eop Ointofsingle (e ::: Enil).

@@ -870,10 +870,22 @@ Theorem eval_floatofintu:
   exists v, eval_expr ge sp e m le (floatofintu a) v /\ Val.lessdef y v.
 Proof.
   intros until y; unfold floatofintu. case (floatofintu_match a); intros.
-  InvEval. TrivialExists.
-  destruct x; simpl in H0; try discriminate. inv H0.
+- InvEval. TrivialExists.
+- destruct x; simpl in H0; try discriminate. inv H0.
   exists (Vfloat (Float.of_intu i)); split; auto.
-  econstructor. eauto.
+  destruct (favor_branchless tt).
++ econstructor. eauto.
+  assert (eval_expr ge sp e m (Vint i :: le) (Eletvar O) (Vint i)) by (constructor; auto).
+  exploit (eval_andimm Float.ox7FFF_FFFF (Vint i :: le) (Eletvar 0)); eauto.
+  simpl. intros [v1 [A1 B1]]. inv B1.
+  exploit (eval_andimm Float.ox8000_0000 (Vint i :: le) (Eletvar 0)); eauto.
+  simpl. intros [v2 [A2 B2]]. inv B2.
+  unfold subf. econstructor.
+  constructor. econstructor. constructor. eexact A1. constructor. simpl; eauto.
+  constructor. econstructor. constructor. eexact A2. constructor. simpl; eauto.
+  constructor.
+  simpl. rewrite Float.of_intu_of_int_3. auto.
++ econstructor. eauto.
   set (fm := Float.of_intu Float.ox8000_0000).
   assert (eval_expr ge sp e m (Vint i :: le) (Eletvar O) (Vint i)).
     constructor. auto.
