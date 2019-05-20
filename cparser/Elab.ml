@@ -1815,7 +1815,7 @@ let elab_expr ctx loc env a =
             emit_elab ~linkage env loc (Gdecl(sto, id, ty, None));
             { edesc = EVar id; etyp = ty },env
         | _ -> elab env a1 in
-      let bl = mmap elab env al in
+      let (bl, env) = mmap elab env al in
       (* Extract type information *)
       let (res, args, vararg) =
         match unroll env b1.etyp with
@@ -1830,8 +1830,13 @@ let elab_expr ctx loc env a =
       (* Type-check the arguments against the prototype *)
       let bl',env =
         match args with
-        | None -> bl
-        | Some proto -> elab_arguments 1 bl proto vararg in
+        | None ->
+          List.iter (fun arg ->
+              let arg_typ = argument_conversion env arg.etyp in
+              if incomplete_type env arg_typ then
+                error "argument type %a is incomplete" (print_typ env) arg.etyp;
+            ) bl; (bl,env)
+        | Some proto -> elab_arguments 1 (bl, env) proto vararg in
       { edesc = ECall(b1, bl'); etyp = res },env
 
   | UNARY(POSINCR, a1) ->
