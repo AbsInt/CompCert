@@ -41,7 +41,7 @@ Inductive expr : Type :=
                                            (**r binary arithmetic operation *)
   | Ecast (r: expr) (ty: type)                        (**r type cast [(ty)r] *)
   | Eseqand (r1 r2: expr) (ty: type)       (**r sequential "and" [r1 && r2] *)
-  | Eseqor (r1 r2: expr) (ty: type)        (**r sequential "or" [r1 && r2] *)
+  | Eseqor (r1 r2: expr) (ty: type)        (**r sequential "or" [r1 || r2] *)
   | Econdition (r1 r2 r3: expr) (ty: type)  (**r conditional [r1 ? r2 : r3] *)
   | Esizeof (ty': type) (ty: type)                      (**r size of a type *)
   | Ealignof (ty': type) (ty: type)        (**r natural alignment of a type *)
