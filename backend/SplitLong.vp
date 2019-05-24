@@ -285,9 +285,10 @@ Definition cmpl_ne_zero (e: expr) :=
 
 Definition cmplu_gen (ch cl: comparison) (e1 e2: expr) :=
   splitlong2 e1 e2 (fun h1 l1 h2 l2 =>
-    Econdition (CEcond (Ccomp Ceq) (h1:::h2:::Enil))
-               (Eop (Ocmp (Ccompu cl)) (l1:::l2:::Enil))
-               (Eop (Ocmp (Ccompu ch)) (h1:::h2:::Enil))).
+    (Eop (Osel (Ccomp Ceq) Tint)
+              ((Eop (Ocmp (Ccompu cl)) (l1:::l2:::Enil)) :::
+               (Eop (Ocmp (Ccompu ch)) (h1:::h2:::Enil)) :::
+               (h1:::h2:::Enil)))).
 
 Definition cmplu (c: comparison) (e1 e2: expr) :=
   match c with
@@ -307,9 +308,10 @@ Definition cmplu (c: comparison) (e1 e2: expr) :=
 
 Definition cmpl_gen (ch cl: comparison) (e1 e2: expr) :=
   splitlong2 e1 e2 (fun h1 l1 h2 l2 =>
-    Econdition (CEcond (Ccomp Ceq) (h1:::h2:::Enil))
-               (Eop (Ocmp (Ccompu cl)) (l1:::l2:::Enil))
-               (Eop (Ocmp (Ccomp ch)) (h1:::h2:::Enil))).
+    (Eop (Osel (Ccomp Ceq) Tint)
+              ((Eop (Ocmp (Ccompu cl)) (l1:::l2:::Enil)) :::
+               (Eop (Ocmp (Ccomp ch)) (h1:::h2:::Enil)) :::
+               (h1:::h2:::Enil)))).
 
 Definition cmpl (c: comparison) (e1 e2: expr) :=
   match c with

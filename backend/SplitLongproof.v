@@ -986,8 +986,10 @@ Lemma eval_cmplu_gen:
                   else Int.cmpu ch (Int64.hiword x) (Int64.hiword y))).
 Proof.
   intros. unfold cmplu_gen. eapply eval_splitlong2_strict; eauto. intros.
-  econstructor. econstructor. EvalOp. simpl. eauto.
-  destruct (Int.eq (Int64.hiword x) (Int64.hiword y)); EvalOp.
+  repeat econstructor; EvalOp; simpl.
+  destruct (Int.eq (Int64.hiword x) (Int64.hiword y)).
+  - destruct (Int.cmpu cl (Int64.loword x) (Int64.loword y)); EvalOp.
+  - destruct (Int.cmpu ch (Int64.hiword x) (Int64.hiword y)); EvalOp.
 Qed.
 
 Remark int64_eq_xor:
@@ -1045,8 +1047,10 @@ Lemma eval_cmpl_gen:
                   else Int.cmp ch (Int64.hiword x) (Int64.hiword y))).
 Proof.
   intros. unfold cmpl_gen. eapply eval_splitlong2_strict; eauto. intros.
-  econstructor. econstructor. EvalOp. simpl. eauto.
-  destruct (Int.eq (Int64.hiword x) (Int64.hiword y)); EvalOp.
+  repeat econstructor; EvalOp; simpl.
+  destruct (Int.eq (Int64.hiword x) (Int64.hiword y)).
+  - destruct (Int.cmpu cl (Int64.loword x) (Int64.loword y)); EvalOp.
+  - destruct (Int.cmp ch (Int64.hiword x) (Int64.hiword y)); EvalOp.
 Qed.
 
 Remark decompose_cmpl_lt_zero:
