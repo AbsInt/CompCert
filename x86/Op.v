@@ -400,7 +400,7 @@ Definition eval_operation
   | Odivfs, v1::v2::nil => Some(Val.divfs v1 v2)
   | Osingleoffloat, v1::nil => Some(Val.singleoffloat v1)
   | Ofloatofsingle, v1::nil => Some(Val.floatofsingle v1)
-  | Ointoffloat, v1::nil => Val.intoffloat v1
+  | Ointoffloat, v1::nil => Some (Val.maketotal (Val.intoffloat v1))
   | Ofloatofint, v1::nil => Val.floatofint v1
   | Ointofsingle, v1::nil => Val.intofsingle v1
   | Osingleofint, v1::nil => Val.singleofint v1
@@ -730,7 +730,7 @@ Proof with (try exact I; try reflexivity).
   destruct v0; destruct v1...
   destruct v0...
   destruct v0...
-  destruct v0; simpl in H0; inv H0. destruct (Float.to_int f); inv H2...
+  destruct v0; simpl... destruct (Float.to_int f); simpl; auto.
   destruct v0; simpl in H0; inv H0...
   destruct v0; simpl in H0; inv H0. destruct (Float32.to_int f); inv H2...
   destruct v0; simpl in H0; inv H0...
@@ -1298,8 +1298,7 @@ Proof.
   inv H4; inv H2; simpl; auto.
   inv H4; simpl; auto.
   inv H4; simpl; auto.
-  inv H4; simpl in H1; inv H1. simpl. destruct (Float.to_int f0); simpl in H2; inv H2.
-  exists (Vint i); auto.
+  inv H4; simpl; auto. destruct (Float.to_int f0); simpl; auto.
   inv H4; simpl in H1; inv H1. simpl. TrivialExists.
   inv H4; simpl in H1; inv H1. simpl. destruct (Float32.to_int f0); simpl in H2; inv H2.
   exists (Vint i); auto.

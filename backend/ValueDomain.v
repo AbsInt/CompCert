@@ -2174,17 +2174,17 @@ Definition intoffloat (x: aval) :=
   | F f =>
       match Float.to_int f with
       | Some i => I i
-      | None => if va_strict tt then Vbot else ntop
+      | None => ntop
       end
   | _ => ntop1 x
   end.
 
 Lemma intoffloat_sound:
-  forall v x w, vmatch v x -> Val.intoffloat v = Some w -> vmatch w (intoffloat x).
+  forall v x w, vmatch v x -> Val.maketotal (Val.intoffloat v) = w -> vmatch w (intoffloat x).
 Proof.
-  unfold Val.intoffloat; intros. destruct v; try discriminate.
-  destruct (Float.to_int f) as [i|] eqn:E; simpl in H0; inv H0.
-  inv H; simpl; auto with va. rewrite E; constructor.
+  unfold Val.intoffloat; intros. 
+  inv H; try constructor; simpl;
+    destruct (Float.to_int f) as [i|] eqn:E; constructor.
 Qed.
 
 Definition intuoffloat (x: aval) :=

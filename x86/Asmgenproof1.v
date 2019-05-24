@@ -1431,8 +1431,6 @@ Transparent destroyed_by_op.
   rewrite Pregmap.gss. rewrite <- EV; auto.
   intros; Simplifs.
   TranslOp. rewrite nextinstr_inv; auto with asmgen. rewrite Pregmap.gss; auto. rewrite <- EV; auto.
-(* intoffloat *)
-  apply SAME. TranslOp. rewrite H0; auto.
 (* floatofint *)
   apply SAME. TranslOp. rewrite H0; auto.
 (* intofsingle *)

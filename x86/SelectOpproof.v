@@ -811,7 +811,10 @@ Theorem eval_intoffloat:
   Val.intoffloat x = Some y ->
   exists v, eval_expr ge sp e m le (intoffloat a) v /\ Val.lessdef y v.
 Proof.
-  intros; unfold intoffloat. TrivialExists.
+  intros; unfold intoffloat.
+  exists (Val.maketotal (Val.intoffloat x)).
+  split. EvalOp.
+  rewrite H0. destruct y; auto.
 Qed.
 
 Theorem eval_floatofint:
@@ -833,34 +836,17 @@ Theorem eval_intuoffloat:
 Proof.
   intros. destruct x; simpl in H0; try discriminate.
   destruct (Float.to_intu f) as [n|] eqn:?; simpl in H0; inv H0.
-  exists (Vint n); split; auto. unfold intuoffloat.
-  set (im := Int.repr Int.half_modulus).
-  set (fm := Float.of_intu im).
-  assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f)).
-    constructor. auto.
-  assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar O) (Vfloat fm)).
-    constructor. auto.
-  econstructor. eauto.
-  econstructor. instantiate (1 := Vfloat fm). EvalOp.
-  eapply eval_Econdition with (va := Float.cmp Clt f fm).
-  eauto with evalexpr.
-  destruct (Float.cmp Clt f fm) eqn:?.
-  exploit Float.to_intu_to_int_1; eauto. intro EQ.
-  EvalOp. simpl. rewrite EQ; auto.
-  exploit Float.to_intu_to_int_2; eauto.
-  change Float.ox8000_0000 with im. fold fm. intro EQ.
-  set (t2 := subf (Eletvar (S O)) (Eletvar O)).
-  set (t3 := intoffloat t2).
-  exploit (eval_subf (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f) (Eletvar O)); eauto.
-  fold t2. intros [v2 [A2 B2]]. simpl in B2. inv B2.
-  exploit (eval_addimm Float.ox8000_0000 (Vfloat fm :: Vfloat f :: le) t3).
-    unfold t3. unfold intoffloat. EvalOp. simpl. rewrite EQ. simpl. eauto.
-  intros [v4 [A4 B4]]. simpl in B4. inv B4.
-  rewrite Int.sub_add_opp in A4. rewrite Int.add_assoc in A4.
-  rewrite (Int.add_commut (Int.neg im)) in A4.
-  rewrite Int.add_neg_zero in A4.
-  rewrite Int.add_zero in A4.
-  auto.
+  econstructor; split.
+  - repeat econstructor; eauto.
+  - simpl.
+    destruct (Float.cmp Clt f (Float.of_intu Float.ox8000_0000)) eqn:?.
+    + erewrite (Float.to_intu_to_int_1); simpl; eauto.
+    + erewrite (Float.to_intu_to_int_2); simpl; eauto.
+      rewrite Int.sub_add_opp. rewrite Int.add_assoc.
+      rewrite (Int.add_commut (Int.neg (Int.repr (Int.signed Float.ox8000_0000)))).
+      rewrite Int.add_neg_zero.
+      rewrite Int.add_zero.
+      constructor.
 Qed.
 
 Theorem eval_floatofintu:
