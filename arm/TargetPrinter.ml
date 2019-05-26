@@ -445,9 +445,9 @@ struct
         (neg_condition_name cond) ireg r1 shift_op ifnot
     | Pfmovite(cond, r1, ifso, ifnot) ->
       fprintf oc "	ite	%s\n" (condition_name cond);
-      fprintf oc "	vmov%s	%a, %a\n"
+      fprintf oc "	vmov%s.f64	%a, %a\n"
         (condition_name cond) freg r1 freg ifso;
-      fprintf oc "	vmov%s	%a, %a\n"
+      fprintf oc "	vmov%s.f64	%a, %a\n"
         (neg_condition_name cond) freg r1 freg ifnot
     | Pbtbl(r, tbl) ->
       if !Clflags.option_mthumb then begin
