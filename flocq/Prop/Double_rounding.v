@@ -1181,7 +1181,7 @@ now apply (round_round_plus_aux0_aux fexp1).
 Qed.
 
 (* fexp1 (mag x) - 1 <= mag y :
- * substraction is exact in the largest precision (fexp2). *)
+ * subtraction is exact in the largest precision (fexp2). *)
 Lemma round_round_minus_aux0 :
   forall (fexp1 fexp2 : Z -> Z),
   round_round_plus_hyp fexp1 fexp2 ->
@@ -1238,7 +1238,7 @@ Qed.
 
 (* mag y <= fexp1 (mag x) - 2,
  * fexp1 (mag (x - y)) - 1 <= mag y :
- * substraction is exact in the largest precision (fexp2). *)
+ * subtraction is exact in the largest precision (fexp2). *)
 Lemma round_round_minus_aux1 :
   forall (fexp1 fexp2 : Z -> Z),
   Valid_exp fexp1 -> Valid_exp fexp2 ->
@@ -1991,7 +1991,7 @@ destruct (Req_dec x 0) as [Zx|Nzx].
 Qed.
 
 (* fexp1 (mag x) <= mag y :
- * substraction is exact in the largest precision (fexp2). *)
+ * subtraction is exact in the largest precision (fexp2). *)
 Lemma round_round_minus_radix_ge_3_aux0 :
   forall (fexp1 fexp2 : Z -> Z),
   round_round_plus_radix_ge_3_hyp fexp1 fexp2 ->
@@ -2048,7 +2048,7 @@ Qed.
 
 (* mag y <= fexp1 (mag x) - 1,
  * fexp1 (mag (x - y)) <= mag y :
- * substraction is exact in the largest precision (fexp2). *)
+ * subtraction is exact in the largest precision (fexp2). *)
 Lemma round_round_minus_radix_ge_3_aux1 :
   forall (fexp1 fexp2 : Z -> Z),
   Valid_exp fexp1 -> Valid_exp fexp2 ->

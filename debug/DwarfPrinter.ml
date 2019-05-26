@@ -241,7 +241,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       let abbrev = !curr_abbrev in
       incr curr_abbrev;abbrev
 
-    (* Mapping from abbreviation string to abbreviaton id *)
+    (* Mapping from abbreviation string to abbreviation id *)
     let abbrev_mapping: (string,int) Hashtbl.t = Hashtbl.create 7
 
     (* Mapping from abbreviation range id to label *)

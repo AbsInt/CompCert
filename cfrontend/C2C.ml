@@ -109,7 +109,7 @@ let atom_location a =
 
 let comp_env : composite_env ref = ref Maps.PTree.empty
 
-(** Hooks -- overriden in machine-dependent CPragmas module *)
+(** Hooks -- overridden in machine-dependent CPragmas module *)
 
 let process_pragma_hook = ref (fun (_: string) -> false)
 

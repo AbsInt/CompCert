@@ -27,9 +27,9 @@
 /* *                                                        * */
 /* *                                                        * */
 /* $Revision: 21527 $                                       * */
-/* $State$                                            * */
-/* $Date: 2005-04-24 21:10:28 -0700 (Sun, 24 Apr 2005) $                             * */
-/* $Author: duraid $                                       * */
+/* $State$                                                  * */
+/* $Date: 2005-04-24 21:10:28 -0700 (Sun, 24 Apr 2005) $    * */
+/* $Author: duraid $                                        * */
 /* *                                                        * */
 /* *             Contact:                                   * */
 /* *             Christoph Weidenbach                       * */
@@ -65,7 +65,7 @@ const NAT red_ALL       = 3;
 
 
 /**************************************************************/
-/* FUNTION PROTOTYPES                                         */
+/* FUNCTION PROTOTYPES                                        */
 /**************************************************************/
 
 static BOOL red_SortSimplification(SORTTHEORY, CLAUSE, NAT, BOOL, FLAGSTORE,
@@ -1929,7 +1929,7 @@ static BOOL red_CRwTautologyCheck(PROOFSEARCH Search, CLAUSE RedClause, int i,
 	else {
 	  /* Store splitting data of <aux> in RuleCopy */
 	  clause_UpdateSplitDataFromPartner(RuleCopy, aux);
-	  /* Collect additonal parent information, if <DocProof> is turned on */
+	  /* Collect additional parent information, if <DocProof> is turned on */
 	  if (flag_GetFlagValue(Flags, flag_DOCPROOF)) {
 	    clause_SetParentClauses(RuleCopy,
 				    list_Nconc(clause_ParentClauses(aux),
@@ -2060,7 +2060,7 @@ static BOOL red_ContextualRewriting(PROOFSEARCH Search, CLAUSE RedClause,
 	   Otherwise the clause is destructively rewritten and
 	   returned.
   CAUTION: If rewriting wasn't applied, the value of <*Changed>
-           isn't set explicitely in this function.
+           isn't set explicitly in this function.
 ***************************************************************/
 {
   TERM         RedAtom, RedTermS;
@@ -2179,7 +2179,7 @@ static BOOL red_ContextualRewriting(PROOFSEARCH Search, CLAUSE RedClause,
 		      }
 		      
 		      if (!Result && flag_GetFlagValue(Flags, flag_PCRW)) {
-			/* Clause is rewitten for the first time and */
+			/* Clause is rewritten for the first time and */
 			/* printing is turned on. */
 			fputs("\nFContRewriting: ", stdout);
 			clause_Print(Copy);

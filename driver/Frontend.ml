@@ -131,7 +131,7 @@ let gnu_prepro_opt_key key s =
 let gnu_prepro_opt s =
   prepro_options := s::!prepro_options
 
-(* Add gnu preprocessor option s and the implict -E *)
+(* Add gnu preprocessor option s and the implicit -E *)
 let gnu_prepro_opt_e s =
   prepro_options := s :: !prepro_options;
   option_E := true
@@ -171,7 +171,7 @@ let prepro_actions = [
   @ (if Configuration.gnu_toolchain then gnu_prepro_actions else [])
 
 let gnu_prepro_help =
-{|  -M            Ouput a rule suitable for make describing the
+{|  -M            Output a rule suitable for make describing the
                  dependencies of the main source file
   -MM            Like -M but do not mention system header files
   -MF <file>     Specifies file <file> as output file for -M or -MM

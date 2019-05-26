@@ -39,7 +39,7 @@ Version: 1.0.5
 	- Changed certain clause generation procedures such that now applying SPASS
 	  directly to a formula or subsequent application of FLOTTER and SPASS produce
 	  exactly the same ordering of a clause set (literlas). Since the behaviour of
-	  SPASS is not independant from initial clause/literal orderings the changes
+	  SPASS is not independent from initial clause/literal orderings the changes
 	  make SPASS results a little more robust/more predictable.
 	  As all code was touched, we also included a code style review (comments,
 	  prototypes, ...).
@@ -92,7 +92,7 @@ Version: 2.0.0
 
 	- Developed PROOFSEARCH data type enabling a modularization of the SPASS
 	  source code on search engine level, such that several proof attempts can
-	  now be run completely independantly at the same time within SPASS.
+	  now be run completely independently at the same time within SPASS.
 
 	- Moved GUI to Qt 3.0. The GUI now also includes dfg2dfg and new even more
 	  user friendly layout. The GUI runs on any platform where SPASS and Qt are

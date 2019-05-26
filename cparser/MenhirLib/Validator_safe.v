@@ -152,7 +152,7 @@ apply is_prefix_correct; intuition.
 Qed.
 
 (** We have to say the same kind of checks for the assumptions about the
-    states stack. However, theses assumptions are predicates. So we define
+    states stack. However, these assumptions are predicates. So we define
     a notion of "prefix" over predicates lists, that means, basically, that
     an assumption entails another **)
 Inductive prefix_pred: list (state->bool) -> list (state->bool) -> Prop :=

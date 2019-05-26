@@ -595,7 +595,7 @@ let string_table: (string,int) Hashtbl.t = Hashtbl.create 7
 
 let gnu_string_entry s =
   if (String.length s < 4 && Configuration.system <> "macosx") (* macosx needs debug_str *)
-  || Configuration.system = "cygwin" then (*Cygwin does not use the debug_str seciton*)
+  || Configuration.system = "cygwin" then (*Cygwin does not use the debug_str section*)
     Simple_string s
   else
     try

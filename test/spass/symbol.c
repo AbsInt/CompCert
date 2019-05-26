@@ -785,7 +785,7 @@ void symbol_SetCount(SYMBOL Symbol, unsigned long Count)
 unsigned long symbol_GetCount(SYMBOL Symbol)
 /**************************************************************
   INPUT:   A symbol.
-  RETURNS: The number of occurences of the symbol in the clause
+  RETURNS: The number of occurrences of the symbol in the clause
            set.
   SUMMARY: Gets the symbol count for the symbol. 
 ***************************************************************/

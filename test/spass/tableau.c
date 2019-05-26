@@ -740,7 +740,7 @@ static void tab_FPrintNodesCgFormat(FILE* File, TABLEAU T)
 /**************************************************************
   INPUT:   A file handle, a tableau
   RETURNS: Nothing
-  EFFECTS: Prints egde information of <T> in xvcg graph format
+  EFFECTS: Prints edge information of <T> in xvcg graph format
            to <File>.                                            
 ***************************************************************/
 {
@@ -818,7 +818,7 @@ static void tab_FPrintDaVinciFormatRec(FILE* File, TABLEAU T)
   tab_FPrintNodeLabel(File, T);
   fputs(")],\n", File);
   
-  /* print egde list  */
+  /* print edge list  */
   putc('[', File);
   if (!tab_LeftBranchIsEmpty(T)) 
     tab_FPrintDaVinciEdge(File, T->Label, tab_LeftBranch(T)->Label); 

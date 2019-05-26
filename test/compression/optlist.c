@@ -84,7 +84,7 @@ option_t *MakeOpt(const char option, char *const argument, const int index);
 *                          an argument.
 *   Effects    : Creates a link list of command line options and their
 *                arguments.
-*   Returned   : option_t type value where the option and arguement fields
+*   Returned   : option_t type value where the option and argument fields
 *                contain the next option symbol and its argument (if any).
 *                The argument field will be set to NULL if the option is
 *                specified as having no arguments or no arguments are found.
@@ -141,7 +141,7 @@ option_t *GetOptList(const int argc, char *const argv[], char *const options)
 
                 if (':' == options[optIndex + 1])
                 {
-                    /* the option found should have a text arguement */
+                    /* the option found should have a text argument */
                     if (strlen(argv[nextArg]) > 2)
                     {
                         /* no space between argument and option */
@@ -168,10 +168,10 @@ option_t *GetOptList(const int argc, char *const argv[], char *const options)
 /****************************************************************************
 *   Function   : MakeOpt
 *   Description: This function uses malloc to allocate space for an option_t
-*                type structure and initailizes the structure with the
+*                type structure and initializes the structure with the
 *                values passed as a parameter.
 *   Parameters : option - this option character
-*                argument - pointer string containg the argument for option.
+*                argument - pointer string containing the argument for option.
 *                           Use NULL for no argument
 *                index - argv[index] contains argument us OL_NOINDEX for
 *                        no argument

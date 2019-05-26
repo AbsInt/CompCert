@@ -1459,7 +1459,7 @@ TERM ren_Rename(TERM Term, PRECEDENCE Precedence, LIST *SkolemSymbols,
 
   Renamings = ren_SolveDependencies(Renamings);  /* dependencies in further matches */
 
-  Renamings = ren_FreeRenaming(Renamings); /* possibly depency solving has created non-zero benefit renamings */
+  Renamings = ren_FreeRenaming(Renamings); /* possibly dependency solving has created non-zero benefit renamings */
 
   if (!list_Empty(Renamings) && Document) {
     puts("\n\n\t Renaming term:");

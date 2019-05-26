@@ -13,7 +13,7 @@
 *   Date        Change
 *   12/10/03    Changed handling of sliding window to better match standard
 *               algorithm description.
-*   12/11/03    Remebered to copy encoded characters to the sliding window
+*   12/11/03    Remembered to copy encoded characters to the sliding window
 *               even when there are no more characters in the input stream.
 *
 *
@@ -203,7 +203,7 @@ int EncodeLZSSByFile(FILE *fpIn, FILE *fpOut)
         {
             unsigned int adjustedLen;
 
-            /* adjust the length of the match so minimun encoded len is 0*/
+            /* adjust the length of the match so minimum encoded len is 0*/
             adjustedLen = matchData.length - (MAX_UNCODED + 1);
 
             /* match length > MAX_UNCODED.  Encode as offset and length. */

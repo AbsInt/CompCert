@@ -694,7 +694,7 @@ BOOL term_SubstituteVariable(SYMBOL Symbol, TERM Repl, TERM* Term)
    RETURNS: A boolean value which is TRUE, if any sub- 
             stitutions were made.                      
    SUMMARY: term_Substitute works recursively and repl.
-            every occurence of 'Symbol' in 'Term' by   
+            every occurrence of 'Symbol' in 'Term' by   
             'Repl'.                                    
    CAUTION: FUNCTION IS DESTRUCTIVE ON 'Term'. REPLACE-
             MENT IS COPIED EACH TIME A SUB. TAKES PLACE
@@ -2538,7 +2538,7 @@ BOOL term_CheckTermIntern(TERM Term, BOOL Links)
 BOOL term_CheckTerm(TERM Term)
 /********************************************************************************
    INPUT : A term Term.
-   RETURN: TRUE iff  eihter all or no father links are set AND
+   RETURN: TRUE iff  either all or no father links are set AND
                      the length of any argument list matches the arity of the respective symbol
 *********************************************************************************/
 {

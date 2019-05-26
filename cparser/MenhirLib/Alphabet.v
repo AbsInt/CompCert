@@ -23,7 +23,7 @@ Require Import RelationClasses.
 
 Local Obligation Tactic := intros.
 
-(** A comparable type is equiped with a [compare] function, that define an order
+(** A comparable type is equipped with a [compare] function, that define an order
    relation. **)
 Class Comparable (A:Type) := {
   compare : A -> A -> comparison;

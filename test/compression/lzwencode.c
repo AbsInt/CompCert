@@ -24,10 +24,10 @@
 *
 *   Revision 1.4  2005/03/27 15:56:47  michael
 *   Use variable length code words.
-*   Include new e-mail addres.
+*   Include new e-mail address.
 *
 *   Revision 1.3  2005/03/10 14:26:58  michael
-*   User variable names that match discription in web page.
+*   User variable names that match description in web page.
 *
 *   Revision 1.2  2005/03/10 05:44:02  michael
 *   Minimize the size of the dictionary.

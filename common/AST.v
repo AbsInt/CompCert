@@ -432,12 +432,12 @@ Inductive external_function : Type :=
      (** A function from the run-time library.  Behaves like an
          external, but must not be redefined. *)
   | EF_vload (chunk: memory_chunk)
-     (** A volatile read operation.  If the adress given as first argument
+     (** A volatile read operation.  If the address given as first argument
          points within a volatile global variable, generate an
          event and return the value found in this event.  Otherwise,
          produce no event and behave like a regular memory load. *)
   | EF_vstore (chunk: memory_chunk)
-     (** A volatile store operation.   If the adress given as first argument
+     (** A volatile store operation.   If the address given as first argument
          points within a volatile global variable, generate an event.
          Otherwise, produce no event and behave like a regular memory store. *)
   | EF_malloc

@@ -4477,7 +4477,7 @@ translation_unit_file: VOID PRE_NAME TYPEDEF_NAME PACKED LPAREN CONSTANT RPAREN 
 ##
 
 # We have just parsed a list of attribute specifiers, but we cannot
-# print it because it is not available. We do not know wether it is
+# print it because it is not available. We do not know whether it is
 # part of the declaration or whether it is part of the first K&R parameter
 # declaration.
 
@@ -4599,7 +4599,7 @@ translation_unit_file: PACKED LPAREN BUILTIN_OFFSETOF XOR_ASSIGN
 ##
 
 Ill-formed __builtin_offsetof.
-At this point, an opening paranthesis '(' is expected.
+At this point, an opening parenthesis '(' is expected.
 
 #------------------------------------------------------------------------------
 

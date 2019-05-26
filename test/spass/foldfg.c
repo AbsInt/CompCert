@@ -205,7 +205,7 @@ LIST fol_GetNonFOLPredicates(void)
 LIST fol_GetAssignments(TERM Term)
 /**************************************************************
   INPUT:   A formula.
-  RETURNS: All assignemnts that occur inside the formula, i.e.,
+  RETURNS: All assignments that occur inside the formula, i.e.,
            equations of the form "x=t" where "x" does not
 	   occur in "t".
 ***************************************************************/
@@ -234,7 +234,7 @@ static void fol_NormalizeVarsIntern(TERM Formula)
   EFFECT:  The quantifier variables of the formula are
            normalized, i.e., no two different quantifiers
 	   bind the same variable.
-  CAUTION: Desctructive.
+  CAUTION: Destructive.
 ***************************************************************/
 {
   SYMBOL   Top;
@@ -1774,7 +1774,7 @@ BOOL fol_PropagateFreeness(TERM Term)
   INPUT:   A term and a list of functions.
   RETURNS: True iff a subterm of the form f(...)=f(...) occurs in the term,
            where f has property FREELY and GENERATED.
-  EFFECT:  Substitutes all occurences of f=f by <and(t1=s1,...tn=sn)>,where
+  EFFECT:  Substitutes all occurrences of f=f by <and(t1=s1,...tn=sn)>,where
            ti and si are the arguments of each f in f=f. 
 ***************************************************************/
 {
@@ -1922,7 +1922,7 @@ BOOL fol_PropagateTautologies(TERM Term)
 /**************************************************************
   INPUT:   A term.
   RETURNS: True iff function replaced a subterm.
-  EFFECT:  Replaces all occurences of t=t, or(A,not(A)) by TRUE
+  EFFECT:  Replaces all occurrences of t=t, or(A,not(A)) by TRUE
            and and(A,not(A)) by FALSE.
 ***************************************************************/
 {
@@ -2182,7 +2182,7 @@ static BOOL fol_CheckApplyContextToTerm(CONTEXT Context, TERM Term)
 /*************************************************************
    INPUT:   A Context and a term.
    RETURN:  TRUE iff Context can be applied to Term.
-   COMMENT: Intern funktion of fol_ApplyContextToTerm.
+   COMMENT: Intern function of fol_ApplyContextToTerm.
 **************************************************************/
 {
   LIST Scan;
@@ -2426,7 +2426,7 @@ BOOL fol_SignatureMatch(TERM Term, TERM Instance, LIST* Bindings, BOOL Variant)
 BOOL fol_CheckFormula(TERM Formula)
 /*******************************************************************
    INPUT : A term Formula.
-   RETURN: TRUE iff  no free variables occure in Formula
+   RETURN: TRUE iff  no free variables occur in Formula
                  and father links are properly set
 		 and argument list lengths match arities
 ********************************************************************/

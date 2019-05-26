@@ -333,7 +333,7 @@ static LIST clause_CopyLitIntervalExcept(CLAUSE Clause, int Start, int End,
 					 int i)
 /**************************************************************
  INPUT:   A clause and three integers representing
-          literal indeces.
+          literal indices.
  RETURNS: A list of atoms from literals within the interval
           [Start:End] except the literal at index <i>.
  MEMORY:  All atoms are copied.
@@ -1276,7 +1276,7 @@ void clause_ReplaceVariable(CLAUSE Clause, SYMBOL Var, TERM Term)
 /**********************************************************
   INPUT:   A clause, a variable symbol, and a term.
   RETURNS: Nothing.
-  EFFECTS: All occurences of the variable <Var> in <Clause>
+  EFFECTS: All occurrences of the variable <Var> in <Clause>
            are replaced by copies if <Term>.
   CAUTION: The maximum variable of the clause is not updated!
 ***********************************************************/

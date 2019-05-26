@@ -445,7 +445,7 @@ void ApplySymbolRange(int symbol, char staticModel)
 
     /***********************************************************************
     * Calculate new upper and lower ranges.  Since the new upper range is
-    * dependant of the old lower range, compute the upper range first.
+    * dependent of the old lower range, compute the upper range first.
     ***********************************************************************/
     range = (unsigned long)(upper - lower) + 1;         /* current range */
 
@@ -765,7 +765,7 @@ void InitializeDecoder(bit_file_t *bfpIn, char staticModel)
 
     code = 0;
 
-    /* read PERCISION MSBs of code one bit at a time */
+    /* read PRECISION MSBs of code one bit at a time */
     for (i = 0; i < PRECISION; i++)
     {
         code <<= 1;
@@ -817,7 +817,7 @@ probability_t GetUnscaledCode(void)
 ****************************************************************************/
 int GetSymbolFromProbability(probability_t probability)
 {
-    int first, last, middle;    /* indicies for binary search */
+    int first, last, middle;    /* indices for binary search */
 
     first = 0;
     last = UPPER(EOF_CHAR);

@@ -122,7 +122,7 @@ Fixpoint pop (symbols_to_pop:list symbol) (stack_cur:stack):
 
     [Fail_sr] means that the input word is rejected by the automaton. It is
     different to [Err] (from the error monad), which mean that the automaton is
-    bogus and has perfomed a forbidden action. **)
+    bogus and has performed a forbidden action. **)
 Inductive step_result :=
   | Fail_sr: step_result
   | Accept_sr: symbol_semantic_type (NT (start_nt init)) -> Stream token -> step_result

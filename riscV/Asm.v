@@ -369,7 +369,7 @@ lbl:
 - [Ploadfi rd fval]: similar to [Ploadli] but loads a double FP constant fval
   into a float register rd.
 
-- [Ploadsi rd fval]: similar to [Ploadli] but loads a singe FP constant fval
+- [Ploadsi rd fval]: similar to [Ploadli] but loads a single FP constant fval
   into a float register rd.
 
 - [Pallocframe sz pos]: in the formal semantics, this

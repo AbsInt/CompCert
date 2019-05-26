@@ -144,7 +144,7 @@ unsigned int HashKey(unsigned int offset, unsigned char lookahead)
 /****************************************************************************
 *   Function   : InitializeSearchStructures
 *   Description: This function initializes structures used to speed up the
-*                process of mathcing uncoded strings to strings in the
+*                process of matching uncoded strings to strings in the
 *                sliding window.  For hashed searches, this means that a
 *                hash table pointing to linked lists is initialized.
 *   Parameters : None

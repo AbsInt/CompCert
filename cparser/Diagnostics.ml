@@ -32,7 +32,7 @@ let max_error = ref 0
 let diagnostics_show_option = ref true
 
 (* Test if color diagnostics are available by testing if stderr is a tty
-   and if the environment varibale TERM is set
+   and if the environment variable TERM is set
 *)
 let color_diagnostics =
   let term = try Sys.getenv "TERM" with Not_found -> "" in

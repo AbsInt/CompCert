@@ -1607,7 +1607,7 @@ POINTER st_NextCandidate(void)
 
 static void st_PrintHelp(st_INDEX St, int Position, void (*Print)(POINTER))
 /**************************************************************
-  INPUT:   A node of an St, an indention and a print
+  INPUT:   A node of an St, an indentation and a print
            function for the entries.
   SUMMARY: Prints an St starting at node St.
 ***************************************************************/

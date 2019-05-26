@@ -113,7 +113,7 @@ Module Types(Import Init:AutInit).
   (** Types used for the annotations of the automaton. **)
 
   (** An item is a part of the annotations given to the validator.
-     It is acually a set of LR(1) items sharing the same core. It is needed
+     It is actually a set of LR(1) items sharing the same core. It is needed
      to validate completeness. **)
   Record item := {
   (** The pseudo-production of the item. **)

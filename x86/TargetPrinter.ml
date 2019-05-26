@@ -103,7 +103,7 @@ let rec log2 n =
   assert (n > 0);
   if n = 1 then 0 else 1 + log2 (n lsr 1)
 
-(* System dependend printer functions *)
+(* System dependent printer functions *)
 module type SYSTEM =
     sig
       val raw_symbol: out_channel -> string -> unit

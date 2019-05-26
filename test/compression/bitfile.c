@@ -97,13 +97,13 @@ typedef enum
 struct bit_file_t
 {
     FILE *fp;                   /* file pointer used by stdio functions */
-    endian_t endian;            /* endianess of architecture */
+    endian_t endian;            /* endianness of architecture */
     unsigned char bitBuffer;    /* bits waiting to be read/written */
     unsigned char bitCount;     /* number of bits in bitBuffer */
     BF_MODES mode;              /* open for read, write, or append */
 };
 
-/* union used to test for endianess */
+/* union used to test for endianness */
 typedef union
 {
     unsigned long word;
@@ -234,7 +234,7 @@ bit_file_t *MakeBitFile(FILE *stream, const BF_MODES mode)
 
 /***************************************************************************
 *   Function   : DetermineEndianess
-*   Description: This function determines the endianess of the current
+*   Description: This function determines the endianness of the current
 *                hardware architecture.  An unsigned long is set to 1.  If
 *                the 1st byte of the unsigned long gets the 1, this is a
 *                little endian machine.  If the last byte gets the 1, this

@@ -337,7 +337,7 @@ static LIST inf_ConstraintHyperResolvents(CLAUSE Clause, LIST Lits,
            a list <Lits> of constraint indices in <Clause> where
 	   all corresponding constraints have the same term,
 	   the overall substitution <Subst>,
-	   a list <Restlits> of constraint indeces for which
+	   a list <Restlits> of constraint indices for which
 	   a partner clause is searched with respect to <Index>,
 	   a list <Foundlits> of literals of already found partner clauses,
 	   a flag store and a precedence.
@@ -683,7 +683,7 @@ LIST inf_BackwardEmptySort(CLAUSE GivenClause, st_INDEX Index,
 
 		  clause_RenameVarsBiggerThan(pCopy, minVar);
 		  pAtom = clause_GetLiteralAtom(pCopy, i);
-		  /* set, to adress the renamed term! */
+		  /* set, to address the renamed term! */
 		  
 		  cont_Check();
 		  unify_UnifyNoOC(cont_LeftContext(), gAtom, cont_RightContext(), pAtom);

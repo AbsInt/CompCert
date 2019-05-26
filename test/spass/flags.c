@@ -757,7 +757,7 @@ void flag_InitFlotterFlags(FLAGSTORE Source, FLAGSTORE Target)
 /**************************************************************
   INPUT:   Two flag stores.
   RETURNS: Nothing.
-  EFFECT:  Initalizes the flag store <Target> to the values required by
+  EFFECT:  Initializes the flag store <Target> to the values required by
            Flotter. The other flag store is needed to set
            some flags, e.g. DOCPROOF.
 ***************************************************************/

@@ -525,7 +525,7 @@ TERM def_ApplyDefToTermExhaustive(PROOFSEARCH Search, TERM Term)
 /**************************************************************
   INPUT:   A proofsearch object and a term.
   RETURNS: An expanded term.
-  NOTE:    All occurences of defined predicates are expanded in the term,
+  NOTE:    All occurrences of defined predicates are expanded in the term,
            until no further changes are possible.
   CAUTION: If cyclic definitions exist, this will crash.
 ***************************************************************/
@@ -568,7 +568,7 @@ LIST def_ApplyDefToClauseOnce(DEF Def, CLAUSE Clause,
            precedence.
   RETURNS: A list of new clauses.
   NOTE:    The clause is not changed.
-           All occurences of the defined predicate are expanded
+           All occurrences of the defined predicate are expanded
 	   in the clause and in the derived clauses.
 ***************************************************************/
 {
@@ -617,7 +617,7 @@ LIST def_ApplyDefToClauseExhaustive(PROOFSEARCH Search, CLAUSE Clause)
 /**************************************************************
   INPUT:   A proofsearch object and a clause.
   RETURNS: A list of derived clauses.
-  NOTE:    All occurences of defined predicates are expanded in the clause.
+  NOTE:    All occurrences of defined predicates are expanded in the clause.
            until no further changes are possible.
   CAUTION: If cyclic definitions exist, this will crash.
 ***************************************************************/
