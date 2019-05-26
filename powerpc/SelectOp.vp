@@ -516,6 +516,17 @@ Definition singleofintu (e: expr) :=
 Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
 Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).
 
+(** ** Selection *)
+
+Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
+  if match ty with
+     | Tint => true
+     | Tlong => Archi.ppc64
+     | _ => false
+     end
+  then Some (Eop (Osel cond ty) (e1 ::: e2 ::: args))
+  else None.
+
 (** ** Recognition of addressing modes for load and store operations *)
 
 Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
