@@ -36,12 +36,14 @@ let _2 = coqint_of_camlint 2l
 let _4 = coqint_of_camlint 4l
 let _6 = coqint_of_camlint 6l
 let _8 = coqint_of_camlint 8l
+let _16 = coqint_of_camlint 16l
 let _31 = coqint_of_camlint 31l
 let _32 = coqint_of_camlint 32l
 let _64 = coqint_of_camlint 64l
 let _m1 = coqint_of_camlint (-1l)
 let _m4 = coqint_of_camlint (-4l)
 let _m8 = coqint_of_camlint (-8l)
+let _m16 = coqint_of_camlint (-16l)
 
 let _0L = Integers.Int64.zero
 let _32L = coqint_of_camlint64 32L
@@ -443,6 +445,21 @@ let expand_integer_cond_move a1 a2 a3 res =
     emit (Psubfic (GPR0, a1, Cint _0));
     expand_integer_cond_move_1 a2 a3 res
   end
+
+
+(* Expansion of floating point conditional moves (Pfcmove) *)
+
+let expand_float_cond_move bit a2 a3 res =
+  emit (Pmfcr GPR0);
+  emit (Prlwinm(GPR0, GPR0, Z.of_uint (4 + num_crbit bit), _8));
+  emit (Pstfdu (a3, Cint (_m16), GPR1));
+  emit (Pcfi_adjust _16);
+  emit (Pstfd (a2, Cint (_8), GPR1));
+  emit (Plfdx (res, GPR1, GPR0));
+  emit (Paddi (GPR1, GPR1, (Cint _16)));
+  emit (Pcfi_adjust _m16)
+
+
 
 (* Symmetrically, we emulate the "isel" instruction on PPC processors
    that do not have it. *)
@@ -894,6 +911,8 @@ let expand_instruction instr =
       if r1 <> r2 then emit(Pfmr(r1, r2))
   | Pisel(rd, r1, r2, bit) ->
       expand_isel bit r1 r2 rd
+  | Pfsel_gen (rd, r1, r2, bit) ->
+      expand_float_cond_move bit r1 r2 rd
   | Plmake(r1, rhi, rlo) ->
       if r1 = rlo then
         emit (Prldimi(r1, rhi, _32L, upper32))

@@ -1007,12 +1007,13 @@ Theorem eval_select:
   eval_expr ge sp e m le a1 v1 ->
   eval_expr ge sp e m le a2 v2 ->
   eval_condition cond vl m = Some b ->
-  exists v, 
+
+  exists v,
      eval_expr ge sp e m le a v
   /\ Val.lessdef (Val.select (Some b) v1 v2 ty) v.
 Proof.
   unfold select; intros.
-  destruct (match ty with Tint => true | Tlong => Archi.ppc64 | _ => false end); inv H.
+  destruct (match ty with Tint => true | Tfloat => true | Tsingle => true | Tlong => Archi.ppc64 | _ => false end); inv H.
   exists (Val.select (Some b) v1 v2 ty); split.
   apply eval_Eop with (v1 :: v2 :: vl).
   constructor; auto. constructor; auto.

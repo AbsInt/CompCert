@@ -228,6 +228,7 @@ let pp_instructions pp ic =
   | Pfres (fr1,fr2) -> instruction pp "Pfres" [Freg fr1; Freg fr2]
   | Pfsel (fr1,fr2,fr3,fr4) -> instruction pp "Pfsel" [Freg fr1; Freg fr2; Freg fr3; Freg fr4]
   | Pisel (ir1,ir2,ir3,cr) ->  instruction pp "Pisel" [Ireg ir1; Ireg ir2; Ireg ir3; Crbit cr]
+  | Pfsel_gen _ -> assert false (* Should not occur *)
   | Picbi (ir1,ir2) -> instruction pp "Picbi" [Ireg ir1; Ireg ir2]
   | Picbtls (n,ir1,ir2) -> instruction pp "Picbtls" [Constant (Cint n);Ireg ir1; Ireg ir2]
   | Pisync -> instruction pp "Pisync" []

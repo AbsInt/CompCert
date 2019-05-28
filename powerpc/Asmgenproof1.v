@@ -1288,6 +1288,35 @@ Proof.
     + intros. Simpl.
 Qed.
 
+Lemma transl_fselect_op_correct:
+  forall cond args ty r1 r2 rd k rs m c,
+  transl_fselect_op cond args r1 r2 rd k = OK c ->
+  important_preg rd = true -> important_preg r1 = true -> important_preg r2 = true ->
+  exists rs',
+  exec_straight ge fn c rs m k rs' m
+  /\ Val.lessdef (Val.select (eval_condition cond (map rs (map preg_of args)) m) rs#r1 rs#r2 ty) rs'#rd
+  /\ forall r, important_preg r = true  -> r <> rd -> rs'#r = rs#r.
+Proof.
+  intros until c.  intros TR IMP1 IMP2 IMP3.
+  unfold transl_fselect_op in TR.
+  destruct (freg_eq r1 r2).
+  - inv TR. econstructor; split; [|split].
+    + apply exec_straight_one. simpl; eauto. auto.
+    + Simpl. destruct (eval_condition cond rs ## (preg_of ## args) m) as [[]|]; simpl; auto using Val.lessdef_normalize.
+    + intros; Simpl.
+  - destruct (transl_cond_correct_1 cond args _ rs m _ TR) as (rs1 & A & B & C).
+    set (bit := fst (crbit_for_cond cond)) in *.
+    set (dir := snd (crbit_for_cond cond)) in *.
+    set (ob := eval_condition cond rs##(preg_of##args) m) in *.
+    econstructor; split; [|split].
+    + eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto.
+      reflexivity.
+    + Simpl.
+      rewrite <- (C r1), <- (C r2) by auto.
+      rewrite B. destruct dir; destruct ob as [[]|]; simpl; auto using Val.lessdef_normalize.
+    + intros. Simpl.
+Qed.
+
 (** Translation of arithmetic operations. *)
 
 Ltac TranslOpSimpl :=
@@ -1486,10 +1515,16 @@ Opaque Val.add.
   exists rs'; auto with asmgen.
   (* Osel *)
 - assert (X: forall mr r, ireg_of mr = OK r -> important_preg r = true).
-  { intros. apply ireg_of_eq in H. apply important_data_preg_1. rewrite <- H.
+  { intros. apply ireg_of_eq in H0. apply important_data_preg_1. rewrite <- H0.
     auto with asmgen. }
-  destruct (transl_select_op_correct _ _ t _ _ _ _ rs m _ EQ3) as (rs' & A & B & C);
-  eauto.
+  assert (Y: forall mr r, freg_of mr = OK r -> important_preg r = true).
+  { intros. apply freg_of_eq in H0. apply important_data_preg_1. rewrite <- H0.
+    auto with asmgen. }
+  destruct (preg_of res) eqn:RES; monadInv H; rewrite <- RES.
+  + rewrite (ireg_of_eq _ _ EQ), (ireg_of_eq _ _ EQ0), (ireg_of_eq _ _ EQ1) in *.
+    destruct (transl_select_op_correct _ _ t _ _ _ _ rs m _ EQ3) as (rs' & A & B & C); eauto.
+  + rewrite (freg_of_eq _ _ EQ), (freg_of_eq _ _ EQ0), (freg_of_eq _ _ EQ1) in *.
+  destruct (transl_fselect_op_correct _ _ t _ _ _ _ rs m _ EQ3) as (rs' & A & B & C); eauto.
 Qed.
 
 Lemma transl_op_correct:

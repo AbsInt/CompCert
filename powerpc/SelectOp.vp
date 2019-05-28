@@ -43,6 +43,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import Op.
 Require Import CminorSel.
+Require Archi.
 
 Local Open Scope cminorsel_scope.
 
@@ -521,6 +522,8 @@ Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).
 Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
   if match ty with
      | Tint => true
+     | Tfloat => true
+     | Tsingle => true
      | Tlong => Archi.ppc64
      | _ => false
      end

@@ -231,6 +231,7 @@ Inductive instruction : Type :=
   | Pfres: freg -> freg -> instruction                        (**r approximate inverse *)
   | Pfsel: freg -> freg -> freg -> freg -> instruction        (**r FP conditional move *)
   | Pisel: ireg -> ireg -> ireg -> crbit -> instruction       (**r integer select *)
+  | Pfsel_gen: freg -> freg -> freg -> crbit -> instruction   (**r floating point select *)
   | Pisync: instruction                                       (**r ISYNC barrier *)
   | Picbi: ireg -> ireg -> instruction                        (**r instruction cache invalidate *)
   | Picbtls: int -> ireg -> ireg -> instruction               (**r instruction cache block touch and lock set *)
@@ -861,6 +862,13 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfsubs rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.subfs rs#r1 rs#r2))) m
   | Pisel rd r1 r2 bit =>
+      let v :=
+          match rs#(reg_of_crbit bit) with
+          | Vint n => if Int.eq n Int.zero then rs#r2 else rs#r1
+          | _ => Vundef
+          end in
+      Next (nextinstr (rs #rd <- v #GPR0 <- Vundef)) m
+  | Pfsel_gen rd r1 r2 bit =>
       let v :=
           match rs#(reg_of_crbit bit) with
           | Vint n => if Int.eq n Int.zero then rs#r2 else rs#r1

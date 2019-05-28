@@ -257,6 +257,15 @@ Proof.
   eapply tail_nolabel_trans. eapply transl_cond_label; eauto.  TailNoLabel.
 Qed.
 
+Remark transl_fselect_op_label:
+  forall cond args r1 r2 rd k c,
+  transl_fselect_op cond args r1 r2 rd k = OK c -> tail_nolabel k c.
+Proof.
+  unfold transl_fselect_op; intros. destruct (freg_eq r1 r2).
+  TailNoLabel.
+  eapply tail_nolabel_trans. eapply transl_cond_label; eauto.  TailNoLabel.
+Qed.
+
 Remark transl_op_label:
   forall op args r k c,
   transl_op op args r k = OK c -> tail_nolabel k c.
@@ -284,7 +293,7 @@ Opaque Int.eq.
   destruct Int64.eq. TailNoLabel.
   destruct ireg_eq; [apply tail_nolabel_cons; unfold nolabel;auto|]; eapply tail_nolabel_trans; TailNoLabel.
 - eapply transl_cond_op_label; eauto.
-- eapply transl_select_op_label; eauto.
+- destruct (preg_of r); monadInv H. eapply transl_select_op_label; eauto. eapply transl_fselect_op_label; eauto.
 Qed.
 
 Remark transl_memory_access_label:
