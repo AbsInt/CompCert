@@ -1249,7 +1249,7 @@ Proof.
     eapply external_call_nextblock; eauto.
     auto. auto.
 
-- (* return fron noninlined function *)
+- (* return from noninlined function *)
   inv MS0.
 + (* normal case *)
   left; econstructor; split.

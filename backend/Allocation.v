@@ -36,7 +36,7 @@ Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
 - a [Lbranch s] instruction.
 
   The [block_shape] type below describes all possible cases of structural
-  maching between an RTL instruction and an LTL basic block.
+  matching between an RTL instruction and an LTL basic block.
 *)
 
 Inductive move: Type :=

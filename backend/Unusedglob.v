@@ -107,7 +107,7 @@ Definition used_globals (p: program) (pm: prog_map) : option IS.t :=
 
 (** * Elimination of unreferenced global definitions *)
 
-(** We also eliminate multiple definitions of the same global name, keeping ony
+(** We also eliminate multiple definitions of the same global name, keeping only
   the last definition (in program definition order). *)
 
 Fixpoint filter_globdefs (used: IS.t) (accu defs: list (ident * globdef fundef unit)) :=

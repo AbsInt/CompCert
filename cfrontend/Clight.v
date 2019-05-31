@@ -84,7 +84,7 @@ Definition typeof (e: expr) : type :=
 (** ** Statements *)
 
 (** Clight statements are similar to those of Compcert C, with the addition
-  of assigment (of a rvalue to a lvalue), assignment to a temporary,
+  of assignment (of a rvalue to a lvalue), assignment to a temporary,
   and function call (with assignment of the result to a temporary).
   The three C loops are replaced by a single infinite loop [Sloop s1
   s2] that executes [s1] then [s2] repeatedly.  A [continue] in [s1]

@@ -947,7 +947,7 @@ let binary_conversion env t1 t2 =
       end
   | _, _ -> assert false
 
-(* Conversion on function arguments (with protoypes) *)
+(* Conversion on function arguments (with prototypes) *)
 
 let argument_conversion env t =
   (* Arrays and functions degrade automatically to pointers *)

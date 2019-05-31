@@ -106,7 +106,7 @@ void dump_play(struct _play *play) /* and for the entire game tree */
 int get_value(int *data) /* get the value (0 or 1) for a specific _data */
 {
   struct _play *search;
-  search = game_tree; /* start at the begginig */
+  search = game_tree; /* start at the beginning */
   while (! equal_data(search -> state,data)) /* until you find a match */
       search = search -> next; /* take next element */
   return search -> value; /* return its value */
@@ -138,7 +138,7 @@ void show_list(struct _list *list) /* show the entire list of moves */
     }
 }
 
-void show_play(struct _play *play) /* to diplay the whole tree */
+void show_play(struct _play *play) /* to display the whole tree */
 {
   while (play != NULL)
     {
@@ -154,7 +154,7 @@ void show_play(struct _play *play) /* to diplay the whole tree */
 int in_wanted(int *data) /* checks if the current _data is in the wanted list */
 {
   struct _list *current;
-  current = wanted; /* start at the begginig */
+  current = wanted; /* start at the beginning */
   while (current != NULL) /* unitl the last one */
     {
       if (equal_data(current -> data,data)) break; /* break if found */

@@ -39,7 +39,7 @@ type action =
    patterns are tried in the order in which they appear in the list. *)
 
 exception CmdError of string
-(** Raise by [parse_cmdline] when an error occured *)
+(** Raise by [parse_cmdline] when an error occurred *)
 
 val parse_cmdline: (pattern * action) list -> unit
 (** [parse_cmdline actions] parses the command line (after @-file expansion)

@@ -2632,7 +2632,7 @@ let elab_fundef genv spec name defs body loc =
      For prototyped functions this has been done by [elab_fundef_name]
      already, but some parameter may have been shadowed by the
      function name, while it should be the other way around, e.g.
-     [int f(int f) { return f+1; }], with [f] refering to the
+     [int f(int f) { return f+1; }], with [f] referring to the
      parameter [f] and not to the function [f] within the body of the
      function. *)
   let lenv =

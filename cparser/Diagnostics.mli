@@ -22,22 +22,22 @@ exception Abort
   (** Exception raised upon fatal errors *)
 
 val check_errors : unit -> unit
-  (** Check whether errors occured and raise abort if an error occured *)
+  (** Check whether errors occurred and raise abort if an error occurred *)
 
 type warning_type =
   | Unnamed                        (** warnings which cannot be turned off *)
   | Unknown_attribute              (** usage of unsupported/unknown attributes *)
-  | Zero_length_array              (** gnu extension for zero lenght arrays *)
+  | Zero_length_array              (** gnu extension for zero length arrays *)
   | Celeven_extension              (** C11 features *)
   | Gnu_empty_struct               (** gnu extension for empty struct *)
-  | Missing_declarations           (** declation which do not declare anything *)
+  | Missing_declarations           (** declaration which do not declare anything *)
   | Constant_conversion            (** dangerous constant conversions *)
   | Int_conversion                 (** pointer <-> int conversions *)
   | Varargs                        (** promotable vararg argument *)
   | Implicit_function_declaration  (** deprecated implicit function declaration *)
   | Pointer_type_mismatch          (** pointer type mismatch in ?: operator *)
   | Compare_distinct_pointer_types (** comparison between different pointer types *)
-  | Implicit_int                   (** implict int parameter or return type *)
+  | Implicit_int                   (** implicit int parameter or return type *)
   | Main_return_type               (** wrong return type for main *)
   | Invalid_noreturn               (** noreturn function containing return *)
   | Return_type                    (** void return in non-void function *)
