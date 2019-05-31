@@ -26,7 +26,7 @@ Require String.
 Require Import Coqlib Maps.
 Require Import AST Errors Integers Globalenvs Switch.
 Require Cminor.
-Require Import Op CminorSel.
+Require Import Op CminorSel Cminortyping.
 Require Import SelectOp SplitLong SelectLong SelectDiv.
 Require Machregs.
 
@@ -41,6 +41,12 @@ Function condexpr_of_expr (e: expr) : condexpr :=
   | Econdition a b c => CEcondition a (condexpr_of_expr b) (condexpr_of_expr c)
   | Elet a b => CElet a (condexpr_of_expr b)
   | _ => CEcond (Ccompuimm Cne Int.zero) (e ::: Enil)
+  end.
+
+Function condition_of_expr (e: expr) : condition * exprlist :=
+  match e with
+  | Eop (Ocmp c) el => (c, el)
+  | _ => (Ccompuimm Cne Int.zero, e ::: Enil)
   end.
 
 (** Conversion of loads and stores *)
@@ -173,6 +179,10 @@ Fixpoint sel_exprlist (al: list Cminor.expr) : exprlist :=
   | a :: bl => Econs (sel_expr a) (sel_exprlist bl)
   end.
 
+Definition sel_select_opt (ty: typ) (arg1 arg2 arg3: Cminor.expr) : option expr :=
+  let (cond, args) := condition_of_expr (sel_expr arg1) in
+  SelectOp.select ty cond args (sel_expr arg2) (sel_expr arg3).
+
 (** Recognition of immediate calls and calls to built-in functions
     that should be inlined *)
 
@@ -267,9 +277,63 @@ Definition sel_switch_long :=
     (fun arg ofs => subl arg (longconst (Int64.repr ofs)))
     lowlong.
 
+(** "If conversion": conversion of certain if-then-else statements
+  into branchless conditional move instructions. *)
+
+(** Recognition of "then" and "else" statements that support if-conversion.
+  Basically we are interested in assignments to local variables [id = e].
+  However the front-end may have put [skip] statements around these
+  assignments. *)
+
+Inductive stmt_class : Type :=
+  | SCskip
+  | SCassign (id: ident) (a: Cminor.expr)
+  | SCother.
+
+Function classify_stmt (s: Cminor.stmt) : stmt_class :=
+  match s with
+  | Cminor.Sskip => SCskip
+  | Cminor.Sassign id a => SCassign id a
+  | Cminor.Sseq Cminor.Sskip s => classify_stmt s
+  | Cminor.Sseq s Cminor.Sskip => classify_stmt s
+  | _ => SCother
+  end.
+
+(** External heuristic to limit the amount of if-conversion performed.
+    Arguments are: the condition, the "then" and the "else" expressions,
+    and the type at which selection is done. *)
+
+Parameter if_conversion_heuristic:
+  Cminor.expr -> Cminor.expr -> Cminor.expr -> AST.typ -> bool.
+
+Definition if_conversion_base
+      (ki: known_idents) (env: typenv)
+      (cond: Cminor.expr) (id: ident) (ifso ifnot:  Cminor.expr) : option stmt :=
+  let ty := env id in
+  if is_known ki id
+  && safe_expr ki ifso && safe_expr ki ifnot
+  && if_conversion_heuristic cond ifso ifnot ty
+  then option_map
+         (fun sel => Sassign id sel)
+         (sel_select_opt ty cond ifso ifnot)
+  else None.
+
+Definition if_conversion
+      (ki: known_idents) (env: typenv)
+      (cond: Cminor.expr) (ifso ifnot: Cminor.stmt) : option stmt :=
+  match classify_stmt ifso, classify_stmt ifnot with
+  | SCskip, SCassign id a =>
+      if_conversion_base ki env cond id (Cminor.Evar id) a
+  | SCassign id a, SCskip =>
+      if_conversion_base ki env cond id a (Cminor.Evar id)
+  | SCassign id1 a1, SCassign id2 a2 =>
+      if ident_eq id1 id2 then if_conversion_base ki env cond id1 a1 a2 else None
+  | _, _ => None
+  end.
+
 (** Conversion from Cminor statements to Cminorsel statements. *)
 
-Fixpoint sel_stmt (s: Cminor.stmt) : res stmt :=
+Fixpoint sel_stmt (ki: known_idents) (env: typenv) (s: Cminor.stmt) : res stmt :=
   match s with
   | Cminor.Sskip => OK Sskip
   | Cminor.Sassign id e => OK (Sassign id (sel_expr e))
@@ -291,15 +355,19 @@ Fixpoint sel_stmt (s: Cminor.stmt) : res stmt :=
       | _            => Stailcall sg (inl _ (sel_expr fn)) (sel_exprlist args)
       end)
   | Cminor.Sseq s1 s2 =>
-      do s1' <- sel_stmt s1; do s2' <- sel_stmt s2;
+      do s1' <- sel_stmt ki env s1; do s2' <- sel_stmt ki env s2;
       OK (Sseq s1' s2')
   | Cminor.Sifthenelse e ifso ifnot =>
-      do ifso' <- sel_stmt ifso; do ifnot' <- sel_stmt ifnot;
-      OK (Sifthenelse (condexpr_of_expr (sel_expr e)) ifso' ifnot')
+      match if_conversion ki env e ifso ifnot with
+      | Some s => OK s
+      | None =>
+          do ifso' <- sel_stmt ki env ifso; do ifnot' <- sel_stmt ki env ifnot;
+          OK (Sifthenelse (condexpr_of_expr (sel_expr e)) ifso' ifnot')
+      end
   | Cminor.Sloop body =>
-      do body' <- sel_stmt body; OK (Sloop body')
+      do body' <- sel_stmt ki env body; OK (Sloop body')
   | Cminor.Sblock body =>
-      do body' <- sel_stmt body; OK (Sblock body')
+      do body' <- sel_stmt ki env body; OK (Sblock body')
   | Cminor.Sexit n => OK (Sexit n)
   | Cminor.Sswitch false e cases dfl =>
       let t := compile_switch Int.modulus dfl cases in
@@ -314,7 +382,7 @@ Fixpoint sel_stmt (s: Cminor.stmt) : res stmt :=
   | Cminor.Sreturn None => OK (Sreturn None)
   | Cminor.Sreturn (Some e) => OK (Sreturn (Some (sel_expr e)))
   | Cminor.Slabel lbl body =>
-      do body' <- sel_stmt body; OK (Slabel lbl body')
+      do body' <- sel_stmt ki env body; OK (Slabel lbl body')
   | Cminor.Sgoto lbl => OK (Sgoto lbl)
   end.
 
@@ -322,8 +390,15 @@ End SELECTION.
 
 (** Conversion of functions. *)
 
+Definition known_id (f: Cminor.function) : known_idents :=
+  let add (ki: known_idents) (id: ident) := PTree.set id tt ki in
+  List.fold_left add f.(Cminor.fn_vars)
+      (List.fold_left add f.(Cminor.fn_params) (PTree.empty unit)).
+
 Definition sel_function (dm: PTree.t globdef) (hf: helper_functions) (f: Cminor.function) : res function :=
-  do body' <- sel_stmt dm f.(Cminor.fn_body);
+  let ki := known_id f in
+  do env <- Cminortyping.type_function f;
+  do body' <- sel_stmt dm ki env f.(Cminor.fn_body);
   OK (mkfunction
         f.(Cminor.fn_sig)
         f.(Cminor.fn_params)
