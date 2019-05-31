@@ -196,6 +196,9 @@ Processing options:
   -finline       Perform inlining of functions [on]
   -finline-functions-called-once Integrate functions only required by their
                  single caller [on]
+  -fif-conversion Perform if-conversion (generation of conditional moves) [on]
+  -ffavor-branchless Favor the generation of branch-free instruction sequences,
+                     even when possibly more costly than the default   [off]
 Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -ffpu          Use FP registers for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
@@ -250,7 +253,8 @@ let dump_mnemonics destfile =
   exit 0
 
 let optimization_options = [
-  option_ftailcalls; option_fconstprop; option_fcse; option_fredundancy; option_finline_functions_called_once;
+  option_ftailcalls; option_fifconversion; option_fconstprop; option_fcse;
+  option_fredundancy; option_finline_functions_called_once;
 ]
 
 let set_all opts () = List.iter (fun r -> r := true) opts
@@ -301,7 +305,8 @@ let cmdline_actions =
   Exact "-Os", Set option_Osize;
   Exact "-fsmall-data", Integer(fun n -> option_small_data := n);
   Exact "-fsmall-const", Integer(fun n -> option_small_const := n);
-  Exact "-ffloat-const-prop", Integer(fun n -> option_ffloatconstprop := n);
+  Exact "-ffloat-const-prop", Integer(fun n -> option_ffloatconstprop := n); 
+  Exact "-ffavor-branchless", Set option_ffavor_branchless;
   Exact "-falign-functions", Integer(fun n -> check_align n; option_falignfunctions := Some n);
   Exact "-falign-branch-targets", Integer(fun n -> check_align n; option_falignbranchtargets := n);
   Exact "-falign-cond-branches", Integer(fun n -> check_align n; option_faligncondbranchs := n);] @
@@ -364,6 +369,7 @@ let cmdline_actions =
 (* Optimization options *)
 (* -f options: come in -f and -fno- variants *)
   @ f_opt "tailcalls" option_ftailcalls
+  @ f_opt "if-conversion" option_fifconversion
   @ f_opt "const-prop" option_fconstprop
   @ f_opt "cse" option_fcse
   @ f_opt "redundancy" option_fredundancy

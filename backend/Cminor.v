@@ -591,6 +591,70 @@ Proof.
   red; intros; inv H; simpl; try omega; eapply external_call_trace_length; eauto.
 Qed.
 
+(** This semantics is determinate. *)
+
+Lemma eval_expr_determ:
+  forall ge sp e m a v, eval_expr ge sp e m a v ->
+  forall v', eval_expr ge sp e m a v' -> v' = v.
+Proof.
+  induction 1; intros v' E'; inv E'.
+- congruence.
+- congruence.
+- assert (v0 = v1) by eauto. congruence.
+- assert (v0 = v1) by eauto. assert (v3 = v2) by eauto. congruence.
+- assert (vaddr0 = vaddr) by eauto. congruence.
+Qed.
+
+Lemma eval_exprlist_determ:
+  forall ge sp e m al vl, eval_exprlist ge sp e m al vl ->
+  forall vl', eval_exprlist ge sp e m al vl' -> vl' = vl.
+Proof.
+  induction 1; intros vl' E'; inv E'.
+  - auto.
+  - f_equal; eauto using eval_expr_determ.
+Qed.
+
+Ltac Determ :=
+  try congruence;
+  match goal with
+  | [ |- match_traces _ E0 E0 /\ (_ -> _) ]  =>
+          split; [constructor|intros _; Determ]
+  | [ H: is_call_cont ?k |- _ ] =>
+          contradiction || (clear H; Determ)
+  | [ H1: eval_expr _ _ _ _ ?a ?v1, H2: eval_expr _ _ _ _ ?a ?v2 |- _ ] =>
+          assert (v1 = v2) by (eapply eval_expr_determ; eauto);
+          clear H1 H2; Determ
+  | [ H1: eval_exprlist _ _ _ _ ?a ?v1, H2: eval_exprlist _ _ _ _ ?a ?v2 |- _ ] =>
+          assert (v1 = v2) by (eapply eval_exprlist_determ; eauto);
+          clear H1 H2; Determ
+  | _ => idtac
+  end.
+
+Lemma semantics_determinate:
+  forall (p: program), determinate (semantics p).
+Proof.
+  intros. constructor; set (ge := Genv.globalenv p); simpl; intros.
+- (* determ *)
+  inv H; inv H0; Determ.
+  + subst vargs0. exploit external_call_determ. eexact H2. eexact H13.
+    intros (A & B). split; intros; auto.
+    apply B in H; destruct H; congruence.
+  + subst v0. assert (b0 = b) by (inv H2; inv H13; auto). subst b0; auto.
+  + assert (n0 = n) by (inv H2; inv H14; auto). subst n0; auto.
+  + exploit external_call_determ. eexact H1. eexact H7.
+    intros (A & B). split; intros; auto.
+    apply B in H; destruct H; congruence.
+- (* single event *)
+  red; simpl. destruct 1; simpl; try omega;
+  eapply external_call_trace_length; eauto.
+- (* initial states *)
+  inv H; inv H0. unfold ge0, ge1 in *. congruence.
+- (* nostep final state *)
+  red; intros; red; intros. inv H; inv H0.
+- (* final states *)
+  inv H; inv H0; auto.
+Qed.
+
 (** * Alternate operational semantics (big-step) *)
 
 (** We now define another semantics for Cminor without [goto] that follows
