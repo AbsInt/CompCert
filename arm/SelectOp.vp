@@ -383,7 +383,14 @@ Definition compfs (c: comparison) (e1: expr) (e2: expr) :=
   Eop (Ocmp (Ccompfs c)) (e1 ::: e2 ::: Enil).
 
 Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
-  Some (Eop (Osel cond ty) (e1 ::: e2 ::: args)).
+  if match ty with
+     | Tint => true
+     | Tfloat => true
+     | Tsingle => true
+     | _ => false
+     end
+  then Some (Eop (Osel cond ty) (e1 ::: e2 ::: args))
+  else None.
 
 (** ** Integer conversions *)
 
