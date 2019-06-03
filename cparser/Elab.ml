@@ -836,7 +836,7 @@ and elab_type_declarator ?(fundef = false) loc env ty = function
   | Cabs.PROTO(d, (params, vararg)) ->
       elab_return_type loc env ty;
       let (ty, a) = get_nontype_attrs env ty in
-      let (params', env') = elab_parameters env params in
+      let (params', env') = elab_parameters loc env params in
       (* For a function declaration (fundef = false), the scope introduced
          to treat parameters ends here, so we discard the extended
          environment env' returned by elab_parameters.
@@ -862,13 +862,15 @@ and elab_type_declarator ?(fundef = false) loc env ty = function
 
 (* Elaboration of parameters in a prototype *)
 
-and elab_parameters env params =
+and elab_parameters loc env params =
   (* Prototype introduces a new scope *)
   let (vars, env) = mmap elab_parameter (Env.new_scope env) params in
   (* Catch special case f(t) where t is void or a typedef to void *)
   match vars with
     | [ ( {C.name=""}, t) ] when is_void_type env t -> [],env
-    | _ -> vars,env
+    | _ -> if List.exists (fun (id, t) -> id.C.name = "" && is_void_type env t) vars then
+        error loc "'void' must be the only parameter";
+      (vars, env)
 
 (* Elaboration of a function parameter *)
 
