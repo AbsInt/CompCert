@@ -811,7 +811,8 @@ Theorem eval_intoffloat:
   Val.intoffloat x = Some y ->
   exists v, eval_expr ge sp e m le (intoffloat a) v /\ Val.lessdef y v.
 Proof.
-  intros; unfold intoffloat. TrivialExists.
+  intros; unfold intoffloat. exists y; split; auto.
+  EvalOp. simpl; rewrite H0; auto.
 Qed.
 
 Theorem eval_floatofint:
@@ -909,7 +910,8 @@ Theorem eval_intofsingle:
   Val.intofsingle x = Some y ->
   exists v, eval_expr ge sp e m le (intofsingle a) v /\ Val.lessdef y v.
 Proof.
-  intros; unfold intofsingle. TrivialExists.
+  intros; unfold intoffloat. exists y; split; auto.
+  EvalOp. simpl; rewrite H0; auto.
 Qed.
 
 Theorem eval_singleofint:

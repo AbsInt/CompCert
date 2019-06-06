@@ -2187,6 +2187,23 @@ Proof.
   inv H; simpl; auto with va. rewrite E; constructor.
 Qed.
 
+Definition intoffloat_total (x: aval) :=
+  match x with
+  | F f =>
+      match Float.to_int f with
+      | Some i => I i
+      | None => ntop
+      end
+  | _ => ntop1 x
+  end.
+
+Lemma intoffloat_total_sound:
+  forall v x, vmatch v x -> vmatch (Val.maketotal (Val.intoffloat v)) (intoffloat_total x).
+Proof.
+  unfold Val.maketotal, Val.intoffloat, intoffloat_total; intros.
+  inv H; auto with va; destruct (Float.to_int f); auto with va.
+Qed.
+
 Definition intuoffloat (x: aval) :=
   match x with
   | F f =>
@@ -2247,6 +2264,23 @@ Proof.
   unfold Val.intofsingle; intros. destruct v; try discriminate.
   destruct (Float32.to_int f) as [i|] eqn:E; simpl in H0; inv H0.
   inv H; simpl; auto with va. rewrite E; constructor.
+Qed.
+
+Definition intofsingle_total (x: aval) :=
+  match x with
+  | FS f =>
+      match Float32.to_int f with
+      | Some i => I i
+      | None => ntop
+      end
+  | _ => ntop1 x
+  end.
+
+Lemma intofsingle_total_sound:
+  forall v x, vmatch v x -> vmatch (Val.maketotal (Val.intofsingle v)) (intofsingle_total x).
+Proof.
+  unfold Val.maketotal, Val.intofsingle, intofsingle_total; intros.
+  inv H; auto with va; destruct (Float32.to_int f); auto with va.
 Qed.
 
 Definition intuofsingle (x: aval) :=
@@ -4675,6 +4709,7 @@ Hint Resolve cnot_sound symbol_address_sound
        singleoffloat_sound floatofsingle_sound
        intoffloat_sound intuoffloat_sound floatofint_sound floatofintu_sound
        intofsingle_sound intuofsingle_sound singleofint_sound singleofintu_sound
+       intoffloat_total_sound intofsingle_total_sound
        longoffloat_sound longuoffloat_sound floatoflong_sound floatoflongu_sound
        longofsingle_sound longuofsingle_sound singleoflong_sound singleoflongu_sound
        longofwords_sound loword_sound hiword_sound
