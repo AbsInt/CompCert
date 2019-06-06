@@ -29,7 +29,7 @@ let mnemonic_names = [ "Padc"; "Padd"; "Padds"; "Pand";"Pannot"; "Pasr"; "Pb"; "
                        "Pfsts"; "Pfsubd"; "Pfsubs"; "Pftosizd"; "Pftosizs"; "Pftouizd";
                        "Pftouizs"; "Pfuitod"; "Pfuitos"; "Pinlineasm"; "Pisb"; "Plabel"; "Pldr";
                        "Ploadsymbol_lbl"; "Pldr_p"; "Pldrb"; "Pldrb_p"; "Pldrh"; "Pldrh_p"; "Pldrsb";
-                       "Pldrsh"; "Plsl"; "Plsr"; "Pmla"; "Pmov"; "Pmovite";
+                       "Pldrsh"; "Plsl"; "Plsr"; "Pmla"; "Pmov"; "Pmovite"; "Pfmovite";
                        "Pmovt"; "Pmovw"; "Pmul"; "Pmvn";  "Ploadsymbol_imm"; "Pnop"; "Porr";
                        "Ppush"; "Prev"; "Prev16"; "Prsb"; "Prsbs"; "Prsc"; "Psbc"; "Psbfx"; "Psdiv"; "Psmull";
                        "Pstr"; "Pstr_p"; "Pstrb"; "Pstrb_p"; "Pstrh"; "Pstrh_p"; "Psub"; "Psubs"; "Pudiv";
