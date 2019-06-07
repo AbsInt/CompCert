@@ -835,33 +835,28 @@ Proof.
   intros. destruct x; simpl in H0; try discriminate.
   destruct (Float.to_intu f) as [n|] eqn:?; simpl in H0; inv H0.
   exists (Vint n); split; auto. unfold intuoffloat.
-  set (im := Int.repr Int.half_modulus).
-  set (fm := Float.of_intu im).
-  assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f)).
-    constructor. auto.
-  assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar O) (Vfloat fm)).
-    constructor. auto.
-  econstructor. eauto.
-  econstructor. instantiate (1 := Vfloat fm). EvalOp.
-  eapply eval_Econdition with (va := Float.cmp Clt f fm).
-  eauto with evalexpr.
-  destruct (Float.cmp Clt f fm) eqn:?.
-  exploit Float.to_intu_to_int_1; eauto. intro EQ.
-  EvalOp. simpl. rewrite EQ; auto.
-  exploit Float.to_intu_to_int_2; eauto.
-  change Float.ox8000_0000 with im. fold fm. intro EQ.
-  set (t2 := subf (Eletvar (S O)) (Eletvar O)).
-  set (t3 := intoffloat t2).
-  exploit (eval_subf (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f) (Eletvar O)); eauto.
-  fold t2. intros [v2 [A2 B2]]. simpl in B2. inv B2.
-  exploit (eval_addimm Float.ox8000_0000 (Vfloat fm :: Vfloat f :: le) t3).
-    unfold t3. unfold intoffloat. EvalOp. simpl. rewrite EQ. simpl. eauto.
-  intros [v4 [A4 B4]]. simpl in B4. inv B4.
-  rewrite Int.sub_add_opp in A4. rewrite Int.add_assoc in A4.
-  rewrite (Int.add_commut (Int.neg im)) in A4.
-  rewrite Int.add_neg_zero in A4.
-  rewrite Int.add_zero in A4.
-  auto.
+  set (fm := Float.of_intu Float.ox8000_0000).
+  set (le' := Vfloat fm :: Vfloat f :: le).
+  set (a1 := intoffloat (Eletvar 1)). 
+  set (a2 := addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0)))).
+  assert (A1: exists v1, eval_expr ge sp e m le' a1 v1 /\
+                  (Float.cmp Clt f fm = true -> v1 = Vint n)).
+  { econstructor; split. repeat econstructor; eauto.
+    intros. simpl. erewrite Float.to_intu_to_int_1 by eauto. reflexivity. }
+  assert (A2: exists v2, eval_expr ge sp e m le' a2 v2 /\
+                  (Float.cmp Clt f fm = false -> v2 = Vint n)).
+  { econstructor; split. repeat econstructor; eauto.
+    intros. simpl. erewrite Float.to_intu_to_int_2 by eauto. simpl.
+    rewrite Int.repr_signed, Int.sub_add_opp, Int.add_assoc.
+    rewrite (Int.add_commut (Int.neg Float.ox8000_0000)), Int.add_neg_zero, Int.add_zero.
+    auto. }
+  destruct A1 as (v1 & EV1 & EQ1), A2 as (v2 & EV2 & EQ2).
+  repeat (econstructor; eauto). fold le'.
+  destruct (favor_branchless tt).
+- repeat (econstructor; eauto). simpl.
+  destruct (Float.cmp Clt f fm); [rewrite EQ1 by auto|rewrite EQ2 by auto]; reflexivity.
+- repeat (econstructor; eauto). 
+  destruct (Float.cmp Clt f fm); [rewrite <- EQ1 by auto|rewrite <- EQ2 by auto]; assumption.
 Qed.
 
 Theorem eval_floatofintu:

@@ -500,11 +500,17 @@ Nondetfunction floatofint (e: expr) :=
 Parameter favor_branchless: unit -> bool.
 
 Definition intuoffloat (e: expr) :=
+  let e1 := intoffloat (Eletvar 1%nat) in
+  let e2 := addimm Float.ox8000_0000
+                   (intoffloat (subf (Eletvar 1%nat) (Eletvar 0%nat))) in
   Elet e
     (Elet (Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil)
-      (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
-        (intoffloat (Eletvar 1))
-        (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
+     (if favor_branchless tt then
+        Eop (Osel (Ccompf Clt) Tint)
+            (e1 ::: e2 ::: Eletvar 1 ::: Eletvar 0 ::: Enil)
+      else
+        Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
+                   e1 e2))%nat.
 
 Nondetfunction floatofintu (e: expr) :=
   match e with
