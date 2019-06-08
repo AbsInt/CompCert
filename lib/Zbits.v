@@ -824,6 +824,14 @@ Proof.
   apply Z.log2_nonneg.
 - reflexivity.
 Qed.
+
+Lemma Z_is_power2_nonneg:
+  forall x i, Z_is_power2 x = Some i -> 0 <= i.
+Proof.
+  unfold Z_is_power2; intros. destruct x; try discriminate.
+  destruct (P_is_power2 p) eqn:P; try discriminate.
+  replace i with (Z.log2 (Z.pos p)) by congruence. apply Z.log2_nonneg.
+Qed.
  
 Lemma Z_is_power2_sound:
   forall x i, Z_is_power2 x = Some i -> x = two_p i /\ i = Z.log2 x.
@@ -858,6 +866,12 @@ Opaque Z.log2.
 Qed.
 
 Definition Z_is_power2m1 (x: Z) : option Z := Z_is_power2 (Z.succ x).
+
+Lemma Z_is_power2m1_nonneg:
+  forall x i, Z_is_power2m1 x = Some i -> 0 <= i.
+Proof.
+  unfold Z_is_power2m1; intros. eapply Z_is_power2_nonneg; eauto.
+Qed.
 
 Lemma Z_is_power2m1_sound:
   forall x i, Z_is_power2m1 x = Some i -> x = two_p i - 1.
