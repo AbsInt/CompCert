@@ -164,7 +164,7 @@ Ltac monadInv1 H :=
   | (match ?X with left _ => _ | right _ => assertion_failed end = OK _) =>
       destruct X; [try (monadInv1 H) | discriminate]
   | (match (negb ?X) with true => _ | false => assertion_failed end = OK _) =>
-      destruct X as [] eqn:?; [discriminate | try (monadInv1 H)]
+      destruct X as [] eqn:?; simpl negb in H; [discriminate | try (monadInv1 H)]
   | (match ?X with true => _ | false => assertion_failed end = OK _) =>
       destruct X as [] eqn:?; [try (monadInv1 H) | discriminate]
   | (mmap ?F ?L = OK ?M) =>
