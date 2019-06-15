@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "../endian.h"
 
 #define MAXKC	(256/32)
 #define MAXKB	(256/8)
@@ -35,15 +36,6 @@
 typedef unsigned char	u8;
 typedef unsigned short	u16;
 typedef unsigned int	u32;
-
-#if defined(__ppc__) || defined(__PPC__) || defined(__ARMEB__)
-#define ARCH_BIG_ENDIAN
-#elif defined(__i386__) || defined(__x86_64__) || defined(__ARMEL__) \
-   || defined(__riscv)
-#undef ARCH_BIG_ENDIAN
-#else
-#error "unknown endianness"
-#endif
 
 #ifdef ARCH_BIG_ENDIAN
 #define GETU32(pt) (*(u32 *)(pt))
