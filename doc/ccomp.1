@@ -146,6 +146,16 @@ Turn on/off common subexpression elimination.
 Enabled by default.
 .
 .TP
+.BR \-fif\-conversion ", " \-fno\-if\-conversion
+Turn on/off generation of conditional moves.
+Enabled by default.
+.
+.TP
+.BR \-ffavor\-branchless "
+When \fB-fif\-conversion\fP is enabled, the conversion is peformed aggressively even if the resulting code is less performant.
+Disabled by default.
+.
+.TP
 .BR \-finline ", " \-fno\-inline
 Turn on/off inlining of functions.
 Enabled by default.
