@@ -93,7 +93,7 @@ module Target : TARGET =
       | X0 -> output_string oc "x0"
       | X r -> ireg oc r
 
-    let preg oc = function
+    let preg_asm oc ty = function
       | IR r -> ireg oc r
       | FR r -> freg oc r
       | _    -> assert false
@@ -582,7 +582,7 @@ module Target : TARGET =
                                (P.to_int kind) (extern_atom txt) args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
-              print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
+              print_inline_asm preg_asm oc (camlstring_of_coqstring txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false

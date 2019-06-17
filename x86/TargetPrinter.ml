@@ -62,8 +62,8 @@ let ireg64 oc r = output_string oc (int64_reg_name r)
 let ireg = if Archi.ptr64 then ireg64 else ireg32
 let freg oc r = output_string oc (float_reg_name r)
 
-let preg oc = function
-  | IR r -> ireg oc r
+let preg_asm oc ty = function
+  | IR r -> if ty = Tlong then ireg64 oc r else ireg32 oc r
   | FR r -> freg oc r
   | _    -> assert false
 
@@ -826,7 +826,7 @@ module Target(System: SYSTEM):TARGET =
                                (P.to_int kind) (extern_atom txt) args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
-              print_inline_asm preg oc (camlstring_of_coqstring txt) sg args res;
+              print_inline_asm preg_asm oc (camlstring_of_coqstring txt) sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false

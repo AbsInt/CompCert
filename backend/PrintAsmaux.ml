@@ -245,14 +245,15 @@ let print_debug_info comment print_line preg_string sp_name oc kind txt args =
 
 (** Inline assembly *)
 
-let print_asm_argument print_preg oc modifier = function
-  | BA r -> print_preg oc r
+let print_asm_argument print_preg oc modifier typ = function 
+  | BA r -> print_preg oc typ r
   | BA_splitlong(BA hi, BA lo) ->
       begin match modifier with
-      | "R" -> print_preg oc hi
-      | "Q" -> print_preg oc lo
-      |  _  -> fprintf oc "%a:%a" print_preg hi print_preg lo
-                  (* Probably not what was intended *)
+      | "R" -> print_preg oc Tint hi
+      | "Q" -> print_preg oc Tint lo
+      |  _  -> print_preg oc Tint hi; fprintf oc ":"; print_preg oc Tint lo
+               (* This case (printing a split long in full) should never
+                  happen because of the checks done in ExtendedAsm.ml *)
       end
   | _ -> failwith "bad asm argument"
 
@@ -265,8 +266,10 @@ let re_asm_param_1 = Str.regexp "%%\\|%[QR]?[0-9]+"
 let re_asm_param_2 = Str.regexp "%\\([QR]?\\)\\([0-9]+\\)"
 
 let print_inline_asm print_preg oc txt sg args res =
-  let operands =
-    if sg.sig_res = None then args else builtin_arg_of_res res :: args in
+  let (operands, ty_operands) =
+    match sg.sig_res with
+    | None -> (args, sg.sig_args)
+    | Some tres -> (builtin_arg_of_res res :: args, tres :: sg.sig_args) in
   let print_fragment = function
   | Str.Text s ->
       output_string oc s
@@ -277,7 +280,9 @@ let print_inline_asm print_preg oc txt sg args res =
       let modifier = Str.matched_group 1 s
       and number = int_of_string (Str.matched_group 2 s) in
       try
-        print_asm_argument print_preg oc modifier (List.nth operands number)
+        print_asm_argument print_preg oc modifier
+                           (List.nth ty_operands number)
+                           (List.nth operands number)
       with Failure _ ->
         fprintf oc "<bad parameter %s>" s in
   List.iter print_fragment (Str.full_split re_asm_param_1 txt);

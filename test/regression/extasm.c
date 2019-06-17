@@ -33,6 +33,7 @@ int main()
   void * y;
   long long z;
   double f;
+  float sf;
   char c[16];
 
   /* No inputs, no outputs */
@@ -72,6 +73,15 @@ int main()
 #ifdef FAILURES
   asm("FAIL4 a:%[a]" : "=r"(x) : [z]"i"(0));
 #endif
+  /* One argument of each type */
+  asm("TEST15 int32 %0" : : "r" (x));
+#ifdef SIXTYFOUR
+  asm("TEST15 int64 %0" : : "r" (z));
+#else
+  asm("TEST15 int64 %Q0 / %R0" : : "r" (z));
+#endif
+  asm("TEST15 float64 %0" : : "r" (f));
+  asm("TEST15 float32 %0" : : "r" (sf));
   /* Various failures */
 #ifdef FAILURES
   asm("FAIL5 out:%0,%1" : "=r"(x), "=r"(y));
