@@ -14,7 +14,7 @@
 
 Require Import Coqlib Compopts.
 Require Import Integers Floats Values Memory Globalenvs Events.
-Require Import Op Registers RTL ValueDomain.
+Require Import Op Registers RTL ValueDomain ValueAOp ValueAnalysis.
 Require Import ConstpropOp.
 
 Section STRENGTH_REDUCTION.
@@ -369,6 +369,28 @@ Proof.
   exploit Y; eauto. intros [A | [A | A]]; rewrite A; simpl; auto.
 * apply make_cmp_base_correct; auto.
 - apply make_cmp_base_correct; auto.
+Qed.
+
+Lemma make_select_correct:
+  forall c ty r1 r2 args vl,
+  vl = map (fun r => AE.get r ae) args ->
+  let (op', args') := make_select c ty r1 r2 args vl in
+  exists v, eval_operation ge (Vptr sp Ptrofs.zero) op' e##args' m = Some v
+         /\ Val.lessdef (Val.select (eval_condition c e##args m) e#r1 e#r2 ty) v.
+Proof.
+  unfold make_select; intros.
+  destruct (resolve_branch (eval_static_condition c vl)) as [b|] eqn:RB.
+- exists (if b then e#r1 else e#r2); split.
++ simpl. destruct b; auto.
++ destruct (eval_condition c e##args m) as [b'|] eqn:EC; simpl; auto.
+  assert (b = b').
+  { eapply resolve_branch_sound; eauto. 
+    rewrite <- EC. apply eval_static_condition_sound with bc. 
+    subst vl. exact (aregs_sound _ _ _ args MATCH). }
+  subst b'. apply Val.lessdef_normalize.
+- generalize (cond_strength_reduction_correct c args vl H).
+  destruct (cond_strength_reduction c args vl) as [cond' args']; intros EQ.
+  econstructor; split. simpl; eauto. rewrite EQ; auto.
 Qed.
 
 Lemma make_addimm_correct:
@@ -905,6 +927,8 @@ Proof.
   auto.
 (* cond *)
   inv H0. apply make_cmp_correct; auto.
+(* select *)
+  inv H0. apply make_select_correct; congruence.
 (* mulf *)
   InvApproxRegs; SimplVM; inv H0. rewrite <- H2. apply make_mulfimm_correct; auto.
   InvApproxRegs; SimplVM; inv H0. fold (Val.mulf (Vfloat n1) e#r2).

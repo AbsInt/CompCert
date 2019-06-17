@@ -20,7 +20,7 @@ Require Import Integers.
 Require Import Floats.
 Require Import Op.
 Require Import Registers.
-Require Import ValueDomain.
+Require Import ValueDomain ValueAOp.
 
 (** * Converting known values to constants *)
 
@@ -129,6 +129,15 @@ Nondetfunction make_cmp (c: condition) (args: list reg) (vl: list aval) :=
       make_cmp_imm_ne c args vl n r1 v1
   | _, _, _ =>
       make_cmp_base c args vl
+  end.
+
+Definition make_select (c: condition) (ty: typ)
+                       (r1 r2: reg) (args: list reg) (vl: list aval) :=
+  match resolve_branch (eval_static_condition c vl) with
+  | Some b => (Omove, (if b then r1 else r2) :: nil)
+  | None =>
+      let (c', args') := cond_strength_reduction c args vl in
+      (Osel c' ty, r1 :: r2 :: args')
   end.
 
 Definition make_addimm (n: int) (r: reg) :=
@@ -284,6 +293,7 @@ Nondetfunction op_strength_reduction
   | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1 r2
   | Oshru, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shruimm n2 r1 r2
   | Ocmp c, args, vl => make_cmp c args vl
+  | Osel c ty, r1 :: r2 :: args, v1 :: v2 :: vl => make_select c ty r1 r2 args vl
   | Omulf, r1 :: r2 :: nil, v1 :: F n2 :: nil => make_mulfimm n2 r1 r1 r2
   | Omulf, r1 :: r2 :: nil, F n1 :: v2 :: nil => make_mulfimm n1 r2 r1 r2
   | Omulfs, r1 :: r2 :: nil, v1 :: FS n2 :: nil => make_mulfsimm n2 r1 r1 r2

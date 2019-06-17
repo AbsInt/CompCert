@@ -83,6 +83,26 @@ float sdoz(float x, float y)
   return x >= y ? x - y : 0.0f;
 }
 
+/* Examples where constant propagation should take place */
+
+int constprop1(int x)
+{
+  int n = 0;
+  return n ? x : 42;
+}
+
+int constprop2(int x)
+{
+  int n = 1;
+  return n ? x : 42;
+}
+
+int constprop3(int x, int y)
+{
+  int n = 0;
+  return x < n ? y - 1 : y + 1;
+}
+
 /* Test harness */
 
 #define TESTI(call) printf(#call " = %d\n", call)
