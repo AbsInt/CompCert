@@ -596,6 +596,12 @@ and convertParams env = function
     | [] -> Tnil
     | (id, ty) :: rem -> Tcons(convertTyp env ty, convertParams env rem)
 
+(* Convert types for the arguments to a function call.  The types for
+   fixed arguments are taken from the function prototype.  The types
+   for other arguments (variable-argument function or unprototyped K&R
+   functions) are taken from the types of the function arguments,
+   after default argument conversion. *)
+
 let rec convertTypArgs env tl el =
   match tl, el with
   | _, [] -> Tnil
@@ -604,6 +610,20 @@ let rec convertTypArgs env tl el =
             convertTypArgs env [] el)
   | (id, t1) :: tl, e1 :: el ->
       Tcons(convertTyp env t1, convertTypArgs env tl el)
+
+(* Convert types for the arguments to inline asm statements and to
+   the special built-in functions __builtin_annot, __builtin_ais_annot_
+   and __builtin_debug.  The types are taken from the types of the
+   arguments, after performing the usual unary conversions.
+   Hence char becomes int but float remains float and is not promoted
+   to double.  The goal is to preserve the representation of the arguments
+   and avoid inserting compiled code to convert the arguments. *)
+
+let rec convertTypAnnotArgs env = function
+  | [] -> Tnil
+  | e1 :: el ->
+      Tcons(convertTyp env (Cutil.unary_conversion env e1.etyp),
+            convertTypAnnotArgs env el)
 
 let convertField env f =
   if f.fld_bitfield <> None then
@@ -845,7 +865,7 @@ let rec convertExpr env e =
         | {edesc = C.EVar id} :: args2 -> (id.name, args2)
         | _::args2 -> error "argument 2 of '__builtin_debug' must be either a string literal or a variable"; ("", args2)
         | [] -> assert false (* catched earlier *) in
-      let targs2 = convertTypArgs env [] args2 in
+      let targs2 = convertTypAnnotArgs env args2 in
       Ebuiltin(
          AST.EF_debug(P.of_int64 kind, intern_string text,
                  typlist_of_typelist targs2),
@@ -854,7 +874,7 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_annot"}}, args) ->
       begin match args with
       | {edesc = C.EConst(CStr txt)} :: args1 ->
-          let targs1 = convertTypArgs env [] args1 in
+          let targs1 = convertTypAnnotArgs env args1 in
           Ebuiltin(
              AST.EF_annot(P.of_int 1,coqstring_of_camlstring txt, typlist_of_typelist targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
@@ -882,7 +902,7 @@ let rec convertExpr env e =
         let file,line = !currentLocation in
         let fun_name = !currentFunction in
         let loc_string = Printf.sprintf "# file:%s line:%d function:%s\n" file line fun_name in
-        let targs1 = convertTypArgs env [] args1 in
+        let targs1 = convertTypAnnotArgs env args1 in
         AisAnnot.validate_ais_annot env !currentLocation txt args1;
           Ebuiltin(
              AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), typlist_of_typelist targs1),
@@ -983,14 +1003,14 @@ let convertAsm loc env txt outputs inputs clobber =
     match output' with None -> TVoid [] | Some e -> e.etyp in
   (* Build the Ebuiltin expression *)
   let e =
-    let tinputs = convertTypArgs env [] inputs' in
+    let tinputs = convertTypAnnotArgs env inputs' in
     let toutput = convertTyp env ty_res in
     Ebuiltin( AST.EF_inline_asm(coqstring_of_camlstring txt',
                            signature_of_type tinputs toutput  AST.cc_default,
                            clobber'),
              tinputs,
              convertExprList env inputs',
-             convertTyp env ty_res) in
+             toutput) in
   (* Add an assignment to the output, if any *)
   match output' with
   | None -> e
