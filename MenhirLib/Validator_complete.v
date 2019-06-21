@@ -229,7 +229,7 @@ Proof.
     revert Val. generalize true at 1.
     induction Hfind as [[? ?] l [?%compare_eq ?]|??? IH]=>?.
     + simpl in *; subst.
-      match goal with |- _ -> ?X = true => destruct X end=>//.
+      match goal with |- _ -> ?X = true => destruct X end; [done|].
       rewrite Bool.andb_false_r. clear. induction l as [|[[[??]?]?] l IH]=>//.
     + apply IH.
   - destruct future_of_prod eqn:EQ. by eapply Hval1; eauto.

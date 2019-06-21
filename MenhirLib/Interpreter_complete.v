@@ -353,8 +353,10 @@ Fixpoint build_pt_dot_from_pt {symb word}
       let X :=
           match ptz in pt_zipper symb word
             return match symb with T term => True | NT _ => False end ->
-                   { symbsq & { wordq & (parse_tree_list symbsq wordq *
-                                ptl_zipper (symb :: symbsq) (wordq ++ word))%type } }
+                   { symbsq : list symbol &
+                     { wordq : list token &
+                       (parse_tree_list symbsq wordq *
+                        ptl_zipper (symb :: symbsq) (wordq ++ word))%type } }
           with
           | Top_ptz => fun F => False_rect _ F
           | Cons_ptl_ptz ptl ptlz => fun _ =>
