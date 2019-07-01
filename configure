@@ -553,7 +553,7 @@ else
   ocaml_opt_comp=false
 fi
 
-MENHIR_REQUIRED=20190613
+MENHIR_REQUIRED=20190626
 echo "Testing Menhir... " | tr -d '\n'
 menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
 case "$menhir_ver" in
