@@ -16,7 +16,7 @@ Require Import FunInd.
 Require Import Axioms Classical.
 Require Import String Coqlib Decidableplus.
 Require Import Errors Maps Integers Floats.
-Require Import AST Values Memory Events Globalenvs Determinism.
+Require Import AST Values Memory Events Globalenvs Builtins Determinism.
 Require Import Ctypes Cop Csyntax Csem.
 Require Cstrategy.
 
@@ -501,12 +501,19 @@ Definition do_ef_debug (kind: positive) (text: ident) (targs: list typ)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
   Some(w, E0, Vundef, m).
 
+Definition do_builtin_or_external (name: string) (sg: signature)
+       (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
+  match lookup_builtin_function name sg with
+  | Some bf => match builtin_function_sem bf vargs with Some v => Some(w, E0, v, m) | None => None end
+  | None    => do_external_function name sg ge w vargs m
+  end.
+
 Definition do_external (ef: external_function):
        world -> list val -> mem -> option (world * trace * val * mem) :=
   match ef with
   | EF_external name sg => do_external_function name sg ge
-  | EF_builtin name sg => do_external_function name sg ge
-  | EF_runtime name sg => do_external_function name sg ge
+  | EF_builtin name sg => do_builtin_or_external name sg
+  | EF_runtime name sg => do_builtin_or_external name sg
   | EF_vload chunk => do_ef_volatile_load chunk
   | EF_vstore chunk => do_ef_volatile_store chunk
   | EF_malloc => do_ef_malloc
@@ -523,17 +530,26 @@ Lemma do_ef_external_sound:
   do_external ef w vargs m = Some(w', t, vres, m') ->
   external_call ef ge vargs m t vres m' /\ possible_trace w t w'.
 Proof with try congruence.
+  intros until m'.
   assert (SIZE: forall v sz, do_alloc_size v = Some sz -> v = Vptrofs sz).
   { intros until sz; unfold Vptrofs; destruct v; simpl; destruct Archi.ptr64 eqn:SF; 
     intros EQ; inv EQ; f_equal; symmetry; eauto with ptrofs. }
-  intros until m'.
+  assert (BF_EX: forall name sg,
+    do_builtin_or_external name sg w vargs m = Some (w', t, vres, m') ->
+    builtin_or_external_sem name sg ge vargs m t vres m' /\ possible_trace w t w').
+  { unfold do_builtin_or_external, builtin_or_external_sem; intros. 
+    destruct (lookup_builtin_function name sg ) as [bf|].
+  - destruct (builtin_function_sem bf vargs) as [vres1|] eqn:BF; inv H.
+    split. constructor; auto. constructor.
+  - eapply do_external_function_sound; eauto.
+  }
   destruct ef; simpl.
 (* EF_external *)
   eapply do_external_function_sound; eauto.
 (* EF_builtin *)
-  eapply do_external_function_sound; eauto.
+  eapply BF_EX; eauto.
 (* EF_runtime *)
-  eapply do_external_function_sound; eauto.
+  eapply BF_EX; eauto.
 (* EF_vload *)
   unfold do_ef_volatile_load. destruct vargs... destruct v... destruct vargs...
   mydestr. destruct p as [[w'' t''] v]; mydestr.
@@ -575,17 +591,26 @@ Lemma do_ef_external_complete:
   external_call ef ge vargs m t vres m' -> possible_trace w t w' ->
   do_external ef w vargs m = Some(w', t, vres, m').
 Proof.
+  intros.
   assert (SIZE: forall n, do_alloc_size (Vptrofs n) = Some n).
   { unfold Vptrofs, do_alloc_size; intros; destruct Archi.ptr64 eqn:SF. 
     rewrite Ptrofs.of_int64_to_int64; auto.
     rewrite Ptrofs.of_int_to_int; auto. }
-  intros. destruct ef; simpl in *.
+  assert (BF_EX: forall name sg,
+    builtin_or_external_sem name sg ge vargs m t vres m' ->
+    do_builtin_or_external name sg w vargs m = Some (w', t, vres, m')).
+  { unfold do_builtin_or_external, builtin_or_external_sem; intros.
+    destruct (lookup_builtin_function name sg) as [bf|].
+  - inv H1. inv H0. rewrite H2. auto.
+  - eapply do_external_function_complete; eauto.
+  }
+  destruct ef; simpl in *.
 (* EF_external *)
   eapply do_external_function_complete; eauto.
 (* EF_builtin *)
-  eapply do_external_function_complete; eauto.
+  eapply BF_EX; eauto.
 (* EF_runtime *)
-  eapply do_external_function_complete; eauto.
+  eapply BF_EX; eauto.
 (* EF_vload *)
   inv H; unfold do_ef_volatile_load.
   exploit do_volatile_load_complete; eauto. intros EQ; rewrite EQ; auto.

@@ -24,6 +24,7 @@ Require Import Floats.
 Require Import Values.
 Require Import Memory.
 Require Import Globalenvs.
+Require Import Builtins.
 
 (** * Events and traces *)
 
@@ -1377,12 +1378,67 @@ Proof.
   split. constructor. auto.
 Qed.
 
+(** ** Semantics of known built-in functions. *)
+
+(** Some built-in functions and runtime support functions have known semantics
+  as defined in the [Builtin] modules.
+  These built-in functions have no observable effects and do not access memory. *)
+
+Inductive known_builtin_sem (bf: builtin_function) (ge: Senv.t):
+              list val -> mem -> trace -> val -> mem -> Prop :=
+  | known_builtin_sem_intro: forall vargs vres m,
+      builtin_function_sem bf vargs = Some vres ->
+      known_builtin_sem bf ge vargs m E0 vres m.
+
+Lemma known_builtin_ok: forall bf,
+  extcall_properties (known_builtin_sem bf) (builtin_function_sig bf).
+Proof.
+  intros. set (bsem := builtin_function_sem bf). constructor; intros.
+(* well typed *)
+- inv H.
+  specialize (bs_well_typed  _ bsem vargs). unfold val_opt_has_type, bsem; rewrite H0.
+  auto.
+(* symbols *)
+- inv H0. econstructor; eauto.
+(* valid blocks *)
+- inv H; auto.
+(* perms *)
+- inv H; auto.
+(* readonly *)
+- inv H. apply Mem.unchanged_on_refl.
+(* mem extends *)
+- inv H. fold bsem in H2. apply val_inject_list_lessdef in H1.
+  specialize (bs_inject _ bsem _ _ _ H1).
+  unfold val_opt_inject; rewrite H2; intros.
+  destruct (bsem vargs') as [vres'|] eqn:?; try contradiction.
+  exists vres', m1'; intuition auto using Mem.extends_refl, Mem.unchanged_on_refl.
+  constructor; auto.
+  apply val_inject_lessdef; auto.
+(* mem injects *)
+- inv H0. fold bsem in H3.
+  specialize (bs_inject _ bsem _ _ _ H2).
+  unfold val_opt_inject; rewrite H3; intros.
+  destruct (bsem vargs') as [vres'|] eqn:?; try contradiction.
+  exists f, vres', m1'; intuition auto using Mem.extends_refl, Mem.unchanged_on_refl.
+  constructor; auto.
+  red; intros; congruence.
+(* trace length *)
+- inv H; simpl; omega.
+(* receptive *)
+- inv H; inv H0. exists vres1, m1; constructor; auto. 
+(* determ *)
+- inv H; inv H0.
+  split. constructor. intuition congruence. 
+Qed.
+
 (** ** Semantics of external functions. *)
 
-(** For functions defined outside the program ([EF_external],
-  [EF_builtin] and [EF_runtime]), we do not define their
-  semantics, but only assume that it satisfies
-  [extcall_properties]. *)
+(** For functions defined outside the program ([EF_external]),
+  we do not define their semantics, but only assume that it satisfies
+  [extcall_properties].
+  We do the same for built-in functions and runtime support functions that
+  are not described in [Builtins].
+*)
 
 Parameter external_functions_sem: String.string -> signature -> extcall_sem.
 
@@ -1398,6 +1454,22 @@ Axiom inline_assembly_properties:
 
 (** ** Combined semantics of external calls *)
 
+Definition builtin_or_external_sem name sg :=
+  match lookup_builtin_function name sg with
+  | Some bf => known_builtin_sem bf
+  | None => external_functions_sem name sg
+  end.
+
+Lemma builtin_or_external_sem_ok: forall name sg,
+  extcall_properties (builtin_or_external_sem name sg) sg.
+Proof.
+  unfold builtin_or_external_sem; intros. 
+  destruct (lookup_builtin_function name sg) as [bf|] eqn:L.
+- exploit lookup_builtin_function_sig; eauto. intros EQ; subst sg.
+  apply known_builtin_ok.
+- apply external_functions_properties.
+Qed.
+
 (** Combining the semantics given above for the various kinds of external calls,
   we define the predicate [external_call] that relates:
 - the external function being invoked
@@ -1412,8 +1484,8 @@ This predicate is used in the semantics of all CompCert languages. *)
 Definition external_call (ef: external_function): extcall_sem :=
   match ef with
   | EF_external name sg  => external_functions_sem name sg
-  | EF_builtin name sg   => external_functions_sem name sg
-  | EF_runtime name sg   => external_functions_sem name sg
+  | EF_builtin name sg   => builtin_or_external_sem name sg
+  | EF_runtime name sg   => builtin_or_external_sem name sg
   | EF_vload chunk       => volatile_load_sem chunk
   | EF_vstore chunk      => volatile_store_sem chunk
   | EF_malloc            => extcall_malloc_sem
@@ -1431,8 +1503,8 @@ Theorem external_call_spec:
 Proof.
   intros. unfold external_call, ef_sig; destruct ef.
   apply external_functions_properties.
-  apply external_functions_properties.
-  apply external_functions_properties.
+  apply builtin_or_external_sem_ok.
+  apply builtin_or_external_sem_ok.
   apply volatile_load_ok.
   apply volatile_store_ok.
   apply extcall_malloc_ok.

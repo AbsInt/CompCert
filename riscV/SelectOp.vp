@@ -44,11 +44,8 @@
 Require Archi.
 Require Import Coqlib.
 Require Import Compopts.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Op.
-Require Import CminorSel.
+Require Import AST Integers Floats Builtins.
+Require Import Op CminorSel.
 
 Local Open Scope cminorsel_scope.
 
@@ -454,3 +451,8 @@ Nondetfunction builtin_arg (e: expr) :=
       if Archi.ptr64 then BA_addptr (BA e1) (BA_long n) else BA e
   | _ => BA e
   end.
+
+(** Platform-specific known builtins *)
+
+Definition platform_builtin (b: platform_builtin) (args: exprlist) : option expr :=
+  None.

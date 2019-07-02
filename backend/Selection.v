@@ -24,7 +24,7 @@
 
 Require String.
 Require Import Coqlib Maps.
-Require Import AST Errors Integers Globalenvs Switch.
+Require Import AST Errors Integers Globalenvs Builtins Switch.
 Require Cminor.
 Require Import Op CminorSel Cminortyping.
 Require Import SelectOp SplitLong SelectLong SelectDiv.
@@ -162,6 +162,13 @@ Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
   | Cminor.Ocmplu c => cmplu c arg1 arg2
   end.
 
+Definition sel_select (ty: typ) (cnd ifso ifnot: expr) : expr :=
+   let (cond, args) := condition_of_expr cnd in
+   match SelectOp.select ty cond args ifso ifnot with
+   | Some a => a
+   | None => Econdition (condexpr_of_expr cnd) ifso ifnot
+   end.
+
 (** Conversion from Cminor expression to Cminorsel expressions *)
 
 Fixpoint sel_expr (a: Cminor.expr) : expr :=
@@ -229,6 +236,43 @@ Definition sel_builtin_res (optid: option ident) : builtin_res ident :=
   match optid with
   | None => BR_none
   | Some id => BR id
+  end.
+
+(** Known builtin functions *)
+
+Function sel_known_builtin (bf: builtin_function) (args: exprlist) :=
+  match bf, args with
+  | BI_platform b, _ =>
+      SelectOp.platform_builtin b args
+  | BI_standard (BI_select ty), a1 ::: a2 ::: a3 ::: Enil =>
+      Some (sel_select ty a1 a2 a3)
+  | BI_standard BI_fabs, a1 ::: Enil =>
+      Some (SelectOp.absf a1)
+  | _, _ =>
+      None
+  end.
+
+(** Builtin functions in general *)
+
+Definition sel_builtin_default (optid: option ident) (ef: external_function)
+                               (args: list Cminor.expr) :=
+  Sbuiltin (sel_builtin_res optid) ef
+           (sel_builtin_args args (Machregs.builtin_constraints ef)).
+
+Definition sel_builtin (optid: option ident) (ef: external_function)
+                               (args: list Cminor.expr) :=
+  match optid, ef with
+  | Some id, EF_builtin name sg =>
+      match lookup_builtin_function name sg with
+      | Some bf =>
+          match sel_known_builtin bf (sel_exprlist args) with
+          | Some a => Sassign id a
+          | None => sel_builtin_default optid ef args
+          end
+      | None => sel_builtin_default optid ef args
+      end
+  | _, _ =>
+      sel_builtin_default optid ef args
   end.
 
 (** Conversion of Cminor [switch] statements to decision trees. *)
@@ -342,13 +386,10 @@ Fixpoint sel_stmt (ki: known_idents) (env: typenv) (s: Cminor.stmt) : res stmt :
       OK (match classify_call fn with
       | Call_default => Scall optid sg (inl _ (sel_expr fn)) (sel_exprlist args)
       | Call_imm id  => Scall optid sg (inr _ id) (sel_exprlist args)
-      | Call_builtin ef => Sbuiltin (sel_builtin_res optid) ef
-                                    (sel_builtin_args args
-                                       (Machregs.builtin_constraints ef))
+      | Call_builtin ef => sel_builtin optid ef args
       end)
   | Cminor.Sbuiltin optid ef args =>
-      OK (Sbuiltin (sel_builtin_res optid) ef
-                   (sel_builtin_args args (Machregs.builtin_constraints ef)))
+      OK (sel_builtin optid ef args)
   | Cminor.Stailcall sg fn args =>
       OK (match classify_call fn with
       | Call_imm id  => Stailcall sg (inr _ id) (sel_exprlist args)
