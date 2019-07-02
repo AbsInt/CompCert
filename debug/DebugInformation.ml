@@ -123,7 +123,7 @@ let insert_type ty =
           | TNamed (id,_) ->
               let typ = try
                 let _,t =
-                  List.find (fun a -> fst a = id.name) CBuiltins.builtins.Builtins.typedefs in
+                  List.find (fun a -> fst a = id.name) CBuiltins.builtins.builtin_typedefs in
                 Some (attr_aux t)
               with Not_found -> None in
               let t = {

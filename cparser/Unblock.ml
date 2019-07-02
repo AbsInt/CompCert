@@ -399,4 +399,4 @@ let rec unblock_glob env accu = function
 let program p =
   next_scope_id := 0;
   {gloc = no_loc; gdesc = Gdecl(Storage_extern, debug_id, debug_ty, None)} ::
-  unblock_glob (Builtins.environment()) [] p
+  unblock_glob (Env.initial()) [] p

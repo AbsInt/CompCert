@@ -38,10 +38,10 @@ let intPtrType = TPtr(TInt(IInt, []), [])
 let sizeType() = TInt(size_t_ikind(), [])
 
 let builtins = {
-  Builtins.typedefs = [
+  builtin_typedefs = [
   "__builtin_va_list", voidPtrType
 ];
-  Builtins.functions = [
+  builtin_functions = [
   "__builtin___fprintf_chk",  (intType, [ voidPtrType; intType; charConstPtrType ], true) (* first argument is really FILE*, not void*, but we don't want to build in the definition for FILE *);
   "__builtin___memcpy_chk",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType(); sizeType() ], false);
   "__builtin___memmove_chk",  (voidPtrType, [ voidPtrType; voidConstPtrType; sizeType(); sizeType() ], false);

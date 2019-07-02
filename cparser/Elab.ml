@@ -3089,7 +3089,7 @@ let _ = elab_funbody_f := elab_funbody
 
 let elab_file prog =
   reset();
-  let env = Builtins.environment () in
+  let env = Env.initial () in
   let elab_def env d = snd (elab_definition false false false env d) in
   ignore (List.fold_left elab_def env prog);
   let p = elaborated_program () in

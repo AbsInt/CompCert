@@ -18,10 +18,10 @@
 open C
 
 let builtins = {
-  Builtins.typedefs = [
+  builtin_typedefs = [
     "__builtin_va_list", TPtr(TVoid [], [])
   ];
-  Builtins.functions = [
+  builtin_functions = [
     (* Integer arithmetic *)
     "__builtin_clz",
       (TInt(IInt, []), [TInt(IUInt, [])], false);

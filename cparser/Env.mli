@@ -77,3 +77,10 @@ val add_typedef : t -> C.ident -> typedef_info -> t
 val add_enum : t -> C.ident -> enum_info -> t
 
 val add_types : t -> t -> t
+
+(* Initial environment describing the builtin types and functions *)
+
+val initial: unit -> t
+val initial_identifiers: unit -> C.ident list
+val initial_declarations: unit -> C.globdecl list
+val set_builtins: C.builtins -> unit

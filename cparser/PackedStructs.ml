@@ -418,4 +418,4 @@ let program p =
     | _ -> false
     end;
   Hashtbl.clear byteswapped_fields;
-  transf_globdecls (Builtins.environment()) [] p
+  transf_globdecls (Env.initial()) [] p

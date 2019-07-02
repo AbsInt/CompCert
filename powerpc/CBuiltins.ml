@@ -18,11 +18,11 @@
 open C
 
 let builtins = {
-  Builtins.typedefs = [
+  builtin_typedefs = [
     "__builtin_va_list",
     TArray(TInt(IUInt, []), Some 3L, [])
   ];
-  Builtins.functions = [
+  builtin_functions = [
     (* Integer arithmetic *)
     "__builtin_mulhw",
       (TInt(IInt, []), [TInt(IInt, []); TInt(IInt, [])], false);

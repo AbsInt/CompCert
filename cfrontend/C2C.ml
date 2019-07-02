@@ -155,8 +155,8 @@ let ais_annot_functions =
     []
 
 let builtins_generic = {
-  Builtins.typedefs = [];
-  Builtins.functions =
+  builtin_typedefs = [];
+  builtin_functions =
     ais_annot_functions
       @
     [
@@ -300,9 +300,12 @@ let builtins_generic = {
 
 (* Add processor-dependent builtins *)
 
-let builtins =
-  Builtins.({ typedefs = builtins_generic.typedefs @ CBuiltins.builtins.typedefs;
-    functions = builtins_generic.Builtins.functions @ CBuiltins.builtins.functions })
+let builtins = {
+  builtin_typedefs =
+    builtins_generic.builtin_typedefs @ CBuiltins.builtins.builtin_typedefs;
+  builtin_functions =
+    builtins_generic.builtin_functions @ CBuiltins.builtins.builtin_functions
+}
 
 (** ** The known attributes *)
 
@@ -1233,7 +1236,7 @@ let convertFundecl env (sto, id, ty, optinit) =
     if id.name = "free" then AST.EF_free else
     if Str.string_match re_runtime id.name 0 then  AST.EF_runtime(id'', sg) else
     if Str.string_match re_builtin id.name 0
-    && List.mem_assoc id.name builtins.Builtins.functions
+    && List.mem_assoc id.name builtins.builtin_functions
     then AST.EF_builtin(id'', sg)
     else AST.EF_external(id'', sg) in
   (id',  AST.Gfun(Ctypes.External(ef, args, res, cconv)))
@@ -1432,7 +1435,7 @@ let convertProgram p =
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
   Hashtbl.clear wstringTable;
-  let p = cleanupGlobals (Builtins.declarations() @ p) in
+  let p = cleanupGlobals (Env.initial_declarations() @ p) in
   try
     let env = translEnv Env.empty p in
     let typs = convertCompositedefs env [] p in

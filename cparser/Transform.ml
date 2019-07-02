@@ -227,4 +227,4 @@ let program
       in
         transf_globdecls env' ({g with gdesc = desc'} :: accu) gl
 
-  in transf_globdecls (Builtins.environment()) [] p
+  in transf_globdecls (Env.initial()) [] p

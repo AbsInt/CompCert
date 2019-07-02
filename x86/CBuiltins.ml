@@ -26,10 +26,10 @@ let (va_list_type, va_list_scalar, size_va_list) =
     (TPtr(TVoid [], []), true, 4)
 
 let builtins = {
-  Builtins.typedefs = [
+  builtin_typedefs = [
     "__builtin_va_list", va_list_type;
   ];
-  Builtins.functions = [
+  builtin_functions = [
     (* Integer arithmetic *)
     "__builtin_bswap64",
       (TInt(IULongLong, []), [TInt(IULongLong, [])], false);

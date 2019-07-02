@@ -276,6 +276,46 @@ let add_enum env id info =
 let add_types env_old env_new =
   { env_new with env_ident = env_old.env_ident;env_scope = env_old.env_scope;}
 
+(* Initial environment describing the built-in types and functions *)
+
+module Init = struct
+
+let env = ref empty
+let idents = ref []
+let decls = ref []
+
+let no_loc = ("", -1)
+
+let add_typedef (s, ty) =
+  let (id, env') = enter_typedef !env s ty in
+  env := env';
+  idents := id :: !idents;
+  decls := {gdesc = Gtypedef(id, ty); gloc = no_loc} :: !decls
+
+let add_function (s, (res, args, va)) =
+  let ty =
+    TFun(res,
+         Some (List.map (fun ty -> (fresh_ident "", ty)) args),
+         va, []) in
+  let (id, env') = enter_ident !env s Storage_extern ty in
+  env := env';
+  idents := id :: !idents;
+  decls :=
+    {gdesc = Gdecl(Storage_extern, id, ty, None); gloc = no_loc} :: !decls
+
+end
+
+let initial () = !Init.env
+let initial_identifiers () = !Init.idents
+let initial_declarations () = List.rev !Init.decls
+
+let set_builtins blt =
+  Init.env := empty;
+  Init.idents := [];
+  Init.decls := [];
+  List.iter Init.add_typedef blt.builtin_typedefs;
+  List.iter Init.add_function blt.builtin_functions
+
 (* Error reporting *)
 
 open Printf

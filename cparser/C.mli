@@ -264,3 +264,10 @@ and globdecl_desc =
   | Gpragma of string                   (* #pragma directive *)
 
 type program = globdecl list
+
+(** Builtin types and functions *)
+
+type builtins = {
+  builtin_typedefs: (string * typ) list;
+  builtin_functions: (string * (typ * typ list * bool)) list
+}

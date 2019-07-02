@@ -117,7 +117,7 @@ let traverse_program
           pragma env g.gloc s;
           env in
       traverse env gl in
-  traverse (Builtins.environment ()) p
+  traverse (Env.initial ()) p
 
 (* Unknown attributes warning *)
 
