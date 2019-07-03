@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps Integers Floats Lattice Kildall.
 Require Import AST Linking.
-Require Import Values Events Memory Globalenvs Smallstep.
+Require Import Values Builtins Events Memory Globalenvs Smallstep.
 Require Compopts Machregs.
 Require Import Op Registers RTL.
 Require Import Liveness ValueDomain ValueAOp ValueAnalysis.
@@ -474,19 +474,41 @@ Proof.
 - (* Ibuiltin *)
   rename pc'0 into pc. TransfInstr; intros.
 Opaque builtin_strength_reduction.
-  exploit builtin_strength_reduction_correct; eauto. intros (vargs' & P & Q).
-  exploit (@eval_builtin_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)).
+  set (dfl := Ibuiltin ef (builtin_strength_reduction ae ef args) res pc') in *.
+  set (rm := romem_for cu) in *.
+  assert (DFL: (fn_code (transf_function rm f))!pc = Some dfl ->
+          exists (n2 : nat) (s2' : state),
+            step tge
+             (State s' (transf_function rm f) (Vptr sp0 Ptrofs.zero) pc rs' m'0) t s2' /\
+            match_states n2
+             (State s f (Vptr sp0 Ptrofs.zero) pc' (regmap_setres res vres rs) m') s2').
+  {
+    exploit builtin_strength_reduction_correct; eauto. intros (vargs' & P & Q).
+    exploit (@eval_builtin_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)).
     apply REGS. eauto. eexact P.
-  intros (vargs'' & U & V).
-  exploit external_call_mem_extends; eauto.
-  intros [v' [m2' [A [B [C D]]]]].
+    intros (vargs'' & U & V).
+    exploit external_call_mem_extends; eauto.
+    intros (v' & m2' & A & B & C & D).
+    econstructor; econstructor; split.
+    eapply exec_Ibuiltin; eauto.
+    eapply eval_builtin_args_preserved. eexact symbols_preserved. eauto.
+    eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+    eapply match_states_succ; eauto.
+    apply set_res_lessdef; auto.
+  }
+  destruct ef; auto.
+  destruct res; auto.
+  destruct (lookup_builtin_function name sg) as [bf|] eqn:LK; auto.
+  destruct (eval_static_builtin_function ae am rm bf args) as [a|] eqn:ES; auto.
+  destruct (const_for_result a) as [cop|] eqn:CR; auto.
+  clear DFL. simpl in H1; red in H1; rewrite LK in H1; inv H1.
+  exploit const_for_result_correct; eauto. 
+  eapply eval_static_builtin_function_sound; eauto.
+  intros (v' & A & B).
   left; econstructor; econstructor; split.
-  eapply exec_Ibuiltin; eauto.
-  eapply eval_builtin_args_preserved. eexact symbols_preserved. eauto.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply exec_Iop; eauto.
   eapply match_states_succ; eauto.
-  apply set_res_lessdef; auto.
-
+  apply set_reg_lessdef; auto.
 - (* Icond, preserved *)
   rename pc'0 into pc. TransfInstr.
   set (ac := eval_static_condition cond (aregs ae args)).

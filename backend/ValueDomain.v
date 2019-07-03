@@ -13,7 +13,7 @@
 Require Import FunInd.
 Require Import Zwf Coqlib Maps Zbits Integers Floats Lattice.
 Require Import Compopts AST.
-Require Import Values Memory Globalenvs Events.
+Require Import Values Memory Globalenvs Builtins Events.
 Require Import Registers RTL.
 
 (** The abstract domains for value analysis *)
@@ -3038,7 +3038,47 @@ Proof with (auto using provenance_monotone with va).
 - destruct (zlt n 16)...
 Qed.
 
-(** Abstracting memory blocks *)
+(** Analysis of known builtin functions.  All we have is a dynamic semantics
+  as a function [list val -> option val], but we can still perform 
+  some constant propagation. *)
+
+Definition val_of_aval (a: aval) : val :=
+  match a with
+  | I n => Vint n
+  | L n => Vlong n
+  | F f => Vfloat f
+  | FS f => Vsingle f
+  | _ => Vundef
+  end.
+
+Definition aval_of_val (v: val) : option aval :=
+  match v with
+  | Vint n => Some (I n)
+  | Vlong n => Some (L n)
+  | Vfloat f => Some (F f)
+  | Vsingle f => Some (FS f)
+  | _ => None
+  end.
+
+Lemma val_of_aval_sound:
+  forall v a, vmatch v a -> Val.lessdef (val_of_aval a) v.
+Proof.
+  destruct 1; simpl; auto.
+Qed.
+
+Corollary list_val_of_aval_sound:
+  forall vl al, list_forall2 vmatch vl al -> Val.lessdef_list (map val_of_aval al) vl.
+Proof.
+  induction 1; simpl; constructor; auto using val_of_aval_sound.
+Qed.
+
+Lemma aval_of_val_sound:
+  forall v a, aval_of_val v = Some a -> vmatch v a. 
+Proof.
+  intros v a E; destruct v; simpl in E; inv E; constructor.
+Qed.
+
+(** * Abstracting memory blocks *)
 
 Inductive acontent : Type :=
  | ACval (chunk: memory_chunk) (av: aval).
