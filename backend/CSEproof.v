@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
 Require Import AST Linking.
-Require Import Values Memory Events Globalenvs Smallstep.
+Require Import Values Memory Builtins Events Globalenvs Smallstep.
 Require Import Op Registers RTL.
 Require Import ValueDomain ValueAOp ValueAnalysis.
 Require Import CSEdomain CombineOp CombineOpproof CSE.
@@ -1129,7 +1129,9 @@ Proof.
   { exists valu. apply set_res_unknown_holds. eapply kill_all_loads_hold; eauto. }
   destruct ef.
   + apply CASE1.
-  + apply CASE3.
+  + destruct (lookup_builtin_function name sg) as [bf|] eqn:LK.
+    ++ apply CASE2. simpl in H1; red in H1; rewrite LK in H1; inv H1. auto.
+    ++ apply CASE3.
   + apply CASE1.
   + apply CASE2; inv H1; auto.
   + apply CASE3.
