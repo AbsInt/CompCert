@@ -3095,4 +3095,5 @@ let elab_file prog =
   let p = elaborated_program () in
   Checks.unused_variables p;
   Checks.unknown_attrs_program p;
+  Checks.non_linear_conditional p;
   p

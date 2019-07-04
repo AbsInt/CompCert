@@ -167,7 +167,7 @@ val is_scalar_type : Env.t -> typ -> bool
 val is_composite_type : Env.t -> typ -> bool
   (* Is type a struct or union? *)
 val is_array_type : Env.t -> typ -> bool
-  (* Is type a array type? *)
+  (* Is type an array type? *)
 val is_function_type : Env.t -> typ -> bool
   (* Is type a function type? (not pointer to function) *)
 val is_function_pointer_type : Env.t -> typ -> bool

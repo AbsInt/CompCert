@@ -212,3 +212,166 @@ let unused_variables p =
   traverse_program
     ~fundef:fundef
     p
+
+(* Warning for conditionals that cannot be transformed into linear code *)
+
+(* Compute the set of local variables that do not have their address taken *)
+
+let rec non_stack_locals_expr vars e =
+  match e.edesc with
+  | ECast (_,e) -> non_stack_locals_expr vars e
+  | EUnop (Oaddrof,e) ->
+    begin match e.edesc with
+    | EVar id ->
+      IdentSet.remove id vars
+    | _ -> vars
+    end
+  | EUnop (Oderef, e) ->
+    (* Special optimization *(& ...) is removed in SimplExpr *)
+    begin match e.edesc with
+      | EUnop (Oaddrof,e) -> non_stack_locals_expr vars e
+      | _ -> non_stack_locals_expr vars e
+    end
+  | EUnop (_, e) ->
+    non_stack_locals_expr vars e
+  | EBinop (_,e1,e2,_) ->
+    let vars = non_stack_locals_expr vars e1 in
+    non_stack_locals_expr vars e2
+  | EConditional (e1,e2,e3) ->
+    let vars = non_stack_locals_expr vars e1 in
+    let vars = non_stack_locals_expr vars e2 in
+    non_stack_locals_expr vars e3
+  | ECompound (_,init) -> non_stack_locals_init vars init
+  | ECall (e,p) ->
+    let vars = non_stack_locals_expr vars e in
+    List.fold_left non_stack_locals_expr vars p
+  | _ -> vars
+
+and non_stack_locals_init vars init =
+  fold_over_init ~expr:non_stack_locals_expr vars init
+
+let add_vars env vars (id,ty) =
+  let volatile = List.mem AVolatile (attributes_of_type env ty) in
+  if not volatile then
+    IdentSet.add id vars
+  else
+    vars
+
+let non_stack_locals_stmt env vars s =
+  let decl vars loc (sto, id, ty, init) =
+    let vars = match init with
+      | Some init -> non_stack_locals_init vars init
+      | None -> vars in
+    add_vars env vars (id,ty) in
+  fold_over_stmt ~expr:non_stack_locals_expr ~decl:decl
+    vars s
+
+(* Check whether an expression is safe and can be always evaluated *)
+
+let safe_cast env tfrom tto =
+  match unroll env tfrom, unroll env tto with
+  | (TInt _ | TPtr _ | TArray _ | TFun _ | TEnum _),
+    (TInt _ | TPtr _ | TEnum _) -> true
+  | TFloat _, TFloat _ -> true
+  | _, _ -> equal_types env tfrom tto
+
+let safe_expr vars env e =
+  let rec expr e =
+    match e.edesc with
+    | EConst _ | ESizeof _ | EAlignof _   | ECompound _  -> true
+    | EVar id -> (IdentSet.mem id vars) || not (is_scalar_type env e.etyp)
+    | ECast (ty, e) ->
+      safe_cast env e.etyp ty && expr e
+    | EUnop (op, e) ->
+      unop op  e
+    | EBinop (op, e1, e2, ty) ->
+      binop op e1  e2
+    | EConditional _  -> false
+    | ECall _ -> false
+  and binop op e1 e2 =
+    let is_long_long_type ty =
+      match unroll env ty with
+      | TInt (ILongLong, _)
+      | TInt (IULongLong, _) -> true
+      | _ -> false in
+    match op with
+    | Oadd | Osub | Omul | Oand | Oor | Oxor | Oshl | Oshr ->
+      expr e1 && expr e2
+    | Oeq | One | Olt | Ogt | Ole | Oge ->
+      let not_long_long = not (is_long_long_type e1.etyp) && not (is_long_long_type e2.etyp) in
+      not_long_long && expr e1 && expr e2
+    | _ -> false
+  (* x.f if f has array or struct or union type *)
+  and unop  op e =
+    match op with
+    | Ominus | Onot | Olognot | Oplus -> expr e
+    | Oaddrof ->
+      begin match e.edesc with
+        (* skip &*e *)
+        | EUnop (Oderef, e) -> expr e
+        (* skip &(e.f) *)
+        | EUnop (Odot f, e) -> expr e
+        | _ -> expr e
+      end
+    (* skip *&e *)
+    | Oderef ->
+      begin match e.edesc with
+        | EUnop (Oaddrof,e) -> expr e
+        | _ -> expr e
+      end
+    (* e.f is okay if f has array or composite type *)
+    | Odot m ->
+      let fld = field_of_dot_access env e.etyp m in
+      (is_array_type env fld.fld_typ || is_composite_type env fld.fld_typ) && expr e
+    | _ -> false in
+  expr e
+
+(* Check expressions if they contain conditionals that cannot be transformed in
+   linear code. The inner_cond parameter is used to mimic the translation of short
+   circuit logical or and logical and as well as conditional to if statements in
+   SimplExpr. *)
+
+let rec non_linear_cond_expr inner_cond vars env loc e =
+  match e.edesc with
+  | EConst _ | ESizeof _ | EAlignof _ | EVar _ -> ()
+  | ECast (_ , e) | EUnop (_, e)-> non_linear_cond_expr false vars env loc e
+  | EBinop (op, e1, e2, ty) ->
+    let inner_cond = match op with
+      | Ocomma -> inner_cond
+      | Ologand | Ologor -> true
+      | _ -> false
+    in
+    non_linear_cond_expr false vars env loc e1;
+    non_linear_cond_expr inner_cond vars env loc e2
+  | EConditional (c, e1, e2) ->
+    let can_cast = safe_cast env e1.etyp e.etyp && safe_cast env e2.etyp e.etyp in
+    if not can_cast || inner_cond || not (safe_expr vars env e1) || not (safe_expr vars env e2) then
+      warning loc Non_linear_cond_expr "conditional expression may not be linearized";
+    non_linear_cond_expr true vars env loc e1;
+    non_linear_cond_expr true vars env loc e2;
+  | ECompound (ty, init) -> non_linear_cond_init vars env loc init
+  | ECall (e, params) ->
+    non_linear_cond_expr false vars env loc e;
+    List.iter (non_linear_cond_expr false vars env loc) params
+
+and non_linear_cond_init vars env loc init =
+  iter_over_init ~expr:(non_linear_cond_expr false vars env loc) init
+
+let non_linear_cond_stmt vars env s =
+  let decl loc (sto, id, ty, init) =
+    match init with
+    | None -> ()
+    | Some init -> non_linear_cond_init vars env loc init in
+  iter_over_stmt_loc ~expr:(non_linear_cond_expr false vars env) ~decl:decl s
+
+let non_linear_conditional p =
+  if active_warning Non_linear_cond_expr then begin
+    let fundef env loc fd =
+      let vars = List.fold_left (add_vars env) IdentSet.empty fd.fd_params in
+      let vars = non_stack_locals_stmt env vars fd.fd_body in
+      non_linear_cond_stmt vars env fd.fd_body;
+    in
+    traverse_program
+      ~fundef:fundef
+      p
+  end
