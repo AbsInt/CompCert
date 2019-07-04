@@ -317,7 +317,7 @@ let safe_expr vars env e =
     | Oderef ->
       begin match e.edesc with
         | EUnop (Oaddrof,e) -> expr e
-        | _ -> expr e
+        | _ -> false
       end
     (* e.f is okay if f has array or composite type *)
     | Odot m ->
