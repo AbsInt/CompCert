@@ -18,44 +18,68 @@ open Diagnostics
 open Cutil
 open Env
 
-let unknown_attrs loc attrs =
-  let unknown attr =
-    let attr_class = class_of_attribute attr in
-    if attr_class = Attr_unknown then
-      warning loc Unknown_attribute
-        "unknown attribute '%s' ignored" (name_of_attribute attr) in
-  List.iter unknown attrs
+(* AST traversal functions *)
 
-let unknown_attrs_typ env loc ty =
-  let attr = attributes_of_type env ty in
-  unknown_attrs loc attr
+let fold_over_stmt_loc ~(expr: 'a -> location -> exp -> 'a)
+    ~(decl: 'a -> location -> decl -> 'a)
+    (a: 'a) (s: stmt) : 'a =
+  let rec fold a s =
+    match s.sdesc with
+    | Sskip -> a
+    | Sbreak -> a
+    | Scontinue -> a
+    | Slabeled(_, s1) -> fold a s1
+    | Sgoto _ -> a
+    | Sreturn None -> a
+    | Sreturn (Some e) -> expr a s.sloc e
+    | Sasm(_, _, outs, ins, _) -> asm_operands (asm_operands a s.sloc outs) s.sloc ins
+    | Sdo e -> expr a s.sloc e
+    | Sif (e, s1, s2) -> fold (fold (expr a s.sloc e) s1) s2
+    | Sseq (s1, s2) -> fold (fold a s1) s2
+    | Sfor (s1, e, s2, s3) -> fold (fold (expr (fold a s1) s.sloc e) s2) s3
+    | Swhile(e, s1) -> fold (expr a s.sloc e) s1
+    | Sdowhile (s1, e) -> expr (fold a s1) s.sloc e
+    | Sswitch (e, s1) -> fold (expr a s.sloc e) s1
+    | Sblock sl -> List.fold_left fold a sl
+    | Sdecl d -> decl a s.sloc d
+  and asm_operands a loc l =
+    List.fold_left (fun a (_, _, e) -> expr a loc e) a l
+  in fold a s
 
-let unknown_attrs_decl env loc (sto, id, ty, init) =
-  unknown_attrs_typ env loc ty
+let iter_over_stmt_loc
+    ?(expr = fun loc e -> ())
+    ?(decl = fun loc decl -> ())
+    (s: stmt) : unit =
+  fold_over_stmt_loc ~expr: (fun () loc e -> expr loc e)
+    ~decl: (fun () loc d -> decl loc d)
+    () s
 
-let rec unknown_attrs_stmt env s =
-  match s.sdesc with
-  | Sskip
-  | Sbreak
-  | Scontinue
-  | Slabeled _
-  | Sgoto _
-  | Sreturn _
-  | Sasm _
-  | Sdo _ -> ()
-  | Sif (_,s1,s2)
-  | Sseq (s1,s2) ->
-    unknown_attrs_stmt env s1;
-    unknown_attrs_stmt env s2
-  | Sfor (s1,e,s2,s3) ->
-    unknown_attrs_stmt env s1;
-    unknown_attrs_stmt env s2;
-    unknown_attrs_stmt env s3
-  | Swhile(_,s)
-  | Sdowhile (s,_)
-  | Sswitch (_,s) -> unknown_attrs_stmt env s
-  | Sblock sl -> List.iter (unknown_attrs_stmt env) sl
-  | Sdecl d -> unknown_attrs_decl env s.sloc d
+let fold_over_stmt ~(expr: 'a -> exp -> 'a)
+    ~(decl: 'a -> location -> decl -> 'a)
+    (a: 'a) (s: stmt) : 'a =
+  fold_over_stmt_loc ~expr:(fun a _ e -> expr a e) ~decl:decl a s
+
+let iter_over_stmt ?(expr = fun e -> ())
+    ?(decl = fun loc decl -> ())
+    (s:stmt) : unit =
+  fold_over_stmt_loc ~expr:(fun () _ e -> expr e)
+    ~decl:(fun () loc d -> decl loc d) () s
+
+let fold_over_init ~(expr: 'a -> exp -> 'a) (a: 'a) (i: init) : 'a =
+  let rec fold a = function
+  | Init_single e -> expr a e
+  | Init_array il -> List.fold_left fold a il
+  | Init_struct (_, sl) -> List.fold_left (fun a (_,i) -> fold a i) a sl
+  | Init_union (_, _, ui) -> fold a ui
+  in fold a i
+
+let iter_over_init ~(expr: exp -> unit) (i:init) : unit =
+  fold_over_init ~expr:(fun () e -> expr e) () i
+
+let fold_over_decl ~(expr: 'a -> exp -> 'a) (a: 'a) loc (sto, id, ty, init) : 'a=
+  match init with
+  | Some i -> fold_over_init ~expr a i
+  | None -> a
 
 let traverse_program
     ?(decl = fun env loc d -> ())
@@ -95,6 +119,26 @@ let traverse_program
       traverse env gl in
   traverse (Builtins.environment ()) p
 
+(* Unknown attributes warning *)
+
+let unknown_attrs loc attrs =
+  let unknown attr =
+    let attr_class = class_of_attribute attr in
+    if attr_class = Attr_unknown then
+      warning loc Unknown_attribute
+        "unknown attribute '%s' ignored" (name_of_attribute attr) in
+  List.iter unknown attrs
+
+let unknown_attrs_typ env loc ty =
+  let attr = attributes_of_type env ty in
+  unknown_attrs loc attr
+
+let unknown_attrs_decl env loc (sto, id, ty, init) =
+  unknown_attrs_typ env loc ty
+
+let unknown_attrs_stmt env s =
+  iter_over_stmt ~decl:(unknown_attrs_decl env) s
+
 let unknown_attrs_program p =
   let decl env loc d =
     unknown_attrs_decl env loc d
@@ -122,6 +166,7 @@ let unknown_attrs_program p =
     ~enum:enum
     p
 
+(* Unused variables and parameters warning *)
 
 let rec vars_used_expr env e =
   match e.edesc with
@@ -143,83 +188,21 @@ let rec vars_used_expr env e =
     let env = vars_used_expr env e in
     List.fold_left vars_used_expr env p
 
-and vars_used_init env = function
-  | Init_single e -> vars_used_expr env e
-  | Init_array al -> List.fold_left vars_used_init env al
-  | Init_struct (_,sl) -> List.fold_left (fun env (_,i) -> vars_used_init env i) env sl
-  | Init_union (_,_,ui) -> vars_used_init env ui
+and vars_used_init env init =
+  fold_over_init ~expr:vars_used_expr env init
 
-let rec vars_used_stmt env s =
-  match s.sdesc with
-  | Sbreak
-  | Scontinue
-  | Sgoto _
-  | Sreturn None
-  | Sskip -> env
-  | Sreturn (Some e)
-  | Sdo e -> (vars_used_expr env e)
-  | Sseq (s1,s2) ->
-    let env = vars_used_stmt env s1 in
-    vars_used_stmt env s2
-  | Sif (e,s1,s2) ->
-    let env = vars_used_expr env e in
-    let env = vars_used_stmt env s1 in
-    vars_used_stmt env s2
-  | Sfor (s1,e,s2,s3) ->
-    let env = vars_used_expr env e in
-    let env = vars_used_stmt env s1 in
-    let env = vars_used_stmt env s2 in
-    vars_used_stmt env s3
-  | Sswitch (e,s)
-  | Swhile (e,s)
-  | Sdowhile (s,e) ->
-    let env = vars_used_expr env e in
-    vars_used_stmt env s
-  | Sblock sl -> List.fold_left vars_used_stmt env sl
-  | Sdecl (sto,id,ty,init) ->
-    let env = match init with
-      | Some init ->vars_used_init env init
-      | None -> env in
-    env
-  | Slabeled (lbl,s) -> vars_used_stmt env s
-  | Sasm (attr,str,op,op2,constr) ->
-    let vars_asm_op env (_,_,e) =
-      vars_used_expr env e in
-    let env = List.fold_left vars_asm_op env op in
-    let env = List.fold_left vars_asm_op env op2 in
-    env
+let vars_used_stmt env s =
+  fold_over_stmt ~expr: vars_used_expr
+    ~decl: (fold_over_decl ~expr: vars_used_expr) env s
 
-let unused_variable env used loc (id,ty) =
+let unused_variable env used loc (id, ty) =
   let attr = attributes_of_type env ty in
   let unused_attr = find_custom_attributes ["unused";"__unused__"] attr <> [] in
   if not ((IdentSet.mem id used) || unused_attr) then
     warning loc Unused_variable "unused variable '%s'" id.name
 
-let rec unused_variables_stmt env used s =
-  match s.sdesc with
-  | Sbreak
-  | Scontinue
-  | Sgoto _
-  | Sreturn _
-  | Sskip
-  | Sasm _
-  | Sdo _ -> ()
-  | Sseq (s1,s2)
-  | Sif (_,s1,s2) ->
-    unused_variables_stmt env used s1;
-    unused_variables_stmt env used s2
-  | Sfor (s1,e,s2,s3) ->
-    unused_variables_stmt env used s1;
-    unused_variables_stmt env used s2;
-    unused_variables_stmt env used s3
-  | Slabeled (_,s)
-  | Sswitch (_,s)
-  | Swhile (_,s)
-  | Sdowhile (s,_) ->
-    unused_variables_stmt env used s
-  | Sblock sl -> List.iter (unused_variables_stmt env used) sl
-  | Sdecl (sto,id,ty,init) ->
-    unused_variable env used s.sloc (id,ty)
+let unused_variables_stmt env used s =
+  iter_over_stmt ~decl:(fun loc (sto, id, ty, init) -> unused_variable env used loc (id,ty)) s
 
 let unused_variables p =
   let fundef env loc fd =
