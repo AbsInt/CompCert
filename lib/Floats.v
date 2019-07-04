@@ -24,6 +24,7 @@ Require Import Program.
 Require Archi.
 
 Close Scope R_scope.
+Open Scope Z_scope.
 
 Definition float := binary64. (**r the type of IEE754 double-precision FP numbers *)
 Definition float32 := binary32. (**r the type of IEE754 single-precision FP numbers *)
@@ -1218,7 +1219,7 @@ Proof.
   assert (C: m / 2^p = if zeq (n mod 2^p) 0 then 0 else 1).
   { unfold m. destruct (zeq (n mod 2^p) 0).
     rewrite e. apply Z.div_small. omega.
-    eapply Zdiv_unique with (n mod 2^p - 1). ring. omega. }
+    eapply Coqlib.Zdiv_unique with (n mod 2^p - 1). ring. omega. }
   assert (D: Z.testbit m p = if zeq (n mod 2^p) 0 then false else true).
   { destruct (zeq (n mod 2^p) 0).
     apply Z.testbit_false; auto. rewrite C; auto.
