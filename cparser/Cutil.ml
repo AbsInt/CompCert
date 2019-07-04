@@ -821,6 +821,11 @@ let is_composite_type env t =
   | TStruct _ | TUnion _ -> true
   | _ -> false
 
+let is_array_type env t =
+  match unroll env t with
+  | TArray _ -> true
+  | _ -> false
+
 let is_function_type env t =
   match unroll env t with
   | TFun _ -> true
