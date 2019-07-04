@@ -1580,6 +1580,27 @@ Proof.
   intros. apply cast_val_casted. eapply cast_val_is_casted; eauto.
 Qed.
 
+(** Moreover, casted values belong to the machine type corresponding to the
+    C type. *)
+
+Lemma val_casted_has_type:
+  forall v ty, val_casted v ty -> ty <> Tvoid -> Val.has_type v (typ_of_type ty).
+Proof.
+  intros. inv H; simpl typ_of_type.
+- exact I.
+- exact I.
+- exact I.
+- exact I.
+- apply Val.Vptr_has_type.
+- red; unfold Tptr; rewrite H1; auto.
+- red; unfold Tptr; rewrite H1; auto.
+- red; unfold Tptr; rewrite H1; auto.
+- red; unfold Tptr; rewrite H1; auto.
+- apply Val.Vptr_has_type.
+- apply Val.Vptr_has_type.
+- congruence.
+Qed.
+
 (** Relation with the arithmetic conversions of ISO C99, section 6.3.1 *)
 
 Module ArithConv.

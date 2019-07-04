@@ -181,6 +181,11 @@ let builtins_generic = {
             TInt(IULong, []);
             TInt(IULong, [])],
           false);
+    (* Selection *)
+    "__builtin_sel",
+        (TVoid [],
+           [TInt(C.IBool, [])],
+           true);
     (* Annotations *)
     "__builtin_annot",
         (TVoid [],
@@ -940,6 +945,10 @@ let rec convertExpr env e =
                  Tcons(Tpointer(Tvoid, noattr), Tnil)),
                Econs(va_list_ptr dst, Econs(va_list_ptr src, Enil)),
                Tvoid)
+
+  | C.ECall({edesc = C.EVar {name = "__builtin_sel"}}, [arg1; arg2; arg3]) ->
+      ewrap (Ctyping.eselection (convertExpr env arg1)
+                                (convertExpr env arg2) (convertExpr env arg3))
 
   | C.ECall({edesc = C.EVar {name = "printf"}}, args)
     when !Clflags.option_interp ->

@@ -162,9 +162,10 @@ Separate Extraction
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
    Ctypes.merge_attributes Ctypes.remove_attributes Ctypes.build_composite_env
    Initializers.transl_init Initializers.constval
-   Csyntax.Eindex Csyntax.Epreincr
+   Csyntax.Eindex Csyntax.Epreincr Csyntax.Eselection
    Ctyping.typecheck_program
    Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
+   Ctyping.eselection
    Ctypes.make_program
    Clight.type_of_function
    Conventions1.callee_save_type Conventions1.is_float_reg
