@@ -125,7 +125,7 @@ Enabled by default.
 .TP
 .B \-O0
 Turn off most optimizations.
-Synonymous to \fB\-fno\-const\-prop\fP \fB\-fno\-cse\fP \fB\-fno\-redundancy\fP \fB\-fno\-tailcalls\fP.
+Synonymous to \fB\-fno\-const\-prop\fP \fB\-fno\-cse\fP \fB\-fno\-redundancy\fP \fB\-fno\-tailcalls\fP \fB\-fno\-if\-conversion\fP.
 .
 .TP
 .BR \-O1 ", " \-O2 ", " \-O3
@@ -134,6 +134,13 @@ Synonymous for \fB\-O\fP.
 .TP
 .B \-Os
 Optimize for code size in preference to code speed.
+.
+.TP
+.B \-Obranchless
+Optimize to generate fewer conditional branches and use branch-free
+instruction sequences instead.  When \fB-fif\-conversion\fP is
+enabled, the conversion is peformed aggressively even if the resulting
+code is less performant.
 .
 .TP
 .BR \-fconst\-prop ", " \-fno\-const\-prop
@@ -149,11 +156,6 @@ Enabled by default.
 .BR \-fif\-conversion ", " \-fno\-if\-conversion
 Turn on/off generation of conditional moves.
 Enabled by default.
-.
-.TP
-.BR \-ffavor\-branchless "
-When \fB-fif\-conversion\fP is enabled, the conversion is peformed aggressively even if the resulting code is less performant.
-Disabled by default.
 .
 .TP
 .BR \-finline ", " \-fno\-inline

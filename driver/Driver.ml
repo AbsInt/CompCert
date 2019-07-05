@@ -187,7 +187,7 @@ Processing options:
   -O0            Do not optimize the compiled code
   -O1 -O2 -O3    Synonymous for -O
   -Os            Optimize for code size in preference to code speed
-  -Obranchless   Optimize to avoid conditional branches; try to generate
+  -Obranchless   Optimize to generate fewer conditional branches; try to produce
                  branch-free instruction sequences as much as possible
   -ftailcalls    Optimize function calls in tail position [on]
   -fconst-prop   Perform global constant propagation  [on]
