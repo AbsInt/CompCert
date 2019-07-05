@@ -80,10 +80,10 @@ let fast_cmove ty =
       assert false
 
 (* The if-conversion heuristic depend on the
-   -fif-conversion and -ffavor-branchless flags.
+   -fif-conversion and -Obranchless flags.
 
 With [-fno-if-conversion] or [-0O], if-conversion is turned off entirely.
-With [-ffavor-branchless], if-conversion is performed whenever semantically
+With [-Obranchless], if-conversion is performed whenever semantically
 correct, regardless of how much it could cost.
 Otherwise (and by default), optimization is performed when it seems beneficial.
 
@@ -106,7 +106,7 @@ instructions from the first branch.
 
 let if_conversion_heuristic cond ifso ifnot ty =
   if not !Clflags.option_fifconversion then false else
-  if !Clflags.option_ffavor_branchless then true else
+  if !Clflags.option_Obranchless then true else
   if not (fast_cmove ty) then false else
   let c1 = cost_expr ifso and c2 = cost_expr ifnot in
   c1 + c2 <= 24 && abs (c1 - c2) <= 8
