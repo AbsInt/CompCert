@@ -1,6 +1,6 @@
 All files in this distribution are part of the CompCert verified compiler.
 
-The CompCert verified compiler is Copyright by Institut National de 
+The CompCert verified compiler is Copyright by Institut National de
 Recherche en Informatique et en Automatique (INRIA) and
 AbsInt Angewandte Informatik GmbH.
 
@@ -9,12 +9,12 @@ INRIA Non-Commercial License Agreement given below or under the terms
 of a Software Usage Agreement of AbsInt Angewandte Informatik GmbH.
 The latter is a separate contract document.
 
-The INRIA Non-Commercial License Agreement is a non-free license that 
-grants you the right to use the CompCert verified compiler for 
-educational, research or evaluation purposes only, but prohibits 
+The INRIA Non-Commercial License Agreement is a non-free license that
+grants you the right to use the CompCert verified compiler for
+educational, research or evaluation purposes only, but prohibits
 any commercial use.
 
-For commercial use you need a Software Usage Agreement from 
+For commercial use you need a Software Usage Agreement from
 AbsInt Angewandte Informatik GmbH.
 
 The following files in this distribution are dual-licensed both under
@@ -38,7 +38,7 @@ option) any later version:
   cfrontend/Ctyping.v
   cfrontend/PrintClight.ml
   cfrontend/PrintCsyntax.ml
-  
+
   backend/Cminor.v
   backend/PrintCminor.ml
 
@@ -46,7 +46,7 @@ option) any later version:
 
   all files in the exportclight/ directory
 
-  the Archi.v, CBuiltins.ml, and extractionMachdep.v files 
+  the Archi.v, CBuiltins.ml, and extractionMachdep.v files
   in directories arm, powerpc, riscV, x86, x86_32, x86_64
 
   extraction/extraction.v
@@ -64,11 +64,14 @@ non-commercial contexts, subject to the terms of the GNU General
 Public License.
 
 The files contained in the flocq/ directory and its subdirectories are
-taken from the Flocq project, http://flocq.gforge.inria.fr/
-These files are Copyright 2010-2017 INRIA and distributed under the
-terms of the GNU Lesser General Public Licence, either version 3 of
-the licence, or (at your option) any later version.  A copy of the GNU
-Lesser General Public Licence version 3 is included below.
+taken from the Flocq project, http://flocq.gforge.inria.fr/. The files
+contained in the MenhirLib directory are taken from the Menhir
+project, http://gallium.inria.fr/~fpottier/menhir/. The files from the
+Flocq project and the files in the MenhirLib directory are Copyright
+2010-2019 INRIA and distributed under the terms of the GNU Lesser
+General Public Licence, either version 3 of the licence, or (at your
+option) any later version. A copy of the GNU Lesser General Public
+Licence version 3 is included below.
 
 The files contained in the runtime/ directory and its subdirectories
 are Copyright 2013-2017 INRIA and distributed under the terms of the BSD

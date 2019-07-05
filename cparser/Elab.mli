@@ -18,8 +18,8 @@ val elab_file : Cabs.definition list -> C.program
      definitions as produced by the parser into a program in C abstract
      syntax. *)
 
-val elab_int_constant : Cabs.cabsloc -> string -> int64 * C.ikind
+val elab_int_constant : Cabs.loc -> string -> int64 * C.ikind
 val elab_float_constant : Cabs.floatInfo -> C.float_cst * C.fkind
-val elab_char_constant : Cabs.cabsloc -> bool -> int64 list -> int64
+val elab_char_constant : Cabs.loc -> bool -> int64 list -> int64
   (* These auxiliary functions are exported so that they can be reused
      in other projects that deal with C-style source languages. *)

@@ -258,7 +258,7 @@ let enter_or_refine_function loc env id sto ty =
 
 (* Forward declarations *)
 
-let elab_expr_f : (cabsloc -> Env.t -> Cabs.expression -> C.exp * Env.t) ref
+let elab_expr_f : (Cabs.loc -> Env.t -> Cabs.expression -> C.exp * Env.t) ref
   = ref (fun _ _ _ -> assert false)
 
 let elab_funbody_f : (C.typ -> bool -> bool -> Env.t -> statement -> C.stmt) ref
@@ -2708,7 +2708,7 @@ let elab_fundef genv spec name defs body loc =
 (* Definitions *)
 let elab_decdef (for_loop: bool) (local: bool) (nonstatic_inline: bool)
                 (env: Env.t) ((spec, namelist): Cabs.init_name_group)
-                (loc: Cabs.cabsloc) : decl list * Env.t =
+                (loc: Cabs.loc) : decl list * Env.t =
   let (sto, inl, noret, tydef, bty, env') =
     elab_specifier ~only:(namelist=[]) loc env spec in
   (* Sanity checks on storage class *)

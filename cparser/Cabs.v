@@ -20,7 +20,7 @@ Parameter string : Type.
 (* OCaml's int64 type, used to represent individual characters in literals. *)
 Parameter char_code : Type.
 (* Context information. *)
-Parameter cabsloc : Type.
+Parameter loc : Type.
 
 Record floatInfo := {
   isHex_FI:bool;
@@ -51,7 +51,7 @@ Inductive typeSpecifier := (* Merge all specifiers into one type *)
    * They also have a list of __attribute__s that appeared between the
    * keyword and the type name (definitions only) *)
   | Tstruct_union : structOrUnion -> option string -> option (list field_group) -> list attribute -> typeSpecifier
-  | Tenum : option string -> option (list (string * option expression * cabsloc)) -> list attribute -> typeSpecifier
+  | Tenum : option string -> option (list (string * option expression * loc)) -> list attribute -> typeSpecifier
 
 with storage :=
   AUTO | STATIC | EXTERN | REGISTER | TYPEDEF
@@ -87,18 +87,18 @@ with decl_type :=
  | PROTO_OLD : decl_type -> list string -> decl_type
 
 with parameter :=
-  | PARAM : list spec_elem -> option string -> decl_type -> list attribute -> cabsloc -> parameter
+  | PARAM : list spec_elem -> option string -> decl_type -> list attribute -> loc -> parameter
 
 (* The optional expression is the bitfield *)
 with field_group :=
-  | Field_group : list spec_elem -> list (option name * option expression) -> cabsloc -> field_group
+  | Field_group : list spec_elem -> list (option name * option expression) -> loc -> field_group
 
 (* The decl_type is in the order in which they are printed. Only the name of
  * the declared identifier is pulled out. *)
 (* e.g: in "int *x", "*x" is the declarator; "x" will be pulled out as *)
 (* the string, and decl_type will be PTR([], JUSTBASE) *)
 with name :=
-  | Name : string -> decl_type -> list attribute -> cabsloc -> name
+  | Name : string -> decl_type -> list attribute -> loc -> name
 
 (* A variable declarator ("name") with an initializer *)
 with init_name :=
@@ -161,9 +161,9 @@ with initwhat :=
   | ATINDEX_INIT : expression -> initwhat
 
 with attribute :=
-  | GCC_ATTR : list gcc_attribute -> cabsloc -> attribute
-  | PACKED_ATTR : list expression -> cabsloc -> attribute
-  | ALIGNAS_ATTR : list expression -> cabsloc -> attribute
+  | GCC_ATTR : list gcc_attribute -> loc -> attribute
+  | PACKED_ATTR : list expression -> loc -> attribute
+  | ALIGNAS_ATTR : list expression -> loc -> attribute
 
 with gcc_attribute :=
   | GCC_ATTR_EMPTY
@@ -194,31 +194,31 @@ Definition asm_flag := (bool * list char_code)%type.
 ** Declaration definition (at toplevel)
 *)
 Inductive definition :=
- | FUNDEF : list spec_elem -> name -> list definition -> statement -> cabsloc -> definition
- | DECDEF : init_name_group -> cabsloc -> definition  (* global variable(s), or function prototype *)
- | PRAGMA : string -> cabsloc -> definition
+ | FUNDEF : list spec_elem -> name -> list definition -> statement -> loc -> definition
+ | DECDEF : init_name_group -> loc -> definition  (* global variable(s), or function prototype *)
+ | PRAGMA : string -> loc -> definition
 
 (*
 ** statements
 *)
 
 with statement :=
- | NOP : cabsloc -> statement
- | COMPUTATION : expression -> cabsloc -> statement
- | BLOCK : list statement -> cabsloc -> statement
- | If : expression -> statement -> option statement -> cabsloc -> statement
- | WHILE : expression -> statement -> cabsloc -> statement
- | DOWHILE : expression -> statement -> cabsloc -> statement
- | FOR : option for_clause -> option expression -> option expression -> statement -> cabsloc -> statement
- | BREAK : cabsloc -> statement
- | CONTINUE : cabsloc -> statement
- | RETURN : option expression -> cabsloc -> statement
- | SWITCH : expression -> statement -> cabsloc -> statement
- | CASE : expression -> statement -> cabsloc -> statement
- | DEFAULT : statement -> cabsloc -> statement
- | LABEL : string -> statement -> cabsloc -> statement
- | GOTO : string -> cabsloc -> statement
- | ASM : list cvspec -> bool -> list char_code -> list asm_operand -> list asm_operand -> list asm_flag -> cabsloc -> statement
+ | NOP : loc -> statement
+ | COMPUTATION : expression -> loc -> statement
+ | BLOCK : list statement -> loc -> statement
+ | If : expression -> statement -> option statement -> loc -> statement
+ | WHILE : expression -> statement -> loc -> statement
+ | DOWHILE : expression -> statement -> loc -> statement
+ | FOR : option for_clause -> option expression -> option expression -> statement -> loc -> statement
+ | BREAK : loc -> statement
+ | CONTINUE : loc -> statement
+ | RETURN : option expression -> loc -> statement
+ | SWITCH : expression -> statement -> loc -> statement
+ | CASE : expression -> statement -> loc -> statement
+ | DEFAULT : statement -> loc -> statement
+ | LABEL : string -> statement -> loc -> statement
+ | GOTO : string -> loc -> statement
+ | ASM : list cvspec -> bool -> list char_code -> list asm_operand -> list asm_operand -> list asm_flag -> loc -> statement
  | DEFINITION : definition -> statement (*definition or declaration of a variable or type*)
 
 with for_clause :=

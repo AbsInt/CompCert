@@ -43,13 +43,13 @@
 %}
 
 %token<string> PRE_NAME
-%token<string * Pre_parser_aux.identifier_type ref * Cabs.cabsloc>
+%token<string * Pre_parser_aux.identifier_type ref * Cabs.loc>
   VAR_NAME TYPEDEF_NAME
-%token<Cabs.constant * Cabs.cabsloc> CONSTANT
-%token<bool * int64 list * Cabs.cabsloc> STRING_LITERAL
-%token<string * Cabs.cabsloc> PRAGMA
+%token<Cabs.constant * Cabs.loc> CONSTANT
+%token<bool * int64 list * Cabs.loc> STRING_LITERAL
+%token<string * Cabs.loc> PRAGMA
 
-%token<Cabs.cabsloc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
+%token<Cabs.loc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
   ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
   COLON AND MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN SUB_ASSIGN LEFT_ASSIGN
   RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN OR_ASSIGN LPAREN RPAREN LBRACK RBRACK
