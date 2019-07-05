@@ -125,7 +125,8 @@ Enabled by default.
 .TP
 .B \-O0
 Turn off most optimizations.
-Synonymous to \fB\-fno\-const\-prop\fP \fB\-fno\-cse\fP \fB\-fno\-redundancy\fP \fB\-fno\-tailcalls\fP \fB\-fno\-if\-conversion\fP.
+Synonymous to \fB\-fno\-const\-prop\fP \fB\-fno\-cse\fP \fB\-fno\-if\-conversion\fP
+\fB\-fno\-inline\-functions\-called\-once\fP \fB\-fno\-redundancy\fP \fB\-fno\-tailcalls\fP.
 .
 .TP
 .BR \-O1 ", " \-O2 ", " \-O3
@@ -444,6 +445,10 @@ Enabled by default.
 \fImissing\-declarations\fP:
 Declarations which do not declare anything.
 Enabled by default.
+.sp
+\fInon\-linear\-cond\-expr\fP:
+Conditional expression that may not be optimized to branchless code.
+Disabled by default.
 .sp
 \fIpointer\-type\-mismatch\fP:
 Use of incompatible pointer types in conditional expressions.
