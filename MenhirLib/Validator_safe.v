@@ -185,7 +185,7 @@ Instance impl_is_state_valid_after_pop_is_validator state sl pl P b :
               (if is_state_valid_after_pop state sl pl then b else true).
 Proof.
   destruct (is_state_valid_after_pop _ sl pl) eqn:EQ.
-  - intros ??. auto using is_validator.
+  - intros ???. by eapply is_validator.
   - intros _ _ Hsvap. exfalso. induction Hsvap=>//; [simpl in EQ; congruence|].
     by destruct sl.
 Qed.

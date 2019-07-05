@@ -17,7 +17,7 @@ Require Import Alphabet.
 
 Class IsValidator (P : Prop) (b : bool) :=
   is_validator : b = true -> P.
-Hint Mode IsValidator + -.
+Hint Mode IsValidator + - : typeclass_instances.
 
 Instance is_validator_true : IsValidator True true.
 Proof. done. Qed.
@@ -31,7 +31,7 @@ Proof. done. Qed.
 
 Instance is_validator_and P1 b1 P2 b2 `{IsValidator P1 b1} `{IsValidator P2 b2}:
   IsValidator (P1 /\ P2) (if b1 then b2 else false).
-Proof. split; destruct b1, b2; auto using is_validator. Qed.
+Proof. by split; destruct b1, b2; apply is_validator. Qed.
 
 Instance is_validator_comparable_leibniz_eq A (C:Comparable A) (x y : A) :
   ComparableLeibnizEq C ->
@@ -49,9 +49,10 @@ Lemma is_validator_forall_finite A P b `(Finite A) :
   (forall (x : A), IsValidator (P x) (b x)) ->
   IsValidator (forall (x : A), P x) (forallb b all_list).
 Proof.
-  move=> ? /forallb_forall.
-  auto using all_list_forall, is_validator, forallb_forall.
+  move=> ? /forallb_forall Hb ?.
+  apply is_validator, Hb, all_list_forall.
 Qed.
+
 (* We do not use an instance directly here, because we need somehow to
    force Coq to instantiate b with a lambda. *)
 Hint Extern 2 (IsValidator (forall x : ?A, _) _) =>
