@@ -29,7 +29,7 @@ let no_loc = ("", -1)
 
 module Ident = struct
   type t = ident
-  let compare id1 id2 = Pervasives.compare id1.stamp id2.stamp
+  let compare id1 id2 = compare id1.stamp id2.stamp
 end
 
 module IdentSet = Set.Make(Ident)

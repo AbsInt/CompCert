@@ -138,7 +138,7 @@ let print_function pp ?alloc ?live f =
   fprintf pp "f() {\n";
   let instrs =
     List.sort
-      (fun (pc1, _) (pc2, _) -> Pervasives.compare pc2 pc1)
+      (fun (pc1, _) (pc2, _) -> compare pc2 pc1)
       (List.map
         (fun (pc, i) -> (P.to_int pc, i))
         (PTree.elements f.fn_code)) in
