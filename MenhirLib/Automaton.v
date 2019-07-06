@@ -99,9 +99,9 @@ Module Types(Import Init:AutInit).
                  T term = last_symb_of_non_init_state s -> lookahead_action term
   | Reduce_act: production -> lookahead_action term
   | Fail_act: lookahead_action term.
-  Arguments Shift_act [term].
-  Arguments Reduce_act [term].
-  Arguments Fail_act [term].
+  Arguments Shift_act {term}.
+  Arguments Reduce_act {term}.
+  Arguments Fail_act {term}.
 
   Inductive action :=
   | Default_reduce_act: production -> action
