@@ -2,15 +2,15 @@
 
 #include <stdio.h>
 
+unsigned int x = 0x12345678;
+unsigned short s = 0x1234;
+unsigned long long zz = 0x123456789ABCDEF0ULL;
+double a = 3.14159;
+double b = 2.718;
+double c = 1.414;
+
 int main(int argc, char ** argv)
 {
-  unsigned int x = 0x12345678;
-  unsigned short s = 0x1234;
-  unsigned long long zz = 0x123456789ABCDEF0ULL;
-  double a = 3.14159;
-  double b = 2.718;
-  double c = 1.414;
-
   printf("bswap16(%x) = %x\n", s, __builtin_bswap16(s));
   printf("bswap32(%x) = %x\n", x, __builtin_bswap32(x));
   printf("bswap64(%llx) = %llx\n", zz, __builtin_bswap64(zz));

@@ -9,16 +9,17 @@ char * check_relative_error(double exact, double actual, double precision)
   return fabs(relative_error) <= precision ? "OK" : "ERROR";
 }
 
+unsigned int x = 0x12345678;
+unsigned int y = 0xDEADBEEF;
+unsigned long long xx = 0x1234567812345678ULL;
+double a = 3.14159;
+double b = 2.718;
+double c = 1.414;
+unsigned short s = 0x1234;
+
 int main(int argc, char ** argv)
 {
-  unsigned int x = 0x12345678;
-  unsigned int y = 0xDEADBEEF;
-  unsigned long long xx = 0x1234567812345678ULL;
   unsigned z;
-  double a = 3.14159;
-  double b = 2.718;
-  double c = 1.414;
-  unsigned short s = 0x1234;
 
   printf("mulhw(%x, %x) = %x\n", x, y, __builtin_mulhw(x, y));
   printf("mulhwu(%x, %x) = %x\n", x, y, __builtin_mulhwu(x, y));
