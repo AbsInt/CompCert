@@ -16,7 +16,7 @@
 (** Pretty-printer for Cminor *)
 
 open Format
-open Camlcoq
+open !Camlcoq
 open Integers
 open AST
 open PrintAST

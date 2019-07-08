@@ -268,7 +268,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
     (* Print the debug_abbrev section using the previous computed abbreviations*)
     let print_abbrev oc =
       let abbrevs = Hashtbl.fold (fun s i acc -> (s,i)::acc) abbrev_mapping [] in
-      let abbrevs = List.sort (fun (_,a) (_,b) -> Pervasives.compare a b) abbrevs in
+      let abbrevs = List.sort (fun (_,a) (_,b) -> compare a b) abbrevs in
       section oc Section_debug_abbrev;
       print_label oc !abbrev_start_addr;
       List.iter (fun (s,id) ->
@@ -685,7 +685,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       print_label oc line_start;
       list_opt s (fun () ->
         section oc Section_debug_str;
-        let s = List.sort (fun (a,_) (b,_) -> Pervasives.compare a b) s in
+        let s = List.sort (fun (a,_) (b,_) -> compare a b) s in
         List.iter (fun (id,s) ->
           print_label oc (loc_to_label id);
           fprintf oc "	.asciz		%S\n" s) s)

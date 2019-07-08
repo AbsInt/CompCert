@@ -106,7 +106,7 @@ let flatten_blocks blks =
   let cmp_minpc (mpc1, _) (mpc2, _) =
     if mpc1 = mpc2 then 0 else if mpc1 > mpc2 then -1 else 1
   in
-    List.flatten (List.map Pervasives.snd (List.sort cmp_minpc blks))
+    List.flatten (List.map snd (List.sort cmp_minpc blks))
 
 (* Build the enumeration *)
 
