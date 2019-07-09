@@ -126,7 +126,7 @@ Enabled by default.
 .B \-O0
 Turn off most optimizations.
 Synonymous to \fB\-fno\-const\-prop\fP \fB\-fno\-cse\fP \fB\-fno\-if\-conversion\fP
-\fB\-fno\-inline\-functions\-called\-once\fP \fB\-fno\-redundancy\fP \fB\-fno\-tailcalls\fP.
+\fB\-fno\-inline\fP \fB\-fno\-redundancy\fP \fB\-fno\-tailcalls\fP.
 .
 .TP
 .BR \-O1 ", " \-O2 ", " \-O3
@@ -448,6 +448,7 @@ Enabled by default.
 .sp
 \fInon\-linear\-cond\-expr\fP:
 Conditional expression that may not be optimized to branchless code.
+Only issued in \fB-Obranchless\fP mode.
 Disabled by default.
 .sp
 \fIpointer\-type\-mismatch\fP:
