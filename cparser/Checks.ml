@@ -365,7 +365,7 @@ let non_linear_cond_stmt vars env s =
   iter_over_stmt_loc ~expr:(non_linear_cond_expr false vars env) ~decl:decl s
 
 let non_linear_conditional p =
-  if active_warning Non_linear_cond_expr then begin
+  if active_warning Non_linear_cond_expr && !Clflags.option_Obranchless then begin
     let fundef env loc fd =
       let vars = List.fold_left (add_vars env) IdentSet.empty fd.fd_params in
       let vars = non_stack_locals_stmt env vars fd.fd_body in
