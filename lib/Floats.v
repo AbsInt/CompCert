@@ -414,6 +414,7 @@ Qed.
   to emulate the former.)   *)
 
 Definition ox8000_0000 := Int.repr Int.half_modulus.  (**r [0x8000_0000] *)
+Definition ox7FFF_FFFF := Int.repr Int.max_signed.    (**r [0x7FFF_FFFF] *)
 
 Theorem of_intu_of_int_1:
   forall x,
@@ -442,6 +443,46 @@ Proof.
   unfold Int.ltu in H. destruct zlt in H; try discriminate.
   unfold y, Int.sub. rewrite Int.signed_repr. omega.
   compute_this (Int.unsigned ox8000_0000); smart_omega.
+Qed.
+
+Theorem of_intu_of_int_3:
+  forall x,
+  of_intu x = sub (of_int (Int.and x ox7FFF_FFFF)) (of_int (Int.and x ox8000_0000)).
+Proof.
+  intros.
+  set (hi := Int.and x ox8000_0000).
+  set (lo := Int.and x ox7FFF_FFFF).
+  assert (R: forall n, integer_representable 53 1024 (Int.signed n)).
+  { intros. pose proof (Int.signed_range n).
+    apply integer_representable_n; auto; smart_omega. }
+  unfold sub, of_int. rewrite BofZ_minus by auto. unfold of_intu. f_equal.
+  assert (E: Int.add hi lo = x).
+  { unfold hi, lo. rewrite Int.add_is_or. 
+  - rewrite <- Int.and_or_distrib. apply Int.and_mone.
+  - rewrite Int.and_assoc. rewrite (Int.and_commut ox8000_0000). rewrite Int.and_assoc.
+    change (Int.and ox7FFF_FFFF ox8000_0000) with Int.zero. rewrite ! Int.and_zero; auto.
+  }
+  assert (RNG: 0 <= Int.unsigned lo < two_p 31).
+  { unfold lo. change ox7FFF_FFFF with (Int.repr (two_p 31 - 1)). rewrite <- Int.zero_ext_and by omega.
+    apply Int.zero_ext_range. compute_this Int.zwordsize. omega. }
+  assert (B: forall i, 0 <= i < Int.zwordsize -> Int.testbit ox8000_0000 i = if zeq i 31 then true else false).
+  { intros; unfold Int.testbit. change (Int.unsigned ox8000_0000) with (2^31).
+    destruct (zeq i 31). subst i; auto. apply Z.pow2_bits_false; auto. } 
+  assert (EITHER: hi = Int.zero \/ hi = ox8000_0000).
+  { unfold hi; destruct (Int.testbit x 31) eqn:B31; [right|left];
+    Int.bit_solve; rewrite B by auto.
+  - destruct (zeq i 31). subst i; rewrite B31; auto. apply andb_false_r.
+  - destruct (zeq i 31). subst i; rewrite B31; auto. apply andb_false_r.
+  }
+  assert (SU: - Int.signed hi = Int.unsigned hi).
+  { destruct EITHER as [EQ|EQ]; rewrite EQ; reflexivity. }
+  unfold Z.sub; rewrite SU, <- E. 
+  unfold Int.add; rewrite Int.unsigned_repr, Int.signed_eq_unsigned. omega.
+  - assert (Int.max_signed = two_p 31 - 1) by reflexivity. omega.
+  - assert (Int.unsigned hi = 0 \/ Int.unsigned hi = two_p 31)
+    by (destruct EITHER as [EQ|EQ]; rewrite EQ; [left|right]; reflexivity).
+    assert (Int.max_unsigned = two_p 31 + two_p 31 - 1) by reflexivity.
+    omega.
 Qed.
 
 Theorem to_intu_to_int_1:
