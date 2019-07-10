@@ -40,6 +40,7 @@ Require Import Coqlib.
 Require Import Compopts.
 Require Import AST Integers Floats.
 Require Import Op CminorSel.
+Require Archi.
 
 Local Open Scope cminorsel_scope.
 
@@ -498,21 +499,27 @@ Nondetfunction floatofint (e: expr) :=
   end.
 
 Definition intuoffloat (e: expr) :=
-  Elet e
-    (Elet (Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil)
-      (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
-        (intoffloat (Eletvar 1))
-        (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat.
+  if Archi.splitlong then
+    Elet e
+      (Elet (Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil)
+        (Econdition (CEcond (Ccompf Clt) (Eletvar 1 ::: Eletvar 0 ::: Enil))
+          (intoffloat (Eletvar 1))
+          (addimm Float.ox8000_0000 (intoffloat (subf (Eletvar 1) (Eletvar 0))))))%nat
+  else
+    Eop Olowlong (Eop Olongoffloat (e ::: Enil) ::: Enil).
 
 Nondetfunction floatofintu (e: expr) :=
   match e with
   | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.of_intu n)) Enil
   | _ =>
-    let f := Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil in
-    Elet e
-      (Econdition (CEcond (Ccompuimm Clt Float.ox8000_0000) (Eletvar O ::: Enil))
-        (floatofint (Eletvar O))
-        (addf (floatofint (addimm (Int.neg Float.ox8000_0000) (Eletvar O))) f))
+    if Archi.splitlong then
+      let f := Eop (Ofloatconst (Float.of_intu Float.ox8000_0000)) Enil in
+      Elet e
+        (Econdition (CEcond (Ccompuimm Clt Float.ox8000_0000) (Eletvar O ::: Enil))
+          (floatofint (Eletvar O))
+          (addf (floatofint (addimm (Int.neg Float.ox8000_0000) (Eletvar O))) f))
+    else
+      Eop Ofloatoflong (Eop Ocast32unsigned (e ::: Enil) ::: Enil)
   end.
 
 Definition intofsingle (e: expr) := Eop Ointofsingle (e ::: Enil).
