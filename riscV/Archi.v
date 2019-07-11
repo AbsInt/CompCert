@@ -16,7 +16,7 @@
 
 (** Architecture-dependent parameters for RISC-V *)
 
-Require Import ZArith.
+Require Import ZArith List.
 (*From Flocq*)
 Require Import Binary Bits.
 
@@ -40,26 +40,28 @@ Qed.
    except the MSB, a.k.a. the quiet bit."
    Exceptions are operations manipulating signs. *)
 
-Definition default_nan_64 : { x : binary64 | is_nan _ _ x = true } :=
-  exist _ (B754_nan 53 1024 false (iter_nat 51 _ xO xH) (eq_refl true)) (eq_refl true).
+Definition default_nan_64 := (false, iter_nat 51 _ xO xH).
+Definition default_nan_32 := (false, iter_nat 22 _ xO xH).
 
-Definition choose_binop_pl_64 (pl1 pl2 : positive) :=
-  false.                        (**r irrelevant *)
+Definition choose_nan_64 (l: list (bool * positive)) : bool * positive :=
+  default_nan_64.
 
-Definition default_nan_32 : { x : binary32 | is_nan _ _ x = true } :=
-  exist _ (B754_nan 24 128 false (iter_nat 22 _ xO xH) (eq_refl true)) (eq_refl true).
+Definition choose_nan_32 (l: list (bool * positive)) : bool * positive :=
+  default_nan_32.
 
-Definition choose_binop_pl_32 (pl1 pl2 : positive) :=
-  false.                        (**r irrelevant *)
+Lemma choose_nan_64_idem: forall n,
+  choose_nan_64 (n :: n :: nil) = choose_nan_64 (n :: nil).
+Proof. auto. Qed.
 
-Definition fpu_returns_default_qNaN := true.
+Lemma choose_nan_32_idem: forall n,
+  choose_nan_32 (n :: n :: nil) = choose_nan_32 (n :: nil).
+Proof. auto. Qed.
 
 Definition float_of_single_preserves_sNaN := false.
 
 Global Opaque ptr64 big_endian splitlong
-              default_nan_64 choose_binop_pl_64
-              default_nan_32 choose_binop_pl_32
-              fpu_returns_default_qNaN
+              default_nan_64 choose_nan_64
+              default_nan_32 choose_nan_32
               float_of_single_preserves_sNaN.
 
 (** Whether to generate position-independent code or not *)
