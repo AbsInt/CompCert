@@ -94,16 +94,48 @@ Proof.
   destruct x as [[]|]; simpl; intros; discriminate.
 Qed.
 
-(** Relation between number of bits and base-2 logarithm *)
+(** Normalization of NaN payloads *)
 
-Lemma digits2_log2:
-  forall p, Z.pos (Digits.digits2_pos p) = Z.succ (Z.log2 (Z.pos p)).
+Lemma normalized_nan: forall prec n p,
+  Z.of_nat n = prec - 1 -> 1 < prec ->
+  nan_pl prec (Z.to_pos (P_mod_two_p p n)) = true.
 Proof.
-  assert (E: forall p, Digits.digits2_pos p = Pos.size p).
-  { induction p; simpl; rewrite ?IHp; auto. }
-  intros p. rewrite E.
-  destruct p; simpl; rewrite ?Pos.add_1_r; reflexivity.
+  intros. unfold nan_pl. apply Z.ltb_lt. rewrite Digits.Zpos_digits2_pos.
+  set (p' := P_mod_two_p p n).
+  assert (A: 0 <= p' < 2 ^ Z.of_nat n).
+  { rewrite <- two_power_nat_equiv; apply P_mod_two_p_range. }
+  assert (B: Digits.Zdigits radix2 p' <= prec - 1).
+  { apply Digits.Zdigits_le_Zpower. rewrite <- H. rewrite Z.abs_eq; tauto. }
+  destruct (zeq p' 0).
+- rewrite e. simpl; auto.
+- rewrite Z2Pos.id by omega. omega.
 Qed.
+
+(** Transform a Nan payload to a quiet Nan payload. *)
+
+Definition quiet_nan_64_payload (p: positive) :=
+  Z.to_pos (P_mod_two_p (Pos.lor p ((iter_nat xO 51 1%positive))) 52%nat).
+
+Lemma quiet_nan_64_proof: forall p, nan_pl 53 (quiet_nan_64_payload p) = true.
+Proof. intros; apply normalized_nan; auto; omega. Qed.
+
+Definition quiet_nan_64 (sp: bool * positive) : {x :float | is_nan _ _ x = true} :=
+  let (s, p) := sp in
+  exist _ (B754_nan 53 1024 s (quiet_nan_64_payload p) (quiet_nan_64_proof p)) (eq_refl true).
+
+Definition default_nan_64 := quiet_nan_64 Archi.default_nan_64.
+
+Definition quiet_nan_32_payload (p: positive) :=
+  Z.to_pos (P_mod_two_p (Pos.lor p ((iter_nat xO 22 1%positive))) 23%nat).
+
+Lemma quiet_nan_32_proof: forall p, nan_pl 24 (quiet_nan_32_payload p) = true.
+Proof. intros; apply normalized_nan; auto; omega. Qed.
+
+Definition quiet_nan_32 (sp: bool * positive) : {x :float32 | is_nan _ _ x = true} :=
+  let (s, p) := sp in
+  exist _ (B754_nan 24 128 s (quiet_nan_32_payload p) (quiet_nan_32_proof p)) (eq_refl true).
+
+Definition default_nan_32 := quiet_nan_32 Archi.default_nan_32.
 
 Local Notation __ := (eq_refl Datatypes.Lt).
 
@@ -119,29 +151,15 @@ Module Float.
 (** The following definitions are not part of the IEEE754 standard but
     apply to all architectures supported by CompCert. *)
 
-(** Transform a Nan payload to a quiet Nan payload. *)
-
-Lemma transform_quiet_nan_proof (p : positive) :
-  nan_pl 53 p = true ->
-  nan_pl 53 (Pos.lor p (iter_nat xO 51 1%positive)) = true.
-Proof.
-  unfold nan_pl. intros K.
-  simpl. rewrite Z.ltb_lt, digits2_log2 in *.
-  change (Z.pos (Pos.lor p 2251799813685248)) with (Z.lor (Z.pos p) 2251799813685248%Z).
-  rewrite Z.log2_lor by xomega.
-  now apply Z.max_case.
-Qed.
-
-Definition transform_quiet_nan s p H : {x :float | is_nan _ _ x = true} :=
-  exist _ (B754_nan 53 1024 s _ (transform_quiet_nan_proof p H)) (eq_refl true).
-
 (** Nan payload operations for single <-> double conversions. *)
+
+Definition expand_nan_payload (p: positive) := Pos.shiftl_nat p 29.
 
 Lemma expand_nan_proof (p : positive) :
   nan_pl 24 p = true ->
-  nan_pl 53 (Pos.shiftl_nat p 29) = true.
+  nan_pl 53 (expand_nan_payload p) = true.
 Proof.
-  unfold nan_pl. intros K.
+  unfold nan_pl, expand_nan_payload. intros K.
   rewrite Z.ltb_lt in *.
   unfold Pos.shiftl_nat, nat_rect, Digits.digits2_pos.
   fold (Digits.digits2_pos p).
@@ -149,38 +167,28 @@ Proof.
 Qed.
 
 Definition expand_nan s p H : {x | is_nan 53 1024 x = true} :=
-  exist _ (B754_nan 53 1024 s _ (expand_nan_proof p H)) (eq_refl true).
+  exist _ (B754_nan 53 1024 s (expand_nan_payload p) (expand_nan_proof p H)) (eq_refl true).
 
 Definition of_single_nan (f : float32) : { x : float | is_nan _ _ x = true } :=
   match f with
   | B754_nan s p H =>
     if Archi.float_of_single_preserves_sNaN
     then expand_nan s p H
-    else transform_quiet_nan s _ (expand_nan_proof p H)
-  | _ => Archi.default_nan_64
+    else quiet_nan_64 (s, expand_nan_payload p)
+  | _ => default_nan_64
   end.
 
-Lemma reduce_nan_proof (p : positive) :
-  nan_pl 53 p = true ->
-  nan_pl 24 (Pos.shiftr_nat p 29) = true.
-Proof.
-  unfold nan_pl. intros K.
-  rewrite Z.ltb_lt in *.
-  unfold Pos.shiftr_nat, nat_rect.
-  assert (H : forall x, Digits.digits2_pos (Pos.div2 x) = (Digits.digits2_pos x - 1)%positive)
-    by (destruct x; simpl; auto; rewrite Pplus_one_succ_r, Pos.add_sub; auto).
-  rewrite !H, !Pos2Z.inj_sub_max.
-  repeat (apply Z.max_lub_lt; [reflexivity |apply Z.lt_sub_lt_add_l]).
-  exact K.
-Qed.
-
-Definition reduce_nan s p H : {x : float32 | is_nan _ _ x = true} :=
-  exist _ (B754_nan 24 128 s _ (reduce_nan_proof p H)) (eq_refl true).
+Definition reduce_nan_payload (p: positive) :=
+  (* The [quiet_nan_64_payload p] before the right shift is redundant with
+     the [quiet_nan_32_payload p] performed after, in [to_single_nan].
+     However the former ensures that the result of the right shift is
+     not 0 and therefore representable as a positive. *)
+  Pos.shiftr_nat (quiet_nan_64_payload p) 29.
 
 Definition to_single_nan (f : float) : { x : float32 | is_nan _ _ x = true } :=
   match f with
-  | B754_nan s p H => reduce_nan s _ (transform_quiet_nan_proof p H)
-  | _ => Archi.default_nan_32
+  | B754_nan s p H => quiet_nan_32 (s, reduce_nan_payload p)
+  | _ => default_nan_32
   end.
 
 (** NaN payload operations for opposite and absolute value. *)
@@ -188,34 +196,37 @@ Definition to_single_nan (f : float) : { x : float32 | is_nan _ _ x = true } :=
 Definition neg_nan (f : float) : { x : float | is_nan _ _ x = true } :=
   match f with
   | B754_nan s p H => exist _ (B754_nan 53 1024 (negb s) p H) (eq_refl true)
-  | _ => Archi.default_nan_64
+  | _ => default_nan_64
   end.
 
 Definition abs_nan (f : float) : { x : float | is_nan _ _ x = true } :=
   match f with
   | B754_nan s p H => exist _ (B754_nan 53 1024 false p H) (eq_refl true)
-  | _ => Archi.default_nan_64
+  | _ => default_nan_64
   end.
 
-(** The NaN payload operations for two-argument arithmetic operations
-   are not part of the IEEE754 standard, but all architectures of
-   Compcert share a similar NaN behavior, parameterized by:
-- a "default" payload which occurs when an operation generates a NaN from
-  non-NaN arguments;
-- a choice function determining which of the payload arguments to choose,
-  when an operation is given two NaN arguments. *)
+(** When an arithmetic operation returns a NaN, the sign and payload
+  of this NaN are not fully specified by the IEEE standard, and vary
+  among the architectures supported by CompCert.  However, the following
+  behavior applies to all the supported architectures: the payload is either
+- a default payload, independent of the arguments, or
+- the payload of one of the NaN arguments, if any.
 
-Definition binop_nan (x y : float) : {x : float | is_nan 53 1024 x = true} :=
-  if Archi.fpu_returns_default_qNaN then Archi.default_nan_64 else
-  match x, y with
-  | B754_nan s1 pl1 H1, B754_nan s2 pl2 H2 =>
-      if Archi.choose_binop_pl_64 pl1 pl2
-      then transform_quiet_nan s2 pl2 H2
-      else transform_quiet_nan s1 pl1 H1
-  | B754_nan s1 pl1 H1, _ => transform_quiet_nan s1 pl1 H1
-  | _, B754_nan s2 pl2 H2 => transform_quiet_nan s2 pl2 H2
-  | _, _ => Archi.default_nan_64
-  end.
+For each supported architecture, the functions [Archi.choose_nan_64]
+and [Archi.choose_nan_32] determine the payload of the result as a
+function of the payloads of the NaN arguments.
+
+Additionally, signaling NaNs are converted to quiet NaNs, as required by the standard.
+*)
+
+Definition cons_pl (x: float) (l: list (bool * positive)) :=
+  match x with B754_nan s p _ => (s, p) :: l | _ => l end.
+
+Definition unop_nan (x: float) : {x : float | is_nan 53 1024 x = true} :=
+  quiet_nan_64 (Archi.choose_nan_64 (cons_pl x [])).
+
+Definition binop_nan (x y: float) : {x : float | is_nan 53 1024 x = true} :=
+  quiet_nan_64 (Archi.choose_nan_64 (cons_pl x (cons_pl y []))).
 
 (** ** Operations over double-precision floats *)
 
@@ -302,19 +313,15 @@ Ltac smart_omega :=
 Theorem add_commut:
   forall x y, is_nan _ _ x = false \/ is_nan _ _ y = false -> add x y = add y x.
 Proof.
-  intros. apply Bplus_commut. unfold binop_nan.
-  destruct Archi.fpu_returns_default_qNaN. easy.
-  destruct x, y; try reflexivity.
-  now destruct H.
+  intros. apply Bplus_commut.
+  destruct x, y; try reflexivity; now destruct H.
 Qed.
 
 Theorem mul_commut:
   forall x y, is_nan _ _ x = false \/ is_nan _ _ y = false -> mul x y = mul y x.
 Proof.
-  intros. apply Bmult_commut. unfold binop_nan.
-  destruct Archi.fpu_returns_default_qNaN. easy.
-  destruct x, y; try reflexivity.
-  now destruct H.
+  intros. apply Bmult_commut.
+  destruct x, y; try reflexivity; now destruct H.
 Qed.
 
 (** Multiplication by 2 is diagonal addition. *)
@@ -324,9 +331,8 @@ Theorem mul2_add:
 Proof.
   intros. apply Bmult2_Bplus.
   intros x y Hx Hy. unfold binop_nan.
-  destruct Archi.fpu_returns_default_qNaN. easy.
-  destruct x as [| |sx px Nx|]; try discriminate.
-  now destruct y, Archi.choose_binop_pl_64.
+  destruct x; try discriminate. simpl. rewrite Archi.choose_nan_64_idem. 
+  destruct y; reflexivity || discriminate.
 Qed.
 
 (** Divisions that can be turned into multiplication by an inverse. *)
@@ -338,9 +344,8 @@ Theorem div_mul_inverse:
 Proof.
   intros. apply Bdiv_mult_inverse. 2: easy.
   intros x0 y0 z0 Hx Hy Hz. unfold binop_nan.
-  destruct Archi.fpu_returns_default_qNaN. easy.
-  destruct x0 as [| |sx px Nx|]; try discriminate.
-  now destruct y0, z0.
+  destruct x0; try discriminate.
+  destruct y0, z0; reflexivity || discriminate.
 Qed.
 
 (** Properties of comparisons. *)
@@ -919,45 +924,26 @@ End Float.
 
 Module Float32.
 
-(** ** NaN payload manipulations *)
-
-Lemma transform_quiet_nan_proof (p : positive) :
-  nan_pl 24 p = true ->
-  nan_pl 24 (Pos.lor p (iter_nat xO 22 1%positive)) = true.
-Proof.
-  unfold nan_pl. intros K.
-  simpl. rewrite Z.ltb_lt, digits2_log2 in *.
-  change (Z.pos (Pos.lor p 4194304)) with (Z.lor (Z.pos p) 4194304%Z).
-  rewrite Z.log2_lor by xomega.
-  now apply Z.max_case.
-Qed.
-
-Definition transform_quiet_nan s p H : {x : float32 | is_nan _ _ x = true} :=
-  exist _ (B754_nan 24 128 s _ (transform_quiet_nan_proof p H)) (eq_refl true).
-
 Definition neg_nan (f : float32) : { x : float32 | is_nan _ _ x = true } :=
   match f with
   | B754_nan s p H => exist _ (B754_nan 24 128 (negb s) p H) (eq_refl true)
-  | _ => Archi.default_nan_32
+  | _ => default_nan_32
   end.
 
 Definition abs_nan (f : float32) : { x : float32 | is_nan _ _ x = true } :=
   match f with
   | B754_nan s p H => exist _ (B754_nan 24 128 false p H) (eq_refl true)
-  | _ => Archi.default_nan_32
+  | _ => default_nan_32
   end.
 
-Definition binop_nan (x y : float32) : {x : float32 | is_nan _ _ x = true} :=
-  if Archi.fpu_returns_default_qNaN then Archi.default_nan_32 else
-  match x, y with
-  | B754_nan s1 pl1 H1, B754_nan s2 pl2 H2 =>
-      if Archi.choose_binop_pl_32 pl1 pl2
-      then transform_quiet_nan s2 pl2 H2
-      else transform_quiet_nan s1 pl1 H1
-  | B754_nan s1 pl1 H1, _ => transform_quiet_nan s1 pl1 H1
-  | _, B754_nan s2 pl2 H2 => transform_quiet_nan s2 pl2 H2
-  | _, _ => Archi.default_nan_32
-  end.
+Definition cons_pl (x: float32) (l: list (bool * positive)) :=
+  match x with B754_nan s p _ => (s, p) :: l | _ => l end.
+
+Definition unop_nan (x: float32) : {x : float32 | is_nan _ _ x = true} :=
+  quiet_nan_32 (Archi.choose_nan_32 (cons_pl x [])).
+
+Definition binop_nan (x y: float32) : {x : float32 | is_nan _ _ x = true} :=
+  quiet_nan_32 (Archi.choose_nan_32 (cons_pl x (cons_pl y []))).
 
 (** ** Operations over single-precision floats *)
 
@@ -1024,19 +1010,15 @@ Definition of_bits (b: int): float32 := b32_of_bits (Int.unsigned b).
 Theorem add_commut:
   forall x y, is_nan _ _ x = false \/ is_nan _ _ y = false -> add x y = add y x.
 Proof.
-  intros. apply Bplus_commut. unfold binop_nan.
-  destruct Archi.fpu_returns_default_qNaN. easy.
-  destruct x, y; try reflexivity.
-  now destruct H.
+  intros. apply Bplus_commut. 
+  destruct x, y; try reflexivity; now destruct H.
 Qed.
 
 Theorem mul_commut:
   forall x y, is_nan _ _ x = false \/ is_nan _ _ y = false -> mul x y = mul y x.
 Proof.
-  intros. apply Bmult_commut. unfold binop_nan.
-  destruct Archi.fpu_returns_default_qNaN. easy.
-  destruct x, y; try reflexivity.
-  now destruct H.
+  intros. apply Bmult_commut.
+  destruct x, y; try reflexivity; now destruct H.
 Qed.
 
 (** Multiplication by 2 is diagonal addition. *)
@@ -1046,9 +1028,8 @@ Theorem mul2_add:
 Proof.
   intros. apply Bmult2_Bplus.
   intros x y Hx Hy. unfold binop_nan.
-  destruct Archi.fpu_returns_default_qNaN. easy.
-  destruct x as [| |sx px Nx|]; try discriminate.
-  now destruct y, Archi.choose_binop_pl_32.
+  destruct x; try discriminate. simpl. rewrite Archi.choose_nan_32_idem. 
+  destruct y; reflexivity || discriminate.
 Qed.
 
 (** Divisions that can be turned into multiplication by an inverse. *)
@@ -1060,9 +1041,8 @@ Theorem div_mul_inverse:
 Proof.
   intros. apply Bdiv_mult_inverse. 2: easy.
   intros x0 y0 z0 Hx Hy Hz. unfold binop_nan.
-  destruct Archi.fpu_returns_default_qNaN. easy.
-  destruct x0 as [| |sx px Nx|]; try discriminate.
-  now destruct y0, z0.
+  destruct x0; try discriminate.
+  destruct y0, z0; reflexivity || discriminate.
 Qed.
 
 (** Properties of comparisons. *)
