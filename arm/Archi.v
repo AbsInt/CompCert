@@ -75,11 +75,16 @@ Lemma choose_nan_32_idem: forall n,
   choose_nan_32 (n :: n :: nil) = choose_nan_32 (n :: nil).
 Proof. intros; apply choose_nan_idem. Qed.
 
+Definition fma_order {A: Type} (x y z: A) := (z, x, y).
+
+Definition fma_invalid_mul_is_nan := true.
+
 Definition float_of_single_preserves_sNaN := false.
 
 Global Opaque ptr64 big_endian splitlong
               default_nan_64 choose_nan_64
               default_nan_32 choose_nan_32
+              fma_order fma_invalid_mul_is_nan
               float_of_single_preserves_sNaN.
 
 (** Which ABI to use: either the standard ARM EABI with floats passed
