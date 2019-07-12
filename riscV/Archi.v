@@ -57,11 +57,16 @@ Lemma choose_nan_32_idem: forall n,
   choose_nan_32 (n :: n :: nil) = choose_nan_32 (n :: nil).
 Proof. auto. Qed.
 
+Definition fma_order {A: Type} (x y z: A) := (x, y, z).
+
+Definition fma_invalid_mul_is_nan := false.
+
 Definition float_of_single_preserves_sNaN := false.
 
 Global Opaque ptr64 big_endian splitlong
               default_nan_64 choose_nan_64
               default_nan_32 choose_nan_32
+              fma_order fma_invalid_mul_is_nan
               float_of_single_preserves_sNaN.
 
 (** Whether to generate position-independent code or not *)

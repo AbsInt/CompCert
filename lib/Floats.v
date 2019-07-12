@@ -166,7 +166,7 @@ Proof.
   zify; omega.
 Qed.
 
-Definition expand_nan s p H : {x | is_nan 53 1024 x = true} :=
+Definition expand_nan s p H : {x | is_nan _ _ x = true} :=
   exist _ (B754_nan 53 1024 s (expand_nan_payload p) (expand_nan_proof p H)) (eq_refl true).
 
 Definition of_single_nan (f : float32) : { x : float | is_nan _ _ x = true } :=
@@ -222,11 +222,37 @@ Additionally, signaling NaNs are converted to quiet NaNs, as required by the sta
 Definition cons_pl (x: float) (l: list (bool * positive)) :=
   match x with B754_nan s p _ => (s, p) :: l | _ => l end.
 
-Definition unop_nan (x: float) : {x : float | is_nan 53 1024 x = true} :=
+Definition unop_nan (x: float) : {x : float | is_nan _ _ x = true} :=
   quiet_nan_64 (Archi.choose_nan_64 (cons_pl x [])).
 
-Definition binop_nan (x y: float) : {x : float | is_nan 53 1024 x = true} :=
+Definition binop_nan (x y: float) : {x : float | is_nan _ _ x = true} :=
   quiet_nan_64 (Archi.choose_nan_64 (cons_pl x (cons_pl y []))).
+
+(** For fused multiply-add, the order in which arguments are examined
+  to select a NaN payload varies across platforms.  E.g. in [fma x y z],
+  x86 considers [x] first, then [y], then [z], while ARM considers [z] first,
+  then [x], then [y].  The corresponding permutation is defined
+  for each target, as function [Archi.fma_order]. *)
+
+Definition fma_nan_1 (x y z: float) : {x : float | is_nan _ _ x = true} :=
+  let '(a, b, c) := Archi.fma_order x y z in
+  quiet_nan_64 (Archi.choose_nan_64 (cons_pl a (cons_pl b (cons_pl c [])))).
+
+(** One last wrinkle for fused multiply-add: [fma zero infinity nan]
+  can return either the quiesced [nan], or the default NaN arising out
+  of the invalid operation [zero * infinity].  Of our target platforms,
+  only ARM honors the latter case.  The choice between the default NaN
+  and [nan] is done as in the case of two-argument arithmetic operations. *)
+
+Definition fma_nan (x y z: float) : {x : float | is_nan _ _ x = true} :=
+  match x, y with
+  | B754_infinity _, B754_zero _ | B754_zero _, B754_infinity _ =>
+      if Archi.fma_invalid_mul_is_nan
+      then quiet_nan_64 (Archi.choose_nan_64 (Archi.default_nan_64 :: cons_pl z []))
+      else fma_nan_1 x y z
+  | _, _ =>
+      fma_nan_1 x y z
+  end.
 
 (** ** Operations over double-precision floats *)
 
@@ -238,6 +264,8 @@ Definition eq_dec: forall (f1 f2: float), {f1 = f2} + {f1 <> f2} := Beq_dec _ _.
 
 Definition neg: float -> float := Bopp _ _ neg_nan. (**r opposite (change sign) *)
 Definition abs: float -> float := Babs _ _ abs_nan. (**r absolute value (set sign to [+]) *)
+Definition sqrt: float -> float :=
+  Bsqrt 53 1024 __ __ unop_nan mode_NE.  (**r square root *)
 Definition add: float -> float -> float :=
   Bplus 53 1024 __ __ binop_nan mode_NE. (**r addition *)
 Definition sub: float -> float -> float :=
@@ -246,6 +274,8 @@ Definition mul: float -> float -> float :=
   Bmult 53 1024 __ __ binop_nan mode_NE. (**r multiplication *)
 Definition div: float -> float -> float :=
   Bdiv 53 1024 __ __ binop_nan mode_NE. (**r division *)
+Definition fma: float -> float -> float -> float :=
+  Bfma 53 1024 __ __ fma_nan mode_NE. (**r fused multiply-add [x * y + z] *)
 Definition compare (f1 f2: float) : option Datatypes.comparison := (**r general comparison *)
   Bcompare 53 1024 f1 f2.
 Definition cmp (c:comparison) (f1 f2: float) : bool := (**r Boolean comparison *)
@@ -945,6 +975,20 @@ Definition unop_nan (x: float32) : {x : float32 | is_nan _ _ x = true} :=
 Definition binop_nan (x y: float32) : {x : float32 | is_nan _ _ x = true} :=
   quiet_nan_32 (Archi.choose_nan_32 (cons_pl x (cons_pl y []))).
 
+Definition fma_nan_1 (x y z: float32) : {x : float32 | is_nan _ _ x = true} :=
+  let '(a, b, c) := Archi.fma_order x y z in
+  quiet_nan_32 (Archi.choose_nan_32 (cons_pl a (cons_pl b (cons_pl c [])))).
+
+Definition fma_nan (x y z: float32) : {x : float32 | is_nan _ _ x = true} :=
+  match x, y with
+  | B754_infinity _, B754_zero _ | B754_zero _, B754_infinity _ =>
+      if Archi.fma_invalid_mul_is_nan
+      then quiet_nan_32 (Archi.choose_nan_32 (Archi.default_nan_32 :: cons_pl z []))
+      else fma_nan_1 x y z
+  | _, _ =>
+      fma_nan_1 x y z
+  end.
+
 (** ** Operations over single-precision floats *)
 
 Definition zero: float32 := B754_zero _ _ false. (**r the float [+0.0] *)
@@ -955,6 +999,8 @@ Definition eq_dec: forall (f1 f2: float32), {f1 = f2} + {f1 <> f2} := Beq_dec _ 
 
 Definition neg: float32 -> float32 := Bopp _ _ neg_nan. (**r opposite (change sign) *)
 Definition abs: float32 -> float32 := Babs _ _ abs_nan. (**r absolute value (set sign to [+]) *)
+Definition sqrt: float32 -> float32 :=
+  Bsqrt 24 128 __ __ unop_nan mode_NE.  (**r square root *)
 Definition add: float32 -> float32 -> float32 :=
   Bplus 24 128 __ __ binop_nan mode_NE. (**r addition *)
 Definition sub: float32 -> float32 -> float32 :=
@@ -963,6 +1009,8 @@ Definition mul: float32 -> float32 -> float32 :=
   Bmult 24 128 __ __ binop_nan mode_NE. (**r multiplication *)
 Definition div: float32 -> float32 -> float32 :=
   Bdiv 24 128 __ __ binop_nan mode_NE. (**r division *)
+Definition fma: float32 -> float32 -> float32 -> float32 :=
+  Bfma 24 128 __ __ fma_nan mode_NE. (**r fused multiply-add [x * y + z] *)
 Definition compare (f1 f2: float32) : option Datatypes.comparison := (**r general comparison *)
   Bcompare 24 128 f1 f2.
 Definition cmp (c:comparison) (f1 f2: float32) : bool := (**r comparison *)
