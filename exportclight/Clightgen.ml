@@ -45,12 +45,7 @@ let compile_c_ast sourcename csyntax ofile =
     | Errors.Error msg ->
       fatal_error loc "%a" print_error msg in
   (* Dump Clight in C syntax if requested *)
-  if !option_dclight then begin
-    let ofile = Filename.chop_suffix sourcename ".c" ^ ".light.c" in
-    let oc = open_out ofile in
-    PrintClight.print_program (Format.formatter_of_out_channel oc) clight;
-    close_out oc
-  end;
+  PrintClight.print_if clight;
   (* Print Clight in Coq syntax *)
   let oc = open_out ofile in
   ExportClight.print_program (Format.formatter_of_out_channel oc)
@@ -60,6 +55,12 @@ let compile_c_ast sourcename csyntax ofile =
 (* From C source to Clight *)
 
 let compile_c_file sourcename ifile ofile =
+  let set_dest dst opt ext =
+    dst := if !opt then Some (output_filename sourcename ".c" ext)
+      else None in
+  set_dest Cprint.destination option_dparse ".parsed.c";
+  set_dest PrintCsyntax.destination option_dcmedium ".compcert.c";
+  set_dest PrintClight.destination option_dclight ".light.c";
   compile_c_ast sourcename (parse_c_file sourcename ifile) ofile
 
 let output_filename sourcename suff =
@@ -74,7 +75,10 @@ let process_c_file sourcename =
   if !option_E then begin
     preprocess sourcename "-"
   end else begin
-    let preproname = Driveraux.tmp_file ".i" in
+    let preproname = if !option_dprepro then
+        Driveraux.output_filename sourcename ".c" ".i"
+      else
+        Driveraux.tmp_file ".i" in
     preprocess sourcename preproname;
     compile_c_file sourcename preproname ofile
   end
@@ -100,9 +104,11 @@ Processing options:
 prepro_help ^
 language_support_help ^
 {|Tracing options:
+  -dprepro       Save C file after preprocessing in <file>.i
   -dparse        Save C file after parsing and elaboration in <file>.parsed.c
   -dc            Save generated Compcert C in <file>.compcert.c
   -dclight       Save generated Clight in <file>.light.c
+  -dall          Save all generated intermediate files in <file>.<ext>
 |} ^
   general_help ^
   warning_help
@@ -142,9 +148,16 @@ let cmdline_actions =
 (* Preprocessing options *)
   @ prepro_actions @
 (* Tracing options *)
- [ Exact "-dparse", Set option_dparse;
-  Exact "-dc", Set option_dcmedium;
-  Exact "-dclight", Set option_dclight;]
+  [ Exact "-dprepro", Set option_dprepro;
+   Exact "-dparse", Set option_dparse;
+   Exact "-dc", Set option_dcmedium;
+   Exact "-dclight", Set option_dclight;
+   Exact "-dall", Self (fun _ ->
+       option_dprepro := true;
+       option_dparse := true;
+       option_dcmedium := true;
+       option_dclight := true;);
+ ]
   @ general_options
 (* Diagnostic options *)
   @ warning_options
