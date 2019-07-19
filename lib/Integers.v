@@ -1181,7 +1181,7 @@ Qed.
 Theorem divs_one:
   forall x, zwordsize > 1 -> divs x one = x.
 Proof.
-  unfold divs; intros. rewrite signed_one. rewrite Zquot_1_r. apply repr_signed. auto.
+  unfold divs; intros. rewrite signed_one. rewrite Z.quot_1_r. apply repr_signed. auto.
 Qed.
 
 Theorem modu_one:

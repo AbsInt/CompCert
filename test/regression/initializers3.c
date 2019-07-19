@@ -82,8 +82,14 @@ int main()
   print_S("s1", &s1);
   struct S s2 = { .a.y = 1, .u.c[4] = 'x', .u.b = p1 };
   print_S("s2", &s2);
+  /* ISO C99 and recent Clang say s3.a.y = 77
+     GCC and earlier CompCert versions say s3.a.y = 0
+     Now CompCert fails on an error "unsupported reinitialization". */
+#if 0
   struct S s3 = { .tag = 1, .a = p1, .a.x = 1, .u.c = "Hello!", .u.c[7] = 'X' };
   print_S("s3", &s3);
+#endif
+  /* This other reinitialization is correctly supported, though. */
   struct S s4 = { .tag = 0, .a.x = 1, .a = p1, .u.b = 88, 99 };
   print_S("s4", &s4);
   return 0;

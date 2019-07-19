@@ -16,7 +16,7 @@
 open C
 
 open Camlcoq
-open Floats
+open! Floats
 open Values
 open Ctypes
 open Csyntax
@@ -119,14 +119,21 @@ let currentLocation = ref Cutil.no_loc
 
 let updateLoc l = currentLocation := l
 
+let currentFunction = ref ""
+
+let updateFunction f = currentFunction := f
+
 let error fmt =
-  Cerrors.error !currentLocation fmt
+  Diagnostics.error !currentLocation fmt
+
+let fatal_error fmt =
+  Diagnostics.fatal_error !currentLocation fmt
 
 let unsupported msg =
-  Cerrors.error !currentLocation "unsupported feature: %s"  msg
+  Diagnostics.error !currentLocation "unsupported feature: %s"  msg
 
 let warning t msg =
-  Cerrors.warning !currentLocation t msg
+  Diagnostics.warning !currentLocation t msg
 
 let string_of_errmsg msg =
   let string_of_err = function
@@ -137,21 +144,21 @@ let string_of_errmsg msg =
 
 (** ** The builtin environment *)
 
-(* let ais_annot_functions =
- *   if Configuration.elf_target then
- *     [(\* Ais Annotations, only available for ELF targets *\)
- *       "__builtin_ais_annot",
- *       (TVoid [],
- *        [TPtr(TInt(IChar, [AConst]), [])],
- *        true);]
- *   else
- *     [] *)
+let ais_annot_functions =
+  if Configuration.elf_target then
+    [(* Ais Annotations, only available for ELF targets *)
+       "__builtin_ais_annot",
+     (TVoid [],
+      [TPtr(TInt(IChar, [AConst]), [])],
+      true);]
+  else
+    []
 
 let builtins_generic = {
   Builtins.typedefs = [];
   Builtins.functions =
-    (* ais_annot_functions
-     * @ *)
+    ais_annot_functions
+      @
     [
     (* Integer arithmetic *)
     "__builtin_bswap",
@@ -300,18 +307,18 @@ let builtins =
 (** ** The known attributes *)
 
 let attributes = [
-  (* type-related *)
-  ("aligned", Cutil.Attr_type);
+  (* type-related -- currently none *)
   (* struct-related *)
   ("packed", Cutil.Attr_struct);
   (* function-related *)
   ("noreturn", Cutil.Attr_function);
   ("noinline",Cutil.Attr_function);
   (* name-related *)
+  ("aligned", Cutil.Attr_name);
   ("section", Cutil.Attr_name);
   ("unused", Cutil.Attr_name)
 ]
-  
+
 
 (** ** Functions used to handle string literals *)
 
@@ -489,7 +496,9 @@ let make_builtin_va_arg env ty e =
 
 (** Constants *)
 
-let convertInt n = coqint_of_camlint(Int64.to_int32 n)
+let convertInt32 (n: int64) = coqint_of_camlint(Int64.to_int32 n)
+let convertInt64 (n: int64) = coqint_of_camlint64 n
+let convertIntZ  (n: int64) = Z.of_sint64 n
 
 (** Attributes *)
 
@@ -537,14 +546,14 @@ let convertFkind k a : coq_type =
 let checkFunctionType env tres targs =
   if not !Clflags.option_fstruct_passing then begin
     if Cutil.is_composite_type env tres then
-      unsupported "function returning a struct or union (consider adding option -fstruct-passing)";
+      unsupported "function returning a struct or union (consider adding option [-fstruct-passing])";
     begin match targs with
     | None -> ()
     | Some l ->
         List.iter
           (fun (id, ty) ->
             if Cutil.is_composite_type env ty then
-              unsupported "function parameter of struct or union type (consider adding option -fstruct-passing)")
+              unsupported "function parameter of struct or union type (consider adding option [-fstruct-passing])")
           l
     end
   end
@@ -562,9 +571,9 @@ let rec convertTyp env t =
       (* Cparser verified that the type ty[] occurs only in
          contexts that are safe for Clight, so just treat as ty[0]. *)
       (* warning "array type of unspecified size"; *)
-      Tarray(convertTyp env ty, coqint_of_camlint 0l, convertAttr a)
+      Tarray(convertTyp env ty, Z.zero, convertAttr a)
   | C.TArray(ty, Some sz, a) ->
-      Tarray(convertTyp env ty, convertInt sz, convertAttr a)
+      Tarray(convertTyp env ty, convertIntZ sz, convertAttr a)
   | C.TFun(tres, targs, va, a) ->
       checkFunctionType env tres targs;
       Tfunction(begin match targs with
@@ -597,13 +606,15 @@ let rec convertTypArgs env tl el =
 
 let convertField env f =
   if f.fld_bitfield <> None then
-    unsupported "bit field in struct or union (consider adding option -fbitfields)";
+    unsupported "bit field in struct or union (consider adding option [-fbitfields])";
   (intern_string f.fld_name, convertTyp env f.fld_typ)
 
 let convertCompositedef env su id attr members =
+  if Cutil.find_custom_attributes ["packed";"__packed__"] attr <> [] then
+    unsupported "packed struct (consider adding option [-fpacked-structs])";
   let t = match su with
   | C.Struct ->
-      let layout = Cutil.struct_layout env members in
+      let layout = Cutil.struct_layout env attr members in
       List.iter (fun (a,b) -> Debug.set_member_offset id a b) layout;
       TStruct (id,attr)
   | C.Union -> TUnion (id,attr) in
@@ -657,11 +668,11 @@ let checkFloatOverflow f typ =
   match f with
   | Fappli_IEEE.B754_finite _ -> ()
   | Fappli_IEEE.B754_zero _ ->
-      warning Cerrors.Literal_range "magnitude of floating-point constant too small for type '%s'"  typ
+      warning Diagnostics.Literal_range "magnitude of floating-point constant too small for type '%s'"  typ
   | Fappli_IEEE.B754_infinity _ ->
-      warning Cerrors.Literal_range "magnitude of floating-point constant too large for type '%s'"  typ
+      warning Diagnostics.Literal_range "magnitude of floating-point constant too large for type '%s'"  typ
   | Fappli_IEEE.B754_nan _ ->
-      warning Cerrors.Literal_range "floating-point converts converts to 'NaN'"
+      warning Diagnostics.Literal_range "floating-point converts converts to 'NaN'"
 
 let convertFloat f kind =
   let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
@@ -708,6 +719,7 @@ let ewrap = function
 
 let rec convertExpr env e =
   match e.edesc with
+  | C.EConst (C.CStr _ | C.CWStr _)
   | C.EVar _
   | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
   | C.EBinop(C.Oindex, _, _, _) ->
@@ -717,20 +729,14 @@ let rec convertExpr env e =
   | C.EConst(C.CInt(i, k, _)) ->
       let sg = if Cutil.is_signed_ikind k then Signed else Unsigned in
       if Cutil.sizeof_ikind k = 8
-      then Ctyping.econst_long (coqint_of_camlint64 i) sg
-      else Ctyping.econst_int (convertInt i) sg
+      then Ctyping.econst_long (convertInt64 i) sg
+      else Ctyping.econst_int (convertInt32 i) sg
   | C.EConst(C.CFloat(f, k)) ->
       if k = C.FLongDouble && not !Clflags.option_flongdouble then
         unsupported "'long double' floating-point constant";
       convertFloat f k
-  | C.EConst(C.CStr s) ->
-      let ty = typeStringLiteral s in
-      Evalof(Evar(name_for_string_literal s, ty), ty)
-  | C.EConst(C.CWStr s) ->
-      let ty = typeWideStringLiteral s in
-      Evalof(Evar(name_for_wide_string_literal s, ty), ty)
   | C.EConst(C.CEnum(id, i)) ->
-      Ctyping.econst_int (convertInt i) Signed
+      Ctyping.econst_int (convertInt32 i) Signed
   | C.ESizeof ty1 ->
       Ctyping.esizeof (convertTyp env ty1)
   | C.EAlignof ty1 ->
@@ -783,7 +789,10 @@ let rec convertExpr env e =
       let e2' = convertExpr env e2 in
       if Cutil.is_composite_type env e1.etyp
       && List.mem AVolatile (Cutil.attributes_of_type env e1.etyp) then
-        warning Cerrors.Unnamed "assignment to an lvalue of volatile composite type, the 'volatile' qualifier is ignored";
+        warning Diagnostics.Unnamed "assignment to an lvalue of volatile composite type, the 'volatile' qualifier is ignored";
+      if Cutil.is_composite_type env e2.etyp
+      && List.mem AVolatile (Cutil.attributes_of_type env e2.etyp) then
+        warning Diagnostics.Unnamed "assignment of a value of volatile composite type, the 'volatile' qualifier is ignored";
       ewrap (Ctyping.eassign e1' e2')
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
@@ -820,10 +829,10 @@ let rec convertExpr env e =
   | C.ECompound(ty1, ie) ->
       unsupported "compound literals"; ezero
 
+  | C.ECall({edesc = C.EVar {name = "__builtin_debug"}}, args) when List.length args < 2 ->
+      error "too few arguments to function call, expected at least 2, have 0";
+      ezero
   | C.ECall({edesc = C.EVar {name = "__builtin_debug"}}, args) ->
-      let len = List.length args in
-      if len < 2 then
-        error "too few arguments to function call, expected at least 2, have 0";
       let (kind, args1) =
         match args with
         | {edesc = C.EConst(CInt(n,_,_))} :: args1 when n <> 0L-> (n, args1)
@@ -866,19 +875,21 @@ let rec convertExpr env e =
           ezero
       end
 
-  (* | C.ECall({edesc = C.EVar {name = "__builtin_ais_annot"}}, args) when Configuration.elf_target ->
-   *     begin match args with
-   *     | {edesc = C.EConst(CStr txt)} :: args1 ->
-   *       let file,line = !currentLocation in
-   *       let loc_string = Printf.sprintf "# file %s, line %d\n" file line in
-   *       let targs1 = convertTypArgs env [] args1 in
-   *         Ebuiltin(
-   *            AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), typlist_of_typelist targs1),
-   *           targs1, convertExprList env args1, convertTyp env e.etyp)
-   *     | _ ->
-   *         error "argument 1 of '__builtin_ais_annot' must be a string literal";
-   *         ezero
-   *     end *)
+  | C.ECall({edesc = C.EVar {name = "__builtin_ais_annot"}}, args) when Configuration.elf_target ->
+      begin match args with
+      | {edesc = C.EConst(CStr txt)} :: args1 ->
+        let file,line = !currentLocation in
+        let fun_name = !currentFunction in
+        let loc_string = Printf.sprintf "# file:%s line:%d function:%s\n" file line fun_name in
+        let targs1 = convertTypArgs env [] args1 in
+        AisAnnot.validate_ais_annot env !currentLocation txt args1;
+          Ebuiltin(
+             AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), typlist_of_typelist targs1),
+            targs1, convertExprList env args1, convertTyp env e.etyp)
+      | _ ->
+          error "argument 1 of '__builtin_ais_annot' must be a string literal";
+          ezero
+      end
 
  | C.ECall({edesc = C.EVar {name = "__builtin_memcpy_aligned"}}, args) ->
       make_builtin_memcpy (convertExprList env args)
@@ -946,6 +957,12 @@ and convertLvalue env e =
       let e1' = convertExpr env e1 and e2' = convertExpr env e2 in
       let e3' = ewrap (Ctyping.ebinop Cop.Oadd e1' e2') in
       ewrap (Ctyping.ederef e3')
+  | C.EConst(C.CStr s) ->
+      let ty = typeStringLiteral s in
+      Evar(name_for_string_literal s, ty)
+  | C.EConst(C.CWStr s) ->
+      let ty = typeWideStringLiteral s in
+      Evar(name_for_wide_string_literal s, ty)
   | _ ->
       error "illegal lvalue"; ezero
 
@@ -991,7 +1008,7 @@ type switchbody =
 let rec flattenSwitch = function
   | {sdesc = C.Sseq(s1, s2)} ->
       flattenSwitch s1 @ flattenSwitch s2
-  | {sdesc = C.Slabeled(C.Scase e, s1)} ->
+  | {sdesc = C.Slabeled(C.Scase(e, _), s1)} ->
       Label(Case e) :: flattenSwitch s1
   | {sdesc = C.Slabeled(C.Sdefault, s1)} ->
       Label Default :: flattenSwitch s1
@@ -1080,7 +1097,7 @@ let rec convertStmt env s =
         | _ -> Cutil.is_debug_stmt s in
       if init.sdesc <> C.Sskip && not (init_debug init) then
         begin
-          warning Cerrors.Unnamed "ignored code at beginning of 'switch'";
+          warning Diagnostics.Unnamed "ignored code at beginning of 'switch'";
           contains_case init
         end;
       let te = convertExpr env e in
@@ -1130,6 +1147,7 @@ and convertSwitch env is_64 = function
 
 let convertFundef loc env fd =
   checkFunctionType env fd.fd_ret (Some fd.fd_params);
+  updateFunction fd.fd_name.name;
   if fd.fd_vararg && not !Clflags.option_fvararg_calls then
     unsupported "variable-argument function (consider adding option [-fvararg-calls])";
   let ret =
@@ -1276,7 +1294,7 @@ let rec convertGlobdecls env res gl =
           begin match Cutil.unroll env ty with
           | TFun(tres, targs, va, a) ->
               if targs = None then
-                warning Cerrors.Unnamed "'%s' is declared without a function prototype" id.name;
+                warning Diagnostics.Unnamed "'%s' is declared without a function prototype" id.name;
               convertGlobdecls env (convertFundecl env d :: res) gl'
           | _ ->
               convertGlobdecls env (convertGlobvar g.gloc env d :: res) gl'
@@ -1290,7 +1308,7 @@ let rec convertGlobdecls env res gl =
           convertGlobdecls env res gl'
       | C.Gpragma s ->
           if not (!process_pragma_hook s) then
-            warning Cerrors.Unknown_pragmas "unknown pragma ignored";
+            warning Diagnostics.Unknown_pragmas "unknown pragma ignored";
           convertGlobdecls env res gl'
 
 (** Convert struct and union declarations.
@@ -1388,7 +1406,7 @@ let public_globals gl =
 (** Convert a [C.program] into a [Csyntax.program] *)
 
 let convertProgram p =
-  Cerrors.reset();
+  Diagnostics.reset();
   stringNum := 0;
   Hashtbl.clear decl_atom;
   Hashtbl.clear stringTable;
@@ -1399,9 +1417,8 @@ let convertProgram p =
     let typs = convertCompositedefs env [] p in
     match build_composite_env typs with
     | Errors.Error msg ->
-        error "incorrect struct or union definition: %s"
-                       (string_of_errmsg msg);
-        None
+      fatal_error "incorrect struct or union definition: %s"
+                       (string_of_errmsg msg)
     | Errors.OK ce ->
         comp_env := ce;
         let gl1 = convertGlobdecls env [] p in
@@ -1413,6 +1430,7 @@ let convertProgram p =
             prog_main = intern_string "main";
             prog_types = typs;
             prog_comp_env = ce } in
-        if Cerrors.check_errors () then None else Some p'
+        Diagnostics.check_errors ();
+        p'
   with Env.Error msg ->
-    error "%s" (Env.error_message msg); None
+    fatal_error "%s" (Env.error_message msg)

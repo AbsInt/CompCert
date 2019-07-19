@@ -25,8 +25,13 @@ Section Def.
 (** Definition of a floating-point number *)
 Record float (beta : radix) := Float { Fnum : Z ; Fexp : Z }.
 
+(*<<<<<<< HEAD
 Arguments Fnum [beta] _.
 Arguments Fexp [beta] _.
+=======*)
+Arguments Fnum {beta} f.
+Arguments Fexp {beta} f.
+(*>>>>>>> 6a080cf6391a8d01640448ab4321ffce596b27a4*)
 
 Variable beta : radix.
 
@@ -46,9 +51,15 @@ Definition round_pred (P : R -> R -> Prop) :=
 
 End Def.
 
+(*<<<<<<< HEAD
 Arguments Fnum [beta] _.
 Arguments Fexp [beta] _.
 Arguments F2R [beta] _.
+=======*)
+Arguments Fnum {beta} f.
+Arguments Fexp {beta} f.
+Arguments F2R {beta} f.
+(*>>>>>>> 6a080cf6391a8d01640448ab4321ffce596b27a4*)
 
 Section RND.
 

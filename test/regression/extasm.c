@@ -18,7 +18,10 @@ int clobbers(int x, int z)
   return y + z;
 }
 
-#if defined(__x86_64__) || __riscv_xlen == 64
+#if (defined(ARCH_x86) && defined(MODEL_64)) \
+ || (defined(ARCH_riscV) && defined(MODEL_64)) \
+ || (defined(ARCH_powerpc) && defined(MODEL_ppc64)) \
+ || (defined(ARCH_powerpc) && defined(MODEL_e5500))
 #define SIXTYFOUR
 #else
 #undef SIXTYFOUR

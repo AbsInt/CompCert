@@ -284,6 +284,7 @@ Inductive instruction: Type :=
   | Pmovsb
   | Pmovsw
   | Pmovw_rm (rd: ireg) (ad: addrmode)
+  | Pnop
   | Prep_movsl
   | Psbbl_rr (rd: ireg) (r2: ireg)
   | Psqrtsd (rd: freg) (r1: freg)
@@ -1001,6 +1002,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmovsb
   | Pmovsw
   | Pmovw_rm _ _
+  | Pnop
   | Prep_movsl
   | Psbbl_rr _ _
   | Psqrtsd _ _
@@ -1046,6 +1048,15 @@ Definition preg_of (r: mreg) : preg :=
   | X15 => FR XMM15
   | FP0 => ST0
   end.
+
+(** Undefine all registers except SP and callee-save registers *)
+
+Definition undef_caller_save_regs (rs: regset) : regset :=
+  fun r =>
+    if preg_eq r SP
+    || In_dec preg_eq r (List.map preg_of (List.filter is_callee_save all_mregs))
+    then rs r
+    else Vundef.
 
 (** Extract the values of the arguments of an external call.
     We exploit the calling conventions from module [Conventions], except that
@@ -1111,7 +1122,7 @@ Inductive step: state -> trace -> state -> Prop :=
       Genv.find_funct_ptr ge b = Some (External ef) ->
       extcall_arguments rs m (ef_sig ef) args ->
       external_call ef ge args m t res m' ->
-      rs' = (set_pair (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA) ->
+      rs' = (set_pair (loc_external_result (ef_sig ef)) res (undef_caller_save_regs rs)) #PC <- (rs RA) ->
       step (State rs m) t (State rs' m').
 
 End RELSEM.

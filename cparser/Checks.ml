@@ -14,7 +14,7 @@
 (* *********************************************************************)
 
 open C
-open Cerrors
+open Diagnostics
 open Cutil
 open Env
 
@@ -106,6 +106,7 @@ let unknown_attrs_program p =
   let decl env loc d =
     unknown_attrs_decl env loc d
   and fundef env loc f =
+     List.iter (fun (id,typ) -> unknown_attrs_typ env loc typ) f.fd_params;
      unknown_attrs loc f.fd_attrib;
      unknown_attrs_stmt env f.fd_body;
      List.iter (unknown_attrs_decl env loc) f.fd_locals;

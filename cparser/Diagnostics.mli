@@ -21,8 +21,8 @@ val reset : unit -> unit
 exception Abort
   (** Exception raised upon fatal errors *)
 
-val check_errors : unit -> bool
-  (** Check whether errors occured *)
+val check_errors : unit -> unit
+  (** Check whether errors occured and raise abort if an error occured *)
 
 type warning_type =
   | Unnamed                        (** warnings which cannot be turned off *)
@@ -47,6 +47,14 @@ type warning_type =
   | Inline_asm_sdump               (** inline assembler used in combination of sdump *)
   | Unused_variable                (** unused local variables *)
   | Unused_parameter               (** unused function parameter *)
+  | Wrong_ais_parameter            (** wrong parameter type for ais replacement *)
+  | Unused_ais_parameter           (** unused builtin ais parameter *)
+  | Ignored_attributes             (** attributes declarations after definition *)
+  | Extern_after_definition        (** extern declaration after non-extern definition *)
+  | Static_in_inline               (** static variable in non-static inline function *)
+  | Flexible_array_extensions      (** usange of structs with flexible arrays in structs and arrays *)
+  | Tentative_incomplete_static    (** static tentative definition with incomplete type *)
+  | Reduced_alignment              (** alignment reduction *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 (** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to
@@ -78,3 +86,12 @@ val raise_on_errors : unit -> unit
 
 val crash: exn -> unit
 (** Report the backtrace of the last exception and exit *)
+
+val no_loc : string * int
+(** Location used for unknown locations *)
+
+val file_loc : string -> string * int
+(** [file_loc f] generates a location for file [f] *)
+
+val error_summary : unit -> unit
+(** Print a summary containing the numbers of errors encountered *)

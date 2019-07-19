@@ -12,8 +12,9 @@
 
 (** Correctness proof for RTL generation. *)
 
-Require Import Coqlib Maps AST Linking.
-Require Import Integers Values Memory Events Smallstep ExposedSimulations Globalenvs.
+Require Import Wellfounded Coqlib Maps AST Linking.
+Require Import Integers Values Memory Events Smallstep Globalenvs.
+Require Import ExposedSimulations.
 Require Import Switch Registers Cminor Op CminorSel RTL.
 Require Import RTLgen RTLgenspec.
 
@@ -1146,8 +1147,6 @@ Qed.
 
 Ltac Lt_state :=
   apply lt_state_intro; simpl; try omega.
-
-Require Import Wellfounded.
 
 Lemma lt_state_wf:
   well_founded lt_state.

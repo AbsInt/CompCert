@@ -34,8 +34,14 @@ val remove_attributes : attributes -> attributes -> attributes
 val incl_attributes : attributes -> attributes -> bool
   (* Check that first set of attributes is a subset of second set. *)
 val alignas_attribute : attributes -> int
-  (* Extract the value of the [_Alignas] attributes, if any.
+  (* Extract the value of the [_Alignas] and [attribute((aligned(N)))]
+     attributes, if any.
      Return 0 if none, a (positive) power of two alignment if some. *)
+val packing_parameters : attributes -> int * int * bool
+  (* Extract the value of the [__packed__] attributes, if any.
+     Return a triple
+     (maximum field alignment, minimum struct alignment, byte swapping).
+     Alignments of 0 mean default alignment. *)
 val find_custom_attributes : string list -> attributes -> attr_arg list list
   (* Extract arguments of custom [Attr] attributes whose names appear
      in the given list of names. *)
@@ -52,6 +58,8 @@ val erase_attributes_type : Env.t -> typ -> typ
   (* Erase the attributes of the given type. *)
 val change_attributes_type : Env.t -> (attributes -> attributes) -> typ -> typ
   (* Apply the given function to the top-level attributes of the given type *)
+val has_std_alignas :  Env.t -> typ -> bool
+  (* Do the attributes of the type contain the C11 _Alignas attribute *)
 
 type attribute_class =
   | Attr_name           (* Attribute applies to the names being declared  *)
@@ -127,7 +135,7 @@ val composite_info_decl:
 val composite_info_def:
   Env.t -> struct_or_union -> attributes -> field list -> Env.composite_info
 val struct_layout:
-  Env.t -> field list -> (string * int) list
+  Env.t -> attributes -> field list -> (string * int) list
 val offsetof:
   Env.t -> typ -> field -> int
 (* Compute the offset of a struct member *)
@@ -141,6 +149,8 @@ val is_void_type : Env.t -> typ -> bool
   (* Is type [void]? *)
 val is_integer_type : Env.t -> typ -> bool
   (* Is type integer? *)
+val is_float_type : Env.t -> typ -> bool
+  (* Is type float *)
 val is_arith_type : Env.t -> typ -> bool
   (* Is type integer or float? *)
 val is_pointer_type : Env.t -> typ -> bool
@@ -151,8 +161,12 @@ val is_composite_type : Env.t -> typ -> bool
   (* Is type a struct or union? *)
 val is_function_type : Env.t -> typ -> bool
   (* Is type a function type? (not pointer to function) *)
+val is_function_pointer_type : Env.t -> typ -> bool
+  (* Is type a pointer to function type? *)
 val is_anonymous_composite : typ -> bool
- (* Is type an anonymous composite? *)
+  (* Is type an anonymous composite? *)
+val is_qualified_array : typ -> bool
+  (* Does the type contain a qualified array type (e.g. int[const 5])? *)
 val pointer_arithmetic_ok : Env.t -> typ -> bool
   (* Is the type [*ty] appropriate for pointer arithmetic?
      [ty] must not be void, nor a function type, nor an incomplete type. *)
@@ -239,6 +253,12 @@ val field_of_arrow_access: Env.t -> typ -> string -> field
   (* Return the field info for a [x->field] access *)
 val valid_array_size: Env.t -> typ -> int64 -> bool
   (* Test whether the array size fits in half of the address space *)
+val is_volatile_variable: Env.t -> exp -> bool
+  (* Test whether the expression is an access to a volatile variable *)
+val is_bitfield: Env.t -> exp -> bool
+  (* Test whether the expression is a bit-field *)
+val contains_flex_array_mem : Env.t  -> typ -> bool
+  (* Is this a struct with a flexible array member *)
 
 (* Constructors *)
 
