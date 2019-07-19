@@ -35,6 +35,8 @@ Require Import compcert.lib.Integers.
 Require Import compcert.common.Smallstep.
 *)
 
+Set Nested Proofs Allowed.
+
 Require Import compcert.common.Values. (*for meminj, compose_meminj,...*)
 
 Set Implicit Arguments.

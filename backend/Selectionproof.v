@@ -19,6 +19,8 @@ Require Import Switch Cminor Op CminorSel.
 Require Import SelectOp SelectDiv SplitLong SelectLong Selection.
 Require Import SelectOpproof SelectDivproof SplitLongproof SelectLongproof.
 
+Set Nested Proofs Allowed.
+
 Local Open Scope cminorsel_scope.
 Local Open Scope error_monad_scope.
 

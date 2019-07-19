@@ -1265,9 +1265,10 @@ Definition after_external_regset (ge:genv)(vret: option val) (rs: regset) : opti
     | Some (External ef) =>
       match vret with
       | Some res => 
-          Some ((set_pair (loc_external_result (ef_sig ef)) res rs) #PC <- (rs RA))
+        Some ((set_pair (loc_external_result (ef_sig ef)) res (undef_caller_save_regs rs))
+                #PC <- (rs RA))
       | None => 
-          Some ( rs#(IR RAX) <- Vundef #PC <- (rs RA))
+          Some ((undef_caller_save_regs rs)#(IR RAX) <- Vundef #PC <- (rs RA))
      end
     | _ => None
    end
