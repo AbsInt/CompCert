@@ -37,7 +37,6 @@ Arguments B754_zero {prec emax} _.
 Arguments B754_infinity {prec emax} _.
 Arguments B754_nan {prec emax} _ _.
 Arguments B754_finite {prec emax} _ m e _.
-(*>>>>>>> 6a080cf6391a8d01640448ab4321ffce596b27a4*)
 
 (** Number of bits for the fraction and exponent *)
 Variable mw ew : Z.
@@ -616,7 +615,6 @@ Section B32_Bits.
 Arguments B754_nan [prec] [emax] _ _.
 =======*)
 Arguments B754_nan {prec emax} _ _.
-(*>>>>>>> 6a080cf6391a8d01640448ab4321ffce596b27a4*)
 
 Definition binary32 := binary_float 24 128.
 
@@ -663,7 +661,6 @@ Section B64_Bits.
 Arguments B754_nan [prec] [emax] _ _.
 ======= *)
 Arguments B754_nan {prec emax} _ _.
-(*>>>>>>> 6a080cf6391a8d01640448ab4321ffce596b27a4*)
 
 Definition binary64 := binary_float 53 1024.
 

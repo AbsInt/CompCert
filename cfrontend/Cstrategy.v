@@ -407,12 +407,12 @@ Hint Resolve context_compose contextlist_compose.
   if it cannot get stuck by doing silent transitions only. *)
 
 Definition safe (s: Csem.state) : Prop :=
-  forall s', star Csem.step ge s E0 s' ->
+  forall s', star (Csem.step ge) s E0 s' ->
   (exists r, final_state s' r) \/ (exists t, exists s'', Csem.step ge s' t s'').
 
 Lemma safe_steps:
   forall s s',
-  safe s -> star Csem.step ge s E0 s' -> safe s'.
+  safe s -> star (Csem.step ge) s E0 s' -> safe s'.
 Proof.
   intros; red; intros.
   eapply H. eapply star_trans; eauto.
@@ -420,16 +420,18 @@ Qed.
 
 Lemma star_safe:
   forall s1 s2 t s3,
-  safe s1 -> star Csem.step ge s1 E0 s2 -> (safe s2 -> star Csem.step ge s2 t s3) ->
-  star Csem.step ge s1 t s3.
+    safe s1 -> star (Csem.step ge) s1 E0 s2 ->
+    (safe s2 -> star (Csem.step ge) s2 t s3) ->
+  star (Csem.step ge) s1 t s3.
 Proof.
   intros. eapply star_trans; eauto. apply H1. eapply safe_steps; eauto. auto.
 Qed.
 
 Lemma plus_safe:
   forall s1 s2 t s3,
-  safe s1 -> star Csem.step ge s1 E0 s2 -> (safe s2 -> plus Csem.step ge s2 t s3) ->
-  plus Csem.step ge s1 t s3.
+    safe s1 -> star (Csem.step ge) s1 E0 s2 ->
+    (safe s2 -> plus (Csem.step ge) s2 t s3) ->
+  plus (Csem.step ge) s1 t s3.
 Proof.
   intros. eapply star_plus_trans; eauto. apply H1. eapply safe_steps; eauto. auto.
 Qed.
@@ -706,11 +708,11 @@ Variable m: mem.
 Lemma eval_simple_steps:
    (forall a v, eval_simple_rvalue e m a v ->
     forall C, context RV RV C ->
-    star Csem.step ge (ExprState f (C a) k e m)
+    star (Csem.step ge) (ExprState f (C a) k e m)
                    E0 (ExprState f (C (Eval v (typeof a))) k e m))
 /\ (forall a b ofs, eval_simple_lvalue e m a b ofs ->
     forall C, context LV RV C ->
-    star Csem.step ge (ExprState f (C a) k e m)
+    star (Csem.step ge) (ExprState f (C a) k e m)
                    E0 (ExprState f (C (Eloc b ofs (typeof a))) k e m)).
 Proof.
 
@@ -754,14 +756,14 @@ Qed.
 Lemma eval_simple_rvalue_steps:
   forall a v, eval_simple_rvalue e m a v ->
   forall C, context RV RV C ->
-  star Csem.step ge (ExprState f (C a) k e m)
+  star (Csem.step ge) (ExprState f (C a) k e m)
                 E0 (ExprState f (C (Eval v (typeof a))) k e m).
-Proof (proj1 eval_simple_steps).
+Proof. eapply  (proj1 eval_simple_steps). Qed.
 
 Lemma eval_simple_lvalue_steps:
   forall a b ofs, eval_simple_lvalue e m a b ofs ->
   forall C, context LV RV C ->
-  star Csem.step ge (ExprState f (C a) k e m)
+  star (Csem.step ge) (ExprState f (C a) k e m)
                 E0 (ExprState f (C (Eloc b ofs (typeof a))) k e m).
 Proof (proj2 eval_simple_steps).
 
@@ -980,7 +982,7 @@ Hint Resolve contextlist'_head contextlist'_tail.
 Lemma eval_simple_list_steps:
   forall rl vl, eval_simple_list' rl vl ->
   forall C, contextlist' C ->
-  star Csem.step ge (ExprState f (C rl) k e m)
+  star (Csem.step ge) (ExprState f (C rl) k e m)
                 E0 (ExprState f (C (rval_list vl rl)) k e m).
 Proof.
   induction 1; intros.
@@ -1142,7 +1144,7 @@ End DECOMPOSITION.
 
 Lemma estep_simulation:
   forall S t S',
-  estep S t S' -> plus Csem.step ge S t S'.
+  estep S t S' -> plus (Csem.step ge) S t S'.
 Proof.
   intros. inv H.
 (* simple *)
@@ -1395,7 +1397,7 @@ Qed.
 
 Theorem step_simulation:
   forall S1 t S2,
-  step S1 t S2 -> plus Csem.step ge S1 t S2.
+  step S1 t S2 -> plus (Csem.step ge) S1 t S2.
 Proof.
   intros. inv H.
   apply estep_simulation; auto.
@@ -1431,10 +1433,19 @@ Qed.
 End STRATEGY.
 
 (** The semantics that follows the strategy. *)
-
+Definition entry_point : mem -> state -> val -> list val -> Prop.
+Admitted.
+Definition at_external : state ->
+                 option (external_function * list val).
+Admitted.
+Definition after_external : option val ->
+                    state -> mem -> option state.
+Admitted.
 Definition semantics (p: program) :=
   let ge := globalenv p in
-  Semantics_gen step (initial_state p) final_state ge ge.
+  Semantics_gen get_mem set_mem (step ge)
+                entry_point at_external after_external
+                final_state ge.
 
 (** This semantics is receptive to changes in events. *)
 
@@ -1476,7 +1487,7 @@ Proof.
   assert (t1 = nil). exploit assign_loc_trace; eauto. destruct t1; simpl; tauto.
   inv H. eapply volatile_store_receptive; eauto.
 Qed.
-
+(*
 Lemma semantics_strongly_receptive:
   forall p, strongly_receptive (semantics p).
 Proof.
@@ -3060,3 +3071,4 @@ Proof.
   apply lt_wf.
   eapply evalinf_funcall_steps; eauto.
 Qed.
+*)

@@ -624,6 +624,8 @@ Theorem transf_program_correct:
     LTL.get_mem LTL.get_mem.
 Proof.
   eapply sim_extSim; try eapply transf_program_correct'.
-  simpl; intros ? ? ? [? ?]; subst;  destruct H0; auto.
-Qed.
+  - admit.
+  - admit.
+  - simpl; intros ? ? ? [? ?]; subst;  destruct H0; auto.
+Admitted.
 End PRESERVATION.

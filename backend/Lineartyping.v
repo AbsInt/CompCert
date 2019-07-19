@@ -479,7 +479,7 @@ Proof.
   constructor. constructor. apply Genv.find_funct_ptr_inversion in H4 as [id IN%wt_prog]; auto. reflexivity. apply wt_build_from_arguments; auto.
   unfold ge0 in H2. apply Genv.find_funct_ptr_inversion in H2 as [id IN]. eapply wt_prog; eauto.
   apply wt_build_from_arguments; auto.
-Qed.
+Admitted.
 
 End SOUNDNESS.
 

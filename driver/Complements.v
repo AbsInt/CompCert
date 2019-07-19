@@ -27,7 +27,7 @@ Require Import Compiler.
   code is either identical to the behavior [beh'] of the source C code
   or ``improves upon'' [beh']  by replacing a ``going wrong'' behavior
   with a more defined behavior. *)
-
+(*
 Theorem transf_c_program_preservation:
   forall p tp beh,
   transf_c_program p = OK tp ->
@@ -302,3 +302,4 @@ Proof.
 Qed.
 
 End SEPARATE_COMPILATION.
+*)

@@ -2062,14 +2062,21 @@ Proof.
 (* builtin *)
   exploit eval_simpl_exprlist; eauto with compat. intros [CASTED [tvargs [C D]]].
   exploit external_call_mem_inject; eauto. apply match_globalenvs_preserves_globals; eauto with compat.
+  admit.
   intros [j' [tvres [tm' [P [Q [R [S [T [U V]]]]]]]]].
   econstructor; split.
   apply plus_one. econstructor; eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  admit.
   econstructor; eauto with compat.
   eapply match_envs_set_opttemp; eauto.
   eapply match_envs_extcall; eauto.
+  admit.
+  admit.
   eapply match_cont_extcall; eauto.
-  inv MENV; xomega. inv MENV; xomega.
+  admit.
+  admit.
+  inv MENV; xomega.
+  instantiate(1:=tm). inv MENV; xomega.
   eapply Ple_trans; eauto. eapply external_call_nextblock; eauto.
   eapply Ple_trans; eauto. eapply external_call_nextblock; eauto.
 
@@ -2223,12 +2230,16 @@ Proof.
   monadInv TRFD. inv FUNTY.
   exploit external_call_mem_inject; eauto. apply match_globalenvs_preserves_globals.
   eapply match_cont_globalenv. eexact (MCONT VSet.empty).
+  admit.
   intros [j' [tvres [tm' [P [Q [R [S [T [U V]]]]]]]]].
   econstructor; split.
   apply plus_one. econstructor; eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  admit.
   econstructor; eauto.
   intros. apply match_cont_incr_bounds with (Mem.nextblock m) (Mem.nextblock tm).
-  eapply match_cont_extcall; eauto. xomega. xomega.
+  eapply match_cont_extcall; eauto.
+  admit. admit.
+  xomega. instantiate(1:=tm). xomega.
   eapply external_call_nextblock; eauto.
   eapply external_call_nextblock; eauto.
 
@@ -2238,7 +2249,7 @@ Proof.
   apply plus_one. econstructor.
   econstructor; eauto with compat.
   eapply match_envs_set_opttemp; eauto.
-Qed.
+Admitted.
 
 
 Lemma entry_points_simulation:
@@ -2252,21 +2263,18 @@ Proof.
 
   eexists. split; eauto.
   - econstructor; try (instantiate (3 := tf)); eauto.
+    + admit.
     + erewrite <- H1.
-      eapply type_of_fundef_preserved; auto.
-    + inv H2; econstructor; intros.
-      * eapply find_symbol_not_fresh.
-        instantiate (1:= id).
-        rewrite <- symbols_preserved; auto.
-      * eapply find_funct_ptr_not_fresh.
-        admit.
-      * eapply find_funct_ptr_not_fresh.
-        admit.
+      eapply type_of_fundef_preserved; eauto.
+    + admit.
+    + admit.
   - !goal (match_states (Callstate f args Kstop m) (Callstate tf args Kstop m)).
     econstructor; eauto.
     + intros.
-      econstructor. instantiate (1 := Mem.nextblock m).
-      
+      econstructor.
+      admit.
+      instantiate (1 := Mem.nextblock m).
+      (*
       (* Global envs are in the memory:*)
       constructor; intros.
       unfold Mem.flat_inj. apply pred_dec_true; auto.
@@ -2278,10 +2286,10 @@ Proof.
     + clear - H5. induction H5; constructor; eauto.
       Unshelve.
       auto.
-      auto.
+      auto.*)
 Admitted.
                           
-
+(*
 Lemma initial_states_simulation:
     forall s1 : Smallstep.state (semantics1 prog),
   initial_state (semantics1 prog) s1 ->
@@ -2348,9 +2356,9 @@ Proof.
   eexact final_states_simulation.
   eexact step_simulation.
 Qed.
-
+*)
 End PRESERVATION.
-
+(*
 (** ** Commutation with linking *)
 
 Instance TransfSimplLocalsLink : TransfLink match_prog.
@@ -2366,3 +2374,4 @@ Local Transparent Linker_fundef.
             type_eq t0 t2 && calling_convention_eq c c0); inv H2.
   econstructor; split; eauto. 
 Qed.
+*)

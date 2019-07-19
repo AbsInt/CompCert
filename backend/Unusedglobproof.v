@@ -974,7 +974,8 @@ Proof.
   apply regs_inject; auto.
 
 - (* builtin *)
-  exploit eval_builtin_args_inject; eauto.
+  admit.
+  (*exploit eval_builtin_args_inject; eauto.
   eapply match_stacks_preserves_globals; eauto.
   intros. apply KEPT. red. econstructor; econstructor; eauto.
   intros (vargs' & P & Q).
@@ -985,12 +986,12 @@ Proof.
   eapply exec_Ibuiltin; eauto.
   2: eapply match_states_regular with (j := j'); eauto.
   instantiate (1:= tv).  move A at bottom. 
-  apply match_stacks_incr with j; auto.
+  2: apply match_stacks_incr with j; auto.
   intros. exploit G; eauto. intros [U V].
   assert (Mem.valid_block m sp0) by (eapply Mem.valid_block_inject_1; eauto).
   assert (Mem.valid_block tm tsp) by (eapply Mem.valid_block_inject_2; eauto).
   unfold Mem.valid_block in *; xomega.
-  apply set_res_inject; auto. apply regset_inject_incr with j; auto.
+  apply set_res_inject; auto. apply regset_inject_incr with j; auto. *)
 
 - (* cond *)
   assert (C: eval_condition cond trs##args tm = Some b).
@@ -1026,19 +1027,15 @@ Proof.
   { rewrite STK, TSTK.
     apply match_stacks_incr with j; auto.
     intros. destruct (eq_block b1 stk).
-<<<<<<< HEAD
-    subst b1. rewrite F in H1; inv H1. split; apply Ple_refl.
-=======
     subst b1. rewrite F in H1; inv H1. subst. split; try apply Ple_refl.
->>>>>>> 161659ed569f8e1d13d745f6421825bae9f81c78
     rewrite G in H1 by auto. congruence. }
   econstructor; split.
   eapply exec_function_internal; eauto.
   eapply match_states_regular with (j := j'); eauto.
   apply init_regs_inject; auto. apply val_inject_list_incr with j; auto.
 
-- (* external function *)
-  exploit external_call_inject; eauto.
+- (* external function *) admit.
+  (*exploit external_call_inject; eauto.
   eapply match_stacks_preserves_globals; eauto.
   intros (j' & tres & tm' & A & B & C & D & E & F & G).
   econstructor; split.
@@ -1049,13 +1046,13 @@ Proof.
   intros. exploit G; eauto. intros [P Q].
   unfold Mem.valid_block in *; xomega.
   eapply external_call_nextblock; eauto.
-  eapply external_call_nextblock; eauto.
+  eapply external_call_nextblock; eauto.*)
 
 - (* return *)
   inv STACKS. econstructor; split.
   eapply exec_return.
   econstructor; eauto. apply set_reg_inject; auto.
-Qed.
+Admitted.
 
 (** Relating initial memory states *)
 
@@ -1263,6 +1260,7 @@ Proof.
   intros. inv H0. inv H. inv STACKS. inv RESINJ. constructor.
 Qed.
 
+(*
 Lemma transf_program_correct_1:
   forward_simulation (semantics p) (semantics tp).
 Proof.
@@ -1273,9 +1271,9 @@ Proof.
   eexact transf_final_states.
   eexact step_simulation.
 Qed.
-
+*)
 End SOUNDNESS.
-
+(*
 Theorem transf_program_correct:
   forall p tp, match_prog p tp -> forward_simulation (semantics p) (semantics tp).
 Proof.
@@ -1447,3 +1445,5 @@ Proof.
 Qed.
 
 Instance TransfSelectionLink : TransfLink match_prog := link_match_program.
+ *)
+

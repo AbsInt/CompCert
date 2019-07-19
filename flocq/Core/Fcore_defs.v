@@ -31,7 +31,6 @@ Arguments Fexp [beta] _.
 =======*)
 Arguments Fnum {beta} f.
 Arguments Fexp {beta} f.
-(*>>>>>>> 6a080cf6391a8d01640448ab4321ffce596b27a4*)
 
 Variable beta : radix.
 
@@ -59,7 +58,6 @@ Arguments F2R [beta] _.
 Arguments Fnum {beta} f.
 Arguments Fexp {beta} f.
 Arguments F2R {beta} f.
-(*>>>>>>> 6a080cf6391a8d01640448ab4321ffce596b27a4*)
 
 Section RND.
 
