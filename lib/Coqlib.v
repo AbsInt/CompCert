@@ -411,42 +411,12 @@ Qed.
 
 (** Properties of Euclidean division and modulus. *)
 
-Lemma Zdiv_small:
-  forall x y, 0 <= x < y -> x / y = 0.
-Proof.
-  intros. assert (y > 0). omega.
-  assert (forall a b,
-    0 <= a < y ->
-    0 <= y * b + a < y ->
-    b = 0).
-  intros.
-  assert (b = 0 \/ b > 0 \/ (-b) > 0). omega.
-  elim H3; intro.
-  auto.
-  elim H4; intro.
-  assert (y * b >= y * 1). apply Zmult_ge_compat_l. omega. omega.
-  omegaContradiction.
-  assert (y * (-b) >= y * 1). apply Zmult_ge_compat_l. omega. omega.
-  rewrite <- Zopp_mult_distr_r in H6. omegaContradiction.
-  apply H1 with (x mod y).
-  apply Z_mod_lt. auto.
-  rewrite <- Z_div_mod_eq. auto. auto.
-Qed.
-
-Lemma Zmod_small:
-  forall x y, 0 <= x < y -> x mod y = x.
-Proof.
-  intros. assert (y > 0). omega.
-  generalize (Z_div_mod_eq x y H0).
-  rewrite (Zdiv_small x y H). omega.
-Qed.
-
 Lemma Zmod_unique:
   forall x y a b,
   x = a * y + b -> 0 <= b < y -> x mod y = b.
 Proof.
   intros. subst x. rewrite Z.add_comm.
-  rewrite Z_mod_plus. apply Zmod_small. auto. omega.
+  rewrite Z_mod_plus. apply Z.mod_small. auto. omega.
 Qed.
 
 Lemma Zdiv_unique:
@@ -461,30 +431,7 @@ Lemma Zdiv_Zdiv:
   forall a b c,
   b > 0 -> c > 0 -> (a / b) / c = a / (b * c).
 Proof.
-  intros.
-  generalize (Z_div_mod_eq a b H). generalize (Z_mod_lt a b H). intros.
-  generalize (Z_div_mod_eq (a/b) c H0). generalize (Z_mod_lt (a/b) c H0). intros.
-  set (q1 := a / b) in *. set (r1 := a mod b) in *.
-  set (q2 := q1 / c) in *. set (r2 := q1 mod c) in *.
-  symmetry. apply Zdiv_unique with (r2 * b + r1).
-  rewrite H2. rewrite H4. ring.
-  split.
-  assert (0 <= r2 * b). apply Z.mul_nonneg_nonneg. omega. omega. omega.
-  assert ((r2 + 1) * b <= c * b).
-  apply Zmult_le_compat_r. omega. omega.
-  replace ((r2 + 1) * b) with (r2 * b + b) in H5 by ring.
-  replace (c * b) with (b * c) in H5 by ring.
-  omega.
-Qed.
-
-Lemma Zmult_le_compat_l_neg :
-  forall n m p:Z, n >= m -> p <= 0 -> p * n <= p * m.
-Proof.
-  intros.
-  assert ((-p) * n >= (-p) * m). apply Zmult_ge_compat_l. auto. omega.
-  replace (p * n) with (- ((-p) * n)) by ring.
-  replace (p * m) with (- ((-p) * m)) by ring.
-  omega.
+  intros. apply Z.div_div; omega.
 Qed.
 
 Lemma Zdiv_interval_1:
@@ -516,9 +463,9 @@ Proof.
   intros.
   assert (lo <= a / b < hi+1).
   apply Zdiv_interval_1. omega. omega. auto.
-  assert (lo * b <= lo * 1). apply Zmult_le_compat_l_neg. omega. omega.
+  assert (lo * b <= lo * 1) by (apply Z.mul_le_mono_nonpos_l; omega).
   replace (lo * 1) with lo in H3 by ring.
-  assert ((hi + 1) * 1 <= (hi + 1) * b). apply Zmult_le_compat_l. omega. omega.
+  assert ((hi + 1) * 1 <= (hi + 1) * b) by (apply Z.mul_le_mono_nonneg_l; omega).
   replace ((hi + 1) * 1) with (hi + 1) in H4 by ring.
   omega.
   omega.
@@ -529,41 +476,10 @@ Lemma Zmod_recombine:
   a > 0 -> b > 0 ->
   x mod (a * b) = ((x/b) mod a) * b + (x mod b).
 Proof.
-  intros.
-  set (xb := x/b).
-  apply Zmod_unique with (xb/a).
-  generalize (Z_div_mod_eq x b H0); fold xb; intro EQ1.
-  generalize (Z_div_mod_eq xb a H); intro EQ2.
-  rewrite EQ2 in EQ1.
-  eapply eq_trans. eexact EQ1. ring.
-  generalize (Z_mod_lt x b H0). intro.
-  generalize (Z_mod_lt xb a H). intro.
-  assert (0 <= xb mod a * b <= a * b - b).
-    split. apply Z.mul_nonneg_nonneg; omega.
-    replace (a * b - b) with ((a - 1) * b) by ring.
-    apply Zmult_le_compat; omega.
-  omega.
+  intros. rewrite (Z.mul_comm a b). rewrite Z.rem_mul_r by omega. ring. 
 Qed.
 
 (** Properties of divisibility. *)
-
-Lemma Zdivides_trans:
-  forall x y z, (x | y) -> (y | z) -> (x | z).
-Proof.
-  intros x y z [a A] [b B]; subst. exists (a*b); ring.
-Qed.
-
-Definition Zdivide_dec:
-  forall (p q: Z), p > 0 -> { (p|q) } + { ~(p|q) }.
-Proof.
-  intros. destruct (zeq (Z.modulo q p) 0).
-  left. exists (q / p).
-  transitivity (p * (q / p) + (q mod p)). apply Z_div_mod_eq; auto.
-  transitivity (p * (q / p)). omega. ring.
-  right; red; intros. elim n. apply Z_div_exact_1; auto.
-  inv H0. rewrite Z_div_mult; auto. ring.
-Defined.
-Global Opaque Zdivide_dec.
 
 Lemma Zdivide_interval:
   forall a b c,
@@ -577,42 +493,19 @@ Qed.
 
 (** Conversion from [Z] to [nat]. *)
 
-Definition nat_of_Z: Z -> nat := Z.to_nat.
-
-Lemma nat_of_Z_of_nat:
-  forall n, nat_of_Z (Z.of_nat n) = n.
-Proof.
-  exact Nat2Z.id.
-Qed.
-
-Lemma nat_of_Z_max:
-  forall z, Z.of_nat (nat_of_Z z) = Z.max z 0.
-Proof.
-  intros. unfold Z.max. destruct z; simpl; auto.
-  change (Z.of_nat (Z.to_nat (Zpos p)) = Zpos p).
-  apply Z2Nat.id. compute; intuition congruence.
-Qed.
-
-Lemma nat_of_Z_eq:
-  forall z, z >= 0 -> Z.of_nat (nat_of_Z z) = z.
-Proof.
-  unfold nat_of_Z; intros. apply Z2Nat.id. omega.
-Qed.
-
-Lemma nat_of_Z_neg:
-  forall n, n <= 0 -> nat_of_Z n = O.
+Lemma Z_to_nat_neg:
+  forall n, n <= 0 -> Z.to_nat n = O.
 Proof.
   destruct n; unfold Z.le; simpl; auto. congruence.
 Qed.
 
-Lemma nat_of_Z_plus:
-  forall p q,
-  p >= 0 -> q >= 0 ->
-  nat_of_Z (p + q) = (nat_of_Z p + nat_of_Z q)%nat.
+Lemma Z_to_nat_max:
+  forall z, Z.of_nat (Z.to_nat z) = Z.max z 0.
 Proof.
-  unfold nat_of_Z; intros. apply Z2Nat.inj_add; omega.
+  intros. destruct (zle 0 z).
+- rewrite Z2Nat.id by auto. xomega.
+- rewrite Z_to_nat_neg by omega. xomega.
 Qed.
-
 
 (** Alignment: [align n amount] returns the smallest multiple of [amount]
   greater than or equal to [n]. *)

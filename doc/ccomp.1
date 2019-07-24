@@ -180,6 +180,12 @@ Set alignment of function entry points to <n> bytes.
 The default alignment is 16 bytes for x86 targets and 4 bytes for ARM and PowerPC.
 .
 .TP
+.BR \-fcommon ", " \-fno\-common
+Turn on/off placement of global variables defined without an initializer (tentative definitions) in the common section.
+Disabling the use of the common section inhibits merging of tentative definitions by the linker and may lead to multiple-definition errors.
+Enabled by default.
+.
+.TP
 .BR \-ffpu ", " \-fno\-fpu
 Turn on/off use of FP registers for some integer operations.
 Enabled by default.
@@ -191,12 +197,12 @@ Code Generation Options (PowerPC)
 .TP
 .B \-falign\-branch\-targets <n>
 Set alignment of branch targets to <n> bytes.
-The default alignment is 0 bytes, which deactivates alignment of branch targets.
+By default alignment of branch targets is deactivated.
 .
 .TP
 .B \-falign\-cond\-branches <n>
-Set alignment of conditional branches to <n> bytes.
-The default alignment is 0 bytes, which deactivates alignment of conditional branch targets.
+Set alignment of conditional branch instructions to <n> bytes.
+By default alignment of conditional branches is deactivated.
 .
 .SS
 Code Generation Options (PowerPC with Diab Backend)

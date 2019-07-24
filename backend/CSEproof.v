@@ -544,7 +544,7 @@ Lemma kill_loads_after_storebytes_holds:
   bc sp = BCstack ->
   ematch bc rs ae ->
   approx = VA.State ae am ->
-  length bytes = nat_of_Z sz -> sz >= 0 ->
+  length bytes = Z.to_nat sz -> sz >= 0 ->
   numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m'
                            (kill_loads_after_storebytes approx n dst sz).
 Proof.
@@ -557,7 +557,7 @@ Proof.
   simpl.
   rewrite negb_false_iff in H8.
   eapply Mem.load_storebytes_other. eauto.
-  rewrite H6. rewrite nat_of_Z_eq by auto.
+  rewrite H6. rewrite Z2Nat.id by omega.
   eapply pdisjoint_sound. eauto.
   unfold aaddressing. apply match_aptr_of_aval. eapply eval_static_addressing_sound; eauto.
   erewrite <- regs_valnums_sound by eauto. eauto with va.
@@ -598,9 +598,9 @@ Proof.
   exploit Mem.storebytes_split; eauto. intros (m2 & SB2 & SB3).
   clear SB23.
   assert (L1: Z.of_nat (length bytes1) = n1).
-  { erewrite Mem.loadbytes_length by eauto. apply nat_of_Z_eq. unfold n1; omega. }
+  { erewrite Mem.loadbytes_length by eauto. apply Z2Nat.id. unfold n1; omega. }
   assert (L2: Z.of_nat (length bytes2) = n2).
-  { erewrite Mem.loadbytes_length by eauto. apply nat_of_Z_eq. unfold n2; omega. }
+  { erewrite Mem.loadbytes_length by eauto. apply Z2Nat.id. unfold n2; omega. }
   rewrite L1 in *. rewrite L2 in *.
   assert (LB': Mem.loadbytes m2 b2 (ofs2 + n1) n2 = Some bytes2).
   { rewrite <- L2. eapply Mem.loadbytes_storebytes_same; eauto. }

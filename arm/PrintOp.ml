@@ -129,6 +129,10 @@ let print_operation reg pp = function
   | Olowlong, [r1] -> fprintf pp "lowlong(%a)" reg r1
   | Ohighlong, [r1] -> fprintf pp "highlong(%a)" reg r1
   | Ocmp c, args -> print_condition reg pp (c, args)
+  | Osel (c, ty), r1::r2::args ->
+      fprintf pp "%a ?%s %a : %a"
+         (print_condition reg) (c, args)
+         (PrintAST.name_of_type ty) reg r1 reg r2
   | _ -> fprintf pp "<bad operator>"
 
 let print_addressing reg pp = function

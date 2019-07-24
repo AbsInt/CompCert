@@ -148,9 +148,9 @@ struct
   let name_of_section = function
     | Section_text -> ".text"
     | Section_data i | Section_small_data i ->
-      if i then ".data" else "COMM"
+      if i then ".data" else common_section ()
     | Section_const i | Section_small_const i ->
-      if i then ".section	.rodata" else "COMM"
+      if i || (not !Clflags.option_fcommon) then ".section	.rodata" else "COMM"
     | Section_string -> ".section	.rodata"
     | Section_literal -> ".text"
     | Section_jumptable -> ".text"
@@ -443,6 +443,12 @@ struct
         (condition_name cond) ireg r1 shift_op ifso;
       fprintf oc "	mov%s	%a, %a\n"
         (neg_condition_name cond) ireg r1 shift_op ifnot
+    | Pfmovite(cond, r1, ifso, ifnot) ->
+      fprintf oc "	ite	%s\n" (condition_name cond);
+      fprintf oc "	vmov%s	%a, %a\n"
+        (condition_name cond) freg r1 freg ifso;
+      fprintf oc "	vmov%s	%a, %a\n"
+        (neg_condition_name cond) freg r1 freg ifnot
     | Pbtbl(r, tbl) ->
       if !Clflags.option_mthumb then begin
         fprintf oc "	lsl	r14, %a, #2\n" ireg r;

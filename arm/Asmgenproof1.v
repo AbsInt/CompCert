@@ -16,6 +16,7 @@ Require Import Coqlib.
 Require Import Errors.
 Require Import Maps.
 Require Import AST.
+Require Import Zbits.
 Require Import Integers.
 Require Import Floats.
 Require Import Values.
@@ -355,7 +356,7 @@ Proof.
   rewrite Int.and_assoc. change 65535 with (two_p 16 - 1). rewrite Int.and_idem.
   apply Int.same_bits_eq; intros.
   rewrite Int.bits_or, Int.bits_and, Int.bits_shl, Int.testbit_repr by auto.
-  rewrite Int.Ztestbit_two_p_m1 by omega. change (Int.unsigned (Int.repr 16)) with 16.
+  rewrite Ztestbit_two_p_m1 by omega. change (Int.unsigned (Int.repr 16)) with 16.
   destruct (zlt i 16).
   rewrite andb_true_r, orb_false_r; auto.
   rewrite andb_false_r; simpl. rewrite Int.bits_shru by omega.
@@ -1188,7 +1189,7 @@ Lemma transl_op_correct_same:
   forall op args res k c (rs: regset) m v,
   transl_op op args res k = OK c ->
   eval_operation ge rs#IR13 op (map rs (map preg_of args)) m = Some v ->
-  match op with Ocmp _ => False | Oaddrstack _ => False | _ => True end ->
+  match op with Ocmp _ => False | Osel _ _ => False | Oaddrstack _ => False | _ => True end ->
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of res) = v
@@ -1332,6 +1333,8 @@ Transparent destroyed_by_op.
   intuition Simpl.
   (* Ocmp *)
   contradiction.
+  (* Osel *)
+  contradiction.
 Qed.
 
 Lemma transl_op_correct:
@@ -1368,6 +1371,27 @@ Proof.
   split; intros; Simpl.
   destruct (eval_condition c0 rs ## (preg_of ## args) m) as [b|]; simpl; auto.
   destruct B as [B1 B2]; rewrite B1. destruct b; auto.
+- (* Osel *)
+  clear SAME. simpl in H.  ArgsInv. simpl in H0; inv H0.
+  assert (D1: data_preg (preg_of m0) = true) by auto with asmgen.
+  assert (D2: data_preg (preg_of m1) = true) by auto with asmgen.
+  destruct (preg_of res) eqn:RES; monadInv H.
++ inv EQ2. rewrite (ireg_of_eq _ _ EQ), (ireg_of_eq _ _ EQ1) in *.
+  exploit transl_cond_correct; eauto. instantiate (1 := rs). instantiate (1 := m). intros [rs1 [A [B C]]].
+  econstructor; split.
+  eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
+  split; intros; Simpl.
+  rewrite ! C by auto.
+  destruct (eval_condition c0 rs ## (preg_of ## args) m) as [b|]; simpl; auto.
+  destruct B as [B1 B2]; rewrite B1. destruct b; apply Val.lessdef_normalize.
++ inv EQ2. rewrite (freg_of_eq _ _ EQ), (freg_of_eq _ _ EQ1) in *.
+  exploit transl_cond_correct; eauto. instantiate (1 := rs). instantiate (1 := m). intros [rs1 [A [B C]]].
+  econstructor; split.
+  eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
+  split; intros; Simpl.
+  rewrite ! C by auto.
+  destruct (eval_condition c0 rs ## (preg_of ## args) m) as [b|]; simpl; auto.
+  destruct B as [B1 B2]; rewrite B1. destruct b; apply Val.lessdef_normalize.
 Qed.
 
 (** Translation of loads and stores. *)

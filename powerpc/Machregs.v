@@ -159,11 +159,7 @@ Definition register_by_name (s: string) : option mreg :=
 
 (** ** Destroyed registers, preferred registers *)
 
-Definition destroyed_by_cond (cond: condition): list mreg :=
-  match cond with
-  | Ccomplimm _ _ | Ccompluimm _ _ => R12 :: nil
-  | _ => nil
-  end.
+Definition destroyed_by_cond (cond: condition): list mreg := nil.
 
 Definition destroyed_by_op (op: operation): list mreg :=
   match op with

@@ -442,8 +442,8 @@ Definition compare_longs (x y: val) (rs: regset) (m: mem): regset :=
      #PF  <- Vundef.
 
 (** Floating-point comparison between x and y:
--       ZF = 1 if x=y or unordered, 0 if x<>y
--       CF = 1 if x<y or unordered, 0 if x>=y
+-       ZF = 1 if x=y or unordered, 0 if x<>y and ordered
+-       CF = 1 if x<y or unordered, 0 if x>=y.
 -       PF = 1 if unordered, 0 if ordered.
 -       SF and 0F are undefined
 *)
@@ -451,9 +451,9 @@ Definition compare_longs (x y: val) (rs: regset) (m: mem): regset :=
 Definition compare_floats (vx vy: val) (rs: regset) : regset :=
   match vx, vy with
   | Vfloat x, Vfloat y =>
-      rs #ZF  <- (Val.of_bool (negb (Float.cmp Cne x y)))
+      rs #ZF  <- (Val.of_bool (Float.cmp Ceq x y || negb (Float.ordered x y)))
          #CF  <- (Val.of_bool (negb (Float.cmp Cge x y)))
-         #PF  <- (Val.of_bool (negb (Float.cmp Ceq x y || Float.cmp Clt x y || Float.cmp Cgt x y)))
+         #PF  <- (Val.of_bool (negb (Float.ordered x y)))
          #SF  <- Vundef
          #OF  <- Vundef
   | _, _ =>
@@ -463,9 +463,9 @@ Definition compare_floats (vx vy: val) (rs: regset) : regset :=
 Definition compare_floats32 (vx vy: val) (rs: regset) : regset :=
   match vx, vy with
   | Vsingle x, Vsingle y =>
-      rs #ZF  <- (Val.of_bool (negb (Float32.cmp Cne x y)))
+      rs #ZF  <- (Val.of_bool (Float32.cmp Ceq x y || negb (Float32.ordered x y)))
          #CF  <- (Val.of_bool (negb (Float32.cmp Cge x y)))
-         #PF  <- (Val.of_bool (negb (Float32.cmp Ceq x y || Float32.cmp Clt x y || Float32.cmp Cgt x y)))
+         #PF  <- (Val.of_bool (negb (Float32.ordered x y)))
          #SF  <- Vundef
          #OF  <- Vundef
   | _, _ =>
@@ -851,11 +851,12 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Ptestq_ri r1 n =>
       Next (nextinstr (compare_longs (Val.andl (rs r1) (Vlong n)) (Vlong Int64.zero) rs m)) m
   | Pcmov c rd r1 =>
-      match eval_testcond c rs with
-      | Some true => Next (nextinstr (rs#rd <- (rs#r1))) m
-      | Some false => Next (nextinstr rs) m
-      | None => Next (nextinstr (rs#rd <- Vundef)) m
-      end
+      let v :=
+        match eval_testcond c rs with
+        | Some b => if b then rs#r1 else rs#rd
+        | None   => Vundef
+      end in
+      Next (nextinstr (rs#rd <- v)) m
   | Psetcc c rd =>
       Next (nextinstr (rs#rd <- (Val.of_optbool (eval_testcond c rs)))) m
   (** Arithmetic operations over double-precision floats *)

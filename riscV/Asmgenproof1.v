@@ -16,7 +16,7 @@
 (* *********************************************************************)
 
 Require Import Coqlib Errors Maps.
-Require Import AST Integers Floats Values Memory Globalenvs.
+Require Import AST Zbits Integers Floats Values Memory Globalenvs.
 Require Import Op Locations Mach Conventions.
 Require Import Asm Asmgen Asmgenproof0.
 
@@ -33,16 +33,16 @@ Proof.
   predSpec Int.eq Int.eq_spec n lo.
 - auto.
 - set (m := Int.sub n lo).
-  assert (A: Int.eqmod (two_p 12) (Int.unsigned lo) (Int.unsigned n)) by (apply Int.eqmod_sign_ext'; compute; auto).
-  assert (B: Int.eqmod (two_p 12) (Int.unsigned n - Int.unsigned  lo) 0).
+  assert (A: eqmod (two_p 12) (Int.unsigned lo) (Int.unsigned n)) by (apply Int.eqmod_sign_ext'; compute; auto).
+  assert (B: eqmod (two_p 12) (Int.unsigned n - Int.unsigned  lo) 0).
   { replace 0 with (Int.unsigned n - Int.unsigned n) by omega.
-    auto using Int.eqmod_sub, Int.eqmod_refl. }
-  assert (C: Int.eqmod (two_p 12) (Int.unsigned m) 0).
-  { apply Int.eqmod_trans with (Int.unsigned n - Int.unsigned lo); auto.
-    apply Int.eqmod_divides with Int.modulus. apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
+    auto using eqmod_sub, eqmod_refl. }
+  assert (C: eqmod (two_p 12) (Int.unsigned m) 0).
+  { apply eqmod_trans with (Int.unsigned n - Int.unsigned lo); auto.
+    apply eqmod_divides with Int.modulus. apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
     exists (two_p (32-12)); auto. }
   assert (D: Int.modu m (Int.repr 4096) = Int.zero).
-  { apply Int.eqmod_mod_eq in C. unfold Int.modu. 
+  { apply eqmod_mod_eq in C. unfold Int.modu. 
     change (Int.unsigned (Int.repr 4096)) with (two_p 12). rewrite C. 
     reflexivity.
     apply two_p_gt_ZERO; omega. }

@@ -1173,14 +1173,12 @@ Unset Implicit Arguments.
 
 (** ** Linking types *)
 
-Instance Linker_types : Linker type := {
+Program Instance Linker_types : Linker type := {
   link := fun t1 t2 => if type_eq t1 t2 then Some t1 else None;
   linkorder := fun t1 t2 => t1 = t2
 }.
-Proof.
-  auto.
-  intros; congruence.
-  intros. destruct (type_eq x y); inv H. auto.
+Next Obligation.
+  destruct (type_eq x y); inv H. auto.
 Defined.
 
 Global Opaque Linker_types.
@@ -1224,14 +1222,18 @@ Proof.
   assert (x = y) by eauto. subst y. auto.
 Qed.
 
-Instance Linker_composite_defs : Linker (list composite_definition) := {
+Program Instance Linker_composite_defs : Linker (list composite_definition) := {
   link := link_composite_defs;
   linkorder := @List.incl composite_definition
 }.
-Proof.
-- intros; apply incl_refl.
-- intros; red; intros; eauto.
-- intros. apply link_composite_def_inv in H; destruct H as (A & B & C).
+Next Obligation.
+  apply incl_refl.
+Defined.
+Next Obligation.
+  red; intros; eauto.
+Defined.
+Next Obligation.
+  apply link_composite_def_inv in H; destruct H as (A & B & C).
   split; red; intros; apply C; auto.
 Defined.
 
@@ -1406,18 +1408,22 @@ Inductive linkorder_fundef {F: Type}: fundef F -> fundef F -> Prop :=
   | linkorder_fundef_ext_int: forall f id sg targs tres cc,
       linkorder_fundef (External (EF_external id sg) targs tres cc) (Internal f).
 
-Instance Linker_fundef (F: Type): Linker (fundef F) := {
+Program Instance Linker_fundef (F: Type): Linker (fundef F) := {
   link := link_fundef;
   linkorder := linkorder_fundef
 }.
-Proof.
-- intros; constructor.
-- intros. inv H; inv H0; constructor.
-- intros x y z EQ. destruct x, y; simpl in EQ.
+Next Obligation.
+  constructor.
+Defined.
+Next Obligation.
+  inv H; inv H0; constructor.
+Defined.
+Next Obligation.
+  destruct x, y; simpl in H.
 + discriminate.
-+ destruct e; inv EQ. split; constructor.
-+ destruct e; inv EQ. split; constructor.
-+ destruct (external_function_eq e e0 && typelist_eq t t1 && type_eq t0 t2 && calling_convention_eq c c0) eqn:A; inv EQ.
++ destruct e; inv H. split; constructor.
++ destruct e; inv H. split; constructor.
++ destruct (external_function_eq e e0 && typelist_eq t t1 && type_eq t0 t2 && calling_convention_eq c c0) eqn:A; inv H.
   InvBooleans. subst. split; constructor.
 Defined.
 
@@ -1465,15 +1471,19 @@ Definition linkorder_program {F: Type} (p1 p2: program F) : Prop :=
      linkorder (program_of_program p1) (program_of_program p2)
   /\ (forall id co, p1.(prog_comp_env)!id = Some co -> p2.(prog_comp_env)!id = Some co).
 
-Instance Linker_program (F: Type): Linker (program F) := {
+Program Instance Linker_program (F: Type): Linker (program F) := {
   link := link_program;
   linkorder := linkorder_program
 }.
-Proof.
-- intros; split. apply linkorder_refl. auto. 
-- intros. destruct H, H0. split. eapply linkorder_trans; eauto.
+Next Obligation.
+  split. apply linkorder_refl. auto.
+Defined.
+Next Obligation.
+  destruct H, H0. split. eapply linkorder_trans; eauto.
   intros; auto.
-- intros until z. unfold link_program. 
+Defined.
+Next Obligation.
+  revert H. unfold link_program.
   destruct (link (program_of_program x) (program_of_program y)) as [p|] eqn:LP; try discriminate.
   destruct (lift_option (link (prog_types x) (prog_types y))) as [[typs EQ]|EQ]; try discriminate.
   destruct (link_build_composite_env (prog_types x) (prog_types y) typs

@@ -95,7 +95,10 @@ let rec remove_custom_attributes (names: string list)  (al: attributes) =
 (* Classification of attributes *)
 
 type attribute_class =
-  | Attr_name           (* Attribute applies to the names being declared  *)
+  | Attr_object         (* Attribute applies to the object being declared
+                           (function, global variable, local variable)  *)
+  | Attr_name           (* Attribute applies to the name being declared
+                          (object, struct/union member, struct/union/enum tag *)
   | Attr_type           (* Attribute applies to types *)
   | Attr_struct         (* Attribute applies to struct, union and enum *)
   | Attr_function       (* Attribute applies to function types and decls *)
@@ -111,10 +114,19 @@ let declare_attributes l =
 
 let class_of_attribute = function
   | AConst | AVolatile | ARestrict -> Attr_type
-  | AAlignas _ -> Attr_name
+  | AAlignas _ -> Attr_object
   | Attr(name, args) ->
       try Hashtbl.find attr_class (normalize_attrname name)
       with Not_found -> Attr_unknown
+
+(* Name for printing an attribute *)
+
+let name_of_attribute = function
+  | AConst -> "const"
+  | AVolatile -> "volatile"
+  | ARestrict -> "restrict"
+  | AAlignas n -> "_Alignas"
+  | Attr(name, _) ->  name
 
 (* Is an attribute a ISO C standard attribute? *)
 
@@ -163,7 +175,10 @@ let rec unroll env t =
       unroll env (add_attributes_type attr ty)
   | _ -> t
 
-(* Extracting the attributes of a type *)
+(* Extracting the attributes of a type, including the attributes
+   attached to typedefs, structs and unions.  In other words,
+   typedefs are unrolled and composite definitions expanded
+   before extracting the attributes.  *)
 
 let rec attributes_of_type env t =
   match t with
@@ -189,6 +204,23 @@ let rec attributes_of_type env t =
       | ei -> add_attributes ei.ei_attr a
       | exception Env.Error(Env.Unbound_tag _) -> a
       end
+
+(* Extracting the attributes of a type, excluding the attributes
+   attached to typedefs, structs and unions.  In other words,
+   typedefs are not unrolled and composite definitions are not expanded. *)
+
+let rec attributes_of_type_no_expand t =
+  match t with
+  | TVoid a -> a
+  | TInt(ik, a) -> a
+  | TFloat(fk, a) -> a
+  | TPtr(ty, a) -> a
+  | TArray(ty, sz, a) -> add_attributes a (attributes_of_type_no_expand ty)
+  | TFun(ty, params, vararg, a) -> a
+  | TNamed(s, a) -> a
+  | TStruct(s, a) -> a
+  | TUnion(s, a) -> a
+  | TEnum(s, a) -> a
 
 (* Changing the attributes of a type (at top-level) *)
 (* Same hack as above for array types. *)

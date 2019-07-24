@@ -606,7 +606,7 @@ Definition load1 (chunk: memory_chunk) (rd: preg)
 
 Definition load2 (chunk: memory_chunk) (rd: preg) (r1 r2: ireg)
                  (rs: regset) (m: mem) :=
-  match Mem.loadv chunk m (Val.add rs#r1 rs#r2) with
+  match Mem.loadv chunk m (Val.add (gpr_or_zero rs r1) rs#r2) with
   | None => Stuck
   | Some v => Next (nextinstr (rs#rd <- v)) m
   end.
@@ -620,7 +620,7 @@ Definition store1 (chunk: memory_chunk) (r: preg)
 
 Definition store2 (chunk: memory_chunk) (r: preg) (r1 r2: ireg)
                   (rs: regset) (m: mem) :=
-  match Mem.storev chunk m (Val.add rs#r1 rs#r2) (rs#r) with
+  match Mem.storev chunk m (Val.add (gpr_or_zero rs r1) rs#r2) (rs#r) with
   | None => Stuck
   | Some m' => Next (nextinstr rs) m'
   end.
@@ -860,6 +860,13 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Val.subf rs#r1 rs#r2))) m
   | Pfsubs rd r1 r2 =>
       Next (nextinstr (rs#rd <- (Val.subfs rs#r1 rs#r2))) m
+  | Pisel rd r1 r2 bit =>
+      let v :=
+          match rs#(reg_of_crbit bit) with
+          | Vint n => if Int.eq n Int.zero then rs#r2 else rs#r1
+          | _ => Vundef
+          end in
+      Next (nextinstr (rs #rd <- v #GPR0 <- Vundef)) m
   | Plbz rd cst r1 =>
       load1 Mint8unsigned rd cst r1 rs m
   | Plbzx rd r1 r2 =>
@@ -1073,7 +1080,6 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfrsqrte _ _
   | Pfres _ _
   | Pfsel _ _ _ _
-  | Pisel _ _ _ _
   | Plwarx _ _ _
   | Plwbrx _ _ _
   | Picbi _ _

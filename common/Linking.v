@@ -59,18 +59,22 @@ Inductive linkorder_fundef {F: Type}: fundef F -> fundef F -> Prop :=
   | linkorder_fundef_refl: forall fd, linkorder_fundef fd fd
   | linkorder_fundef_ext_int: forall f id sg, linkorder_fundef (External (EF_external id sg)) (Internal f).
 
-Instance Linker_fundef (F: Type): Linker (fundef F) := {
+Program Instance Linker_fundef (F: Type): Linker (fundef F) := {
   link := link_fundef;
   linkorder := linkorder_fundef
 }.
-Proof.
-- intros; constructor.
-- intros. inv H; inv H0; constructor.
-- intros x y z EQ. destruct x, y; simpl in EQ.
+Next Obligation.
+  constructor.
+Defined.
+Next Obligation.
+  inv H; inv H0; constructor.
+Defined.
+Next Obligation.
+  destruct x, y; simpl in H.
 + discriminate.
-+ destruct e; inv EQ. split; constructor.
-+ destruct e; inv EQ. split; constructor.
-+ destruct (external_function_eq e e0); inv EQ. split; constructor.
++ destruct e; inv H. split; constructor.
++ destruct e; inv H. split; constructor.
++ destruct (external_function_eq e e0); inv H. split; constructor.
 Defined.
 
 Global Opaque Linker_fundef.
@@ -109,16 +113,20 @@ Inductive linkorder_varinit: list init_data -> list init_data -> Prop :=
       il <> nil -> init_data_list_size il = sz ->
       linkorder_varinit (Init_space sz :: nil) il.
 
-Instance Linker_varinit : Linker (list init_data) := {
+Program Instance Linker_varinit : Linker (list init_data) := {
   link := link_varinit;
   linkorder := linkorder_varinit
 }.
-Proof.
-- intros. constructor.
-- intros. inv H; inv H0; constructor; auto.
+Next Obligation.
+  constructor.
+Defined.
+Next Obligation.
+  inv H; inv H0; constructor; auto.
   congruence.
   simpl. generalize (init_data_list_size_pos z). xomega.
-- unfold link_varinit; intros until z.
+Defined.
+Next Obligation.
+  revert H; unfold link_varinit.
   destruct (classify_init x) eqn:Cx, (classify_init y) eqn:Cy; intros E; inv E; try (split; constructor; fail).
 + destruct (zeq sz (Z.max sz0 0 + 0)); inv H0.
   split; constructor. congruence. auto.
@@ -154,14 +162,18 @@ Inductive linkorder_vardef {V: Type} {LV: Linker V}: globvar V -> globvar V -> P
       linkorder i1 i2 ->
       linkorder_vardef (mkglobvar info1 i1 ro vo) (mkglobvar info2 i2 ro vo).
 
-Instance Linker_vardef (V: Type) {LV: Linker V}: Linker (globvar V) := {
+Program Instance Linker_vardef (V: Type) {LV: Linker V}: Linker (globvar V) := {
   link := link_vardef;
   linkorder := linkorder_vardef
 }.
-Proof.
-- intros. destruct x; constructor; apply linkorder_refl.
-- intros. inv H; inv H0. constructor; eapply linkorder_trans; eauto.
-- unfold link_vardef; intros until z.
+Next Obligation.
+  destruct x; constructor; apply linkorder_refl.
+Defined.
+Next Obligation.
+  inv H; inv H0. constructor; eapply linkorder_trans; eauto.
+Defined.
+Next Obligation.
+  revert H; unfold link_vardef.
   destruct x as [f1 i1 r1 v1], y as [f2 i2 r2 v2]; simpl.
   destruct (link f1 f2) as [f|] eqn:LF; try discriminate.
   destruct (link i1 i2) as [i|] eqn:LI; try discriminate.
@@ -176,15 +188,10 @@ Global Opaque Linker_vardef.
 
 (** A trivial linker for the trivial var info [unit]. *)
 
-Instance Linker_unit: Linker unit := {
+Program Instance Linker_unit: Linker unit := {
   link := fun x y => Some tt;
   linkorder := fun x y => True
 }.
-Proof.
-- auto.
-- auto.
-- auto.
-Defined.
 
 Global Opaque Linker_unit.
 
@@ -207,18 +214,22 @@ Inductive linkorder_def {F V: Type} {LF: Linker F} {LV: Linker V}: globdef F V -
       linkorder v1 v2 ->
       linkorder_def (Gvar v1) (Gvar v2).
 
-Instance Linker_def (F V: Type) {LF: Linker F} {LV: Linker V}: Linker (globdef F V) := {
+Program Instance Linker_def (F V: Type) {LF: Linker F} {LV: Linker V}: Linker (globdef F V) := {
   link := link_def;
   linkorder := linkorder_def
 }.
-Proof.
-- intros. destruct x; constructor; apply linkorder_refl.
-- intros. inv H; inv H0; constructor; eapply linkorder_trans; eauto.
-- unfold link_def; intros.
+Next Obligation.
+  destruct x; constructor; apply linkorder_refl.
+Defined.
+Next Obligation.
+  inv H; inv H0; constructor; eapply linkorder_trans; eauto.
+Defined.
+Next Obligation.
+  unfold link_def; intros.
   destruct x as [f1|v1], y as [f2|v2]; try discriminate.
-+ destruct (link f1 f2) as [f|] eqn:L; inv H. apply link_linkorder in L.
-  split; constructor; tauto.
-+ destruct (link v1 v2) as [v|] eqn:L; inv H. apply link_linkorder in L.
++ simpl in H. destruct (link f1 f2) as [f|] eqn:L. inv H. apply link_linkorder in L.
+  split; constructor; tauto. discriminate.
++ simpl in H; destruct (link v1 v2) as [v|] eqn:L; inv H. apply link_linkorder in L.
   split; constructor; tauto.
 Defined.
 
@@ -320,7 +331,7 @@ Qed.
 
 End LINKER_PROG.
 
-Instance Linker_prog (F V: Type) {LF: Linker F} {LV: Linker V} : Linker (program F V) := {
+Program Instance Linker_prog (F V: Type) {LF: Linker F} {LV: Linker V} : Linker (program F V) := {
   link := link_prog;
   linkorder := fun p1 p2 =>
      p1.(prog_main) = p2.(prog_main)
@@ -332,18 +343,19 @@ Instance Linker_prog (F V: Type) {LF: Linker F} {LV: Linker V} : Linker (program
      /\ linkorder gd1 gd2
      /\ (~In id p2.(prog_public) -> gd2 = gd1)
 }.
-Proof.
-- intros; split; auto. split. apply incl_refl. intros.
+Next Obligation.
+  split; auto. split. apply incl_refl. intros.
   exists gd1; split; auto. split; auto. apply linkorder_refl.
-
-- intros x y z (A1 & B1 & C1) (A2 & B2 & C2).
+Defined.
+Next Obligation.
   split. congruence. split. red; eauto.
-  intros. exploit C1; eauto. intros (gd2 & P & Q & R).
-  exploit C2; eauto. intros (gd3 & U & X & Y).
+  intros. exploit H4; eauto. intros (gd2 & P & Q & R).
+  exploit H2; eauto. intros (gd3 & U & X & Y).
   exists gd3. split; auto. split. eapply linkorder_trans; eauto.
   intros. transitivity gd2. apply Y. auto. apply R. red; intros; elim H0; auto.
-
-- intros. apply link_prog_inv in H. destruct H as (L1 & L2 & L3).
+Defined.
+Next Obligation.
+  apply link_prog_inv in H. destruct H as (L1 & L2 & L3).
   subst z; simpl. intuition auto.
 + red; intros; apply in_app_iff; auto.
 + rewrite prog_defmap_elements, PTree.gcombine, H by auto.

@@ -46,7 +46,7 @@ type implem =
      exists_section: section_name -> bool;
      remove_unused: ident -> unit;
      remove_unused_function: ident -> unit;
-     variable_printed: string -> unit;
+     symbol_printed: string -> unit;
      add_diab_info: section_name ->  int -> int -> int -> unit;
    }
 
@@ -80,5 +80,5 @@ val compute_gnu_file_enum: (string -> unit) -> unit
 val exists_section: section_name -> bool
 val remove_unused: ident -> unit
 val remove_unused_function: ident -> unit
-val variable_printed: string -> unit
+val symbol_printed: string -> unit
 val add_diab_info: section_name ->  int -> int  -> int -> unit

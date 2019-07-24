@@ -150,8 +150,9 @@ Inductive operation : Type :=
   | Olowlong: operation                 (**r [rd = low-word(r1)] *)
   | Ohighlong: operation                (**r [rd = high-word(r1)] *)
 (*c Boolean tests: *)
-  | Ocmp: condition -> operation.       (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
-
+  | Ocmp: condition -> operation        (**r [rd = 1] if condition holds, [rd = 0] otherwise. *)
+  | Osel: condition -> typ -> operation.
+                                        (**r [rd = rs1] if condition holds, [rd = rs2] otherwise. *)
 
 (** Addressing modes.  [r1], [r2], etc, are the arguments to the
   addressing. *)
@@ -173,7 +174,7 @@ Proof.
 Defined.
 
 Definition beq_operation: forall (x y: operation), bool.
-  generalize Int.eq_dec Int64.eq_dec Ptrofs.eq_dec ident_eq Float.eq_dec Float32.eq_dec  eq_condition; boolean_equality.
+  generalize Int.eq_dec Int64.eq_dec Ptrofs.eq_dec ident_eq Float.eq_dec Float32.eq_dec typ_eq eq_condition; boolean_equality.
 Defined.
 
 Definition eq_operation (x y: operation): {x=y} + {x<>y}.
@@ -306,6 +307,7 @@ Definition eval_operation
   | Olowlong, v1::nil => Some(Val.loword v1)
   | Ohighlong, v1::nil => Some(Val.hiword v1)
   | Ocmp c, _ => Some(Val.of_optbool (eval_condition c vl m))
+  | Osel c ty, v1::v2::vl => Some(Val.select (eval_condition c vl m) v1 v2 ty)
   | _, _ => None
   end.
 
@@ -455,6 +457,7 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Olowlong => (Tlong :: nil, Tint)
   | Ohighlong => (Tlong :: nil, Tint)
   | Ocmp c => (type_of_condition c, Tint)
+  | Osel c ty => (ty :: ty :: type_of_condition c, ty)
   end.
 
 Definition type_of_addressing (addr: addressing) : list typ :=
@@ -575,6 +578,7 @@ Proof with (try exact I; try reflexivity).
   destruct v0...
   destruct v0...
   destruct (eval_condition c vl m); simpl... destruct b...
+  unfold Val.select. destruct (eval_condition c vl m). apply Val.normalize_type. exact I.
 Qed.
 
 End SOUNDNESS.
@@ -727,22 +731,40 @@ Definition is_trivial_op (op: operation) : bool :=
 
 (** Operations that depend on the memory state. *)
 
-Definition op_depends_on_memory (op: operation) : bool :=
-  match op with
-  | Ocmp (Ccompu _) => true
-  | Ocmp (Ccompuimm _ _) => true
-  | Ocmp (Ccomplu _) => Archi.ppc64
-  | Ocmp (Ccompluimm _ _) => Archi.ppc64
+Definition condition_depends_on_memory (c: condition) : bool :=
+  match c with
+  | Ccompu _ => true
+  | Ccompuimm _ _ => true
+  | Ccomplu _ => Archi.ppc64
+  | Ccompluimm _ _ => Archi.ppc64
   | _ => false
   end.
+
+Definition op_depends_on_memory (op: operation) : bool :=
+  match op with
+  | Ocmp c => condition_depends_on_memory c
+  | Osel c ty => condition_depends_on_memory c
+  | _ => false
+  end.
+
+Lemma condition_depends_on_memory_correct:
+  forall c args m1 m2,
+  condition_depends_on_memory c = false ->
+  eval_condition c args m1 = eval_condition c args m2.
+Proof.
+  intros. destruct c; simpl; auto; discriminate.
+Qed.
 
 Lemma op_depends_on_memory_correct:
   forall (F V: Type) (ge: Genv.t F V) sp op args m1 m2,
   op_depends_on_memory op = false ->
   eval_operation ge sp op args m1 = eval_operation ge sp op args m2.
 Proof.
-  intros until m2. destruct op; simpl; try congruence. unfold eval_condition.
-  destruct c; simpl; auto; try discriminate.
+  intros until m2. destruct op; simpl; try congruence; intros C.
+- f_equal; f_equal; apply condition_depends_on_memory_correct; auto.
+- destruct args; auto. destruct args; auto.
+  rewrite (condition_depends_on_memory_correct c args m1 m2 C).
+  auto.
 Qed.
 
 (** Global variables mentioned in an operation or addressing mode *)
@@ -989,6 +1011,9 @@ Proof.
   exploit eval_condition_inj; eauto. intros EQ; rewrite EQ.
   destruct b; simpl; constructor.
   simpl; constructor.
+  apply Val.select_inject; auto.  
+  destruct (eval_condition c vl1 m1) eqn:?; auto.
+  right; symmetry; eapply eval_condition_inj; eauto.
 Qed.
 
 Lemma eval_addressing_inj:

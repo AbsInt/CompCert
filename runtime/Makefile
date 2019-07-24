@@ -70,16 +70,16 @@ clean::
 
 ifeq ($(strip $(HAS_RUNTIME_LIB)),true)
 install::
-	install -d $(LIBDIR)
-	install -m 0644 $(LIB) $(LIBDIR)
+	install -d $(DESTDIR)$(LIBDIR)
+	install -m 0644 $(LIB) $(DESTDIR)$(LIBDIR)
 else
 install::
 endif
 
 ifeq ($(strip $(HAS_STANDARD_HEADERS)),true)
 install::
-	install -d $(LIBDIR)/include
-	install -m 0644 $(INCLUDES) $(LIBDIR)/include
+	install -d $(DESTDIR)$(LIBDIR)/include
+	install -m 0644 $(INCLUDES) $(DESTDIR)$(LIBDIR)/include
 else
 install::
 endif

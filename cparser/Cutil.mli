@@ -50,6 +50,8 @@ val remove_custom_attributes : string list -> attributes -> attributes
      in the given list of names. *)
 val attributes_of_type : Env.t -> typ -> attributes
   (* Return the attributes of the given type, expanding typedefs if needed. *)
+val attributes_of_type_no_expand : typ -> attributes
+  (* Return the attributes of the given type, without expanding typedefs. *)
 val add_attributes_type : attributes -> typ -> typ
   (* Add the given set of attributes to those of the given type. *)
 val remove_attributes_type : Env.t -> attributes -> typ -> typ
@@ -62,7 +64,10 @@ val has_std_alignas :  Env.t -> typ -> bool
   (* Do the attributes of the type contain the C11 _Alignas attribute *)
 
 type attribute_class =
-  | Attr_name           (* Attribute applies to the names being declared  *)
+  | Attr_object         (* Attribute applies to the object being declared
+                          (function, global variable, local variable)  *)
+  | Attr_name           (* Attribute applies to the name being declared
+                          (object, struct/union member, struct/union/enum tag *)
   | Attr_type           (* Attribute applies to types *)
   | Attr_struct         (* Attribute applies to struct, union and enum *)
   | Attr_function       (* Attribute applies to function types and decls *)
@@ -76,6 +81,8 @@ val class_of_attribute: attribute -> attribute_class
      have class [Attr_type].  Custom attributes have the class that
      was given to them using [declare_attribute], or [Attr_unknown]
      if not declared. *)
+val name_of_attribute: attribute -> string
+  (* Name for printing an attribute *)
 val attr_inherited_by_members: attribute -> bool
   (* Is an attribute of a composite inherited by members of the composite? *)
 

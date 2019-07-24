@@ -972,7 +972,7 @@ Remark inj_offset_aligned_block:
   Mem.inj_offset_aligned (align stacksize (block_alignment sz)) sz.
 Proof.
   intros; red; intros.
-  apply Zdivides_trans with (block_alignment sz).
+  apply Z.divide_trans with (block_alignment sz).
   unfold align_chunk.  unfold block_alignment.
   generalize Z.divide_1_l; intro.
   generalize Z.divide_refl; intro.

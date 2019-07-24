@@ -179,13 +179,27 @@ Proof.
 Qed.
 Hint Resolve rolm_label: labels.
 
+Remark loadimm64_32s_label:
+  forall r n k, tail_nolabel k (loadimm64_32s r n k).
+Proof.
+  unfold loadimm64_32s; intros. destruct Int64.eq; TailNoLabel.
+Qed.
+Hint Resolve loadimm64_32s_label: labels.
+
 Remark loadimm64_label:
   forall r n k, tail_nolabel k (loadimm64 r n k).
 Proof.
-  unfold loadimm64; intros.
-  destruct Int64.eq. TailNoLabel. destruct Int64.eq; TailNoLabel.
+  unfold loadimm64; intros. destruct Int64.eq; TailNoLabel.
 Qed.
 Hint Resolve loadimm64_label: labels.
+
+Remark loadimm64_notemp_label:
+  forall r n k, tail_nolabel k (loadimm64_notemp r n k).
+Proof.
+  unfold loadimm64_notemp; intros. destruct Int64.eq; TailNoLabel.
+  eapply tail_nolabel_trans; TailNoLabel.
+Qed.
+Hint Resolve loadimm64_notemp_label: labels.
 
 Remark loadind_label:
   forall base ofs ty dst k c,
@@ -234,6 +248,15 @@ Proof.
   destruct (snd (crbit_for_cond c0)); TailNoLabel.
 Qed.
 
+Remark transl_select_op_label:
+  forall cond args r1 r2 rd k c,
+  transl_select_op cond args r1 r2 rd k = OK c -> tail_nolabel k c.
+Proof.
+  unfold transl_select_op; intros. destruct (ireg_eq r1 r2).
+  TailNoLabel.
+  eapply tail_nolabel_trans. eapply transl_cond_label; eauto.  TailNoLabel.
+Qed.
+
 Remark transl_op_label:
   forall op args r k c,
   transl_op op args r k = OK c -> tail_nolabel k c.
@@ -261,6 +284,7 @@ Opaque Int.eq.
   destruct Int64.eq. TailNoLabel.
   destruct ireg_eq; [apply tail_nolabel_cons; unfold nolabel;auto|]; eapply tail_nolabel_trans; TailNoLabel.
 - eapply transl_cond_op_label; eauto.
+- eapply transl_select_op_label; eauto.
 Qed.
 
 Remark transl_memory_access_label:

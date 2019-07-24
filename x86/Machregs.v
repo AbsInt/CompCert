@@ -351,6 +351,7 @@ Definition two_address_op (op: operation) : bool :=
   | Olongofsingle => false
   | Osingleoflong => false
   | Ocmp c => false
+  | Osel c op => true
   end.
 
 (* Constraints on constant propagation for builtins *)

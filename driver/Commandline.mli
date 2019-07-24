@@ -42,8 +42,8 @@ exception CmdError of string
 (** Raise by [parse_cmdline] when an error occured *)
 
 val parse_cmdline: (pattern * action) list -> unit
-(** [parse_cmdline actions] parses the commandline and performs all [actions].
-    Raises [CmdError] if an error occurred.
+(** [parse_cmdline actions] parses the command line (after @-file expansion)
+    and performs all [actions].  Raises [CmdError] if an error occurred.
 *)
 
 val longopt_int: string -> (int -> unit) -> pattern * action
@@ -51,5 +51,5 @@ val longopt_int: string -> (int -> unit) -> pattern * action
     options of the form [key=<n>] and calls [fn] with the integer argument
 *)
 
-val argv: string array ref
+val argv: string array
 (** [argv] contains the complete command line after @-file expandsion *)

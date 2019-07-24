@@ -106,7 +106,7 @@ Local Transparent Mem.loadbytes.
   unfold Mem.loadbytes; intros. destruct H.
   destruct (Mem.range_perm_dec m1 b ofs (ofs + n) Cur Readable); inv H0.
   rewrite pred_dec_true. econstructor; split; eauto.
-  apply GETN. intros. rewrite nat_of_Z_max in H.
+  apply GETN. intros. rewrite Z_to_nat_max in H.
   assert (ofs <= i < ofs + n) by xomega.
   apply ma_memval0; auto.
   red; intros; eauto.
@@ -966,7 +966,7 @@ Ltac UseTransfer :=
   intros. eapply nlive_remove; eauto.
   unfold adst, vanalyze; rewrite AN; eapply aaddr_arg_sound_1; eauto.
   erewrite Mem.loadbytes_length in H1 by eauto.
-  rewrite nat_of_Z_eq in H1 by omega. auto.
+  rewrite Z2Nat.id in H1 by omega. auto.
   eauto.
   intros (tm' & A & B).
   econstructor; split.
@@ -993,7 +993,7 @@ Ltac UseTransfer :=
   intros (bc & A & B & C).
   intros. eapply nlive_contains; eauto.
   erewrite Mem.loadbytes_length in H0 by eauto.
-  rewrite nat_of_Z_eq in H0 by omega. auto.
+  rewrite Z2Nat.id in H0 by omega. auto.
 + (* annot *)
   destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x2) as (ne1, nm1) eqn:TR.
   InvSoundState.

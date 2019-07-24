@@ -456,7 +456,35 @@ Nondetfunction cast16signed (e: expr) :=
       Eop Ocast16signed (e ::: Enil)
   end.
 
-(** Floating-point conversions *)
+(** ** Selection *)
+
+Definition select_supported (ty: typ) : bool :=
+  match ty with
+  | Tint => true
+  | Tlong => Archi.ptr64
+  | _ => false
+  end.
+
+(** [Asmgen.mk_sel] cannot always handle the conditions that are
+    implemented as a "and" of two processor flags.  However it can
+    handle the negation of those conditions, which are implemented
+    as an "or".  So, for the risky conditions we just take their
+    negation and swap the two arguments of the [select]. *)
+
+Definition select_swap (cond: condition) :=
+  match cond with
+  | Ccompf Cne | Ccompfs Cne | Cnotcompf Ceq | Cnotcompfs Ceq => true
+  | _ => false
+  end.
+
+Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
+  if select_supported ty then
+    if select_swap cond
+    then Some (Eop (Osel (negate_condition cond) ty) (e2 ::: e1 ::: args))
+    else Some (Eop (Osel cond ty) (e1 ::: e2 ::: args))
+  else None.
+
+(** ** Floating-point conversions *)
 
 Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
 Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).

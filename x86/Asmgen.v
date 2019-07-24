@@ -305,6 +305,35 @@ Definition mk_jcc (cond: extcond) (lbl: label) (k: code) :=
   | Cond_or c1 c2 => Pjcc c1 lbl :: Pjcc c2 lbl :: k
   end.
 
+Definition negate_testcond (c: testcond) : testcond :=
+  match c with
+  | Cond_e => Cond_ne  | Cond_ne => Cond_e
+  | Cond_b => Cond_ae  | Cond_be => Cond_a
+  | Cond_ae => Cond_b  | Cond_a => Cond_be
+  | Cond_l => Cond_ge  | Cond_le => Cond_g
+  | Cond_ge => Cond_l  | Cond_g => Cond_le
+  | Cond_p => Cond_np  | Cond_np => Cond_p
+  end.
+
+Definition mk_sel (cond: extcond) (rd r2: ireg) (k: code) :=
+  match cond with
+  | Cond_base c =>
+      OK (Pcmov (negate_testcond c) rd r2 :: k)
+  | Cond_and c1 c2 =>
+      OK (Pcmov (negate_testcond c1) rd r2 ::
+          Pcmov (negate_testcond c2) rd r2 :: k)
+  | Cond_or c1 c2 =>
+      Error (msg "Asmgen.mk_sel")    (**r should never happen, see [SelectOp.select] *)
+  end.
+
+Definition transl_sel
+      (cond: condition) (args: list mreg) (rd r2: ireg) (k: code) : res code :=
+  if ireg_eq rd r2 then
+    OK (Pmov_rr rd r2 :: k)    (* must generate one instruction... *)
+  else
+    do k1 <- mk_sel (testcond_for_condition cond) rd r2 k;
+    transl_cond cond args k1.
+
 (** Translation of the arithmetic operation [r <- op(args)].
   The corresponding instructions are prepended to [k]. *)
 
@@ -597,6 +626,10 @@ Definition transl_op
   | Ocmp c, args =>
       do r <- ireg_of res;
       transl_cond c args (mk_setcc (testcond_for_condition c) r k)
+  | Osel c ty, a1 :: a2 :: args =>
+      assertion (mreg_eq a1 res);
+      do r <- ireg_of res; do r2 <- ireg_of a2;
+      transl_sel c args r r2 k
   | _, _ =>
       Error(msg "Asmgen.transl_op")
   end.

@@ -420,6 +420,12 @@ Definition singleofintu (e: expr) := Eop Osingleofintu (e ::: Enil).
 Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
 Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).
 
+(** ** Selection *)
+
+Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr)
+   : option expr
+   := None.
+ 
 (** ** Recognition of addressing modes for load and store operations *)
 
 Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=

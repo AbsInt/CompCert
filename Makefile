@@ -22,8 +22,8 @@ ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
 DIRS=lib common $(ARCHDIRS) backend cfrontend driver \
-  flocq/Core flocq/Prop flocq/Calc flocq/Appli exportclight \
-  cparser cparser/MenhirLib
+  flocq/Core flocq/Prop flocq/Calc flocq/IEEE754 \
+  exportclight cparser cparser/MenhirLib
 
 RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight cparser
 
@@ -43,20 +43,17 @@ GPATH=$(DIRS)
 # Flocq
 
 FLOCQ=\
-  Fcore_Raux.v Fcore_Zaux.v Fcore_defs.v Fcore_digits.v                     \
-  Fcore_float_prop.v Fcore_FIX.v Fcore_FLT.v Fcore_FLX.v                    \
-  Fcore_FTZ.v Fcore_generic_fmt.v Fcore_rnd.v Fcore_rnd_ne.v                \
-  Fcore_ulp.v Fcore.v                                                       \
-  Fcalc_bracket.v Fcalc_digits.v Fcalc_div.v Fcalc_ops.v                    \
-  Fcalc_round.v Fcalc_sqrt.v                                                \
-  Fprop_div_sqrt_error.v Fprop_mult_error.v Fprop_plus_error.v              \
-  Fprop_relative.v Fprop_Sterbenz.v                                         \
-  Fappli_rnd_odd.v Fappli_double_round.v Fappli_IEEE.v Fappli_IEEE_bits.v
+  Raux.v Zaux.v Defs.v Digits.v Float_prop.v FIX.v FLT.v FLX.v FTZ.v \
+  Generic_fmt.v Round_pred.v Round_NE.v Ulp.v Core.v \
+  Bracket.v Div.v Operations.v Round.v Sqrt.v \
+  Div_sqrt_error.v Mult_error.v Plus_error.v \
+  Relative.v Sterbenz.v Round_odd.v Double_rounding.v \
+  Binary.v Bits.v
 
 # General-purpose libraries (in lib/)
 
 VLIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
-  Iteration.v Integers.v Archi.v Fappli_IEEE_extra.v Floats.v \
+  Iteration.v Zbits.v Integers.v Archi.v IEEE754_extra.v Floats.v \
   Parmov.v UnionFind.v Wfsimpl.v \
   Postorder.v FSetAVLplus.v IntvSets.v Decidableplus.v BoolEqual.v \
   SCTactics.v
@@ -239,24 +236,24 @@ depend1: $(FILES) exportclight/Clightdefs.v
 	@$(COQDEP) $^ > .depend
 
 install:
-	install -d $(BINDIR)
-	install -m 0755 ./ccomp $(BINDIR)
-	install -d $(SHAREDIR)
-	install -m 0644 ./compcert.ini $(SHAREDIR)
-	install -d $(MANDIR)/man1
-	install -m 0644 ./doc/ccomp.1 $(MANDIR)/man1
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 0755 ./ccomp $(DESTDIR)$(BINDIR)
+	install -d $(DESTDIR)$(SHAREDIR)
+	install -m 0644 ./compcert.ini $(DESTDIR)$(SHAREDIR)
+	install -d $(DESTDIR)$(MANDIR)/man1
+	install -m 0644 ./doc/ccomp.1 $(DESTDIR)$(MANDIR)/man1
 	$(MAKE) -C runtime install
 ifeq ($(CLIGHTGEN),true)
-	install -m 0755 ./clightgen $(BINDIR)
+	install -m 0755 ./clightgen $(DESTDIR)$(BINDIR)
 endif
 ifeq ($(INSTALL_COQDEV),true)
-	install -d $(COQDEVDIR)
+	install -d $(DESTDIR)$(COQDEVDIR)
 	for d in $(DIRS); do \
-          install -d $(COQDEVDIR)/$$d && \
-          install -m 0644 $$d/*.vo $(COQDEVDIR)/$$d/; \
+          install -d $(DESTDIR)$(COQDEVDIR)/$$d && \
+          install -m 0644 $$d/*.vo $(DESTDIR)$(COQDEVDIR)/$$d/; \
 	done
-	install -m 0644 ./VERSION $(COQDEVDIR)
-	@(echo "To use, pass the following to coq_makefile or add the following to _CoqProject:"; echo "-R $(COQDEVDIR) compcert") > $(COQDEVDIR)/README
+	install -m 0644 ./VERSION $(DESTDIR)$(COQDEVDIR)
+	@(echo "To use, pass the following to coq_makefile or add the following to _CoqProject:"; echo "-R $(COQDEVDIR) compcert") > $(DESTDIR)$(COQDEVDIR)/README
 endif
 
 
@@ -269,6 +266,7 @@ clean:
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
 	rm -f $(GENERATED) .depend
+	rm -f .lia.cache
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
 	$(MAKE) -C test clean
@@ -280,12 +278,8 @@ distclean:
 check-admitted: $(FILES)
 	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
 
-# Problems with coqchk (coq 8.6):
-# Integers.Int.Z_mod_modulus_range takes forever to check
-# compcert.backend.SelectDivproof.divs_mul_shift_2 takes forever to check
-
 check-proof: $(FILES)
-	$(COQCHK) -admit compcert.lib.Integers -admit compcert.backend.SelectDivproof compcert.driver.Complements
+	$(COQCHK) compcert.driver.Complements
 
 print-includes:
 	@echo $(COQINCLUDES)

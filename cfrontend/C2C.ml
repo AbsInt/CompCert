@@ -315,8 +315,9 @@ let attributes = [
   ("noinline",Cutil.Attr_function);
   (* name-related *)
   ("aligned", Cutil.Attr_name);
-  ("section", Cutil.Attr_name);
-  ("unused", Cutil.Attr_name)
+  (* object-related *)
+  ("section", Cutil.Attr_object);
+  ("unused", Cutil.Attr_object)
 ]
 
 
@@ -666,12 +667,12 @@ let z_of_str hex str fst =
 
 let checkFloatOverflow f typ =
   match f with
-  | Fappli_IEEE.B754_finite _ -> ()
-  | Fappli_IEEE.B754_zero _ ->
+  | Binary.B754_finite _ -> ()
+  | Binary.B754_zero _ ->
       warning Diagnostics.Literal_range "magnitude of floating-point constant too small for type '%s'"  typ
-  | Fappli_IEEE.B754_infinity _ ->
+  | Binary.B754_infinity _ ->
       warning Diagnostics.Literal_range "magnitude of floating-point constant too large for type '%s'"  typ
-  | Fappli_IEEE.B754_nan _ ->
+  | Binary.B754_nan _ ->
       warning Diagnostics.Literal_range "floating-point converts converts to 'NaN'"
 
 let convertFloat f kind =
