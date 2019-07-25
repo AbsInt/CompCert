@@ -1059,7 +1059,7 @@ End DETERMINISM.
 End StrongRelaxedInjections.
 
 Definition trivial_inject t:=
-  forall {f t'},
+  forall f t',
     inject_trace f t t' -> t' = t.
 Ltac trivial_inject_trace:=
   match goal with
@@ -1727,7 +1727,7 @@ Proof.
   eapply UNCHANGED; eauto.
   (* mem injects full *)
 - inv H0. inv H3. inv H7. inv H9.
-  exploit alloc_parallel_inject'; eauto. apply Zle_refl. apply Zle_refl.
+  exploit alloc_parallel_inject'; eauto. apply Z.le_refl. apply Z.le_refl.
   intros [f' [m3' [b' [ALLOC [A [B [C [D E]]]]]]]].
   exploit Mem.store_mapped_inject. eexact A. eauto. eauto.
   instantiate (1 := Vptrofs sz). auto.
@@ -1744,7 +1744,7 @@ Proof.
   eapply store_full; eauto.
 (* mem injects *)
 - inv H0. inv H2. inv H6. inv H8.
-  exploit Mem.alloc_parallel_inject; eauto. apply Zle_refl. apply Zle_refl.
+  exploit Mem.alloc_parallel_inject; eauto. apply Z.le_refl. apply Z.le_refl.
   intros [f' [m3' [b' [ALLOC [A [B [C D]]]]]]].
   exploit Mem.store_mapped_inject. eexact A. eauto. eauto.
   instantiate (1 := Vptrofs sz). auto.
@@ -1976,7 +1976,7 @@ Proof.
   assert (RPDST: Mem.range_perm m1 bdst (Ptrofs.unsigned odst) (Ptrofs.unsigned odst + sz) Cur Nonempty).
     replace sz with (Z_of_nat (length bytes)).
     eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
-    rewrite LEN. apply nat_of_Z_eq. omega.
+    rewrite LEN. apply Z2Nat.id. omega.
   assert (PSRC: Mem.perm m1 bsrc (Ptrofs.unsigned osrc) Cur Nonempty).
     apply RPSRC. omega.
   assert (PDST: Mem.perm m1 bdst (Ptrofs.unsigned odst) Cur Nonempty).

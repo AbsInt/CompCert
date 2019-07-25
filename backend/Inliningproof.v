@@ -1231,7 +1231,7 @@ Proof.
   assert (TR: tr_function prog f f').
   { eapply tr_function_linkorder; eauto. }
   inversion TR; subst.
-  (*exploit Mem.alloc_parallel_inject.*) exploit alloc_parallel_inject'. eauto. eauto. trivial. apply Zle_refl.
+  (*exploit Mem.alloc_parallel_inject.*) exploit alloc_parallel_inject'. eauto. eauto. trivial. apply Z.le_refl.
     instantiate (1 := fn_stacksize f'). inv H1. xomega.
   intros [F' [m1' [sp' [A [B [C [D [E FULL']]]]]]]].
   left; econstructor; exists F', E0; split.
