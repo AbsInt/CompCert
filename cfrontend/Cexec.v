@@ -1124,8 +1124,8 @@ Proof.
   induction 1; intros; constructor; eauto.
 Qed.
 
-Hint Constructors context contextlist.
-Hint Resolve context_compose contextlist_compose.
+Local Hint Constructors context contextlist : core.
+Local Hint Resolve context_compose contextlist_compose : core.
 
 Definition reduction_ok (k: kind) (a: expr) (m: mem) (rd: reduction) : Prop :=
   match k, rd with
@@ -1691,8 +1691,9 @@ Proof.
   change (In (f (C0, rd)) (map f res2)). apply in_map; auto.
 Qed.
 
-Hint Resolve reducts_incl_val reducts_incl_loc reducts_incl_listval
-             reducts_incl_incontext reducts_incl_incontext2_left reducts_incl_incontext2_right.
+Local Hint Resolve reducts_incl_val reducts_incl_loc reducts_incl_listval
+                   reducts_incl_incontext reducts_incl_incontext2_left
+                   reducts_incl_incontext2_right : core.
 
 Lemma step_expr_context:
   forall from to C, context from to C ->
@@ -2077,7 +2078,7 @@ Ltac myinv :=
   | _ => idtac
   end.
 
-Hint Extern 3 => exact I.
+Local Hint Extern 3 => exact I : core.
 
 Theorem do_step_sound:
   forall w S rule t S',

@@ -222,7 +222,7 @@ Proof.
   induction 1; constructor; auto.
 Qed.
 
-Hint Resolve leftcontext_context.
+Local Hint Resolve leftcontext_context : core.
 
 (** Strategy for reducing expressions. We reduce the leftmost innermost
   non-simple subexpression, evaluating its arguments (which are necessarily
@@ -398,8 +398,8 @@ Proof.
   induction 1; intros; constructor; eauto.
 Qed.
 
-Hint Constructors context contextlist.
-Hint Resolve context_compose contextlist_compose.
+Local Hint Constructors context contextlist : core.
+Local Hint Resolve context_compose contextlist_compose : core.
 
 (** * Safe executions. *)
 
@@ -975,7 +975,7 @@ Proof.
   apply extensionality; intros. f_equal. f_equal. apply exprlist_app_assoc.
 Qed.
 
-Hint Resolve contextlist'_head contextlist'_tail.
+Local Hint Resolve contextlist'_head contextlist'_tail : core.
 
 Lemma eval_simple_list_steps:
   forall rl vl, eval_simple_list' rl vl ->
@@ -1049,7 +1049,7 @@ Scheme expr_ind2 := Induction for expr Sort Prop
   with exprlist_ind2 := Induction for exprlist Sort Prop.
 Combined Scheme expr_expr_list_ind from expr_ind2, exprlist_ind2.
 
-Hint Constructors leftcontext leftcontextlist.
+Local Hint Constructors leftcontext leftcontextlist : core.
 
 Lemma decompose_expr:
   (forall a from C,
