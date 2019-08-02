@@ -190,7 +190,7 @@ Module PTree <: TREE.
     | Leaf : tree A
     | Node : tree A -> option A -> tree A -> tree A.
 
-  Arguments Leaf [A].
+  Arguments Leaf {A}.
   Arguments Node [A].
   Scheme tree_ind := Induction for tree Sort Prop.
 
