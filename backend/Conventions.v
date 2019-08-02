@@ -128,8 +128,6 @@ Definition callee_save_loc (l: loc) :=
   | S sl ofs ty => sl <> Outgoing
   end.
 
-Hint Unfold callee_save_loc.
-
 Definition agree_callee_save (ls1 ls2: Locmap.t) : Prop :=
   forall l, callee_save_loc l -> ls1 l = ls2 l.
 

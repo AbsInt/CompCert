@@ -1131,7 +1131,7 @@ Qed.
 Remark val_inject_vptrofs: forall n, Val.inject f (Vptrofs n) (Vptrofs n).
 Proof. intros. unfold Vptrofs. destruct Archi.ptr64; auto. Qed.
 
-Hint Resolve val_inject_vtrue val_inject_vfalse val_inject_of_bool val_inject_vptrofs.
+Local Hint Resolve val_inject_vtrue val_inject_vfalse val_inject_of_bool val_inject_vptrofs : core.
 
 Ltac TrivialInject :=
   match goal with
@@ -1517,7 +1517,7 @@ Inductive val_casted: val -> type -> Prop :=
   | val_casted_void: forall v,
       val_casted v Tvoid.
 
-Hint Constructors val_casted.
+Local Hint Constructors val_casted : core.
 
 Remark cast_int_int_idem:
   forall sz sg i, cast_int_int sz sg (cast_int_int sz sg i) = cast_int_int sz sg i.

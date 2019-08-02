@@ -687,7 +687,7 @@ Hint Resolve gensym_within within_widen contained_widen
              in_eq in_cons
              Ple_trans Ple_refl: gensym.
 
-Hint Resolve dest_for_val_below dest_for_effect_below.
+Local Hint Resolve dest_for_val_below dest_for_effect_below : core.
 
 (** ** Correctness of the translation functions *)
 

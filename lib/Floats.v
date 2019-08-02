@@ -139,8 +139,8 @@ Definition default_nan_32 := quiet_nan_32 Archi.default_nan_32.
 
 Local Notation __ := (eq_refl Datatypes.Lt).
 
-Local Hint Extern 1 (Prec_gt_0 _) => exact (eq_refl Datatypes.Lt).
-Local Hint Extern 1 (_ < _) => exact (eq_refl Datatypes.Lt).
+Local Hint Extern 1 (Prec_gt_0 _) => exact (eq_refl Datatypes.Lt) : core.
+Local Hint Extern 1 (_ < _) => exact (eq_refl Datatypes.Lt) : core.
 
 (** * Double-precision FP numbers *)
 
