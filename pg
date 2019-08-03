@@ -1,10 +1,7 @@
 #!/bin/sh
-# Start Proof General with the right -I options
+# Start Proof General with the right Coq version
 # Use the Makefile to rebuild dependencies if needed
-# Recompile the modified file after coqide editing
-
-PWD=`pwd`
-INCLUDES=`make print-includes`
+# Recompile the modified file after editing
 
 make -q ${1}o || {
   make -n ${1}o | grep -v "\\b${1}\\b" | \
@@ -15,16 +12,5 @@ make -q ${1}o || {
 
 COQPROGNAME="${COQBIN}coqtop"
 
-COQPROGARGS=""
-for arg in $INCLUDES; do
-  case "$arg" in
-    -I|-R|-as|compcert*)
-      COQPROGARGS="$COQPROGARGS \"$arg\"";;
-    *)
-      COQPROGARGS="$COQPROGARGS \"$PWD/$arg\"";;
-  esac
-done
-
-emacs --eval "(setq coq-prog-name \"$COQPROGNAME\")" \
- --eval "(setq coq-prog-args '($COQPROGARGS))" $1 \
+emacs --eval "(setq coq-prog-name \"$COQPROGNAME\")" $1 \
 && make ${1}o
