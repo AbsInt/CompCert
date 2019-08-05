@@ -30,6 +30,7 @@ RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight \
 
 COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
 
+COQCOPTS ?= -w -undeclared-scope
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
