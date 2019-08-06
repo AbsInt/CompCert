@@ -399,7 +399,13 @@ module Target(System: SYSTEM):TARGET =
 
 (* Printing of instructions *)
 
-(* Reminder on AT&T syntax: op source, dest *)
+(* Reminder on X86 assembly syntaxes:
+                              AT&T syntax         Intel syntax
+                              (used by GNU as)    (used in reference manuals)
+   dst <- op(src)             op src, dst         op dst, src
+   dst <- op(dst, src2)       op src2, dst        op dst, src2
+   dst <- op(dst, src2, src3) op src3, src2, dst  op dst, src2, src3
+*)
 
     let print_instruction oc = function
         (* Moves *)
@@ -752,29 +758,29 @@ module Target(System: SYSTEM):TARGET =
       | Pcfi_adjust sz ->
 	 cfi_adjust oc (camlint_of_coqint sz)
       | Pfmadd132 (res,a1,a2) ->
-	 fprintf oc "	vfmadd132sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfmadd132sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmadd213 (res,a1,a2) ->
-	 fprintf oc "	vfmadd213sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfmadd213sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmadd231 (res,a1,a2) ->
-	 fprintf oc "	vfmadd231sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfmadd231sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmsub132 (res,a1,a2) ->
-	 fprintf oc "	vfmsub132sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfmsub132sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmsub213 (res,a1,a2) ->
-	 fprintf oc "	vfmsub213sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfmsub213sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfmsub231 (res,a1,a2) ->
-	 fprintf oc "	vfmsub231sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfmsub231sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmadd132 (res,a1,a2) ->
-	 fprintf oc "	vfnmadd132sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfnmadd132sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmadd213 (res,a1,a2) ->
-	 fprintf oc "	vfnmadd213sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfnmadd213sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmadd231 (res,a1,a2) ->
-	 fprintf oc "	vfnmadd231sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfnmadd231sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmsub132 (res,a1,a2) ->
-	 fprintf oc "	vfnmsub132sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfnmsub132sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmsub213 (res,a1,a2) ->
-	 fprintf oc "	vfnmsub213sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfnmsub213sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pfnmsub231 (res,a1,a2) ->
-	 fprintf oc "	vfnmsub231sd	%a, %a, %a\n" freg a1 freg a2 freg res
+	 fprintf oc "	vfnmsub231sd	%a, %a, %a\n" freg a2 freg a1 freg res
       | Pmaxsd (res,a1) ->
 	 fprintf oc "	maxsd	%a, %a\n" freg a1 freg res
       | Pminsd (res,a1) ->
