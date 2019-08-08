@@ -763,8 +763,8 @@ Lemma eval_divlu_mull:
 Proof.
   intros. unfold divlu_mull. exploit (divlu_mul_shift x); eauto. intros [A B].
   assert (A0: eval_expr ge sp e m le (Eletvar O) (Vlong x)) by (constructor; auto).
-  exploit eval_mullhu. eauto. eexact A0. instantiate (1 := Int64.repr M). intros (v1 & A1 & B1).
-  exploit eval_shrluimm. eauto. eexact A1. instantiate (1 := Int.repr p). intros (v2 & A2 & B2).
+  exploit eval_mullhu. try apply HELPERS. eexact A0. instantiate (1 := Int64.repr M). intros (v1 & A1 & B1).
+  exploit eval_shrluimm. try apply HELPERS. eexact A1. instantiate (1 := Int.repr p). intros (v2 & A2 & B2).
   simpl in B1; inv B1. simpl in B2. replace (Int.ltu (Int.repr p) Int64.iwordsize') with true in B2. inv B2.
   rewrite B. assumption.
   unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true; auto. tauto.
@@ -834,17 +834,17 @@ Proof.
   intros. unfold divls_mull.
   assert (A0: eval_expr ge sp e m le (Eletvar O) (Vlong x)).
   { constructor; auto. }
-  exploit eval_mullhs. eauto. eexact A0. instantiate (1 := Int64.repr M).  intros (v1 & A1 & B1).
-  exploit eval_addl; auto; try apply HELPERS. eexact A1. eexact A0. intros (v2 & A2 & B2).
-  exploit eval_shrluimm. eauto. eexact A0. instantiate (1 := Int.repr 63). intros (v3 & A3 & B3).
+  exploit eval_mullhs. try apply HELPERS. eexact A0. instantiate (1 := Int64.repr M).  intros (v1 & A1 & B1).
+  exploit eval_addl. try apply HELPERS. eexact A1. eexact A0. intros (v2 & A2 & B2).
+  exploit eval_shrluimm. try apply HELPERS. eexact A0. instantiate (1 := Int.repr 63). intros (v3 & A3 & B3).
   set (a4 := if zlt M Int64.half_modulus
              then mullhs (Eletvar 0) (Int64.repr M)
              else addl (mullhs (Eletvar 0) (Int64.repr M)) (Eletvar 0)).
   set (v4 := if zlt M Int64.half_modulus then v1 else v2).
   assert (A4: eval_expr ge sp e m le a4 v4).
   { unfold a4, v4; destruct (zlt M Int64.half_modulus); auto. }
-  exploit eval_shrlimm. eauto. eexact A4. instantiate (1 := Int.repr p). intros (v5 & A5 & B5).
-  exploit eval_addl; auto; try apply HELPERS. eexact A5. eexact A3. intros (v6 & A6 & B6).
+  exploit eval_shrlimm. try apply HELPERS. eexact A4. instantiate (1 := Int.repr p). intros (v5 & A5 & B5).
+  exploit eval_addl. try apply HELPERS. eexact A5. eexact A3. intros (v6 & A6 & B6).
   assert (RANGE: forall x, 0 <= x < 64 -> Int.ltu (Int.repr x) Int64.iwordsize' = true).
   { intros. unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true by tauto. auto.
     assert (64 < Int.max_unsigned) by (compute; auto). omega. }
@@ -948,8 +948,7 @@ Proof.
   intros until y. unfold divf. destruct (divf_match b); intros.
 - unfold divfimm. destruct (Float.exact_inverse n2) as [n2' | ] eqn:EINV.
   + inv H0. inv H4. simpl in H6. inv H6. econstructor; split.
-    EvalOp. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor.
-    simpl; eauto.
+    repeat (econstructor; eauto). 
     destruct x; simpl; auto. erewrite Float.div_mul_inverse; eauto.
   + TrivialExists.
 - TrivialExists.
@@ -964,8 +963,7 @@ Proof.
   intros until y. unfold divfs. destruct (divfs_match b); intros.
 - unfold divfsimm. destruct (Float32.exact_inverse n2) as [n2' | ] eqn:EINV.
   + inv H0. inv H4. simpl in H6. inv H6. econstructor; split.
-    EvalOp. constructor. eauto. constructor. EvalOp. simpl; eauto. constructor.
-    simpl; eauto.
+    repeat (econstructor; eauto). 
     destruct x; simpl; auto. erewrite Float32.div_mul_inverse; eauto.
   + TrivialExists.
 - TrivialExists.

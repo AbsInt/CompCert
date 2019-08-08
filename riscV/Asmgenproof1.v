@@ -400,22 +400,6 @@ Ltac ArgsInv :=
   | [ H: freg_of _ = OK _ |- _ ] => simpl in *; rewrite (freg_of_eq _ _ H) in *
   end).
 
-Inductive exec_straight_opt: code -> regset -> mem -> code -> regset -> mem -> Prop :=
-  | exec_straight_opt_refl: forall c rs m,
-      exec_straight_opt c rs m c rs m
-  | exec_straight_opt_intro: forall c1 rs1 m1 c2 rs2 m2,
-      exec_straight ge fn c1 rs1 m1 c2 rs2 m2 ->
-      exec_straight_opt c1 rs1 m1 c2 rs2 m2.
-
-Remark exec_straight_opt_right:
-  forall c3 rs3 m3 c1 rs1 m1 c2 rs2 m2,
-  exec_straight_opt c1 rs1 m1 c2 rs2 m2 ->
-  exec_straight ge fn c2 rs2 m2 c3 rs3 m3 ->
-  exec_straight ge fn c1 rs1 m1 c3 rs3 m3.
-Proof.
-  destruct 1; intros. auto. eapply exec_straight_trans; eauto. 
-Qed.
-
 Lemma transl_cbranch_correct_1:
   forall cond args lbl k c m ms b sp rs m',
   transl_cbranch cond args lbl k = OK c ->

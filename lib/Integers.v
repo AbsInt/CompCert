@@ -2689,42 +2689,93 @@ Proof.
   rewrite <- (sign_ext_zero_ext n y H). congruence.
 Qed.
 
-Theorem zero_ext_shru_shl:
+Theorem shru_shl:
+  forall x y z, ltu y iwordsize = true -> ltu z iwordsize = true ->
+  shru (shl x y) z =
+  if ltu z y then shl (zero_ext (zwordsize - unsigned y) x) (sub y z)
+             else zero_ext (zwordsize - unsigned z) (shru x (sub z y)).
+Proof.
+  intros. apply ltu_iwordsize_inv in H; apply ltu_iwordsize_inv in H0.
+  unfold ltu. set (Y := unsigned y) in *; set (Z := unsigned z) in *.
+  apply same_bits_eq; intros. rewrite bits_shru by auto. fold Z.
+  destruct (zlt Z Y).
+- assert (A: unsigned (sub y z) = Y - Z).
+  { apply unsigned_repr. generalize wordsize_max_unsigned; omega. }
+  symmetry; rewrite bits_shl, A by omega.
+  destruct (zlt (i + Z) zwordsize).
++ rewrite bits_shl by omega. fold Y.
+  destruct (zlt i (Y - Z)); [rewrite zlt_true by omega|rewrite zlt_false by omega]; auto.
+  rewrite bits_zero_ext by omega. rewrite zlt_true by omega. f_equal; omega.
++ rewrite bits_zero_ext by omega. rewrite ! zlt_false by omega. auto.
+- assert (A: unsigned (sub z y) = Z - Y).
+  { apply unsigned_repr. generalize wordsize_max_unsigned; omega. }
+  rewrite bits_zero_ext, bits_shru, A by omega.
+  destruct (zlt (i + Z) zwordsize); [rewrite zlt_true by omega|rewrite zlt_false by omega]; auto.
+  rewrite bits_shl by omega. fold Y.
+  destruct (zlt (i + Z) Y).
++ rewrite zlt_false by omega. auto.
++ rewrite zlt_true by omega. f_equal; omega.
+Qed.
+
+Corollary zero_ext_shru_shl:
   forall n x,
   0 < n < zwordsize ->
   let y := repr (zwordsize - n) in
   zero_ext n x = shru (shl x y) y.
 Proof.
   intros.
-  assert (unsigned y = zwordsize - n).
-    unfold y. apply unsigned_repr. generalize wordsize_max_unsigned. omega.
-  apply same_bits_eq; intros.
-  rewrite bits_zero_ext.
-  rewrite bits_shru; auto.
-  destruct (zlt i n).
-  rewrite zlt_true. rewrite bits_shl. rewrite zlt_false. f_equal. omega.
-  omega. omega. omega.
-  rewrite zlt_false. auto. omega.
-  omega.
+  assert (A: unsigned y = zwordsize - n).
+  { unfold y. apply unsigned_repr. generalize wordsize_max_unsigned. omega. }
+  assert (B: ltu y iwordsize = true).
+  { unfold ltu; rewrite A, unsigned_repr_wordsize. apply zlt_true; omega. }
+  rewrite shru_shl by auto. unfold ltu; rewrite zlt_false by omega.
+  rewrite sub_idem, shru_zero. f_equal. rewrite A; omega.
 Qed.
 
-Theorem sign_ext_shr_shl:
+Theorem shr_shl:
+  forall x y z, ltu y iwordsize = true -> ltu z iwordsize = true ->
+  shr (shl x y) z =
+  if ltu z y then shl (sign_ext (zwordsize - unsigned y) x) (sub y z)
+             else sign_ext (zwordsize - unsigned z) (shr x (sub z y)).
+Proof.
+  intros. apply ltu_iwordsize_inv in H; apply ltu_iwordsize_inv in H0.
+  unfold ltu. set (Y := unsigned y) in *; set (Z := unsigned z) in *.
+  apply same_bits_eq; intros. rewrite bits_shr by auto. fold Z.
+  rewrite bits_shl by (destruct (zlt (i + Z) zwordsize); omega). fold Y.
+  destruct (zlt Z Y).
+- assert (A: unsigned (sub y z) = Y - Z).
+  { apply unsigned_repr. generalize wordsize_max_unsigned; omega. }
+  rewrite bits_shl, A by omega.
+  destruct (zlt i (Y - Z)).
++ apply zlt_true. destruct (zlt (i + Z) zwordsize); omega.
++ rewrite zlt_false by (destruct (zlt (i + Z) zwordsize); omega).
+  rewrite bits_sign_ext by omega. f_equal. 
+  destruct (zlt (i + Z) zwordsize).
+  rewrite zlt_true by omega. omega.
+  rewrite zlt_false by omega. omega.
+- assert (A: unsigned (sub z y) = Z - Y).
+  { apply unsigned_repr. generalize wordsize_max_unsigned; omega. }
+  rewrite bits_sign_ext by omega.
+  rewrite bits_shr by (destruct (zlt i (zwordsize - Z)); omega).
+  rewrite A. rewrite zlt_false by (destruct (zlt (i + Z) zwordsize); omega).
+  f_equal. destruct (zlt i (zwordsize - Z)).
++ rewrite ! zlt_true by omega. omega.
++ rewrite ! zlt_false by omega. rewrite zlt_true by omega. omega.
+Qed.
+
+Corollary sign_ext_shr_shl:
   forall n x,
   0 < n < zwordsize ->
   let y := repr (zwordsize - n) in
   sign_ext n x = shr (shl x y) y.
 Proof.
   intros.
-  assert (unsigned y = zwordsize - n).
-    unfold y. apply unsigned_repr. generalize wordsize_max_unsigned. omega.
-  apply same_bits_eq; intros.
-  rewrite bits_sign_ext.
-  rewrite bits_shr; auto.
-  destruct (zlt i n).
-  rewrite zlt_true. rewrite bits_shl. rewrite zlt_false. f_equal. omega.
-  omega. omega. omega.
-  rewrite zlt_false. rewrite bits_shl. rewrite zlt_false. f_equal. omega.
-  omega. omega. omega. omega.
+  assert (A: unsigned y = zwordsize - n).
+  { unfold y. apply unsigned_repr. generalize wordsize_max_unsigned. omega. }
+  assert (B: ltu y iwordsize = true).
+  { unfold ltu; rewrite A, unsigned_repr_wordsize. apply zlt_true; omega. }
+  rewrite shr_shl by auto. unfold ltu; rewrite zlt_false by omega.
+  rewrite sub_idem, shr_zero. f_equal. rewrite A; omega.
 Qed.
 
 (** [zero_ext n x] is the unique integer congruent to [x] modulo [2^n]
@@ -3641,6 +3692,67 @@ Proof.
   unfold shr, shr'. rewrite E; auto.
   unfold shr at 1, shr'. rewrite <- B; auto.
   unfold shr, shr'; rewrite <- A; auto.
+Qed.
+
+Theorem shru'_shl':
+  forall x y z, Int.ltu y iwordsize' = true -> Int.ltu z iwordsize' = true ->
+  shru' (shl' x y) z =
+  if Int.ltu z y then shl' (zero_ext (zwordsize - Int.unsigned y) x) (Int.sub y z)
+                 else zero_ext (zwordsize - Int.unsigned z) (shru' x (Int.sub z y)).
+Proof.
+  intros. apply Int.ltu_inv in H; apply Int.ltu_inv in H0.
+  change (Int.unsigned iwordsize') with zwordsize in *.
+  unfold Int.ltu. set (Y := Int.unsigned y) in *; set (Z := Int.unsigned z) in *.
+  apply same_bits_eq; intros. rewrite bits_shru' by auto. fold Z.
+  destruct (zlt Z Y).
+- assert (A: Int.unsigned (Int.sub y z) = Y - Z).
+  { apply Int.unsigned_repr. assert (zwordsize < Int.max_unsigned) by reflexivity. omega. }
+  symmetry; rewrite bits_shl', A by omega.
+  destruct (zlt (i + Z) zwordsize).
++ rewrite bits_shl' by omega. fold Y.
+  destruct (zlt i (Y - Z)); [rewrite zlt_true by omega|rewrite zlt_false by omega]; auto.
+  rewrite bits_zero_ext by omega. rewrite zlt_true by omega. f_equal; omega.
++ rewrite bits_zero_ext by omega. rewrite ! zlt_false by omega. auto.
+- assert (A: Int.unsigned (Int.sub z y) = Z - Y).
+  { apply Int.unsigned_repr. assert (zwordsize < Int.max_unsigned) by reflexivity. omega. }
+  rewrite bits_zero_ext, bits_shru', A by omega.
+  destruct (zlt (i + Z) zwordsize); [rewrite zlt_true by omega|rewrite zlt_false by omega]; auto.
+  rewrite bits_shl' by omega. fold Y.
+  destruct (zlt (i + Z) Y).
++ rewrite zlt_false by omega. auto.
++ rewrite zlt_true by omega. f_equal; omega.
+Qed.
+
+Theorem shr'_shl':
+  forall x y z, Int.ltu y iwordsize' = true -> Int.ltu z iwordsize' = true ->
+  shr' (shl' x y) z =
+  if Int.ltu z y then shl' (sign_ext (zwordsize - Int.unsigned y) x) (Int.sub y z)
+                 else sign_ext (zwordsize - Int.unsigned z) (shr' x (Int.sub z y)).
+Proof.
+  intros. apply Int.ltu_inv in H; apply Int.ltu_inv in H0.
+  change (Int.unsigned iwordsize') with zwordsize in *.
+  unfold Int.ltu. set (Y := Int.unsigned y) in *; set (Z := Int.unsigned z) in *.
+  apply same_bits_eq; intros. rewrite bits_shr' by auto. fold Z.
+  rewrite bits_shl' by (destruct (zlt (i + Z) zwordsize); omega). fold Y.
+  destruct (zlt Z Y).
+- assert (A: Int.unsigned (Int.sub y z) = Y - Z).
+  { apply Int.unsigned_repr. assert (zwordsize < Int.max_unsigned) by reflexivity. omega. }
+  rewrite bits_shl', A by omega.
+  destruct (zlt i (Y - Z)).
++ apply zlt_true. destruct (zlt (i + Z) zwordsize); omega.
++ rewrite zlt_false by (destruct (zlt (i + Z) zwordsize); omega).
+  rewrite bits_sign_ext by omega. f_equal. 
+  destruct (zlt (i + Z) zwordsize).
+  rewrite zlt_true by omega. omega.
+  rewrite zlt_false by omega. omega.
+- assert (A: Int.unsigned (Int.sub z y) = Z - Y).
+  { apply Int.unsigned_repr. assert (zwordsize < Int.max_unsigned) by reflexivity. omega. }
+  rewrite bits_sign_ext by omega.
+  rewrite bits_shr' by (destruct (zlt i (zwordsize - Z)); omega).
+  rewrite A. rewrite zlt_false by (destruct (zlt (i + Z) zwordsize); omega).
+  f_equal. destruct (zlt i (zwordsize - Z)).
++ rewrite ! zlt_true by omega. omega.
++ rewrite ! zlt_false by omega. rewrite zlt_true by omega. omega.
 Qed.
 
 Lemma shl'_zero_ext:

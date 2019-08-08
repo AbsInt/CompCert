@@ -237,6 +237,11 @@ let rv64 =
                    struct_passing_style = SP_ref_callee; (* Wrong *)
                    struct_return_style = SR_ref } (* to check *)
 
+let aarch64 =
+  { i32lpll64 with name = "aarch64";
+                   struct_passing_style = SP_ref_callee; (* Wrong *)
+                   struct_return_style = SR_ref } (* Wrong *)
+
 (* Add GCC extensions re: sizeof and alignof *)
 
 let gcc_extensions c =

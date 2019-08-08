@@ -1257,8 +1257,8 @@ Proof.
   econstructor; eauto.
   econstructor; eauto. apply set_var_lessdef; auto.
 - (* store *)
-  exploit sel_expr_correct. eauto. eauto. eexact H. eauto. eauto. intros [vaddr' [A B]].
-  exploit sel_expr_correct. eauto. eauto. eexact H0. eauto. eauto. intros [v' [C D]].
+  exploit sel_expr_correct. try apply LINK. try apply HF. eexact H. eauto. eauto. intros [vaddr' [A B]].
+  exploit sel_expr_correct. try apply LINK. try apply HF. eexact H0. eauto. eauto. intros [v' [C D]].
   exploit Mem.storev_extends; eauto. intros [m2' [P Q]].
   left; econstructor; split.
   eapply eval_store; eauto.

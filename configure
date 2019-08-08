@@ -55,10 +55,12 @@ Supported targets:
   x86_64-macosx        (x86 64 bits, MacOS X)
   rv32-linux           (RISC-V 32 bits, Linux)
   rv64-linux           (RISC-V 64 bits, Linux)
+  aarch64-linux        (AArch64, i.e. ARMv8 in 64-bit mode, Linux)
   manual               (edit configuration file by hand)
 
 For x86 targets, the "x86_32-" prefix can also be written "ia32-" or "i386-".
 For x86 targets, the "x86_64-" prefix can also be written "amd64-".
+For AArch64 targets, the "aarch64-" prefix can also be written "arm64-".
 
 For PowerPC targets, the "ppc-" prefix can be refined into:
   ppc64-               PowerPC 64 bits
@@ -175,6 +177,8 @@ case "$target" in
       arch="riscV"; model="32"; endianness="little"; bitsize=32;;
   rv64-*)
       arch="riscV"; model="64"; endianness="little"; bitsize=64;;
+  aarch64-*|arm64-*)
+      arch="aarch64"; model="default"; endianness="little"; bitsize=64;;
   manual)
       ;;
   "")
@@ -426,6 +430,29 @@ if test "$arch" = "riscV"; then
   cprepro_options="$model_options -std=c99 -U__GNUC__ -E"
   libmath="-lm"
   system="linux"
+fi
+
+#
+# AArch64 (ARMv8 64 bits) Target Configuration
+#
+if test "$arch" = "aarch64"; then
+  case "$target" in
+    linux)
+        abi="standard"
+        casm="${toolprefix}gcc"
+        casm_options="-c"
+        cc="${toolprefix}gcc"
+        clinker="${toolprefix}gcc"
+        clinker_options=""
+        cprepro="${toolprefix}gcc"
+        cprepro_options="-std=c99 -U__GNUC__ -E"
+        libmath="-lm"
+        system="linux";;
+    *)
+        echo "Error: invalid eabi/system '$target' for architecture AArch64." 1>&2
+        echo "$usage" 1>&2
+        exit 2;;
+  esac
 fi
 
 
@@ -690,6 +717,8 @@ cat >> Makefile.config <<'EOF'
 # ARCH=powerpc
 # ARCH=arm
 # ARCH=x86
+# ARCH=riscV
+# ARCH=aarch6
 ARCH=
 
 # Hardware variant
@@ -703,23 +732,24 @@ ARCH=
 # MODEL=armv7m      # for ARM
 # MODEL=32sse2      # for x86 in 32-bit mode
 # MODEL=64          # for x86 in 64-bit mode
+# MODEL=default     # for others
 MODEL=
 
 # Target ABI
 # ABI=eabi          # for PowerPC / Linux and other SVR4 or EABI platforms
 # ABI=eabi          # for ARM
 # ABI=hardfloat     # for ARM
-# ABI=standard      # for x86
+# ABI=standard      # for others
 ABI=
 
 # Target bit width
-# BITSIZE=64        # for x86 in 64-bit mode
+# BITSIZE=64        # for x86 in 64-bit mode, RiscV in 64-bit mode, AArch64
 # BITSIZE=32        # otherwise
 BITSIZE=
 
 # Target endianness
 # ENDIANNESS=big     # for ARM or PowerPC
-# ENDIANNESS=little  # for ARM or x86
+# ENDIANNESS=little  # for ARM or x86 or RiscV or AArch64
 ENDIANNESS=
 
 # Target operating system and development environment
@@ -728,7 +758,7 @@ ENDIANNESS=
 # SYSTEM=linux
 # SYSTEM=diab
 #
-# Possible choices for ARM:
+# Possible choices for ARM, AArch64, RiscV:
 # SYSTEM=linux
 #
 # Possible choices for x86:

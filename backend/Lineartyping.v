@@ -321,7 +321,7 @@ Local Opaque mreg_type.
   + (* other ops *)
     destruct (type_of_operation op) as [ty_args ty_res] eqn:TYOP. InvBooleans.
     econstructor; eauto.
-    apply wt_setreg; auto. eapply Val.has_subtype; eauto.
+    apply wt_setreg. eapply Val.has_subtype; eauto.
     change ty_res with (snd (ty_args, ty_res)). rewrite <- TYOP. eapply type_of_operation_sound; eauto.
     red; intros; subst op. simpl in ISMOVE.
     destruct args; try discriminate. destruct args; discriminate.

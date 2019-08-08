@@ -1,0 +1,478 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*         Xavier Leroy, Collège de France and INRIA Paris             *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(** Instruction selection for 64-bit integer operations *)
+
+Require Import Coqlib Zbits.
+Require Import Compopts AST Integers Floats.
+Require Import Op CminorSel SelectOp.
+
+Local Open Scope cminorsel_scope.
+
+(** ** Constants **)
+
+Definition longconst (n: int64) : expr :=
+  Eop (Olongconst n) Enil.
+
+(** ** Conversions *)
+
+Nondetfunction intoflong (e: expr) :=
+  match e with
+  | Eop (Olongconst n) Enil => Eop (Ointconst (Int.repr (Int64.unsigned n))) Enil
+  | _ =>  Eop Olowlong (e ::: Enil)
+  end.
+
+Nondetfunction longofint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => longconst (Int64.repr (Int.signed n))
+  | _ =>  Eop (Oextend Xsgn32 (mk_amount64 Int.zero)) (e ::: Enil)
+  end.
+
+Nondetfunction longofintu (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => longconst (Int64.repr (Int.unsigned n))
+  | _ =>  Eop (Oextend Xuns32 (mk_amount64 Int.zero)) (e ::: Enil)
+  end.
+
+(** ** Integer addition and pointer addition *)
+
+Nondetfunction addlimm (n: int64) (e: expr) :=
+  if Int64.eq n Int64.zero then e else
+  match e with
+  | Eop (Olongconst m) Enil => longconst (Int64.add n m)
+  | Eop (Oaddrsymbol s m) Enil => Eop (Oaddrsymbol s (Ptrofs.add (Ptrofs.of_int64 n) m)) Enil
+  | Eop (Oaddrstack m) Enil => Eop (Oaddrstack (Ptrofs.add (Ptrofs.of_int64 n) m)) Enil
+  | Eop (Oaddlimm m) (t ::: Enil) => Eop (Oaddlimm(Int64.add n m)) (t ::: Enil)
+  | _ => Eop (Oaddlimm n) (e ::: Enil)
+  end.
+
+Nondetfunction addl (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => addlimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => addlimm n2 t1
+  | Eop (Oaddlimm n1) (t1:::Enil), Eop (Oaddlimm n2) (t2:::Enil) =>
+      addlimm (Int64.add n1 n2) (Eop Oaddl (t1:::t2:::Enil))
+  | Eop (Oaddlimm n1) (t1:::Enil), Eop (Oaddrstack n2) Enil =>
+      Eop Oaddl (Eop (Oaddrstack (Ptrofs.add (Ptrofs.of_int64 n1) n2)) Enil ::: t1 ::: Enil)
+  | Eop (Oaddrstack n1) Enil, Eop (Oaddlimm n2) (t2:::Enil) =>
+      Eop Oaddl (Eop (Oaddrstack (Ptrofs.add n1 (Ptrofs.of_int64 n2))) Enil ::: t2 ::: Enil)
+  | Eop (Oaddlimm n1) (t1:::Enil), t2 =>
+      addlimm n1 (Eop Oaddl (t1:::t2:::Enil))
+  | t1, Eop (Oaddlimm n2) (t2:::Enil) =>
+      addlimm n2 (Eop Oaddl (t1:::t2:::Enil))
+  | Eop (Oshiftl s a) (t1:::Enil), t2 ?? arith_shift s =>
+      Eop (Oaddlshift s a) (t2 ::: t1 ::: Enil)
+  | t1, Eop (Oshiftl s a) (t2:::Enil) ?? arith_shift s =>
+      Eop (Oaddlshift s a) (t1 ::: t2 ::: Enil)
+  | Eop (Oextend x a) (t1:::Enil), t2 =>
+      Eop (Oaddlext x a) (t2 ::: t1 ::: Enil)
+  | t1, Eop (Oextend x a) (t2:::Enil) =>
+      Eop (Oaddlext x a) (t1 ::: t2 ::: Enil)
+  | Eop Omull (t1:::t2:::Enil), t3 =>
+      Eop Omulladd (t3:::t1:::t2:::Enil)
+  | t1, Eop Omull (t2:::t3:::Enil) =>
+      Eop Omulladd (t1:::t2:::t3:::Enil)
+  | _, _ => Eop Oaddl (e1:::e2:::Enil)
+  end.
+
+(** ** Opposite *)
+
+Nondetfunction negl (e: expr) :=
+  match e with
+  | Eop (Olongconst n) Enil => Eop (Olongconst (Int64.neg n)) Enil
+  | Eop (Oshiftl s a) (t1:::Enil) ?? arith_shift s => Eop (Oneglshift s a) (t1:::Enil)
+  | _ =>  Eop Onegl (e ::: Enil)
+  end.
+
+(** ** Integer and pointer subtraction *)
+
+Nondetfunction subl (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | t1, Eop (Olongconst n2) Enil =>
+      addlimm (Int64.neg n2) t1
+  | Eop (Oaddlimm n1) (t1:::Enil), Eop (Oaddlimm n2) (t2:::Enil) =>
+      addlimm (Int64.sub n1 n2) (Eop Osubl (t1:::t2:::Enil))
+  | Eop (Oaddlimm n1) (t1:::Enil), t2 =>
+      addlimm n1 (Eop Osubl (t1:::t2:::Enil))
+  | t1, Eop (Oaddlimm n2) (t2:::Enil) =>
+      addlimm (Int64.neg n2) (Eop Osubl (t1:::t2:::Enil))
+  | t1, Eop (Oshiftl s a) (t2:::Enil) ?? arith_shift s =>
+      Eop (Osublshift s a) (t1:::t2::: Enil)
+  | t1, Eop (Oextend x a) (t2:::Enil) =>
+      Eop (Osublext x a) (t1 ::: t2 ::: Enil)
+  | t1, Eop Omull (t2:::t3:::Enil) =>
+      Eop Omullsub (t1:::t2:::t3:::Enil)
+  | _, _ => Eop Osubl (e1:::e2:::Enil)
+  end.
+
+(** ** Immediate shift left *)
+
+Definition shllimm_base (e1: expr) (n: int) :=
+  Eop (Oshiftl Slsl (mk_amount64 n)) (e1 ::: Enil).
+
+Nondetfunction shllimm (e1: expr) (n: int) :=
+  if Int.eq n Int.zero then
+    e1
+  else if negb (Int.ltu n Int64.iwordsize') then
+    Eop Oshll (e1 ::: Eop (Ointconst n) Enil ::: Enil)
+  else match e1 with
+    | Eop (Olongconst n1) Enil =>
+        Eop (Olongconst (Int64.shl' n1 n)) Enil
+    | Eop (Oshiftl Slsl a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int64.iwordsize'
+        then shllimm_base t1 (Int.add a n)
+        else shllimm_base e1 n
+    | Eop (Ozextl s) (t1:::Enil) =>
+        Eop (Oshllzext s (mk_amount64 n)) (t1:::Enil)
+    | Eop (Osextl s) (t1:::Enil) =>
+        Eop (Oshllsext s (mk_amount64 n)) (t1:::Enil)
+    | Eop (Oshllzext s a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int64.iwordsize'
+        then Eop (Oshllzext s (mk_amount64 (Int.add a n))) (t1:::Enil)
+        else shllimm_base e1 n
+    | Eop (Oshllsext s a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int64.iwordsize'
+        then Eop (Oshllsext s (mk_amount64 (Int.add a n))) (t1:::Enil)
+        else shllimm_base e1 n
+    | Eop (Oextend x a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int64.iwordsize'
+        then Eop (Oextend x (mk_amount64 (Int.add a n))) (t1:::Enil)
+        else shllimm_base e1 n
+    | _ =>
+        shllimm_base e1 n
+  end.
+
+(** ** Immediate shift right (logical) *)
+
+Definition shrluimm_base (e1: expr) (n: int) :=
+  Eop (Oshiftl Slsr (mk_amount64 n)) (e1 ::: Enil).
+
+Nondetfunction shrluimm (e1: expr) (n: int) :=
+  if Int.eq n Int.zero then
+    e1
+  else if negb (Int.ltu n Int64.iwordsize') then
+    Eop Oshrlu (e1 ::: Eop (Ointconst n) Enil ::: Enil)
+  else match e1 with
+    | Eop (Olongconst n1) Enil =>
+        Eop (Olongconst (Int64.shru' n1 n)) Enil
+    | Eop (Oshiftl Slsl a) (t1:::Enil) =>
+        if Int.ltu n a
+        then Eop (Oshllzext (Int64.zwordsize - Int.unsigned a) (mk_amount64 (Int.sub a n))) (t1:::Enil)
+        else Eop (Ozextshrl (mk_amount64 (Int.sub n a)) (Int64.zwordsize - Int.unsigned n)) (t1:::Enil)
+    | Eop (Oshiftl Slsr a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int64.iwordsize'
+        then shrluimm_base t1 (Int.add a n)
+        else shrluimm_base e1 n
+    | Eop (Ozextl s) (t1:::Enil) =>
+        if zlt (Int.unsigned n) s
+        then Eop (Ozextshrl (mk_amount64 n) (s - Int.unsigned n)) (t1:::Enil)
+        else Eop (Olongconst Int64.zero) Enil
+    | _ =>
+        shrluimm_base e1 n
+    end.
+
+(** ** Immediate shift right (arithmetic) *)
+
+Definition shrlimm_base (e1: expr) (n: int) :=
+  Eop (Oshiftl Sasr (mk_amount64 n)) (e1 ::: Enil).
+
+Nondetfunction shrlimm (e1: expr) (n: int) :=
+  if Int.eq n Int.zero then
+    e1
+  else if negb (Int.ltu n Int64.iwordsize') then
+    Eop Oshrl (e1 ::: Eop (Ointconst n) Enil ::: Enil)
+  else match e1 with
+    | Eop (Olongconst n1) Enil =>
+        Eop (Olongconst (Int64.shr' n1 n)) Enil
+    | Eop (Oshiftl Slsl a) (t1:::Enil) =>
+        if Int.ltu n a
+        then Eop (Oshllsext (Int64.zwordsize - Int.unsigned a) (mk_amount64 (Int.sub a n))) (t1:::Enil)
+        else Eop (Osextshrl (mk_amount64 (Int.sub n a)) (Int64.zwordsize - Int.unsigned n)) (t1:::Enil)
+    | Eop (Oshiftl Sasr a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int64.iwordsize'
+        then shrlimm_base t1 (Int.add a n)
+        else shrlimm_base e1 n
+    | Eop (Osextl s) (t1:::Enil) =>
+        if zlt (Int.unsigned n) s && zlt s Int64.zwordsize
+        then Eop (Osextshrl (mk_amount64 n) (s - Int.unsigned n)) (t1:::Enil)
+        else shrlimm_base e1 n
+    | _ =>
+        shrlimm_base e1 n
+    end.
+
+(** ** Integer multiply *)
+
+Definition mullimm_base (n1: int64) (e2: expr) :=
+  match Int64.one_bits' n1 with
+  | i :: nil =>
+      shllimm e2 i
+  | i :: j :: nil =>
+      Elet e2 (addl (shllimm (Eletvar 0) i) (shllimm (Eletvar 0) j))
+  | _ =>
+      Eop Omull (Eop (Olongconst n1) Enil ::: e2 ::: Enil)
+  end.
+
+Nondetfunction mullimm (n1: int64) (e2: expr) :=
+  if Int64.eq n1 Int64.zero then Eop (Olongconst Int64.zero) Enil
+  else if Int64.eq n1 Int64.one then e2
+  else match e2 with
+  | Eop (Olongconst n2) Enil => Eop (Olongconst (Int64.mul n1 n2)) Enil
+  | Eop (Oaddlimm n2) (t2:::Enil) => addlimm (Int64.mul n1 n2) (mullimm_base n1 t2)
+  | _ => mullimm_base n1 e2
+  end.
+
+Nondetfunction mull (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => mullimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => mullimm n2 t1
+  | _, _ => Eop Omull (e1:::e2:::Enil)
+  end.
+
+Definition mullhs (e1: expr) (n2: int64) :=
+  Eop Omullhs (e1 ::: longconst n2 ::: Enil).
+
+Definition mullhu (e1: expr) (n2: int64) :=
+  Eop Omullhu (e1 ::: longconst n2 ::: Enil).
+
+(** ** Integer conversions *)
+
+Nondetfunction zero_ext_l (sz: Z) (e: expr) :=
+  match e with
+  | Eop (Olongconst n) Enil => Eop (Olongconst (Int64.zero_ext sz n)) Enil
+  | Eop (Oshiftl Slsr a) (t1:::Enil) => Eop (Ozextshrl a sz) (t1:::Enil)
+  | Eop (Oshiftl Slsl a) (t1:::Enil) =>
+      if zlt (Int.unsigned a) sz
+      then Eop (Oshllzext (sz - Int.unsigned a) a) (t1:::Enil)
+      else Eop (Ozextl sz) (e:::Enil)
+  | _ => Eop (Ozextl sz) (e:::Enil)
+  end.
+
+(** ** Bitwise not *)
+
+Nondetfunction notl (e: expr) :=
+  match e with
+  | Eop (Olongconst n) Enil => Eop (Olongconst (Int64.not n)) Enil
+  | Eop (Oshiftl s a) (t1:::Enil) => Eop (Onotlshift s a) (t1:::Enil)
+  | Eop Onotl (t1:::Enil) => t1
+  | Eop (Onotlshift s a) (t1:::Enil) => Eop (Oshiftl s a) (t1:::Enil)
+  | Eop Obicl (t1:::t2:::Enil) => Eop Oornl (t2:::t1:::Enil)
+  | Eop Oornl (t1:::t2:::Enil) => Eop Obicl (t2:::t1:::Enil)
+  | Eop Oxorl (t1:::t2:::Enil) => Eop Oeqvl (t1:::t2:::Enil)
+  | Eop Oeqvl (t1:::t2:::Enil) => Eop Oxorl (t1:::t2:::Enil)
+  | _ => Eop Onotl (e:::Enil)
+  end.
+
+(** ** Bitwise and *)
+
+Definition andlimm_base (n1: int64) (e2: expr) :=
+  if Int64.eq n1 Int64.zero then Eop (Olongconst Int64.zero) Enil else
+  if Int64.eq n1 Int64.mone then e2 else
+  match Z_is_power2m1 (Int64.unsigned n1) with
+  | Some s => zero_ext_l s e2
+  | None => Eop (Oandlimm n1) (e2 ::: Enil)
+  end.
+
+Nondetfunction andlimm (n1: int64) (e2: expr) :=
+  match e2 with
+  | Eop (Olongconst n2) Enil => Eop (Olongconst (Int64.and n1 n2)) Enil
+  | Eop (Oandlimm n2) (t2:::Enil) => andlimm_base (Int64.and n1 n2) t2
+  | Eop (Ozextl s) (t2:::Enil) =>
+      if zle 0 s
+      then andlimm_base (Int64.and n1 (Int64.repr (two_p s - 1))) t2
+      else andlimm_base n1 e2
+  | _ => andlimm_base n1 e2
+  end.
+
+Nondetfunction andl (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => andlimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => andlimm n2 t1
+  | Eop Onotl (t1:::Enil), t2 => Eop Obicl (t2:::t1:::Enil)
+  | t1, Eop Onotl (t2:::Enil) => Eop Obicl (t1:::t2:::Enil)
+  | Eop (Onotlshift s a) (t1:::Enil), t2 => Eop (Obiclshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Onotlshift s a) (t2:::Enil) => Eop (Obiclshift s a) (t1:::t2:::Enil)
+  | Eop (Oshiftl s a) (t1:::Enil), t2 => Eop (Oandlshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Oshiftl s a) (t2:::Enil) => Eop (Oandlshift s a) (t1:::t2:::Enil)
+  | _, _ => Eop Oandl (e1:::e2:::Enil)
+  end.
+
+(** ** Bitwise or *)
+
+Nondetfunction orlimm (n1: int64) (e2: expr) :=
+  if Int64.eq n1 Int64.zero then e2
+  else if Int64.eq n1 Int64.mone then Eop (Olongconst Int64.mone) Enil
+  else match e2 with
+  | Eop (Olongconst n2) Enil => Eop (Olongconst (Int64.or n1 n2)) Enil
+  | Eop (Oorlimm n2) (t2:::Enil) => Eop (Oorlimm (Int64.or n1 n2)) (t2:::Enil)
+  | _ => Eop (Oorlimm n1) (e2:::Enil)
+  end.
+
+Nondetfunction orl (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => orlimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => orlimm n2 t1
+  | Eop Onotl (t1:::Enil), t2 => Eop Oornl (t2:::t1:::Enil)
+  | t1, Eop Onotl (t2:::Enil) => Eop Oornl (t1:::t2:::Enil)
+  | Eop (Onotlshift s a) (t1:::Enil), t2 => Eop (Oornlshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Onotlshift s a) (t2:::Enil) => Eop (Oornlshift s a) (t1:::t2:::Enil)
+  | Eop (Oshiftl Slsl a1) (t1:::Enil), Eop (Oshiftl Slsr a2) (t2:::Enil) =>
+      if Int.eq (Int.add a1 a2) Int64.iwordsize' && same_expr_pure t1 t2
+      then Eop (Oshiftl Sror a2) (t2:::Enil)
+      else Eop (Oorlshift Slsr a2) (Eop (Oshiftl Slsl a1) (t1:::Enil):::t2:::Enil)
+  | Eop (Oshiftl Slsr a1) (t1:::Enil), Eop (Oshiftl Slsl a2) (t2:::Enil) =>
+      if Int.eq (Int.add a2 a1) Int64.iwordsize' && same_expr_pure t1 t2
+      then Eop (Oshiftl Sror a1) (t1:::Enil)
+      else Eop (Oorlshift Slsl a2) (Eop (Oshiftl Slsr a1) (t1:::Enil):::t2:::Enil)
+  | Eop (Oshiftl s a) (t1:::Enil), t2 => Eop (Oorlshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Oshiftl s a) (t2:::Enil) => Eop (Oorlshift s a) (t1:::t2:::Enil)
+  | _, _ => Eop Oorl (e1:::e2:::Enil)
+  end.
+
+(** ** Bitwise xor *)
+
+Definition xorlimm_base (n1: int64) (e2: expr) :=
+  if Int64.eq n1 Int64.zero then e2 else
+  if Int64.eq n1 Int64.mone then notl e2 else
+  Eop (Oxorlimm n1) (e2:::Enil).  
+
+Nondetfunction xorlimm (n1: int64) (e2: expr) :=
+  match e2 with
+  | Eop (Olongconst n2) Enil => Eop (Olongconst (Int64.xor n1 n2)) Enil
+  | Eop (Oxorlimm n2) (t2:::Enil) => xorlimm_base (Int64.xor n1 n2) t2
+  | _ => xorlimm_base n1 e2
+  end.
+
+Nondetfunction xorl (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 => xorlimm n1 t2
+  | t1, Eop (Olongconst n2) Enil => xorlimm n2 t1
+  | Eop Onotl (t1:::Enil), t2 => Eop Oeqvl (t2:::t1:::Enil)
+  | t1, Eop Onotl (t2:::Enil) => Eop Oeqvl (t1:::t2:::Enil)
+  | Eop (Onotlshift s a) (t1:::Enil), t2 => Eop (Oeqvlshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Onotlshift s a) (t2:::Enil) => Eop (Oeqvlshift s a) (t1:::t2:::Enil)
+  | Eop (Oshiftl s a) (t1:::Enil), t2 => Eop (Oxorlshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Oshiftl s a) (t2:::Enil) => Eop (Oxorlshift s a) (t1:::t2:::Enil)
+  | _, _ => Eop Oxorl (e1:::e2:::Enil)
+  end.
+
+(** ** Integer division and modulus *)
+
+Definition modl_aux (divop: operation) (e1 e2: expr) :=
+  Elet e1
+    (Elet (lift e2)
+      (Eop Omullsub (Eletvar 1 :::
+                     Eop divop (Eletvar 1 ::: Eletvar 0 ::: Enil) :::
+                     Eletvar 0 :::
+                     Enil))).
+
+Definition divls_base (e1: expr) (e2: expr) := Eop Odivl (e1:::e2:::Enil).
+Definition modls_base := modl_aux Odivl.
+Definition divlu_base (e1: expr) (e2: expr) := Eop Odivlu (e1:::e2:::Enil).
+Definition modlu_base := modl_aux Odivlu.
+
+Definition shrxlimm (e1: expr) (n2: int) :=
+  if Int.eq n2 Int.zero then e1 else Eop (Oshrlximm n2) (e1:::Enil).
+
+(** ** General shifts *)
+
+Nondetfunction shll (e1: expr) (e2: expr) :=
+  match e2 with
+  | Eop (Ointconst n2) Enil => shllimm e1 n2
+  | _ => Eop Oshll (e1:::e2:::Enil)
+  end.
+
+Nondetfunction shrl (e1: expr) (e2: expr) :=
+  match e2 with
+  | Eop (Ointconst n2) Enil => shrlimm e1 n2
+  | _ => Eop Oshrl (e1:::e2:::Enil)
+  end.
+
+Nondetfunction shrlu (e1: expr) (e2: expr) :=
+  match e2 with
+  | Eop (Ointconst n2) Enil => shrluimm e1 n2
+  | _ => Eop Oshrlu (e1:::e2:::Enil)
+  end.
+
+(** ** Comparisons *)
+
+Nondetfunction complimm (default: comparison -> int64 -> condition)
+                        (sem: comparison -> int64 -> int64 -> bool)
+                        (c: comparison) (e1: expr) (n2: int64) :=
+  match c, e1 with
+  | c, Eop (Olongconst n1) Enil =>
+      Eop (Ointconst (if sem c n1 n2 then Int.one else Int.zero)) Enil
+  | Ceq, Eop (Oandlimm m) (t1:::Enil) =>
+      if Int64.eq n2 Int64.zero
+      then Eop (Ocmp (Cmasklzero m)) (t1:::Enil)
+      else Eop (Ocmp (default c n2)) (e1:::Enil)
+  | Cne, Eop (Oandlimm m) (t1:::Enil) =>
+      if Int64.eq n2 Int64.zero
+      then Eop (Ocmp (Cmasklnotzero m)) (t1:::Enil)
+      else Eop (Ocmp (default c n2)) (e1:::Enil)
+  | _, _ =>
+      Eop (Ocmp (default c n2)) (e1:::Enil)
+  end.
+
+Nondetfunction cmpl (c: comparison) (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 =>
+      complimm Ccomplimm Int64.cmp (swap_comparison c) t2 n1
+  | t1, Eop (Olongconst n2) Enil =>
+      complimm Ccomplimm Int64.cmp c t1 n2
+  | Eop (Oshiftl s a) (t1:::Enil), t2 ?? arith_shift s =>
+      Eop (Ocmp (Ccomplshift (swap_comparison c) s a)) (t2:::t1:::Enil)
+  | t1, Eop (Oshiftl s a) (t2:::Enil) ?? arith_shift s =>
+      Eop (Ocmp (Ccomplshift c s a)) (t1:::t2:::Enil)
+  | _, _ =>
+      Eop (Ocmp (Ccompl c)) (e1:::e2:::Enil)
+  end.
+
+Nondetfunction cmplu (c: comparison) (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Olongconst n1) Enil, t2 =>
+      complimm Ccompluimm Int64.cmpu (swap_comparison c) t2 n1
+  | t1, Eop (Olongconst n2) Enil =>
+      complimm Ccompluimm Int64.cmpu c t1 n2
+  | Eop (Oshiftl s a) (t1:::Enil), t2 ?? arith_shift s =>
+      Eop (Ocmp (Ccomplushift (swap_comparison c) s a)) (t2:::t1:::Enil)
+  | t1, Eop (Oshiftl s a) (t2:::Enil) ?? arith_shift s =>
+      Eop (Ocmp (Ccomplushift c s a)) (t1:::t2:::Enil)
+  | _, _ =>
+      Eop (Ocmp (Ccomplu c)) (e1:::e2:::Enil)
+  end.
+
+(** ** Floating-point conversions *)
+
+Definition longoffloat (e: expr) :=
+  Eop Olongoffloat (e:::Enil).
+
+Definition longuoffloat (e: expr) :=
+  Eop Olonguoffloat (e:::Enil).
+
+Definition floatoflong (e: expr) := 
+  Eop Ofloatoflong (e:::Enil).
+
+Definition floatoflongu (e: expr) := 
+  Eop Ofloatoflongu (e:::Enil).
+
+Definition longofsingle (e: expr) := 
+  Eop Olongofsingle (e:::Enil).
+
+Definition longuofsingle (e: expr) := 
+  Eop Olonguofsingle (e:::Enil).
+
+Definition singleoflong (e: expr) := 
+  Eop Osingleoflong (e:::Enil).
+
+Definition singleoflongu (e: expr) := 
+  Eop Osingleoflongu (e:::Enil).
+
