@@ -554,6 +554,26 @@ let expand_builtin_inline name args res =
       emit (Plabel lbl2)
   | "__builtin_cmpb",  [BA(IR a1); BA(IR a2)], BR(IR res) ->
       emit (Pcmpb (res,a1,a2))
+  |  "__builtin_bswap64", [BA_splitlong(BA(IR ah), BA(IR al))],
+                          BR_splitlong(BR(IR rh), BR(IR rl))->
+      assert (not Archi.ppc64);
+      emit (Pstwu(ah, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Pstwu(al, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Plwbrx(rh, GPR0, GPR1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8);
+      emit (Plwbrx(rl, GPR0, GPR1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
+  |  "__builtin_bswap64", [BA(IR a1)], BR(IR res) ->
+      assert (Archi.ppc64);
+      emit (Pstdu(a1, Cint _m8, GPR1));
+      emit (Pcfi_adjust _8);
+      emit (Pldbrx(res, GPR0, GPR1));
+      emit (Paddi(GPR1, GPR1, Cint _8));
+      emit (Pcfi_adjust _m8)
   | ("__builtin_bswap" | "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
       emit (Pstwu(a1, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);

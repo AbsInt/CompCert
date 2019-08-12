@@ -31,8 +31,6 @@ let builtins = {
   ];
   builtin_functions = [
     (* Integer arithmetic *)
-    "__builtin_bswap64",
-      (TInt(IULongLong, []), [TInt(IULongLong, [])], false);
     "__builtin_clz",
       (TInt(IInt, []), [TInt(IUInt, [])], false);
     "__builtin_clzl",

@@ -304,6 +304,11 @@ let expand_builtin_va_start r =
 let expand_builtin_inline name args res =
   match name, args, res with
   (* Integer arithmetic *)
+  | "__builtin_bswap64" , [BA_splitlong(BA(IR ah), BA(IR al))],
+                          BR_splitlong(BR(IR rh), BR(IR rl)) ->
+     expand_int64_arith (rl = al) rl (fun rl ->
+        emit (Prev (rl, ah));
+        emit (Prev (rh, al)))
   | ("__builtin_bswap" | "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
      emit (Prev (res, a1))
   | "__builtin_bswap16", [BA(IR a1)], BR(IR res) ->

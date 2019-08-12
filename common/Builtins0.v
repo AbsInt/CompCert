@@ -16,7 +16,7 @@
 (** Associating semantics to built-in functions *)
 
 Require Import String Coqlib.
-Require Import AST Integers Floats Values.
+Require Import AST Integers Floats Values Memdata.
 
 (** This module provides definitions and mechanisms to associate semantics
   with names of built-in functions.
@@ -337,6 +337,9 @@ Inductive standard_builtin : Type :=
   | BI_addl
   | BI_subl
   | BI_mull
+  | BI_i16_bswap
+  | BI_i32_bswap
+  | BI_i64_bswap
   | BI_i64_umulh
   | BI_i64_smulh
   | BI_i64_sdiv
@@ -366,6 +369,10 @@ Definition standard_builtin_table : list (string * standard_builtin) :=
  :: ("__builtin_addl", BI_addl)
  :: ("__builtin_subl", BI_subl)
  :: ("__builtin_mull", BI_mull)
+ :: ("__builtin_bswap16", BI_i16_bswap)
+ :: ("__builtin_bswap", BI_i32_bswap)
+ :: ("__builtin_bswap32", BI_i32_bswap)
+ :: ("__builtin_bswap64", BI_i64_bswap)
  :: ("__compcert_i64_umulh", BI_i64_umulh)
  :: ("__compcert_i64_smulh", BI_i64_smulh)
  :: ("__compcert_i64_sdiv", BI_i64_sdiv)
@@ -396,6 +403,12 @@ Definition standard_builtin_sig (b: standard_builtin) : signature :=
       mksignature (Tlong :: Tlong :: nil) (Some Tlong) cc_default
   | BI_mull =>
       mksignature (Tint :: Tint :: nil) (Some Tlong) cc_default
+  | BI_i32_bswap =>
+      mksignature (Tint :: nil) (Some Tint) cc_default
+  | BI_i64_bswap =>
+      mksignature (Tlong :: nil) (Some Tlong) cc_default
+  | BI_i16_bswap =>
+      mksignature (Tint :: nil) (Some Tint) cc_default
   | BI_i64_shl  | BI_i64_shr | BI_i64_sar =>
       mksignature (Tlong :: Tint :: nil) (Some Tlong) cc_default
   | BI_i64_dtos | BI_i64_dtou =>
@@ -420,6 +433,15 @@ Program Definition standard_builtin_sem (b: standard_builtin) : builtin_sem (pro
   | BI_addl => mkbuiltin_v2t Tlong Val.addl _ _ 
   | BI_subl => mkbuiltin_v2t Tlong Val.subl _ _
   | BI_mull => mkbuiltin_v2t Tlong Val.mull' _ _
+  | BI_i16_bswap =>
+    mkbuiltin_n1t Tint Tint
+                  (fun n => Int.repr (decode_int (List.rev (encode_int 2%nat (Int.unsigned n)))))
+  | BI_i32_bswap =>
+    mkbuiltin_n1t Tint Tint
+                  (fun n => Int.repr (decode_int (List.rev (encode_int 4%nat (Int.unsigned n)))))
+  | BI_i64_bswap =>
+    mkbuiltin_n1t Tlong Tlong
+                  (fun n => Int64.repr (decode_int (List.rev (encode_int 8%nat (Int64.unsigned n)))))
   | BI_i64_umulh => mkbuiltin_n2t Tlong Tlong Tlong Int64.mulhu
   | BI_i64_smulh => mkbuiltin_n2t Tlong Tlong Tlong Int64.mulhs
   | BI_i64_sdiv => mkbuiltin_v2p Tlong Val.divls _ _

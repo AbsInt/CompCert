@@ -161,7 +161,9 @@ let builtins_generic = {
       @
     [
     (* Integer arithmetic *)
-    "__builtin_bswap",
+    "__builtin_bswap64",
+    (TInt(IULongLong, []), [TInt(IULongLong, [])], false);
+      "__builtin_bswap",
     (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap32",
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
