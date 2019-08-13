@@ -101,6 +101,8 @@ Proof.
   destruct a; inv H; SimplVM.
 - (* integer *)
   exists (Vint n); auto.
+- (* long *)
+  destruct (Archi.ppc64); inv H2. exists (Vlong n); auto.
 - (* float *)
   destruct (generate_float_constants tt); inv H2. exists (Vfloat f); auto.
 - (* single *)

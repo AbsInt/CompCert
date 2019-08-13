@@ -23,6 +23,7 @@ Require Import ValueDomain ValueAOp.
 Definition const_for_result (a: aval) : option operation :=
   match a with
   | I n => Some(Ointconst n)
+  | L n => if Archi.ppc64 then Some (Olongconst n) else None
   | F n => if Compopts.generate_float_constants tt then Some(Ofloatconst n) else None
   | FS n => if Compopts.generate_float_constants tt then Some(Osingleconst n) else None
   | Ptr(Gl id ofs) => Some (Oaddrsymbol id ofs)
