@@ -1127,30 +1127,29 @@ Lemma sel_entry_points:
   Cminor.entry_point prog m0 s1 f arg ->
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
-  intros. inv H. subst ge0.
-  destruct (function_ptr_translated b f0) as (cu & tf & A & B & C); auto.
-  destruct (function_ptr_translated b0 (Internal f1)) as (cu0 & tf0 & A0 & B0 & C0); auto; simpl in B0.
-  destruct B0 as (? & ? & B0); simpl in B0.
-  monadInv B0.
-  exploit Mem.alloc_extends; eauto.
+  intros. inv H. replace ge0 with ge in * by reflexivity.
+  eapply function_ptr_translated in H0 as (cu & tf & A & B & C).
+  destruct B as (? & ? & B); simpl in B.
+  monadInv B.
+  (* exploit Mem.alloc_extends; eauto.
   { apply Mem.extends_refl. }
   { apply Z.le_refl. }
   { instantiate (1 := fn_stackspace x0).
     admit. }
-  intros (m2' & ? & ?).
+  intros (m2' & ? & ?). *)
   econstructor; split.
   - econstructor; eauto.
-    eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+    + admit. (* selection preserves vars*)
+    + admit. (* selection preserves params*)
+    + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
-    erewrite sig_function_translated; simpl; eauto.
-  - econstructor; try apply B; auto.
-    + repeat intro.
-      assert (hf = x) by admit; subst.
-      econstructor; eauto.
-      * constructor.
-      * repeat intro.
-        rewrite PTree.gempty in *; discriminate.
-    + clear. induction arg; auto.
+  - econstructor; try apply B; eauto.
+    + econstructor; repeat (split ; auto).
+      simpl. rewrite EQ; reflexivity.
+    + constructor.
+    + (* This should be a lemma! *)
+      clear. induction arg; auto.
+    + apply Mem.extends_refl.
 Admitted.
 
 Lemma sel_initial_states':

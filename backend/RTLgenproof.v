@@ -19,6 +19,8 @@ Require Import Integers Values Memory Events Smallstep ExposedSimulations Global
 Require Import Switch Registers Cminor Op CminorSel RTL.
 Require Import RTLgen RTLgenspec.
 
+Set Nested Proofs Allowed.
+       
 (** * Correspondence between Cminor environments and RTL register sets *)
 
 (** A compilation environment (mapping) is well-formed if
@@ -1579,31 +1581,90 @@ Lemma transl_entry_points:
   CminorSel.entry_point prog m0 s1 f arg ->
   exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
-  intros. inv H. subst ge0.
-  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
-  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
-  monadInv B0.
-  unfold transl_function in EQ.
-  destruct (reserve_labels _ _).
-  destruct (transl_fun _ _ _); inv EQ.
-  destruct p; inv H7.
+  intros. inv H.
+  replace ge0 with ge in * by reflexivity.
+  
+  destruct (function_ptr_translated _ _ H0) as (tf & A & B); auto.
+  monadInv B.
   econstructor; split.
-  - econstructor; eauto.
-    eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+  - unfold transl_function in EQ.
+    destruct (reserve_labels _ _) eqn:Hres_lab.
+    destruct (transl_fun _ _ _) eqn:Htransl; inv EQ.
+    destruct p; inv H6.
+  
+    econstructor; eauto.
+    + simpl.
+      unfold transl_fun in Htransl.
+      unfold RTLgen.bind2 in *.
+      unfold RTLgen.bind in *.
+      Local Ltac match_case_hyp H:=
+  match type of H with
+    context[match ?x with _ => _ end] => destruct x eqn:?
+  end; first [ congruence
+        | solve[inversion H]
+        | auto].
+      
+      repeat (match_case_hyp Htransl).
+      assert (l0 = fst p).
+      { 
+      repeat (match_case_hyp Heqr0).
+      repeat (match_case_hyp Heqr2).
+      repeat (match_case_hyp Heqr4).
+      repeat (match_case_hyp Heqr6).
+        inv Htransl.
+        inv Heqr0.
+        inv Heqr2.
+        inv Heqr4.
+        inv Heqr6.
+        inv Heqr8.
+        reflexivity. }
+      subst l0.
+      clear Heqr0.
+      rewrite H2 in Heqr.
+      simpl in Heqr.
+      unfold RTLgen.bind2 in *.
+      unfold RTLgen.bind in *.
+      repeat (match_case_hyp Heqr).
+      repeat (match_case_hyp Heqr1).
+      inv Heqr.
+      inv Heqr1.
+      rename p into PP.
+      inv Heqr3; simpl.
+      inv Heqr0; simpl in *.
+      f_equal.
+      inv Heqr2; simpl in *.
+      inv Htransl.
+
+      (*I claim resreve labels doesn't change the regs *)
+      Lemma reserve_labels_regs:
+        forall s l1 l2 s1 s2,
+        reserve_labels s (l1, s1) =
+        (l2, s2) ->
+        st_nextreg s1 = st_nextreg s2.
+      Proof.
+        induction s; simpl;
+          intros * HH.
+        all: try solve[inv HH; auto].
+        + destruct (reserve_labels s2 (l1, s0)) eqn:?.
+          erewrite IHs2; try eassumption.
+          erewrite IHs1; eauto. 
+        + destruct (reserve_labels s2 (l1, s0)) eqn:?.
+          erewrite IHs2; try eassumption.
+          erewrite IHs1; eauto. 
+        + eapply IHs; eauto.
+        + eapply IHs; eauto.
+        + unfold alloc_label in *.
+          destruct (reserve_labels s (l1, s1)) eqn:?.
+          inv HH; simpl; eauto.
+      Qed.
+      eapply reserve_labels_regs in Hres_lab.
+      rewrite <- Hres_lab; reflexivity.
+    + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSL; eauto.
-    erewrite sig_transl_function; simpl; eauto.
   - econstructor; eauto.
+    + simpl. rewrite EQ; reflexivity.
     + econstructor.
-      * apply init_mapping_wf.
-      * econstructor; eauto; simpl.
-        admit.
-      * apply match_env_empty; auto.
-      * constructor; intros [|]; try contradiction.
-        destruct H.
-        rewrite PTree.gempty in H; discriminate.
-      * repeat constructor; simpl.
-        admit.
-    + clear. induction arg; auto.
+    + admit. (*proven elsewhere *)
     + apply Mem.extends_refl.
 Admitted.
 

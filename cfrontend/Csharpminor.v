@@ -529,7 +529,7 @@ Inductive initial_state (p: program): state -> Prop :=
 
 Require Import Conventions.
 
-Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
+(*Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
   | entry_point_intro: forall b f b0 f0 m0 m1 stk args,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
@@ -539,7 +539,32 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       Val.has_type_list args (sig_args (funsig f)) ->
       Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
       Mem.alloc m0 0 0 = (m1, stk) ->
-      entry_point p m0 (Callstate f args (Kcall None f0 (PTree.empty _) (temp_bindings 1 (Vptr b Ptrofs.zero :: args)) Kstop) m1) (Vptr b Ptrofs.zero) args.
+      entry_point p m0 (Callstate f args (Kcall None f0 (PTree.empty _) (temp_bindings 1 (Vptr b Ptrofs.zero :: args)) Kstop) m1) (Vptr b Ptrofs.zero) args. *)
+
+Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
+| initi_core:
+    let ge := Genv.globalenv p in
+    forall f fb m0 m1 args stk,
+      Genv.find_funct_ptr ge fb = Some (Internal f) ->
+      (* Assume there are no local variables, this could change*)
+      f.(fn_vars) = nil ->
+      (* The only argument is a pointer*)
+      f.(fn_params) = (xH)::nil ->
+      (*Make sure the memory is well formed *)
+      globals_not_fresh ge m0 ->
+      Mem.mem_wd m0 ->
+      (* Allocate a stackframe, to pass arguments in the stack*)
+      Mem.alloc m0 0 0 = (m1, stk) ->
+      (*Mem.arg_well_formed args m0 ->
+      val_casted_list args targs ->
+      Val.has_type_list args (typlist_of_typelist targs) ->
+      val_casted_list_func args targs 
+                           && tys_nonvoid targs 
+                           && vals_defined args
+                           && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
+      entry_point p m0
+                  (Callstate (Internal f) args Kstop m1) (Vptr fb Ptrofs.zero) args.
+
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 

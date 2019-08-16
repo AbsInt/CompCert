@@ -1769,29 +1769,67 @@ Proof.
   econstructor; eauto. instantiate (1 := prog_comp_env cu). constructor; auto. exact I.
 Qed.
 
+  Local Ltac destruct_bind H:=
+    match type of H with
+      context[bind ?A ?B] =>
+      destruct A eqn:?; simpl in H
+    end.
+Lemma fn_vars_translate:
+      forall comp_env f tf,
+        transl_function comp_env f = OK tf ->
+        mmap (transl_var comp_env) (Clight.fn_vars f) =
+        OK (fn_vars tf).
+Proof.
+  intros.
+  unfold transl_function in *.
+  destruct_bind H; try solve[inv H].
+  destruct_bind H; try solve[inv H].
+  inv H; reflexivity.
+Qed.
+Lemma fn_vars_nil:
+      forall comp_env f tf,
+        transl_function comp_env f = OK tf ->
+        (Clight.fn_vars f) = nil -> 
+        fn_vars tf = nil.
+Proof.
+  intros.
+  exploit fn_vars_translate; eauto.
+  rewrite H0; simpl; intros HH.
+  inversion HH; auto.
+Qed.
+Lemma fn_params_translate:
+      forall comp_env f tf,
+        transl_function comp_env f = OK tf ->
+        fn_params tf = map fst (Clight.fn_params f).
+Proof.
+  intros; 
+  unfold transl_function in *.
+  destruct_bind H; try solve[inv H].
+  destruct_bind H; try solve[inv H].
+  inv H; reflexivity.
+Qed.
+  
 Lemma transl_entry_points:
   forall (s1 : Clight.state) (f : val) (arg : list val) (m0 : mem),
   Clight.entry_point (globalenv prog) m0 s1 f arg ->
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
-  intros. inv H.
-  destruct (function_ptr_translated fb f0) as (cu & tf & A & B & C); auto.
-  destruct (function_ptr_translated b0 (Internal f1)) as (cu0 & tf0 & A0 & B0 & C0); auto; simpl in B0.
-  inv B0.
+  intros * Hentry. inv Hentry.
+  pose proof function_ptr_translated _ _ H as (?&f0'&(Hptr'&f_match& Hlink)). 
+  inversion f_match; subst.
   econstructor; split.
   - econstructor; eauto.
-    eapply globals_not_fresh_preserve; simpl in *; try eassumption;
-      eapply match_program_gen_len_defs; eauto.
-    erewrite transl_fundef_sig2; simpl; eauto.
-(*    repeat intro; apply H8.
-    unfold loc_arguments', Conventions1.loc_arguments in *.
-    monadInv H10; auto.*)
-  - econstructor; try apply B; eauto.
-    + instantiate (1 := prog_comp_env cu). econstructor; eauto.
-      * apply match_env_empty.
-      * instantiate (1 := O); instantiate (1 := O); constructor.
-    + exact I.
-Qed.
+    + eapply fn_vars_nil; eauto.
+    + erewrite fn_params_translate, H1; eauto.
+    + admit. (* global environments are preserved? *)
+  - econstructor; simpl; eauto.
+    + econstructor.
+    + (unfold type_of_function; simpl).
+      f_equal.
+
+      Unshelve.
+      unshelve econstructor.
+Admitted.
 
 Lemma transl_initial_states':
     forall s1 : Smallstep.state (semantics2 prog),

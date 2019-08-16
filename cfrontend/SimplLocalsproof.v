@@ -2253,40 +2253,35 @@ Admitted.
 
 
 Lemma entry_points_simulation:
-  forall gs gt S v args m, entry_point gs m S v args ->
-       exists R, entry_point gt m R v args /\ match_states S R.
+  forall S v args m, entry_point ge m S v args ->
+       exists R, entry_point tge m R v args /\ match_states S R.
 Proof.
   intros. inv H.
-  exploit function_ptr_translated; eauto.
-  admit.
-  intros [tf [A B]].
-
+  apply function_ptr_translated in H0
+    as (tf&Hfunc_ptr&Htranslate).
+  simpl in Htranslate.
+  destruct ( transf_function f ) eqn: Htrans_f;
+    simpl in *; inversion Htranslate; subst.
+  rename f0 into ft.
   eexists. split; eauto.
   - econstructor; try (instantiate (3 := tf)); eauto.
-    + admit.
-    + erewrite <- H1.
-      eapply type_of_fundef_preserved; eauto.
-    + admit.
-    + admit.
-  - !goal (match_states (Callstate f args Kstop m) (Callstate tf args Kstop m)).
+    + admit. (* Should be easy obvious. *)
+    + admit. (* params don't change*)
+    + admit. (* does the ge change? *)
+  - !goal (match_states _ _).
     econstructor; eauto.
+    + simpl; rewrite Htrans_f.
+      reflexivity.
     + intros.
       econstructor.
-      admit.
-      instantiate (1 := Mem.nextblock m).
-      (*
-      (* Global envs are in the memory:*)
-      constructor; intros.
-      unfold Mem.flat_inj. apply pred_dec_true; auto.
-      unfold Mem.flat_inj in H. destruct (plt b1 (Mem.nextblock m)); inv H. auto.
-      eapply H2 in H; eauto.
-      eapply H2 in H; eauto.
-      eapply H2 in H; eauto.
-      xomega. xomega.
-    + clear - H5. induction H5; constructor; eauto.
-      Unshelve.
-      auto.
-      auto.*)
+      * admit. (*this comes from globals_fresh?*)
+      * instantiate(1:=stk).
+        apply Mem.valid_new_block in H5.
+        unfold Mem.valid_block in H5. auto.
+        xomega.
+      * apply Mem.valid_new_block in H5.
+        unfold Mem.valid_block in H5. auto.
+        xomega.
 Admitted.
                           
 (*

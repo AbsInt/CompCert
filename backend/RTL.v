@@ -374,16 +374,27 @@ Inductive initial_state (p: program): state -> Prop :=
 Require Import Conventions.
 
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f b0 f0 m0 m1 stk args,
-      let ge := Genv.globalenv p in
-      Mem.mem_wd m0 ->
-      Mem.arg_well_formed args m0 ->
+| entry_point_intro: 
+    let ge := Genv.globalenv p in
+    forall f fb m0 m1 args stk,
+      Genv.find_funct_ptr ge fb = Some (Internal f) ->
+      (* Assume there are no local variables, this could change*)
+      (* The only argument is a pointer*)
+      f.(fn_params) = (xH)::nil ->
+      (*Make sure the memory is well formed *)
       globals_not_fresh ge m0 ->
-      Genv.find_funct_ptr ge b = Some f ->
-      Val.has_type_list args (sig_args (funsig f)) ->
-      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
-      Mem.alloc m0 0 (fn_stacksize f0) = (m1, stk) ->
-      entry_point p m0 (Callstate (Stackframe 1%positive f0 (Vptr stk Ptrofs.zero) 1%positive (Regmap.init Vundef) :: nil) f args m1) (Vptr b Ptrofs.zero) args.
+      Mem.mem_wd m0 ->
+      (* Allocate a stackframe, to pass arguments in the stack*)
+      Mem.alloc m0 0 0 = (m1, stk) ->
+      (*Mem.arg_well_formed args m0 ->
+      val_casted_list args targs ->
+      Val.has_type_list args (typlist_of_typelist targs) ->
+      val_casted_list_func args targs 
+                           && tys_nonvoid targs 
+                           && vals_defined args
+                           && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
+      entry_point p m0
+                  (Callstate nil (Internal f) args m1) (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty call stack. *)
 

@@ -715,16 +715,6 @@ Inductive step: state -> trace -> state -> Prop :=
   without arguments and with an empty continuation. *)
 
 
-(*Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f args m0,
-      let ge := Genv.globalenv p in
-      Genv.init_mem p = Some m0 ->
-      Genv.find_symbol ge p.(prog_main) = Some b ->
-      Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
-      entry_point p m0 (Callstate f nil Kstop m0) (Vptr b Ptrofs.zero) args.*)
-
-
 Inductive initial_state (p: program): state -> Prop :=
   | initial_state_intro: forall b f m0,
       let ge := Genv.globalenv p in
@@ -764,6 +754,8 @@ Inductive val_casted_list: list val -> typelist -> Prop :=
 Definition loc_arguments' l := if Archi.ptr64 then loc_arguments_64 l 0 0 0 else loc_arguments_32 l 0. *)
 
 (*NOTE: DOUBLE CHECK TARGS (it's not used right now)*)
+(*
+Old entry_point
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
     forall f fb b0 f0 m0 m1 stk args targs tres,
@@ -780,9 +772,58 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
       Mem.alloc m0 0 0 = (m1, stk) ->
-      entry_point ge m0 (Callstate f args (Kcall None f0 empty_env
+      entry_point ge m0 (Callstate f args
+                                   (Kcall None f0 empty_env
                                                  (temp_bindings
-                                                    1%positive (Vptr fb Ptrofs.zero::args)) Kstop) m1) (Vptr fb Ptrofs.zero) args.
+                                                    1%positive (Vptr fb Ptrofs.zero::args)) Kstop) m1) (Vptr fb Ptrofs.zero) args.*)
+
+
+(*Explain the new entry_points:
+  1. Starts one step before calling main or the spawned function,
+     this way it can create a stack to put arguments if any.
+  2. Assumes no return. Might be easy to check.
+  3.       
+
+ *)
+(*
+Inductive function_entry2 ge f vargs m e le m'
+          (ge: genv)  (f: function) (vargs: list val) (m: mem) (e: env) (le: temp_env) (m': mem)
+  | function_entry2_intro:
+      list_norepet (var_names f.(fn_vars)) ->
+      list_norepet (var_names f.(fn_params)) ->
+      list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps)) ->
+      
+      alloc_variables ge empty_env m f.(fn_vars) e m' ->
+
+      bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le ->
+      function_entry2 ge f vargs m e le m'.
+ *)
+
+(*TODO: fill in:
+ - targs tres AT
+*)
+Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
+| initi_core:
+    forall f fb m0 m1 args stk targs tres AT,
+      Genv.find_funct_ptr ge fb = Some (Internal f) ->
+      (* Assume there are no local variables, this could change*)
+      f.(fn_vars) = nil ->
+      (* The only argument is a pointer*)
+      f.(fn_params) = (xH, Tpointer (Tfunction targs tres cc_default)  AT)::nil ->
+      (*Make sure the memory is well formed *)
+      globals_not_fresh ge m0 ->
+      Mem.mem_wd m0 ->
+      (* Allocate a stackframe, to pass arguments in the stack*)
+      Mem.alloc m0 0 0 = (m1, stk) ->
+      (*Mem.arg_well_formed args m0 ->
+      val_casted_list args targs ->
+      Val.has_type_list args (typlist_of_typelist targs) ->
+      val_casted_list_func args targs 
+                           && tys_nonvoid targs 
+                           && vals_defined args
+                           && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
+      entry_point ge m0
+                  (Callstate (Internal f) args Kstop m1) (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=
