@@ -381,9 +381,9 @@ Proof.
 - TrivialExists. simpl. rewrite Int.and_commut; auto.
 - TrivialExists. simpl. rewrite Val.and_assoc. rewrite Int.and_commut. auto.
 - rewrite Val.zero_ext_and. TrivialExists. rewrite Val.and_assoc.
-  rewrite Int.and_commut. auto. compute; auto.
+  rewrite Int.and_commut. auto. omega.
 - rewrite Val.zero_ext_and. TrivialExists. rewrite Val.and_assoc.
-  rewrite Int.and_commut. auto. compute; auto.
+  rewrite Int.and_commut. auto. omega.
 - TrivialExists.
 Qed.
 
@@ -743,7 +743,7 @@ Proof.
   red; intros until x. unfold cast8unsigned. destruct (cast8unsigned_match a); intros; InvEval.
   TrivialExists.
   subst. rewrite Val.zero_ext_and. rewrite Val.and_assoc.
-  rewrite Int.and_commut. apply eval_andimm; auto. compute; auto.
+  rewrite Int.and_commut. apply eval_andimm; auto. omega.
   TrivialExists.
 Qed.
 
@@ -759,7 +759,7 @@ Proof.
   red; intros until x. unfold cast16unsigned. destruct (cast16unsigned_match a); intros; InvEval.
   TrivialExists.
   subst. rewrite Val.zero_ext_and. rewrite Val.and_assoc.
-  rewrite Int.and_commut. apply eval_andimm; auto. compute; auto.
+  rewrite Int.and_commut. apply eval_andimm; auto. omega.
   TrivialExists.
 Qed.
 
