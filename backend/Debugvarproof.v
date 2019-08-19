@@ -539,19 +539,23 @@ Lemma transf_entry_points:
 Proof.
   intros. inv H. subst ge0.
   destruct (function_ptr_translated _ _ H3) as (tf & A & B).
-  destruct (function_ptr_translated _ _ H5) as (tf0 & A0 & B0).
-  monadInv B0.
+  monadInv B.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
     erewrite sig_preserved; eauto.
-    erewrite stacksize_preserved; eauto.
-  - erewrite sig_preserved by eauto.
+    simpl; rewrite EQ; reflexivity.
+  - (*erewrite sig_preserved by eauto.*)
+    subst ls0.
+    replace (funsig (Internal x)) with
+        (funsig (Internal f0)).
     econstructor; eauto.
-    repeat constructor.
-    admit.
-Admitted.
+    + econstructor.
+    + simpl; rewrite EQ; reflexivity.
+    + symmetry; eapply sig_preserved.
+      simpl; rewrite EQ; reflexivity.
+Qed.
 
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->

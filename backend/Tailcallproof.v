@@ -582,23 +582,24 @@ Proof.
   constructor. constructor. constructor. apply Mem.extends_refl.
 Qed.
 
+Lemma transf_params:
+  forall f,
+    fn_params (transf_function f) = fn_params (f).
+Admitted.
 Lemma transf_entry_points:
    forall (s1 : state) (f : val) (arg : list val) (m0 : mem),
   entry_point prog m0 s1 f arg ->
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H.
-  pose proof (funct_ptr_translated _ _ H3).
-  pose proof (funct_ptr_translated _ _ H5).
+  pose proof (funct_ptr_translated _ _ H0).
   econstructor; split.
-  
   - econstructor; eauto.
+    + rewrite transf_params; auto. (*parameters are preserved*)
     + unfold globals_not_fresh.
       erewrite <- len_defs_genv_next.
       unfold ge0 in *. simpl in H2; eapply H2.
       eapply (@match_program_gen_len_defs program); eauto.
-    + rewrite sig_preserved; auto.
-    + rewrite stacksize_preserved; eauto.
   - econstructor; eauto.
     + repeat constructor.
     + clear. induction arg; auto.

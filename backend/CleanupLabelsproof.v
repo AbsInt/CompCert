@@ -330,16 +330,14 @@ Lemma transf_entry_points:
 Proof.
   intros. inv H. subst ge0.
   pose proof (function_ptr_translated _ _ H3) as A.
-  pose proof (function_ptr_translated _ _ H5) as A0.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
-      eapply match_program_gen_len_defs in TRANSL; eauto.
-    rewrite sig_function_translated; auto.
-  - rewrite sig_function_translated.
+    eapply match_program_gen_len_defs in TRANSL; eauto.
+    (* rewrite sig_function_translated; auto. *)
+  - (* rewrite sig_function_translated.*)
     econstructor; eauto.
     repeat constructor.
-    intro; contradiction.
 Qed.
 
 Lemma transf_initial_states:

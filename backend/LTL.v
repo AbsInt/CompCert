@@ -359,17 +359,20 @@ Definition build_ls_from_arguments (fs: signature)(args:list val) :=
   setlist (loc_arguments fs) args (Locmap.init Vundef).
 
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f b0 f0 m0 m1 stk args,
+  | entry_point_intro: 
       let ge := Genv.globalenv p in
-      Mem.mem_wd m0 ->
-      Mem.arg_well_formed args m0 ->
-      globals_not_fresh ge m0 ->
-      Genv.find_funct_ptr ge b = Some f ->
-      Val.has_type_list args (sig_args (funsig f)) ->
-      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
-      Mem.alloc m0 0 (fn_stacksize f0) = (m1, stk) ->
-      let ls := build_ls_from_arguments (funsig f) args in
-      entry_point p m0 (Callstate (Stackframe f0 (Vptr stk Ptrofs.zero) ls nil :: nil) f ls m1) (Vptr b Ptrofs.zero) args.
+      forall f fb m0 m1 arg stk l,
+        Genv.find_funct_ptr ge fb = Some (Internal f) ->
+        (*Make sure the memory is well formed *)
+        globals_not_fresh ge m0 ->
+        Mem.mem_wd m0 ->
+        (* Allocate a stackframe, to pass arguments in the stack*)
+        Mem.alloc m0 0 0 = (m1, stk) ->
+        l = Locmap.set (S Outgoing 0 Tany32)
+                       arg (Locmap.init Vundef) (*TODO: GUESS AX? *)  ->
+        entry_point p m0
+                    (Callstate nil (Internal f) l m1)
+                    (Vptr fb Ptrofs.zero) (arg::nil).
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m retcode,

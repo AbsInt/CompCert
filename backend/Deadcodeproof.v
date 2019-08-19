@@ -1106,31 +1106,58 @@ Ltac UseTransfer :=
   econstructor; eauto. apply mextends_agree; auto.
 Qed.
 
+
+
+Ltac common_tacs_after_destruct H:=
+  first [ congruence
+        | solve[inversion H]
+        | auto].
+
+Ltac match_case_goal:=
+  match goal with
+    |- context[match ?x with _ => _ end] =>
+    destruct x eqn:?; try congruence
+  end.
+Ltac match_case_hyp H:=
+  match type of H with
+    context[match ?x with _ => _ end] => destruct x eqn:?
+  end; common_tacs_after_destruct H.
+
+(* This lemma probably has a pretty generalization*)
+
+Lemma transf_fundef_single_param:
+  forall cu f tf,
+    transf_fundef (romem_for cu) (Internal f) = OK (Internal tf) ->
+    fn_params f = 1%positive :: nil ->
+    fn_params tf = 1%positive :: nil.
+Proof.
+  intros * TR H.
+  unfold transf_fundef,transf_partial_fundef,transf_function in *.
+  match_case_hyp TR.
+  inv TR; simpl; auto.
+Qed.
 Lemma transf_entry_points:
   forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
   entry_point prog m0 s1 f arg ->
   exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H.
-  destruct (function_ptr_translated _ _ H3) as (cu & tf & A & B & C).
-  destruct (function_ptr_translated _ _ H5) as (cu0 & tf0 & A0 & B0 & C0).
-  monadInv B0.
+  destruct (function_ptr_translated _ _ H0) as (cu & tf & A & B & C).
+  monadInv B.
   econstructor; split.
   - econstructor; eauto.
-    unfold globals_not_fresh.
-    erewrite <- len_defs_genv_next.
-    + unfold ge0 in *. simpl in H2; eapply H2.
-    + eapply (@match_program_gen_len_defs program); eauto.
-    + erewrite sig_function_translated; eauto.
-    + erewrite stacksize_translated; eauto.
-  - econstructor; try apply B; auto.
-    + constructor; [|constructor].
-      econstructor; eauto.
-      * admit.
-      * admit.
+    + eapply transf_fundef_single_param; eauto.
+      simpl; rewrite EQ; auto.
+    + unfold globals_not_fresh.
+      erewrite <- len_defs_genv_next.
+      * unfold ge0 in *. simpl in H2; eapply H2.
+      * eapply (@match_program_gen_len_defs program); eauto.
+  - econstructor; try apply B; eauto.
+    + constructor.
+    + simpl; rewrite EQ; auto.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
-Admitted.
+Qed.
 
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->

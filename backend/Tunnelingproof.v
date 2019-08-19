@@ -540,20 +540,16 @@ Lemma transf_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  pose proof (function_ptr_translated _ _ H3) as A.
-  pose proof (function_ptr_translated _ _ H5) as A0.
+  pose proof (function_ptr_translated _ _ H0) as A.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSL; eauto.
-    rewrite sig_preserved; auto.
   - econstructor; eauto.
-    + repeat constructor.
-      admit.
-    + rewrite sig_preserved.
-      repeat intro; apply Val.lessdef_refl.
+    + econstructor.
+    + econstructor.
     + apply Mem.extends_refl.
-Admitted.
+Qed.
 
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->

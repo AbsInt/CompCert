@@ -2526,40 +2526,75 @@ Lemma transl_entry_points:
   exists s2 : LTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
-  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
-  destruct (transf_function f1) eqn: Hf1; inv B0.
+  destruct (function_ptr_translated _ _ H0) as (tf & A & B).
+  simpl in B. destruct (transf_function f0) eqn: Hf1; inv B.
+
+  assert (Hargs: exists a, arg = a::nil).
+  { admit. (* TODO this has to be propagated upwards*) }
+  destruct Hargs as (a&Hargs); subst arg.
+  assert (H32: Archi.ptr64 = false) by admit.  
+  assert (Hargs_typ: (sig_args (fn_sig f)) = (Tany32) :: nil)
+    by admit.
+  assert (Harg: exists b, a = Vptr b Ptrofs.zero)
+    by admit.
+  destruct Harg as (b & Harg).
+
   econstructor; split.
   - destruct (transf_function_inv _ _ Hf1).
-    econstructor; eauto.
-    eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+    econstructor.
+    + eauto.
+    + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
-    erewrite sig_function_translated; simpl; eauto.
-    replace (fn_sig f) with (RTL.fn_sig f1); auto.
-    replace (fn_stacksize f) with (RTL.fn_stacksize f1); eauto.
-  - assert (Val.has_type_list arg (sig_args (funsig tf))).
-    { erewrite sig_function_translated; simpl; eauto. }
+    + eauto.
+    + eauto.
+    + instantiate(1:= Locmap.set (R X0) a (Locmap.init Vundef)).
+      admit. (* temp. assumption *)
+  - (* assert (Val.has_type_list arg (sig_args (funsig (Internal f)))).
+    { erewrite sig_function_translated; simpl; eauto. } *)
+    
+    
     econstructor; eauto.
     + econstructor; eauto.
-      * constructor.
-      * admit.
-      * admit.
-      * admit.
-      * admit.
-      * admit.
-      * admit.
-    + simpl.
-      admit. (*ls contains all arguments. *)
-    + simpl. intros ? ?.
-      admit. (*loc_arguments only returns non callee_save? *)
+    + simpl; rewrite Hf1; reflexivity.
+    + unfold loc_arguments.
+      rewrite H32.
+      simpl.
+      rewrite Hargs_typ; simpl.
+      rewrite Locmap.gss; simpl.
+      econstructor; auto.
+      subst a.
+      rewrite H32.
+      constructor.
+    + unfold agree_callee_save; intros.
+      erewrite Locmap.gso.
+      * reflexivity.
+      * unfold callee_save_loc in *.
+        simpl.
+        destruct l; auto.
     + apply Mem.extends_refl.
+    + simpl. rewrite Hargs_typ; auto.
+      split; auto.
+      (*Possible types of the pointeer: 
+
+      It's not: 
+      | Tlong 
+      | Tfloat
+      | Tsingle
+      | Tany64 
+      So it could be: 
+      | Tany32
+      | Tint
+       *)
+      subst a; simpl; auto.
+      
 Admitted.
 
 
 Lemma initial_states_simulation':
   forall s1 : RTL.state,
   Smallstep.initial_state (RTL.semantics prog) s1 ->
-  exists s2 : LTL.state, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
+  exists s2 : LTL.state, Smallstep.initial_state (semantics tprog) s2 /\
+                    match_states s1 s2.
 Proof.
   eapply (@init_states_from_entry (RTL.semantics prog) (semantics tprog));
     try apply transl_entry_points.
@@ -2590,13 +2625,27 @@ Proof.
   exists st2; split; auto. split; auto.
   inv H; subst ge0.
   econstructor; eauto.
-  admit.
-  admit. (*Initial function must be "well typed"*)
+  + econstructor; simpl.
+    admit. (* we need the retyurn to be an int. *)
+  + econstructor.
+    econstructor.
+    * rewrite H1; simpl.
+      admit. (* add sig f0 to entry_point*) 
+    * rewrite H1; simpl.
+      econstructor; auto. constructor.
+    * intros.
+      admit. (* Check how it's done in init_state*)
+    * econstructor.
+      admit. (* Check how it's done in init_state*)
+  + simpl.
+    admit. (* once added to the entry_point this will go*)
+  
 - intros.
   exploit initial_states_simulation'; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
+  apply wt_initial_state with (p := prog); auto. exact wt_prog.
   admit.
-  (* need a new wt_initial_state*)
+  (* need a new wt_initial_state. there is one for the old initial state*)
   (*apply wt_initial_state with (p := prog); auto. exact wt_prog.*)
   
 - intros. destruct H. eapply final_states_simulation; eauto.
@@ -2615,13 +2664,27 @@ Proof.
   eapply fsim_properties_plus.
   - apply senv_preserved.
 
-- intros.
+  - intros.
+    
   exploit transl_entry_points; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.
   inv H; subst ge0.
   econstructor; eauto.
-  admit.
-  admit. (*Initial function must be "well typed"*)
+  + econstructor; simpl.
+    admit. (* we need the retyurn to be an int. *)
+  + econstructor.
+    econstructor.
+    * rewrite H1; simpl.
+      admit. (* add sig f0 to entry_point*) 
+    * rewrite H1; simpl.
+      econstructor; auto. constructor.
+    * intros.
+      admit. (* Check how it's done in init_state*)
+    * econstructor.
+      admit. (* Check how it's done in init_state*)
+  + simpl.
+    admit. (* will be done once entry points are changed. *)
+    
 - intros.
   exploit initial_states_simulation'; eauto. intros [st2 [A B]].
   exists st2; split; auto. split; auto.

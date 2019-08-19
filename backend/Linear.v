@@ -309,18 +309,18 @@ Inductive initial_state (p: program): state -> Prop :=
 (* This lets the stack frame for a spawned thread be an arbitrary internal function, but in fact
    it should be fixed or possibly passed as an argument to entry_point. *)
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f b0 f0 m0 m1 stk args,
+  | entry_point_intro: forall fb f m0 m1 stk args,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       globals_not_fresh ge m0 ->
       Mem.arg_well_formed args m0 ->
-      Genv.find_funct_ptr ge b = Some f ->
-      Val.has_type_list args (sig_args (funsig f)) ->
-      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
-(*      size_arguments (funsig f) <= Z.max (max_over_instrs outgoing_space) (max_over_slots_of_funct outgoing_slot) ->*)
-      Mem.alloc m0 0 (fn_stacksize f0) = (m1, stk) ->
-      let ls := build_ls_from_arguments (funsig f) args in
-      entry_point p m0 (Callstate (Stackframe f0 (Vptr stk Ptrofs.zero) ls nil :: nil) f ls m1) (Vptr b Ptrofs.zero) args.
+      Genv.find_funct_ptr ge fb = Some (Internal f) ->
+      Val.has_type_list args (sig_args (funsig (Internal f))) ->
+(*      size_arguments (funsig f) <= Z.max (max_over_instrs outgoing_space) 
+        (max_over_slots_of_funct outgoing_slot) ->*)
+      Mem.alloc m0 0 0 = (m1, stk) ->
+      let ls := LTL.build_ls_from_arguments (funsig (Internal f)) args in
+      entry_point p m0 (Callstate nil (Internal f) ls m1) (Vptr fb Ptrofs.zero) args.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m retcode,

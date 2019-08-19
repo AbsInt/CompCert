@@ -710,24 +710,36 @@ Lemma transf_entry_points:
   exists s2 : Linear.state, Linear.entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
-  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
-  destruct (transf_function f1) eqn: Hf1; inv B0.
+  destruct (function_ptr_translated _ _ H0) as (tf & A & B); auto.
+  simpl in B.
+  destruct (transf_function f0) eqn: Hf0; inv B.
   econstructor; split.
   - econstructor; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
         eapply match_program_gen_len_defs in TRANSF; eauto.
-    + erewrite sig_preserved; eauto.
-(*    + pose proof (sig_preserved (Internal f1) (Internal f)) as Heq.
-      simpl in Heq; rewrite Heq; auto.
-      rewrite Hf1; auto.*)
-    + erewrite stacksize_preserved; eauto.
-  - subst ls0; erewrite sig_preserved by eauto.
-    econstructor; eauto.
-    repeat constructor.
-    replace nil with (linearize_block nil nil) by auto; constructor; auto.
-    apply is_tail_nil.
-Qed.
+    (* + erewrite sig_preserved; eauto. *)
+    + econstructor; auto.
+      assert (exists b, arg0 = Vptr b Ptrofs.zero
+             /\ Plt b (Mem.nextblock m0)) by admit.
+      destruct H as (b&?&?).
+      subst arg0.
+      econstructor; eauto.
+      unfold Mem.flat_inj.
+      destruct (plt b (Mem.nextblock m0)); try xomega.
+      reflexivity.
+      admit.
+    +  admit. (* should be in the entry_points. *)
+   
+  - assert ((Locmap.set (S Outgoing 0 Tany32) arg0 (Locmap.init Vundef))
+            =
+            (build_ls_from_arguments (funsig (Internal f)) (arg0 :: nil))
+           ) by admit.
+    rewrite H.
+    econstructor.
+    econstructor.
+    simpl.
+    rewrite Hf0; reflexivity.
+Admitted.
 
 Lemma transf_initial_states:
   forall st1, LTL.initial_state prog st1 ->

@@ -540,23 +540,34 @@ Fixpoint make_arguments (rs: regset) (m: mem) sp (al: list (rpair loc)) (lv: lis
     end
   | nil, nil => Some (rs, m)
   | _, _ => None
- end.
+  end.
 
 (* When we spawn a thread, it should have a stack frame under it with its arguments. *)
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall b f b0 f0 rs stk m0 m1 m2 m3 m args,
+  | entry_point_intro: forall fb f m0 m1 stk args,
+      let ge := Genv.globalenv p in
+      Mem.mem_wd m0 ->
+      globals_not_fresh ge m0 ->
+      Mem.arg_well_formed args m0 ->
+      Genv.find_funct_ptr ge fb = Some (Internal f) ->
+      Val.has_type_list args (sig_args (funsig (Internal f))) ->
+(*      size_arguments (funsig f) <= Z.max (max_over_instrs outgoing_space) (max_over_slots_of_funct outgoing_slot) ->*)
+      Mem.alloc m0 0 0 = (m1, stk) ->
+      let ls := LTL.build_ls_from_arguments (funsig (Internal f)) args in
+      entry_point p m0 (Callstate nil fb ls m1) (Vptr fb Ptrofs.zero) args.
+
+forall b f b0 f0 rs stk m0 m1 m2 m3 m args,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       globals_not_fresh ge m0 ->
       Mem.arg_well_formed args m0 ->
       Genv.find_funct_ptr ge b = Some f ->
-      Genv.find_funct_ptr ge b0 = Some (Internal f0) ->
-      Mem.alloc m0 0 f0.(fn_stacksize) = (m1, stk) ->
+      Mem.alloc m0 0 0 = (m1, stk) ->
       let sp := Vptr stk Ptrofs.zero in
       Mem.storev Mptr m1 (Val.offset_ptr sp f0.(fn_link_ofs)) Vnullptr = Some m2 ->
       Mem.storev Mptr m2 (Val.offset_ptr sp f0.(fn_retaddr_ofs)) Vnullptr = Some m3 ->
       make_arguments (Regmap.init Vundef) m3 sp (loc_arguments (funsig f)) args = Some (rs, m) ->
-      entry_point p m0 (Callstate (Stackframe b0 sp Vnullptr nil :: nil) b rs m) (Vptr b (Ptrofs.zero)) args.
+      entry_point p m0 (Callstate b rs m) (Vptr b (Ptrofs.zero)) args.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r retcode,

@@ -1404,57 +1404,98 @@ Proof.
   destruct (zlt _ _); inv H; simpl.
   monadInv EQ.
 Admitted.
-*)
+ *)
 
+
+(* This lemma probably has a pretty generalization*)      
+Lemma transf_fundef_single_param:
+        forall cu f tf,
+        transf_fundef (funenv_program cu) (Internal f) = OK (Internal tf) ->
+        fn_params f = 1%positive :: nil ->
+        fn_params tf = 1%positive :: nil.
+Proof.
+  intros * TR H.
+  unfold transf_fundef,transf_partial_fundef,transf_function in *.
+  destruct (expand_function (funenv_program cu) f initstate) eqn:HH.
+  destruct (zlt (st_stksize s') Ptrofs.max_unsigned) eqn:HH0.
+  2: solve[inv TR].
+  inv TR; simpl.
+  rewrite H. simpl.
+  unfold sreg, shiftpos.
+  
+  (*Lets look at HH and see if that is what we get*)
+      unfold expand_function,initstate  in *.
+      simpl in HH.
+      unfold bind in *.
+      Ltac common_tacs_after_destruct H:=
+        first [ congruence
+              | solve[inversion H]
+              | auto].
+      
+      Ltac match_case_goal:=
+        match goal with
+          |- context[match ?x with _ => _ end] =>
+          destruct x eqn:?; try congruence
+        end.
+      Ltac match_case_hyp H:=
+        match type of H with
+          context[match ?x with _ => _ end] => destruct x eqn:?
+        end; common_tacs_after_destruct H.
+      match_case_hyp HH.
+      match_case_hyp HH.
+      inv HH.
+      match_case_hyp Heqr0.
+      match_case_hyp Heqr0.
+      inv Heqr0.
+      match_case_hyp Heqr2.
+      match_case_hyp Heqr2.
+      inv Heqr2.
+      unfold ret in *.
+      inv Heqr3. simpl.
+      unfold reserve_regs in Heqr1.
+      inv Heqr1.
+
+      unfold reserve_nodes in Heqr.
+      inv Heqr; simpl.
+      reflexivity.
+Qed.
+
+      
 Lemma transf_entry_points:
   forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
   entry_point prog m0 s1 f arg ->
   exists j (s2 : RTL.state), entry_point tprog m0 s2 f arg /\ match_states j s1 s2.
 Proof.
   intros. inv H.
-  destruct (function_ptr_translated _ _ H3) as (cu & tf & FIND & TR & LINK).
-  destruct (function_ptr_translated _ _ H5) as (cu' & tf' & FIND' & TR' & LINK').
-  simpl in TR'.
-  destruct (transf_function _ f1) eqn: EQ; inv TR'.
+  destruct (function_ptr_translated _ _ H0) as (cu & tf & FIND & TR & LINK).
+  assert (exists tf', tf = Internal tf').
+  { unfold transf_fundef,transf_partial_fundef in *.
+    destruct (transf_function (funenv_program cu) f0);
+      try solve[inversion TR]. inversion TR; subst tf.
+    eexists; eauto. }
+  destruct H as (?&?); subst tf.
+  
   do 2 econstructor; split.
-  - econstructor; eauto.
-    unfold globals_not_fresh.
-    erewrite <- len_defs_genv_next.
-    + unfold ge0 in *. simpl in H2; eapply H2.
-    + eapply (@match_program_gen_len_defs program); eauto.
-    + erewrite sig_function_translated; eauto.
-    + 
- 
-(*     
-    + erewrite transf_stacksize; eauto.
-  - econstructor; try apply TR; try apply flat_injection_full; eauto.
-    + admit.
-    + admit.
-=======
-  eapply function_ptr_translated in H3. destruct H3 as (cu & tf & FIND & TR & LINK).
-  eapply function_ptr_translated in H5. destruct H5 as (cu0 & tf0 & FIND0 & TR0 & LINK0).
-  (* exploit function_ptr_translated; eauto. intros (cu & tf & FIND & TR & LINK). *)
-  simpl in TR0. destruct (transf_function (funenv_program cu0) f1); try discriminate.
-  simpl in TR0; inversion TR0. subst tf0.
-  do 2 econstructor; split.
-  - econstructor. eauto.
+  - econstructor; try eassumption.
+    + eapply transf_fundef_single_param; eauto.
     + unfold globals_not_fresh.
       erewrite <- len_defs_genv_next.
-      unfold ge0 in *.
-      * simpl in H2; eapply H2.  
+      * unfold ge0 in *. simpl in H2; eapply H2.
       * eapply (@match_program_gen_len_defs program); eauto.
-    + erewrite sig_function_translated; eauto.
-    + fold tge. erewrite FIND0.
-      
-
-      
   - econstructor; eauto.
-    + econstructor. instantiate (1:=Mem.nextblock m0).
-      eapply match_globalenvs_not_fresh; auto.
-      reflexivity.
->>>>>>> Adding the simulation of at_external
-    + apply Mem.neutral_inject; auto.
-      admit. *)
+    + econstructor.
+      2: apply Ple_refl.
+      eapply match_globalenvs_not_fresh.
+      subst ge0 ge.
+      admit. (* next block increased*)
+    + admit. (* args of init have to be well formed.*)
+    + eapply Mem.neutral_inject.
+      unfold Mem.mem_wd in *.
+      (* Mem.inject_neutral (Mem.nextblock m0) m0 
+         should be enough, since we added an empty block.
+       *)
+      admit.
+    + apply flat_injection_full.
 Admitted.
 
 Lemma transf_initial_states':

@@ -249,20 +249,16 @@ Lemma transf_entry_points:
   exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H.
-  pose proof (function_ptr_translated _ _ H3) as A.
-  pose proof (function_ptr_translated _ _ H5) as A0.
+  pose proof (function_ptr_translated _ _ H0) as A.
   econstructor; split.
   - econstructor; eauto.
     + unfold globals_not_fresh.
       erewrite <- len_defs_genv_next.
       * unfold ge0 in *. simpl in H2; eapply H2.
       * eapply (@match_program_gen_len_defs program); eauto.
-    + rewrite sig_preserved; eauto.
   - econstructor; eauto.
     repeat econstructor.
-    admit.
-Admitted.
-
+Qed.
 Lemma transf_initial_states':
    forall s1 : RTL.state,
   Smallstep.initial_state (semantics prog) s1 ->
