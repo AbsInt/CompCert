@@ -444,7 +444,7 @@ End EXPR.
 (** Continuations *)
 
 Inductive cont: Type :=
-  | Kstop: cont
+  | Kstop: typelist -> cont
   | Kseq: statement -> cont -> cont       (**r [Kseq s2 k] = after [s1] in [s1;s2] *)
   | Kloop1: statement -> statement -> cont -> cont (**r [Kloop1 s1 s2 k] = after [s1] in [Sloop s1 s2] *)
   | Kloop2: statement -> statement -> cont -> cont (**r [Kloop1 s1 s2 k] = after [s2] in [Sloop s1 s2] *)
@@ -468,7 +468,7 @@ Fixpoint call_cont (k: cont) : cont :=
 
 Definition is_call_cont (k: cont) : Prop :=
   match k with
-  | Kstop => True
+  | Kstop _ => True
   | Kcall _ _ _ _ _ => True
   | _ => False
   end.
@@ -722,7 +722,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
-      initial_state p (Callstate f nil Kstop m0).
+      initial_state p (Callstate f nil (Kstop Tnil) m0).
 
 (*NEW*)
 (* The following parameters are simple and reasonable, *)
@@ -823,12 +823,12 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       entry_point ge m0
-                  (Callstate (Internal f) args Kstop m1) (Vptr fb Ptrofs.zero) args.
+                  (Callstate (Internal f) args (Kstop targs) m1) (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall r m,
-      final_state (Returnstate (Vint r) Kstop m) r.
+  | final_state_intro: forall r m targs,
+      final_state (Returnstate (Vint r) (Kstop targs) m) r.
 
 End SEMANTICS.
 

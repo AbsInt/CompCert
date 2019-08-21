@@ -492,11 +492,19 @@ Inductive match_stackframes: stackframe -> stackframe -> Prop :=
                      (fst (transfer f (vanalyze cu f) pc an!!pc))),
       match_stackframes (Stackframe res f (Vptr sp Ptrofs.zero) pc e)
                         (Stackframe res tf (Vptr sp Ptrofs.zero) pc te).
+Inductive match_stackframe_list: list stackframe -> list stackframe -> Prop :=
+| match_stackframes_one: forall s,
+    match_stackframe_list (s::nil) (s::nil)
+| match_stackframes_cons:
+    forall s s' stk stk',
+    match_stackframes s s' ->
+    match_stackframe_list stk stk' ->
+    match_stackframe_list (s::stk) (s'::stk').
 
 Inductive match_states: state -> state -> Prop :=
   | match_regular_states:
       forall s f sp pc e m ts tf te tm cu an
-        (STACKS: list_forall2 match_stackframes s ts)
+        (STACKS: match_stackframe_list s ts)
         (LINK: linkorder cu prog)
         (FUN: transf_function (romem_for cu) f = OK tf)
         (ANL: analyze (vanalyze cu f) f = Some an)
@@ -506,7 +514,7 @@ Inductive match_states: state -> state -> Prop :=
                    (State ts tf (Vptr sp Ptrofs.zero) pc te tm)
   | match_call_states:
       forall s f args m ts tf targs tm cu
-        (STACKS: list_forall2 match_stackframes s ts)
+        (STACKS: match_stackframe_list s ts)
         (LINK: linkorder cu prog)
         (FUN: transf_fundef (romem_for cu) f = OK tf)
         (ARGS: Val.lessdef_list args targs)
@@ -515,7 +523,7 @@ Inductive match_states: state -> state -> Prop :=
                    (Callstate ts tf targs tm)
   | match_return_states:
       forall s v m ts tv tm
-        (STACKS: list_forall2 match_stackframes s ts)
+        (STACKS: match_stackframe_list s ts)
         (RES: Val.lessdef v tv)
         (MEM: Mem.extends m tm),
       match_states (Returnstate s v m)
@@ -537,7 +545,7 @@ Qed.
 Lemma match_succ_states:
   forall s f sp pc e m ts tf te tm an pc' cu instr ne nm
     (LINK: linkorder cu prog)
-    (STACKS: list_forall2 match_stackframes s ts)
+    (STACKS: match_stackframe_list s ts)
     (FUN: transf_function (romem_for cu) f = OK tf)
     (ANL: analyze (vanalyze cu f) f = Some an)
     (INSTR: f.(fn_code)!pc = Some instr)
@@ -1100,10 +1108,14 @@ Ltac UseTransfer :=
   econstructor; eauto.
 
 - (* return *)
-  inv STACKS. inv H1.
-  econstructor; split.
-  constructor.
-  econstructor; eauto. apply mextends_agree; auto.
+  inv STACKS.
+  + exploit nil_has_pre_main ; eauto.
+    intros HH; contradict HH.
+  + inv H1.
+    econstructor; split.
+    constructor.
+    inv H3; auto.
+    econstructor; eauto. apply mextends_agree; auto.
 Qed.
 
 
@@ -1153,12 +1165,12 @@ Proof.
       * unfold ge0 in *. simpl in H2; eapply H2.
       * eapply (@match_program_gen_len_defs program); eauto.
   - econstructor; try apply B; eauto.
-    + constructor.
+    + unfold pre_main_staklist. econstructor.
     + simpl; rewrite EQ; auto.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
 Qed.
-
+(*
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
@@ -1173,13 +1185,14 @@ Proof.
   symmetry; eapply match_program_main; eauto.
   rewrite <- H3. eapply sig_function_translated; eauto.
   econstructor; eauto. constructor. apply Mem.extends_refl.
-Qed.
+Qed.*)
 
 Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv STACKS. inv RES. constructor.
+  intros. inv H0. inv H. inv STACKS. inv RES. econstructor.
+  inv H3.
 Qed.
 
 (** * Semantic preservation *)

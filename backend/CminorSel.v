@@ -120,7 +120,7 @@ Definition letenv := list val.
 (** Continuations *)
 
 Inductive cont: Type :=
-  | Kstop: cont                         (**r stop program execution *)
+  | Kstop: list typ -> cont                         (**r stop program execution *)
   | Kseq: stmt -> cont -> cont          (**r execute stmt, then cont *)
   | Kblock: cont -> cont                (**r exit a block, then do cont *)
   | Kcall: option ident -> function -> val -> env -> cont -> cont.
@@ -344,7 +344,7 @@ Fixpoint call_cont (k: cont) : cont :=
 
 Definition is_call_cont (k: cont) : Prop :=
   match k with
-  | Kstop => True
+  | Kstop _ => True
   | Kcall _ _ _ _ _ => True
   | _ => False
   end.
@@ -500,14 +500,14 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
       funsig f = signature_main ->
-      initial_state p (Callstate f nil Kstop m0).
+      initial_state p (Callstate f nil (Kstop nil) m0).
 
 Require Import Conventions.
 
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
 | entry_point_intro: 
     let ge := Genv.globalenv p in
-    forall f fb m0 m1 args stk,
+    forall f fb m0 m1 args targs stk,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       (* Assume there are no local variables, this could change*)
       f.(fn_vars) = nil ->
@@ -526,11 +526,11 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       entry_point p m0
-                  (Callstate (Internal f) args Kstop m1) (Vptr fb Ptrofs.zero) args.
+                  (Callstate (Internal f) args (Kstop targs) m1) (Vptr fb Ptrofs.zero) args.
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall r m,
-      final_state (Returnstate (Vint r) Kstop m) r.
+  | final_state_intro: forall r m targs,
+      final_state (Returnstate (Vint r) (Kstop targs) m) r.
 
 Definition semantics (p: program) :=
   let ge:= (Genv.globalenv p) in

@@ -1050,7 +1050,8 @@ Proof.
 
 - (* return *)
   inv STACKS. econstructor; split.
-  eapply exec_return.
+  eapply exec_return; auto.
+  inv STACKS0; auto; exploit nil_has_pre_main ; eauto.
   econstructor; eauto. apply set_reg_inject; auto.
 Admitted.
 
@@ -1257,7 +1258,7 @@ Lemma transf_final_states:
   forall S1 S2 r,
   match_states S1 S2 -> final_state S1 r -> final_state S2 r.
 Proof.
-  intros. inv H0. inv H. inv STACKS. inv RESINJ. constructor.
+  intros. inv H0. inv H. inv STACKS. inv RESINJ. inv STACKS0; constructor.
 Qed.
 
 (*

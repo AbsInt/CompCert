@@ -748,8 +748,8 @@ End EXPRESSIONS.
 (** Semantic preservation for functions and statements. *)
 
 Inductive match_cont: Cminor.program -> helper_functions -> Cminor.cont -> CminorSel.cont -> Prop :=
-  | match_cont_stop: forall cunit hf,
-      match_cont cunit hf Cminor.Kstop Kstop
+  | match_cont_stop: forall cunit hf ls targs,
+      match_cont cunit hf (Cminor.Kstop targs)  (Kstop ls)
   | match_cont_seq: forall cunit hf s s' k k',
       sel_stmt (prog_defmap cunit) s = OK s' ->
       match_cont cunit hf k k' ->

@@ -304,8 +304,10 @@ The first two cases are standard, but the third case corresponds
 to a frame that was eliminated by the transformation. *)
 
 Inductive match_stackframes: list stackframe -> list stackframe -> Prop :=
-  | match_stackframes_nil:
-      match_stackframes nil nil
+  (*| match_stackframes_nil:
+      match_stackframes nil nil*)
+  | match_stackframes_single: forall s,
+      match_stackframes (s::nil) (s::nil)
   | match_stackframes_normal: forall stk stk' res sp pc rs rs' f,
       match_stackframes stk stk' ->
       regs_lessdef rs rs' ->
@@ -396,6 +398,13 @@ Ltac EliminatedInstr :=
 (** The proof of semantic preservation, then, is a simulation diagram
   of the ``option'' kind. *)
 
+Lemma match_stackframes_has_pre_main:
+  forall stk1 stk2,
+    match_stackframes stk1 stk2 ->
+    has_pre_main stk1 ->
+    has_pre_main stk2.
+Proof. intros; induction H; auto; inv H; auto. Qed.
+  
 Lemma transf_step_correct:
   forall s1 t s2, step ge s1 t s2 ->
   forall s1' (MS: match_states s1 s1'),
@@ -553,21 +562,25 @@ Proof.
 
 - (* returnstate *)
   inv H2.
-+ (* synchronous return in both programs *)
-  left. econstructor; split.
-  apply exec_return.
-  constructor; auto. apply set_reg_lessdef; auto.
-+ (* return instr in source program, eliminated because of tailcall *)
-  right. split. unfold measure. simpl length.
-  change (S (length s) * (niter + 2))%nat
-   with ((niter + 2) + (length s) * (niter + 2))%nat.
-  generalize (return_measure_bounds (fn_code f) pc). omega.
-  split. auto.
-  econstructor; eauto.
-  rewrite Regmap.gss. auto.
+  + (*empty stackframe -> impossible*)
+    inv Has_pre_main.
+    
+  + (* synchronous return in both programs *)
+    left. econstructor; split.
+    apply exec_return; auto.
+    eapply match_stackframes_has_pre_main; eauto.
+    constructor; auto. apply set_reg_lessdef; auto.
+  + (* return instr in source program, eliminated because of tailcall *)
+    right. split. unfold measure. simpl length.
+    change (S (length s) * (niter + 2))%nat
+      with ((niter + 2) + (length s) * (niter + 2))%nat.
+    generalize (return_measure_bounds (fn_code f) pc). omega.
+    split. auto.
+    econstructor; eauto.
+    rewrite Regmap.gss. auto.
 Qed.
 
-Lemma transf_initial_states:
+(*Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
 Proof.
@@ -580,7 +593,7 @@ Proof.
   symmetry; eapply match_program_main; eauto.
   rewrite <- H3. apply sig_preserved.
   constructor. constructor. constructor. apply Mem.extends_refl.
-Qed.
+Qed.*)
 
 Lemma transf_params:
   forall f,
@@ -601,7 +614,12 @@ Proof.
       unfold ge0 in *. simpl in H2; eapply H2.
       eapply (@match_program_gen_len_defs program); eauto.
   - econstructor; eauto.
-    + repeat constructor.
+    + unfold pre_main_staklist, pre_main_stack.
+      pose proof (match_stackframes_normal
+                    nil nil pre_main_return
+                 ).
+      
+      econstructor.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
 Qed.
@@ -622,7 +640,9 @@ Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H5. inv H3. constructor.
+  intros. inv H0. inv H. inv H5. inv H3; try constructor.
+  - inv H1.
+  - inv H1.
 Qed.
 
 

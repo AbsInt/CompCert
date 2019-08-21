@@ -154,7 +154,10 @@ Inductive match_states: RTL.state -> RTL.state -> Prop :=
         (STACKS: list_forall2 match_frames stk stk'),
       match_states (Returnstate stk v m)
                    (Returnstate stk' v m).
-
+(* Move to RTL.v*)
+Lemma nil_has_pre_main:
+      has_pre_main nil -> False.
+Admitted.  
 Lemma step_simulation:
   forall S1 t S2, RTL.step ge S1 t S2 ->
   forall S1', match_states S1 S1' ->
@@ -227,6 +230,7 @@ Proof.
   inv STACKS. inv H1.
   econstructor; split.
   eapply exec_return; eauto.
+  { inv H3; auto. }
   constructor; auto.
 Qed.
 
@@ -241,6 +245,49 @@ Proof.
     eapply function_ptr_translated; eauto.
     rewrite <- H3; apply sig_preserved.
   constructor. constructor.
+Qed.
+
+Lemma renum_pc_pre_main:
+  forall targs,
+  renum_pc (pnum (pre_main (arg_size targs))) 1%positive = 1%positive.
+Proof.
+  intros. unfold pre_main, renum_pc, pnum, successors_map, postorder.
+  simpl in *.
+  Local Ltac match_case:=
+    match goal with
+      |- context[match ?x with _ => _ end] =>
+      destruct x eqn:?HH; auto
+    | [H:context[match ?x with _ => _ end] |- _] =>
+      destruct x eqn:?HH; auto
+    end.
+  match_case.
+  match_case; try discriminate; subst.
+  set (Q:= fun x => x = @PTree.Leaf positive).
+  set (P:= fun x =>
+             exists g,
+               x = {| gr := g; wrk := nil;
+                      map := PTree.empty positive; next := 1 |}).
+  
+  match type of HH0 with
+  | ?LHS  = ?RHS =>
+    assert (Q LHS)
+  end.
+  eapply Iteration.WfIter.iterate_prop.
+  2: { instantiate (1:= P). eexists; reflexivity. }
+  intros. destruct H as (?&H); inv H.
+  simpl. subst Q; simpl. reflexivity.
+  unfold Q in *; congruence.
+Qed.
+
+
+Lemma pre_main_translated:
+  forall targs,
+    transf_function (pre_main (arg_size targs)) = pre_main (arg_size targs).
+Proof.
+  unfold transf_function; simpl.
+  intros; f_equal.
+  pose proof renum_pc_pre_main. unfold pnum in *.
+  rewrite H; reflexivity.
 Qed.
 
 Lemma transf_entry_points:
@@ -258,6 +305,11 @@ Proof.
       * eapply (@match_program_gen_len_defs program); eauto.
   - econstructor; eauto.
     repeat econstructor.
+    unfold pre_main_stack; simpl.
+    rewrite <- (pre_main_translated targs) at 2.
+    rewrite <- (renum_pc_pre_main targs) at 2.
+    econstructor.
+    constructor.
 Qed.
 Lemma transf_initial_states':
    forall s1 : RTL.state,
@@ -274,7 +326,8 @@ Qed.
 Lemma transf_final_states:
   forall S1 S2 r, match_states S1 S2 -> RTL.final_state S1 r -> RTL.final_state S2 r.
 Proof.
-  intros. inv H0. inv H. inv STACKS. constructor.
+  intros. inv H0. inv H. inv STACKS.
+  inv H3. constructor.
 Qed.
 
 Theorem transf_program_correct'':

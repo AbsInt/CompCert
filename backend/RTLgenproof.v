@@ -476,7 +476,8 @@ Definition transl_expr_prop
     (MWF: map_wf map)
     (TE: tr_expr f.(fn_code) map pr a ns nd rd dst)
     (ME: match_env map e le rs)
-    (EXT: Mem.extends m tm),
+    (EXT: Mem.extends m tm)
+    (Has_pre_main:has_pre_main cs),
   exists rs', exists tm',
      star (step tge) (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
   /\ match_env map (set_optvar dst v e) le rs'
@@ -490,7 +491,8 @@ Definition transl_exprlist_prop
     (MWF: map_wf map)
     (TE: tr_exprlist f.(fn_code) map pr al ns nd rl)
     (ME: match_env map e le rs)
-    (EXT: Mem.extends m tm),
+    (EXT: Mem.extends m tm)
+    (Has_pre_main:has_pre_main cs),
   exists rs', exists tm',
      star (step tge) (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
   /\ match_env map e le rs'
@@ -504,7 +506,8 @@ Definition transl_condexpr_prop
     (MWF: map_wf map)
     (TE: tr_condition f.(fn_code) map pr a ns ntrue nfalse)
     (ME: match_env map e le rs)
-    (EXT: Mem.extends m tm),
+    (EXT: Mem.extends m tm)
+    (Has_pre_main:has_pre_main cs),
   exists rs', exists tm',
      plus (step tge) (State cs f sp ns rs tm) E0 (State cs f sp (if v then ntrue else nfalse) rs' tm')
   /\ match_env map e le rs'
@@ -750,7 +753,7 @@ Proof.
   eapply star_left. eapply exec_function_external.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   apply star_one. apply exec_return.
-  reflexivity. reflexivity. reflexivity.
+  assumption. reflexivity. reflexivity. reflexivity.
 (* Match-env *)
   split. eauto with rtlg.
 (* Result reg *)
@@ -949,7 +952,8 @@ Definition transl_exitexpr_prop
     (MWF: map_wf map)
     (TE: tr_exitexpr f.(fn_code) map a ns nexits)
     (ME: match_env map e le rs)
-    (EXT: Mem.extends m tm),
+    (EXT: Mem.extends m tm)
+    (Has_pre_main:has_pre_main cs),
   exists nd, exists rs', exists tm',
      star (step tge) (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
   /\ nth_error nexits x = Some nd
@@ -1200,19 +1204,22 @@ Inductive tr_cont: RTL.code -> mapping ->
   | tr_Kblock: forall c map k nd nexits ngoto nret rret cs,
       tr_cont c map k nd nexits ngoto nret rret cs ->
       tr_cont c map (Kblock k) nd (nd :: nexits) ngoto nret rret cs
-  | tr_Kstop: forall c map ngoto nret rret cs,
+  | tr_Kstop: forall c map ngoto nret targs rret cs,
       c!nret = Some(Ireturn rret) ->
-      match_stacks Kstop cs ->
-      tr_cont c map Kstop nret nil ngoto nret rret cs
+      match_stacks (Kstop targs) cs ->
+      tr_cont c map (Kstop targs) nret nil ngoto nret rret cs
   | tr_Kcall: forall c map optid f sp e k ngoto nret rret cs,
       c!nret = Some(Ireturn rret) ->
       match_stacks (Kcall optid f sp e k) cs ->
       tr_cont c map (Kcall optid f sp e k) nret nil ngoto nret rret cs
 
 with match_stacks: CminorSel.cont -> list RTL.stackframe -> Prop :=
-  | match_stacks_stop:
-      match_stacks Kstop nil
-  | match_stacks_call: forall optid f sp e k r tf n rs cs map nexits ngoto nret rret,
+  | match_stacks_stop1: forall targs,
+      match_stacks (Kstop targs) (pre_main_staklist targs)
+  (*| match_stacks_stop2:
+      match_stacks Kstop nil *)
+  | match_stacks_call: forall optid f sp e k r tf n rs cs map nexits ngoto nret rret
+    (Has_pre_main:has_pre_main cs),
       map_wf map ->
       tr_fun tf map f ngoto nret rret ->
       match_env map e nil rs ->
@@ -1228,7 +1235,8 @@ Inductive match_states: CminorSel.state -> RTL.state -> Prop :=
         (TF: tr_fun tf map f ngoto nret rret)
         (TK: tr_cont tf.(fn_code) map k ncont nexits ngoto nret rret cs)
         (ME: match_env map e nil rs)
-        (MEXT: Mem.extends m tm),
+        (MEXT: Mem.extends m tm)
+        (Has_pre_main:has_pre_main cs),
       match_states (CminorSel.State f s k sp e m)
                    (RTL.State cs tf sp ns rs tm)
   | match_callstate:
@@ -1236,14 +1244,16 @@ Inductive match_states: CminorSel.state -> RTL.state -> Prop :=
         (TF: transl_fundef f = OK tf)
         (MS: match_stacks k cs)
         (LD: Val.lessdef_list args targs)
-        (MEXT: Mem.extends m tm),
+        (MEXT: Mem.extends m tm)
+        (Has_pre_main:has_pre_main cs),
       match_states (CminorSel.Callstate f args k m)
                    (RTL.Callstate cs tf targs tm)
   | match_returnstate:
       forall v tv k m tm cs
         (MS: match_stacks k cs)
         (LD: Val.lessdef v tv)
-        (MEXT: Mem.extends m tm),
+        (MEXT: Mem.extends m tm)
+        (Has_pre_main:has_pre_main cs),
       match_states (CminorSel.Returnstate v k m)
                    (RTL.Returnstate cs tv tm).
 
@@ -1262,11 +1272,12 @@ Lemma tr_cont_call_cont:
 Proof.
   induction 1; simpl; auto; econstructor; eauto.
 Qed.
-
+                                                      
 Lemma tr_find_label:
   forall c map lbl n (ngoto: labelmap) nret rret s' k' cs,
   ngoto!lbl = Some n ->
-  forall s k ns1 nd1 nexits1,
+  forall s k ns1 nd1 nexits1
+  (Has_pre_main: has_pre_main cs),
   find_label lbl s k = Some (s', k') ->
   tr_stmt c map s ns1 nd1 nexits1 ngoto nret rret ->
   tr_cont c map k nd1 nexits1 ngoto nret rret cs ->
@@ -1555,11 +1566,12 @@ Proof.
   (* return *)
   inv MS.
   econstructor; split.
-  left; apply plus_one; constructor.
+  left; apply plus_one; constructor; auto.
   econstructor; eauto. constructor.
   eapply match_env_update_dest; eauto.
 Qed.
 
+(*
 Lemma transl_initial_states:
   forall S, CminorSel.initial_state prog S ->
   exists R, RTL.initial_state tprog R /\ match_states S R.
@@ -1575,6 +1587,7 @@ Proof.
   constructor. auto. constructor.
   constructor. apply Mem.extends_refl.
 Qed.
+ *)
 
 Lemma transl_entry_points:
   forall (s1 : CminorSel.state) (f : val) (arg : list val) (m0 : mem),
@@ -1663,8 +1676,9 @@ Proof.
       eapply match_program_gen_len_defs in TRANSL; eauto.
   - econstructor; eauto.
     + simpl. rewrite EQ; reflexivity.
-    + econstructor.
-    + admit. (*proven elsewhere *)
+    + pose proof match_stacks_stop1.
+      admit. (* relate arg to kstop typ*)
+    + induction arg; auto.
     + apply Mem.extends_refl.
 Admitted.
 
@@ -1685,9 +1699,8 @@ Lemma transl_final_states:
   forall S R r,
   match_states S R -> CminorSel.final_state S r -> RTL.final_state R r.
 Proof.
-  intros. inv H0. inv H. inv MS. inv LD. constructor.
+  intros. inv H0. inv H. inv LD. inv MS; try constructor.
 Qed.
-
 Theorem transf_program_correct'':
   forward_simulation (CminorSel.semantics prog) (RTL.semantics tprog).
 Proof.

@@ -152,10 +152,10 @@ a function call in progress.
 Inductive stackframe : Type :=
   | Stackframe:
       forall (res: reg)            (**r where to store the result *)
-             (f: function)         (**r calling function *)
-             (sp: val)             (**r stack pointer in calling function *)
-             (pc: node)            (**r program point in calling function *)
-             (rs: regset),         (**r register state in calling function *)
+        (f: function)         (**r calling function *)
+        (sp: val)             (**r stack pointer in calling function *)
+        (pc: node)            (**r program point in calling function *)
+        (rs: regset),         (**r register state in calling function *)
       stackframe.
 
 Inductive state : Type :=
@@ -243,7 +243,15 @@ Definition find_function
   [step ge st1 t st2], where [ge] is the global environment,
   [st1] the initial state, [st2] the final state, and [t] the trace
   of system calls performed during this transition. *)
-
+Definition has_pre_main (cs:list stackframe):= (0 < length cs)%nat.
+Lemma has_pre_main_cons:
+  forall hd tl, has_pre_main (hd::tl).
+Proof. intros. unfold has_pre_main. simpl; omega. Qed.
+(* Move to RTL.v*)
+Lemma nil_has_pre_main:
+      has_pre_main nil -> False.
+Proof. unfold has_pre_main; simpl; omega. Qed.
+  
 Inductive step: state -> trace -> state -> Prop :=
   | exec_Inop:
       forall s f sp pc rs m pc',
@@ -328,7 +336,8 @@ Inductive step: state -> trace -> state -> Prop :=
       step (Callstate s (External ef) args m)
          t (Returnstate s res m')
   | exec_return:
-      forall res f sp pc rs s vres m,
+      forall res f sp pc rs s vres m
+      (Has_pre_main: has_pre_main s), 
       step (Returnstate (Stackframe res f sp pc rs :: s) vres m)
         E0 (State s f sp pc (rs#res <- vres) m).
 
@@ -356,6 +365,7 @@ Proof.
 Qed.
 
 End RELSEM.
+Hint Resolve has_pre_main_cons.
 
 (** Execution of whole programs are described as sequences of transitions
   from an initial state to a final state.  An initial state is a [Callstate]
@@ -373,10 +383,34 @@ Inductive initial_state (p: program): state -> Prop :=
 
 Require Import Conventions.
 
+
+Definition pre_main_sig: signature:=
+  {| sig_args := nil;
+     sig_res := None ;
+     sig_cc := cc_default |}.
+Definition pre_main_code: code:= PTree.Leaf.
+Definition pre_main (stck_sz:Z): function:=
+  {| fn_sig := pre_main_sig;
+    fn_params := nil ;
+    fn_stacksize := stck_sz;
+    fn_code := pre_main_code;
+    fn_entrypoint := 1%positive |}.
+Definition pre_main_return: reg:= 1%positive.
+Definition pre_main_regset: regset:= (Vundef, PTree.Leaf).
+
+Definition pre_main_stack (stck_sz:Z): stackframe:=
+  Stackframe
+    pre_main_return
+    (pre_main stck_sz)
+    Vundef                 (* no stack pointere for pre_main *)
+    1%positive             (* no program point in pre_main *)
+    pre_main_regset.
+Definition arg_size (args : list typ):= Z.of_nat (Datatypes.length args).
+Definition pre_main_staklist (args : list typ):= (pre_main_stack (arg_size args))::nil.
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
 | entry_point_intro: 
     let ge := Genv.globalenv p in
-    forall f fb m0 m1 args stk,
+    forall f fb m0 m1 args targs stk,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       (* Assume there are no local variables, this could change*)
       (* The only argument is a pointer*)
@@ -394,13 +428,13 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       entry_point p m0
-                  (Callstate nil (Internal f) args m1) (Vptr fb Ptrofs.zero) args.
+                  (Callstate (pre_main_staklist targs) (Internal f) args m1) (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty call stack. *)
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall r m,
-      final_state (Returnstate nil (Vint r) m) r.
+  | final_state_intro: forall r m pre_main,
+      final_state (Returnstate (pre_main::nil) (Vint r) m) r.
 
 (** The small-step semantics for a program. *)
 

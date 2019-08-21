@@ -500,10 +500,14 @@ Qed.
 
 Inductive match_stacks (F: meminj) (m m': mem):
              list stackframe -> list stackframe -> block -> Prop :=
-  | match_stacks_nil: forall bound1 bound
+  (*| match_stacks_nil: forall bound1 bound
         (MG: match_globalenvs F bound1)
         (BELOW: Ple bound1 bound),
-      match_stacks F m m' nil nil bound
+      match_stacks F m m' nil nil bound *)
+  | match_stacks_one: forall bound1 bound s
+        (MG: match_globalenvs F bound1)
+        (BELOW: Ple bound1 bound),
+      match_stacks F m m' (s::nil) (s::nil) bound
   | match_stacks_cons: forall res f sp pc rs stk f' sp' rs' stk' bound fenv ctx
         (MS: match_stacks_inside F m m' stk stk' f' ctx sp' rs')
         (COMPAT: fenv_compat prog fenv)
@@ -592,7 +596,7 @@ Lemma match_stacks_bound:
   match_stacks F m m' stk stk' bound1.
 Proof.
   intros. inv H.
-  apply match_stacks_nil with bound0. auto. eapply Ple_trans; eauto.
+  apply match_stacks_one with bound0. auto. eapply Ple_trans; eauto.
   eapply match_stacks_cons; eauto. eapply Pos.lt_le_trans; eauto.
   eapply match_stacks_untailcall; eauto. eapply Pos.lt_le_trans; eauto.
 Qed.
@@ -633,7 +637,7 @@ with match_stacks_inside_invariant:
 Proof.
   induction 1; intros.
   (* nil *)
-  apply match_stacks_nil with (bound1 := bound1).
+  apply match_stacks_one with (bound1 := bound1).
   inv MG. constructor; auto.
   intros. apply IMAGE with delta. eapply INJ; eauto. eapply Pos.lt_le_trans; eauto.
   auto. auto.
@@ -675,6 +679,43 @@ Proof.
     intros. eapply PERM2; eauto. xomega.
 Qed.
 
+
+Lemma match_stack_not_nil:
+      forall F m m' stk stk' sp',
+        match_stacks F m m' stk stk' sp' ->
+        stk <> nil /\ stk' <> nil
+    with match_stack_inside_not_nil:
+        forall F m m' stk stk' f' ctx' sp' rs',   
+          match_stacks_inside F m m' stk stk'
+                              f' ctx' sp' rs' ->
+          stk <> nil /\ stk' <> nil.
+Proof.
+  - intros.
+    inv H; simpl;
+      split; try solve[intros HH; inv HH].
+    exploit match_stack_inside_not_nil; eauto;
+      intros [? ?]; auto.
+  - intros. inv H.
+    + eapply match_stack_not_nil; eauto.
+    + split; try solve[intros HH; inv HH].
+    exploit match_stack_inside_not_nil; eauto;
+      intros [? ?]; auto.
+Qed.
+Lemma match_stack_not_nil1:
+      forall F m m' stk' sp',
+        match_stacks
+          F m m' nil stk' sp' -> False
+    with match_stack_inside_not_nil1:
+        forall F m m' stk' f' ctx' sp' rs',   
+          match_stacks_inside
+            F m m' nil stk'
+            f' ctx' sp' rs' -> False.
+Proof.
+  - intros. inv H.
+    exploit match_stack_inside_not_nil; eauto.
+  - intros. inv H. 
+    exploit match_stack_not_nil; eauto.
+Qed.
 Lemma match_stacks_empty:
   forall stk stk' bound,
   match_stacks F m m' stk stk' bound -> stk = nil -> stk' = nil
@@ -684,12 +725,46 @@ with match_stacks_inside_empty:
 Proof.
   induction 1; intros.
   auto.
-  discriminate.
-  exploit match_stacks_inside_empty; eauto. intros [A B]. congruence.
-  induction 1; intros.
-  split. eapply match_stacks_empty; eauto. auto.
-  discriminate.
+  (*match_stacks_one*) discriminate.
+  (*match_stacks_cons*) exploit match_stacks_inside_empty; eauto. intros [A B]. congruence.
+  (*match_stacks_untailcall*) induction 1; intros.
+  (*match_stacks_inside_base*) split. eapply match_stacks_empty; eauto. auto.
+  (* match_stacks_inside_inlined*) discriminate.
 Qed.
+Lemma match_stacks_justone:
+  forall stk stk' bound,
+    match_stacks F m m' stk stk' bound ->
+    forall s, stk = s::nil -> stk' = s::nil
+with match_stacks_inside_justone:
+  forall stk stk' f ctx sp rs,
+    match_stacks_inside F m m' stk stk' f ctx sp rs ->
+    forall s, stk = s::nil -> stk' = s::nil /\ ctx.(retinfo) = None.
+Proof.
+  - (*match_stacks*) induction 1; intros.
+    + (*match_stacks_one*)
+      auto. 
+    + (*match_stacks_cons*)
+      inv H. exfalso; eapply match_stack_inside_not_nil1; eauto.
+    + (*match_stacks_untailcall*)
+      exploit match_stacks_inside_justone; eauto. intros [A B]. congruence.
+  - (*match_stacks_inside*) induction 1; intros.
+   + (*match_stacks_inside_base*)  split. eapply match_stacks_justone; eauto. auto.
+   + inv H0. exfalso; eapply match_stack_inside_not_nil1; eauto.
+Qed.
+
+Lemma match_stk_pre_main:
+  forall F m m' stk1 stk2 sp,
+    match_stacks F m m' stk1 stk2 sp ->
+    has_pre_main stk2
+with match_stk_pre_main_inside: 
+  forall F m m' stk1 stk2 f' ctx sp rs, 
+    match_stacks_inside F m m' stk1 stk2 f' ctx sp rs-> 
+    has_pre_main stk2.
+Proof.
+  - intros. inv H; auto.
+  - intros * H. induction H; auto.
+    eapply match_stk_pre_main; eauto.
+Qed. 
 
 End MATCH_STACKS.
 
@@ -832,7 +907,7 @@ with match_stacks_inside_extcall:
   match_stacks_inside F2 m2 m2' stk stk' f' ctx sp' rs'.
 Proof.
   induction 1; intros.
-  apply match_stacks_nil with bound1; auto.
+  apply match_stacks_one with bound1; auto.
     inv MG. constructor; intros; eauto.
     destruct (F1 b1) as [[b2' delta']|] eqn:?.
     exploit INCR; eauto. intros EQ; rewrite H0 in EQ; inv EQ. eapply IMAGE; eauto.
@@ -974,6 +1049,10 @@ Definition CONCL1 S1' S2 F t:=
 Definition CONCL2 S1 S1' S2 f t :=
   t = E0 /\ (measure S2 < measure S1)%nat /\ match_states f S2 S1'.
 
+
+
+ 
+    
 Theorem step_simulation:
   forall S1 t S2,
   step ge S1 t S2 ->
@@ -1315,7 +1394,8 @@ Proof.
   split; [| split; trivial].
   econstructor.
     eapply match_stacks_bound with (Mem.nextblock m'0).
-    eapply match_stacks_extcall with (F1 := F) (F2 := F1) (m1 := m) (m1' := m'0); eauto.
+    eapply match_stacks_extcall with (F1 := F) (F2 := F1) (m1 := m) (m1' := m'0);
+      eauto.
     intros; eapply external_call_max_perm; eauto.
     intros; eapply external_call_max_perm; eauto.
     xomega.
@@ -1325,9 +1405,13 @@ Proof.
 
 - (* return fron noninlined function *)
   inv MS0.
-+ (* normal case *)
+  + (* one case*)
+    inv Has_pre_main.
+  + (* normal case *)
+    
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_return.
+  eapply match_stk_pre_main_inside; eauto.
   split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   apply match_stacks_inside_set_reg; auto.
@@ -1337,6 +1421,7 @@ Proof.
   rewrite RET in RET0; inv RET0.
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_return.
+  eapply match_stk_pre_main_inside; eauto.
   split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   eapply match_regular_states.
   eapply match_stacks_inside_set_reg; eauto.
@@ -1365,7 +1450,7 @@ Proof.
   econstructor; eauto. subst vres. apply agree_set_reg_undef'; auto.
 Qed.
 
-Lemma transf_initial_states:
+(*Lemma transf_initial_states:
   forall st1, initial_state prog st1 -> exists j st2, initial_state tprog st2 /\ match_states j st1 st2.
 Proof.
   intros. inv H.
@@ -1379,7 +1464,7 @@ Proof.
     rewrite <- H3. eapply sig_function_translated; eauto.
   econstructor; eauto.
   (*instantiate (1 := Mem.flat_inj (Mem.nextblock m0)).*)
-  apply match_stacks_nil with (Mem.nextblock m0).
+  apply match_stacks_one with (Mem.nextblock m0).
   constructor; intros; subst j.
     unfold Mem.flat_inj. apply pred_dec_true; auto.
     unfold Mem.flat_inj in H. destruct (plt b1 (Mem.nextblock m0)); congruence.
@@ -1390,7 +1475,7 @@ Proof.
   eapply Genv.initmem_inject; eauto.
   (*FULL*)
   red; intros; subst j. unfold Mem.flat_inj. destruct (plt b0 (Mem.nextblock m0)). congruence. elim n. apply H.
-Qed.
+Qed.*)
 
 (* sounds false: inlining increases stack size!
 Lemma transf_stacksize:
@@ -1510,14 +1595,46 @@ Proof.
   - simpl. destruct TRANSF as (P & Q & R).
     rewrite symbols_preserved, Q; auto.
 Qed.
+(*
+Lemma match_stack_not_try:
+      forall F m m' st stk' sp',
+        match_stacks F m m' (st::nil) stk' sp' ->
+        stk' = st::nil
+    with match_stack_inside_not_try:
+        forall F m m' st stk' f' ctx' sp' rs',   
+          match_stacks_inside F m m' (st::nil) stk'
+                              f' ctx' sp' rs' ->
+          stk' = st::nil.
+Proof.
+  - intros. inv H; simpl; auto.
+    apply match_stack_inside_not_nil1 in MS;
+      exfalso; auto.
+    exploit match_stack_inside_not_try; eauto.
+    intros H; subst.
+    apply match_stack_inside_not_nil1 in MS;
+    exfalso; auto.
+    eauto.
+    intros [? ?]; eauto.
+      split; try solve[intros HH; inv HH].
+    exploit match_stack_inside_not_nil; eauto;
+      intros [? ?]; auto.
+  - intros. inv H.
+    + eapply match_stack_not_nil; eauto.
+    + split; try solve[intros HH; inv HH].
+    exploit match_stack_inside_not_nil; eauto;
+      intros [? ?]; auto.
+Qed.*)
 
 Lemma transf_final_states:
   forall st1 st2 r f,
-  match_states f st1 st2 -> final_state st1 r -> final_state st2 r.
+    match_states f st1 st2 ->
+    final_state st1 r ->
+    final_state st2 r.
 Proof.
   intros. inv H0. inv H.
-  exploit match_stacks_empty; eauto. intros EQ; subst. inv VINJ. constructor.
-  exploit match_stacks_inside_empty; eauto. intros [A B]. congruence.
+  - exploit match_stacks_justone; eauto.
+    intros EQ; subst. inv VINJ. constructor.
+  - exploit match_stacks_inside_justone; eauto. intros [A B]. congruence.
 Qed.
 
 (*Theorem transf_program_correct:

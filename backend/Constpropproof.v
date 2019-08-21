@@ -553,6 +553,7 @@ Opaque builtin_strength_reduction.
   inv H4. inv H1.
   left; exists O; econstructor; split.
   eapply exec_return; eauto.
+  { inv H3; auto. }
   econstructor; eauto. constructor. apply set_reg_lessdef; auto.
 Qed.
 
@@ -576,7 +577,8 @@ Lemma transf_final_states:
   forall n st1 st2 r,
   match_states n st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv STACKS. inv RES. constructor.
+  intros. inv H0. inv H. inv STACKS. inv RES.
+  inv H3. constructor.
 Qed.
 
 (** The preservation of the observable behavior of the program then
