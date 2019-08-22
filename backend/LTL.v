@@ -358,10 +358,42 @@ Fixpoint setlist (locs: list (rpair loc))(args:list val) base :=
 Definition build_ls_from_arguments (fs: signature)(args:list val) :=
   setlist (loc_arguments fs) args (Locmap.init Vundef).
 
+
+
+Definition pre_main_sig: signature:=
+  {| sig_args := nil;
+     sig_res := None ;
+     sig_cc := cc_default |}.
+Definition pre_main_code: code:= PTree.Leaf.
+Definition pre_main (stck_sz:Z): function:=
+  {| fn_sig := pre_main_sig;
+     fn_stacksize := stck_sz;
+     fn_code := pre_main_code;
+     fn_entrypoint := 1%positive |}.
+(*Definition pre_main_return: reg:= 1%positive.*)
+Definition pre_main_locset: locset:= Locmap.init Vundef.
+Definition pre_main_stack (stck_sz:Z): stackframe:=
+  Stackframe
+    (pre_main stck_sz)
+    Vundef                 (* no stack pointere for pre_main *)
+    pre_main_locset        (* empty environment in pre_main *)
+    nil.                   (* No continuation in pre_main *)
+Definition arg_size (args : list typ):= Z.of_nat (Datatypes.length args).
+Definition pre_main_staklist (args : list typ):= (pre_main_stack (arg_size args))::nil.
+Definition has_pre_main (cs:list stackframe):= (0 < length cs)%nat.
+Lemma has_pre_main_cons:
+  forall hd tl, has_pre_main (hd::tl).
+Proof. intros. unfold has_pre_main. simpl; omega. Qed.
+(* Move to RTL.v*)
+Lemma nil_has_pre_main:
+      has_pre_main nil -> False.
+Proof. unfold has_pre_main; simpl; omega. Qed.
+
+
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
   | entry_point_intro: 
       let ge := Genv.globalenv p in
-      forall f fb m0 m1 arg stk l,
+      forall f fb m0 m1 arg targs stk l,
         Genv.find_funct_ptr ge fb = Some (Internal f) ->
         (*Make sure the memory is well formed *)
         globals_not_fresh ge m0 ->
@@ -371,13 +403,13 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
         l = Locmap.set (S Outgoing 0 Tany32)
                        arg (Locmap.init Vundef) (*TODO: GUESS AX? *)  ->
         entry_point p m0
-                    (Callstate nil (Internal f) l m1)
+                    (Callstate (pre_main_staklist targs) (Internal f) l m1)
                     (Vptr fb Ptrofs.zero) (arg::nil).
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall rs m retcode,
+  | final_state_intro: forall rs m retcode targs,
       Locmap.getpair (map_rpair R (loc_result signature_main)) rs = Vint retcode ->
-      final_state (Returnstate nil rs m) retcode.
+      final_state (Returnstate (pre_main_staklist targs) rs m) retcode.
 
 Definition semantics (p: program) :=
   let ge:= (Genv.globalenv p) in

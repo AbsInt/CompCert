@@ -428,7 +428,8 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       entry_point p m0
-                  (Callstate (pre_main_staklist targs) (Internal f) args m1) (Vptr fb Ptrofs.zero) args.
+                  (Callstate (pre_main_staklist targs)
+                             (Internal f) args m1) (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty call stack. *)
 

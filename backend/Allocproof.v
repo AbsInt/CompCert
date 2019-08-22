@@ -1891,10 +1891,10 @@ Qed.
 (** The simulation relation *)
 
 Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signature -> Prop :=
-| match_stackframes_nil: forall sg,
+| match_stackframes_one: forall targs sg,
       (*This is only true for main!!*)
-      (* sg.(sig_res) = Some Tint -> *)
-      match_stackframes nil nil sg
+    sg.(sig_res) = Some Tint ->
+    match_stackframes (RTL.pre_main_staklist targs) (pre_main_staklist targs) sg
   | match_stackframes_cons:
       forall res f sp pc rs s tf bb ls ts sg an e env
         (STACKS: match_stackframes s ts (fn_sig tf))
@@ -1957,7 +1957,7 @@ Lemma match_stackframes_change_sig:
   match_stackframes s ts sg'.
 Proof.
   intros. inv H.
-  constructor. 
+  constructor; rewrite <- H1; eauto. 
   econstructor; eauto.
   unfold proj_sig_res in *. rewrite H0; auto.
   intros. rewrite (loc_result_exten sg' sg) in H by auto. eauto.
@@ -2476,11 +2476,13 @@ Proof.
 
 (* return *)
 - inv STACKS.
-  exploit STEPS; eauto. rewrite WTRES0; auto. intros [ls2 [A B]].
-  econstructor; split.
-  eapply plus_left. constructor. eexact A. traceEq.
-  econstructor; eauto.
-  apply wt_regset_assign; auto. rewrite WTRES0; auto.
+  + (*the impossible case*)
+    apply RTL.nil_has_pre_main in Has_pre_main; inv Has_pre_main.
+  + exploit STEPS; eauto. rewrite WTRES0; auto. intros [ls2 [A B]].
+    econstructor; split.
+    eapply plus_left. constructor. eexact A. traceEq.
+    econstructor; eauto.
+    apply wt_regset_assign; auto. rewrite WTRES0; auto.
 Qed.
 
 (* Can't prove this because I removed *)
@@ -2527,34 +2529,33 @@ Lemma transl_entry_points:
 Proof.
   intros. inv H. subst ge0.
   destruct (function_ptr_translated _ _ H0) as (tf & A & B).
-  simpl in B. destruct (transf_function f0) eqn: Hf1; inv B.
-
+  monadInv B. rename x into f.
   assert (Hargs: exists a, arg = a::nil).
   { admit. (* TODO this has to be propagated upwards*) }
   destruct Hargs as (a&Hargs); subst arg.
   assert (H32: Archi.ptr64 = false) by admit.  
   assert (Hargs_typ: (sig_args (fn_sig f)) = (Tany32) :: nil)
     by admit.
+  assert (Hret_typ: (sig_res (fn_sig f)) = Some Tint)
+    by admit.
   assert (Harg: exists b, a = Vptr b Ptrofs.zero)
     by admit.
   destruct Harg as (b & Harg).
 
   econstructor; split.
-  - destruct (transf_function_inv _ _ Hf1).
+  - destruct (transf_function_inv _ _ EQ).
     econstructor.
     + eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
     + eauto.
     + eauto.
-    + instantiate(1:= Locmap.set (R X0) a (Locmap.init Vundef)).
-      admit. (* temp. assumption *)
+    + reflexivity.
+      
   - (* assert (Val.has_type_list arg (sig_args (funsig (Internal f)))).
     { erewrite sig_function_translated; simpl; eauto. } *)
-    
-    
     econstructor; eauto.
-    + econstructor; eauto.
+    + econstructor; simpl. eauto.
     + simpl; rewrite Hf1; reflexivity.
     + unfold loc_arguments.
       rewrite H32.
@@ -2610,6 +2611,11 @@ Lemma final_states_simulation:
 Proof.
   intros. inv H0. inv H. inv STACKS.
   econstructor. rewrite <- (loc_result_exten sg). inv RES; auto.
+  simpl.
+  unfold proj_sig_res in *.
+  destruct (sig_res sg); simpl in *.
+  destruct t; try inv WTRES; auto.
+  inv WTRES.
   admit. (* problem with return signature*)
   (* rewrite H; auto.*)
 Admitted.

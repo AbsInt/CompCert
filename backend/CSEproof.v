@@ -918,8 +918,8 @@ Definition analyze (cu: program) (f: function) :=
   CSE.analyze f (vanalyze (romem_for cu) f).
 
 Inductive match_stackframes: list stackframe -> list stackframe -> Prop :=
-  | match_stackframes_nil:
-      match_stackframes nil nil
+  | match_stackframes_one: forall s, 
+      match_stackframes (s::nil) (s::nil)
   | match_stackframes_cons:
       forall res sp pc rs f s rs' s' cu approx
            (LINK: linkorder cu prog)
@@ -1205,13 +1205,17 @@ Proof.
   econstructor; eauto.
 
 - (* return *)
-  inv STACK.
+  inv STACK; eauto.
+  { exploit nil_has_pre_main; eauto.
+    intros HH; inv HH. }
   econstructor; split.
   eapply exec_return; eauto.
+  inv STACKS; auto.
   econstructor; eauto.
   apply set_reg_lessdef; auto.
 Qed.
 
+(*
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
@@ -1227,7 +1231,7 @@ Proof.
   rewrite <- H3. eapply sig_preserved; eauto.
   econstructor. eauto. constructor. auto. auto. apply Mem.extends_refl.
 Qed.
-
+*)
 
 
 Ltac common_tacs_after_destruct H:=
@@ -1276,7 +1280,7 @@ Proof.
       * unfold ge0 in *. simpl in H2; eapply H2.
       * eapply (@match_program_gen_len_defs program); eauto.
   - econstructor; try apply B; eauto.
-    + econstructor.
+    + unfold pre_main_staklist; constructor. 
     + simpl; rewrite EQ; auto.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
@@ -1299,6 +1303,7 @@ Lemma transf_final_states:
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv RES. inv STACK. constructor.
+  inv STACKS.
 Qed.
 
 Theorem transf_program_correct'':
