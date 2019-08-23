@@ -146,7 +146,9 @@ let expand_annot_val kind txt targ args res =
    Temporary registers used: x15 x16 x17 x29 x30. *)
 
 let offset_in_range ofs =
-  let ofs = Z.to_int64 ofs in 0L <= ofs && ofs < 0x1000L
+  (* The 512 upper bound comes from ldp/stp.  Single-register load/store
+     instructions support bigger offsets. *)
+  let ofs = Z.to_int64 ofs in 0L <= ofs && ofs < 512L
   
 let memcpy_small_arg sz arg tmp =
   match arg with
