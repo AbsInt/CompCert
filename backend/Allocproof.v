@@ -1891,10 +1891,11 @@ Qed.
 (** The simulation relation *)
 
 Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signature -> Prop :=
-| match_stackframes_one: forall targs sg,
+| match_stackframes_one: forall targs sg args,
       (*This is only true for main!!*)
     sg.(sig_res) = Some Tint ->
-    match_stackframes (RTL.pre_main_staklist targs) (pre_main_staklist targs) sg
+    match_stackframes (RTL.pre_main_staklist targs)
+                      (pre_main_staklist targs args) sg
   | match_stackframes_cons:
       forall res f sp pc rs s tf bb ls ts sg an e env
         (STACKS: match_stackframes s ts (fn_sig tf))
@@ -2485,7 +2486,7 @@ Proof.
     apply wt_regset_assign; auto. rewrite WTRES0; auto.
 Qed.
 
-(* Can't prove this because I removed *)
+(* Can't prove this because I removed come things a bout initia_state *)
 (*
 Lemma initial_states_simulation:
   forall st1, RTL.initial_state prog st1 ->
@@ -2522,74 +2523,315 @@ Proof.
 - constructor.
 Qed.
 
+
+Definition size_typed ty v:=
+  Val.load_result (chunk_of_type ty) v = v.
+
+Definition Sloc2typ (a:loc): typ:=
+      match a with
+        R m => Tany64
+      | S _ _ ty => ty
+      end.
+Definition loc2typ:=
+  typ_rpair Loc.type.
+Lemma loc_blah':
+  forall r v set,
+    Val.has_type v (Sloc2typ r) ->
+    Locmap.set r v set r = v.
+Proof.
+  intros.
+  apply Val.load_result_same in H.
+  rewrite Locmap.gss. destruct r eqn:HHH; auto.
+Qed.
+Definition not_twolong {T} (a: rpair T):=
+  match a with
+  | Twolong _ _ => False
+  | _ => True
+  end.
+Definition twolong {T} (a: rpair T):=
+  match a with
+  | Twolong _ _ => True
+  | _ => False
+  end.
+Inductive BLAH:=
+  | BLAH_intro  (H64: Archi.ptr64 = true).
+(* Lemma loc_blah:
+  forall a v set,
+    (Archi.ptr64 = true -> not_twolong a) -> 
+    Val.has_type v (loc2typ a) ->
+    Locmap.getpair a (setpair a v set) = v.
+Proof.
+  intros.
+  unfold Locmap.getpair.
+  destruct a eqn:Ha.
+  - eapply loc_blah'; auto.
+  - unfold not_twolong in *.
+    destruct Archi.ptr64 eqn:H32.
+    + solve[contradict H; auto].
+    + erewrite <- val_longofwords_eq_1; eauto.
+      f_equal; simpl.
+      erewrite Locmap.gso.
+      rewrite Locmap.gss.
+      destruct rhi; eauto.
+      apply Val.load_result_same; auto.
+      simpl in H0.
+      (*
+    eapply val_longofwords_eq_1.
+    erewrite loc_blah'.
+    erewrite Locmap.gso.
+    erewrite loc_blah'.
+    simpl in H0.
+    + destruct v; try solve[inv H0].
+      * reflexivity.
+      * simpl.
+        f_equal.
+        apply Int64.ofwords_recompose.
+      * simpl. simpl in H0. unfold not_twolong in *.
+        contradict H; auto.
+    + simpl.*)
+        
+Admitted.
+  *)
+Definition twolong_type_diff p:=
+              match p with
+                Twolong rhi rlo =>
+                Loc.type rlo = Tint /\
+                Loc.type rhi = Tint /\
+                Loc.diff rlo rhi
+              | _ => True
+              end.
+      Lemma locmap_gss:
+        forall p v lm,
+          Val.has_type v (loc2typ p) ->
+          twolong_type_diff p ->
+          (twolong p -> Archi.ptr64 = false ) ->
+          Locmap.getpair p (setpair p v lm) = v.
+      Proof.
+        intros. destruct p eqn:HH.
+        - eapply Locmap.gss_typed; auto.
+        - simpl.
+          destruct H0 as (Trlo& Trhi& Hdiff).
+          exploit H1; simpl; auto; intros H32.
+          rewrite <- val_longofwords_eq_1; eauto.
+          f_equal; swap 1 2.
+          + rewrite Locmap.gss_typed; auto.
+            unfold Val.loword; destruct v; simpl; auto.
+            rewrite Trlo; auto.
+          + rewrite Locmap.gso; auto.
+            rewrite Locmap.gss_typed; auto.
+            unfold Val.loword; destruct v; simpl; auto.
+            rewrite Trhi; auto.
+      Qed.
+      Definition rpair_loc_diff (p q:rpair loc):=
+        match p, q with
+          One a, One b => Loc.diff a b
+        | One a, Twolong b b' => Loc.diff a b /\ Loc.diff a b' 
+        | Twolong a a', One b => Loc.diff a b /\ Loc.diff a' b 
+        | Twolong a a', Twolong b b' =>
+          Loc.diff a b /\ Loc.diff a' b /\
+          Loc.diff a b' /\ Loc.diff a' b'
+        end.
+                                                        
+                                                        
+        
+      Lemma locmap_gso:
+        forall p q v lm,
+          rpair_loc_diff q p ->
+          Locmap.getpair p (setpair q v lm) = Locmap.getpair p lm.
+      Proof.
+        intros. destruct q eqn:Hq;
+                  destruct p eqn:Hp.
+        - simpl; rewrite Locmap.gso; auto.
+        - simpl; f_equal.
+          + rewrite Locmap.gso; auto.
+            destruct H; auto.
+          + rewrite Locmap.gso; auto.
+            destruct H; auto.
+        - destruct H.
+          simpl; f_equal.
+          rewrite Locmap.gso; auto.
+          rewrite Locmap.gso; auto.
+        - destruct H as (?&?&?&?).
+          simpl; f_equal;
+            repeat (rewrite Locmap.gso; auto).
+      Qed.
+      Definition loc_has_type_list arg typs:=
+        Forall2 (fun v l =>
+                   Val.has_type v l)
+                arg
+                (map loc2typ typs).
+      Definition twolong_type_diff_list ls:=
+        Forall twolong_type_diff ls.
+      Definition two_only32_list {T}
+                 (ls:list (rpair T)):=
+        Forall (fun a => twolong a -> Archi.ptr64 = false)
+               ls.
+      Fixpoint list_regs_of_rpair {A} (a: list (rpair A)) :
+        list A:=
+          match a with
+          | nil => nil
+          | cons hd tl => (regs_of_rpair hd) ++
+                      (list_regs_of_rpair tl)
+          end.
+      Definition rpair_notin {A}
+                 (a:rpair A)(ls:list A) :=
+        match a with
+          One r => ~ In r ls
+        | Twolong r r' => ~ In r ls /\ ~ In r' ls
+        end.
+        
+      Inductive non_rep_rpairs{A}: list (rpair A) -> Prop:=
+      | non_rep_rpairs_nil:
+          non_rep_rpairs nil
+      | non_rep_rpairs_cons:
+          forall l ls,
+            rpair_notin l (list_regs_of_rpair ls) ->
+            non_rep_rpairs ls ->
+            non_rep_rpairs (l::ls).
+      
+Set Nested Proofs Allowed.
+      
+Lemma rpair_notin_diff:
+  forall LOC, forall a x0 : rpair loc,
+      rpair_notin a (list_regs_of_rpair LOC) ->
+      In x0 LOC ->
+      rpair_loc_diff a x0.
+Admitted.
+Lemma loc_arguments_correct:
+  forall LOC arg
+    (Hnon_rep: non_rep_rpairs LOC)
+    (Hhas_type: loc_has_type_list arg LOC)
+    (Htyps: twolong_type_diff_list LOC)
+    (Honly32: two_only32_list LOC),
+    (map (fun p : rpair loc =>
+            Locmap.getpair p (setlist LOC arg (Locmap.init Vundef)))
+         LOC) = arg.
+Proof.
+  induction LOC; simpl.
+  - intros; destruct arg; auto. inversion Hhas_type.
+  - intros.
+    inv Hnon_rep. inv Hhas_type.
+    inv Htyps. inv Honly32.
+    f_equal.
+    + eapply locmap_gss; eauto.
+    + erewrite list_map_exten.
+      * eapply IHLOC; eauto.
+      * intros. symmetry.
+        erewrite locmap_gso.
+        reflexivity.
+        eapply rpair_notin_diff; eauto.
+Qed.
+
+Inductive type_lessdef a : typ -> Prop :=
+        | type_lessdef_refl: 
+            type_lessdef a a
+        | type_lessdef_any64:
+            type_lessdef a Tany64.
+        Lemma loc_arguments_less_type:
+          forall sg,
+          Forall2 type_lessdef
+                  (sig_args sg)
+                  (map loc2typ (loc_arguments sg)).
+        Admitted.
+        Lemma loc_has_type_list_less_def:
+          forall arg ls_typ ls_typ',
+          Forall2 (fun v l => Val.has_type v l) arg ls_typ ->
+          Forall2 type_lessdef
+                  ls_typ ls_typ' ->
+          Forall2 (fun v l => Val.has_type v l) arg ls_typ'.
+        Proof.
+          induction arg; intros; inv H; inv H0.
+          - constructor.
+          - constructor.
+            + inv H2; auto.
+              destruct a; simpl; auto.
+            + eapply IHarg; eauto.
+        Qed.
+        Lemma loc_arguments_two_only32_list:
+          forall sg,
+          two_only32_list (loc_arguments sg).
+        Admitted.
+        Lemma loc_arguments_twolong_type_diff:
+          forall sg,
+          twolong_type_diff_list (loc_arguments sg).
+        Admitted.
+        Lemma has_type_list_Forall2:
+          forall (arg : list val) (targs : list typ),
+  Val.has_type_list arg targs ->
+  Forall2 (fun (v : val) (l : typ) => Val.has_type v l) arg targs.
+        Proof.
+          induction arg; auto.
+          -- intros. destruct targs; try (inv H).
+             constructor.
+          --intros. destruct targs; inv H.
+            constructor; auto.
+        Qed.
+        Lemma loc_arguments_non_rep:
+          forall sg, non_rep_rpairs (loc_arguments sg).
+        Admitted.
+        Lemma loc_argumetn_properties:
+          forall sg,
+            non_rep_rpairs (loc_arguments sg) /\
+            twolong_type_diff_list (loc_arguments sg) /\
+            two_only32_list (loc_arguments sg) /\
+            Forall2 type_lessdef
+                    (sig_args sg)
+                    (map loc2typ (loc_arguments sg)).
+        Proof.
+          intros; repeat split;
+          first [apply loc_arguments_non_rep|
+                 apply loc_arguments_twolong_type_diff|
+                 apply loc_arguments_two_only32_list|
+                 apply loc_arguments_less_type].
+        Qed.
+        Lemma loc_arguments_retrieved:
+          forall sg LOC args,
+            Val.has_type_list args (sig_args sg) ->
+            LOC = loc_arguments sg ->
+            (map (fun p : rpair loc =>
+                    Locmap.getpair p
+                    (setlist LOC args (Locmap.init Vundef)))
+               LOC)= args.
+        Proof.
+          intros; subst.
+          destruct (loc_argumetn_properties sg) as (?&?&?&?).
+          eapply loc_arguments_correct; eauto.
+          eapply loc_has_type_list_less_def.
+          2: eapply loc_arguments_less_type.
+          apply has_type_list_Forall2; auto.
+        Qed.
+        
 Lemma transl_entry_points:
   forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
   RTL.entry_point prog m0 s1 f arg ->
   exists s2 : LTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  destruct (function_ptr_translated _ _ H0) as (tf & A & B).
-  monadInv B. rename x into f.
-  assert (Hargs: exists a, arg = a::nil).
-  { admit. (* TODO this has to be propagated upwards*) }
-  destruct Hargs as (a&Hargs); subst arg.
-  assert (H32: Archi.ptr64 = false) by admit.  
-  assert (Hargs_typ: (sig_args (fn_sig f)) = (Tany32) :: nil)
-    by admit.
-  assert (Hret_typ: (sig_res (fn_sig f)) = Some Tint)
-    by admit.
-  assert (Harg: exists b, a = Vptr b Ptrofs.zero)
-    by admit.
-  destruct Harg as (b & Harg).
-
+  exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
+  exploit sig_function_translated; eauto. intros SIG.
+  monadInv TR. rename x into f.
+  
   econstructor; split.
   - destruct (transf_function_inv _ _ EQ).
-    econstructor.
-    + eauto.
+      
+    econstructor; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
-    + eauto.
-    + eauto.
-    + reflexivity.
-      
   - (* assert (Val.has_type_list arg (sig_args (funsig (Internal f)))).
     { erewrite sig_function_translated; simpl; eauto. } *)
     econstructor; eauto.
-    + econstructor; simpl. eauto.
-    + simpl; rewrite Hf1; reflexivity.
-    + unfold loc_arguments.
-      rewrite H32.
-      simpl.
-      rewrite Hargs_typ; simpl.
-      rewrite Locmap.gss; simpl.
-      econstructor; auto.
-      subst a.
-      rewrite H32.
-      constructor.
-    + unfold agree_callee_save; intros.
-      erewrite Locmap.gso.
-      * reflexivity.
-      * unfold callee_save_loc in *.
-        simpl.
-        destruct l; auto.
+    + simpl in *. rewrite SIG.
+      eapply match_stackframes_one; auto.
+    + simpl; rewrite EQ; reflexivity.
+    + simpl; subst.
+      unfold build_ls_from_arguments.
+      erewrite loc_arguments_retrieved; eauto.
+      * clear; induction arg; auto.
+      * simpl in SIG. rewrite SIG; reflexivity.  
+    + intros ??; simpl. eauto.
     + apply Mem.extends_refl.
-    + simpl. rewrite Hargs_typ; auto.
-      split; auto.
-      (*Possible types of the pointeer: 
-
-      It's not: 
-      | Tlong 
-      | Tfloat
-      | Tsingle
-      | Tany64 
-      So it could be: 
-      | Tany32
-      | Tint
-       *)
-      subst a; simpl; auto.
-      
-Admitted.
-
+    + simpl in *; rewrite SIG; auto.
+Qed.
 
 Lemma initial_states_simulation':
   forall s1 : RTL.state,
@@ -2610,15 +2852,15 @@ Lemma final_states_simulation:
   match_states st1 st2 -> RTL.final_state st1 r -> LTL.final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv STACKS.
-  econstructor. rewrite <- (loc_result_exten sg). inv RES; auto.
-  simpl.
-  unfold proj_sig_res in *.
-  destruct (sig_res sg); simpl in *.
-  destruct t; try inv WTRES; auto.
-  inv WTRES.
-  admit. (* problem with return signature*)
-  (* rewrite H; auto.*)
-Admitted.
+  + econstructor.
+    rewrite <- (loc_result_exten sg). inv RES; auto.
+    simpl.
+    unfold proj_sig_res in *.
+    destruct (sig_res sg); simpl in *.
+    destruct t; try inv WTRES; auto.
+    auto.
+  + inv STACKS0.
+Qed.
 
 Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (LTL.semantics tprog).
@@ -2632,28 +2874,12 @@ Proof.
   inv H; subst ge0.
   econstructor; eauto.
   + econstructor; simpl.
-    admit. (* we need the retyurn to be an int. *)
-  + econstructor.
-    econstructor.
-    * rewrite H1; simpl.
-      admit. (* add sig f0 to entry_point*) 
-    * rewrite H1; simpl.
-      econstructor; auto. constructor.
-    * intros.
-      admit. (* Check how it's done in init_state*)
-    * econstructor.
-      admit. (* Check how it's done in init_state*)
-  + simpl.
-    admit. (* once added to the entry_point this will go*)
-  
+    inv A; auto.
+  + exploit Genv.find_funct_ptr_inversion; eauto.
+    intros (?&?).
+    eapply wt_prog; eauto.
 - intros.
-  exploit initial_states_simulation'; eauto. intros [st2 [A B]].
-  exists st2; split; auto. split; auto.
-  apply wt_initial_state with (p := prog); auto. exact wt_prog.
   admit.
-  (* need a new wt_initial_state. there is one for the old initial state*)
-  (*apply wt_initial_state with (p := prog); auto. exact wt_prog.*)
-  
 - intros. destruct H. eapply final_states_simulation; eauto.
 - intros. destruct H0.
   exploit step_simulation; eauto. intros [s2' [A B]].
@@ -2677,27 +2903,13 @@ Proof.
   inv H; subst ge0.
   econstructor; eauto.
   + econstructor; simpl.
-    admit. (* we need the retyurn to be an int. *)
-  + econstructor.
-    econstructor.
-    * rewrite H1; simpl.
-      admit. (* add sig f0 to entry_point*) 
-    * rewrite H1; simpl.
-      econstructor; auto. constructor.
-    * intros.
-      admit. (* Check how it's done in init_state*)
-    * econstructor.
-      admit. (* Check how it's done in init_state*)
-  + simpl.
-    admit. (* will be done once entry points are changed. *)
-    
-- intros.
-  exploit initial_states_simulation'; eauto. intros [st2 [A B]].
-  exists st2; split; auto. split; auto.
-  admit.
-  (* need a new wt_initial_state*)
-  (*apply wt_initial_state with (p := prog); auto. exact wt_prog.*)
-- intros. destruct H. eapply final_states_simulation; eauto.
+    inv A; auto.
+  + exploit Genv.find_funct_ptr_inversion; eauto.
+    intros (?&?).
+    eapply wt_prog; eauto.
+  - intros.
+    admit.
+  - intros. destruct H. eapply final_states_simulation; eauto.
 - intros. destruct H0.
   exploit step_simulation; eauto. intros [s2' [A B]].
   exists s2'; split. exact A. split.

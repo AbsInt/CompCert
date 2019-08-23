@@ -804,20 +804,22 @@ Inductive function_entry2 ge f vargs m e le m'
 *)
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
-    forall f fb m0 m1 args stk targs tres AT,
+    forall f fb m0 m1 args stk targs AT,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       (* Assume there are no local variables, this could change*)
       f.(fn_vars) = nil ->
       (* The only argument is a pointer*)
-      f.(fn_params) = (xH, Tpointer (Tfunction targs tres cc_default)  AT)::nil ->
+      f.(fn_params) = (xH, Tpointer (Tfunction targs type_int32s  cc_default)  AT)::nil ->
       (*Make sure the memory is well formed *)
       globals_not_fresh ge m0 ->
       Mem.mem_wd m0 ->
+      typlist_of_typelist targs =
+      (map (fun x => typ_of_type (snd x)) (fn_vars f)) ->
       (* Allocate a stackframe, to pass arguments in the stack*)
       Mem.alloc m0 0 0 = (m1, stk) ->
+      Val.has_type_list args (typlist_of_typelist targs) ->
       (*Mem.arg_well_formed args m0 ->
       val_casted_list args targs ->
-      Val.has_type_list args (typlist_of_typelist targs) ->
       val_casted_list_func args targs 
                            && tys_nonvoid targs 
                            && vals_defined args

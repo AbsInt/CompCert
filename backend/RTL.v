@@ -239,10 +239,6 @@ Definition find_function
       end
   end.
 
-(** The transitions are presented as an inductive predicate
-  [step ge st1 t st2], where [ge] is the global environment,
-  [st1] the initial state, [st2] the final state, and [t] the trace
-  of system calls performed during this transition. *)
 Definition has_pre_main (cs:list stackframe):= (0 < length cs)%nat.
 Lemma has_pre_main_cons:
   forall hd tl, has_pre_main (hd::tl).
@@ -251,7 +247,12 @@ Proof. intros. unfold has_pre_main. simpl; omega. Qed.
 Lemma nil_has_pre_main:
       has_pre_main nil -> False.
 Proof. unfold has_pre_main; simpl; omega. Qed.
-  
+
+
+(** The transitions are presented as an inductive predicate
+  [step ge st1 t st2], where [ge] is the global environment,
+  [st1] the initial state, [st2] the final state, and [t] the trace
+  of system calls performed during this transition. *)
 Inductive step: state -> trace -> state -> Prop :=
   | exec_Inop:
       forall s f sp pc rs m pc',
@@ -397,7 +398,6 @@ Definition pre_main (stck_sz:Z): function:=
     fn_entrypoint := 1%positive |}.
 Definition pre_main_return: reg:= 1%positive.
 Definition pre_main_regset: regset:= (Vundef, PTree.Leaf).
-
 Definition pre_main_stack (stck_sz:Z): stackframe:=
   Stackframe
     pre_main_return
@@ -407,6 +407,7 @@ Definition pre_main_stack (stck_sz:Z): stackframe:=
     pre_main_regset.
 Definition arg_size (args : list typ):= Z.of_nat (Datatypes.length args).
 Definition pre_main_staklist (args : list typ):= (pre_main_stack (arg_size args))::nil.
+
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
 | entry_point_intro: 
     let ge := Genv.globalenv p in
@@ -420,7 +421,13 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       Mem.mem_wd m0 ->
       (* Allocate a stackframe, to pass arguments in the stack*)
       Mem.alloc m0 0 0 = (m1, stk) ->
-      (*Mem.arg_well_formed args m0 ->
+      (funsig (Internal f)).(sig_res) = Some Tint ->
+      (* arguments are well typed by targs *)
+      targs = (sig_args (fn_sig f)) ->
+      Val.has_type_list args targs ->
+      
+      (* 
+         Mem.arg_well_formed args m0 ->
       val_casted_list args targs ->
       Val.has_type_list args (typlist_of_typelist targs) ->
       val_casted_list_func args targs 

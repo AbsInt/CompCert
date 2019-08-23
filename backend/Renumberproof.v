@@ -154,10 +154,6 @@ Inductive match_states: RTL.state -> RTL.state -> Prop :=
         (STACKS: list_forall2 match_frames stk stk'),
       match_states (Returnstate stk v m)
                    (Returnstate stk' v m).
-(* Move to RTL.v*)
-Lemma nil_has_pre_main:
-      has_pre_main nil -> False.
-Admitted.  
 Lemma step_simulation:
   forall S1 t S2, RTL.step ge S1 t S2 ->
   forall S1', match_states S1 S1' ->

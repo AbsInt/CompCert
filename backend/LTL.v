@@ -370,16 +370,24 @@ Definition pre_main (stck_sz:Z): function:=
      fn_stacksize := stck_sz;
      fn_code := pre_main_code;
      fn_entrypoint := 1%positive |}.
-(*Definition pre_main_return: reg:= 1%positive.*)
-Definition pre_main_locset: locset:= Locmap.init Vundef.
-Definition pre_main_stack (stck_sz:Z): stackframe:=
-  Stackframe
-    (pre_main stck_sz)
-    Vundef                 (* no stack pointere for pre_main *)
-    pre_main_locset        (* empty environment in pre_main *)
-    nil.                   (* No continuation in pre_main *)
+(* loc_arguments takes a signature, 
+   It generally only needs the types of arguemtns targs.
+   For RISC-V, it also takes calling conventions.
+ *)
+Definition pre_main_locset targs args: locset:=
+  let sg:= {| sig_args := targs;
+              sig_res := None;
+              sig_cc := cc_default |} in
+  build_ls_from_arguments sg args.
 Definition arg_size (args : list typ):= Z.of_nat (Datatypes.length args).
-Definition pre_main_staklist (args : list typ):= (pre_main_stack (arg_size args))::nil.
+Definition pre_main_stack targs args: stackframe:=
+  Stackframe
+    (pre_main (arg_size targs))
+    Vundef                     (* no stack pointere for pre_main *)
+    (pre_main_locset targs args) (* empty environment in pre_main *)
+    nil.                       (* No continuation in pre_main *)
+Definition pre_main_staklist sig args:=
+  (pre_main_stack sig args)::nil.
 Definition has_pre_main (cs:list stackframe):= (0 < length cs)%nat.
 Lemma has_pre_main_cons:
   forall hd tl, has_pre_main (hd::tl).
@@ -389,27 +397,29 @@ Lemma nil_has_pre_main:
       has_pre_main nil -> False.
 Proof. unfold has_pre_main; simpl; omega. Qed.
 
-
+        
+Search Locmap.t.
+(* build_ls_from_arguments *)
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
   | entry_point_intro: 
       let ge := Genv.globalenv p in
-      forall f fb m0 m1 arg targs stk l,
+      forall f fb m0 m1 args targs stk l,
         Genv.find_funct_ptr ge fb = Some (Internal f) ->
         (*Make sure the memory is well formed *)
         globals_not_fresh ge m0 ->
         Mem.mem_wd m0 ->
         (* Allocate a stackframe, to pass arguments in the stack*)
         Mem.alloc m0 0 0 = (m1, stk) ->
-        l = Locmap.set (S Outgoing 0 Tany32)
-                       arg (Locmap.init Vundef) (*TODO: GUESS AX? *)  ->
+        targs = sig_args (fn_sig f) ->
+        l = build_ls_from_arguments (fn_sig f) args ->
         entry_point p m0
-                    (Callstate (pre_main_staklist targs) (Internal f) l m1)
-                    (Vptr fb Ptrofs.zero) (arg::nil).
+                    (Callstate (pre_main_staklist targs args) (Internal f) l m1)
+                    (Vptr fb Ptrofs.zero) (args).
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall rs m retcode targs,
+  | final_state_intro: forall rs m retcode sig args,
       Locmap.getpair (map_rpair R (loc_result signature_main)) rs = Vint retcode ->
-      final_state (Returnstate (pre_main_staklist targs) rs m) retcode.
+      final_state (Returnstate (pre_main_staklist sig args) rs m) retcode.
 
 Definition semantics (p: program) :=
   let ge:= (Genv.globalenv p) in

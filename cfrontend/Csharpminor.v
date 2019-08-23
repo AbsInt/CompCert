@@ -553,17 +553,19 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       (*Make sure the memory is well formed *)
       globals_not_fresh ge m0 ->
       Mem.mem_wd m0 ->
+      targs = (sig_args (funsig f)) ->
       (* Allocate a stackframe, to pass arguments in the stack*)
       Mem.alloc m0 0 0 = (m1, stk) ->
+      Val.has_type_list args targs ->
       (*Mem.arg_well_formed args m0 ->
-      val_casted_list args targs ->
       Val.has_type_list args (typlist_of_typelist targs) ->
       val_casted_list_func args targs 
                            && tys_nonvoid targs 
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       entry_point p m0
-                  (Callstate (Internal f) args (Kstop targs) m1) (Vptr fb Ptrofs.zero) args.
+                  (Callstate (Internal f) args (Kstop targs) m1)
+                  (Vptr fb Ptrofs.zero) args.
 
 
 (** A final state is a [Returnstate] with an empty continuation. *)

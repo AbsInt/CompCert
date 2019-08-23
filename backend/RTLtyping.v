@@ -871,9 +871,9 @@ Proof.
 Qed.
 
 Inductive wt_stackframes: list stackframe -> signature -> Prop :=
-  | wt_stackframes_nil: forall sg,
+  | wt_stackframes_nil: forall sg targs,
       sg.(sig_res) = Some Tint ->
-      wt_stackframes nil sg
+      wt_stackframes (pre_main_staklist targs) sg
   | wt_stackframes_cons:
       forall s res f sp pc rs env sg,
       wt_function f env ->
@@ -973,18 +973,20 @@ Proof.
   econstructor; eauto. simpl.
   eapply external_call_well_typed; eauto.
   (* return *)
-  inv H1. econstructor; eauto.
+  inv H1.
+  apply nil_has_pre_main in Has_pre_main; inv Has_pre_main.
+  econstructor; eauto.
   apply wt_regset_assign; auto. rewrite H10; auto.
 Qed.
 
-Lemma wt_initial_state:
+(*Lemma wt_initial_state:
   forall S, initial_state p S -> wt_state S.
 Proof.
   intros. inv H. constructor. constructor. rewrite H3; auto.
   pattern f. apply Genv.find_funct_ptr_prop with fundef unit p b.
   exact wt_p. exact H2.
   rewrite H3. constructor.
-Qed.
+Qed.*)
 
 Lemma wt_instr_inv:
   forall s f sp pc rs m i,
