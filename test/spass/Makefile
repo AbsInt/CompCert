@@ -24,11 +24,10 @@ clean:
 test:
 	$(SIMU) ./spass small_problem.dfg | grep 'Proof found'
 
-TIME=xtime -o /dev/null     # Xavier's hack
-#TIME=time >/dev/null       # Otherwise
+TIME=ocaml unix.cma ../../tools/xtime.ml -o /dev/null -mintime 5.0
 
 bench:
-	@echo -n "spass: "; $(TIME) ./spass problem.dfg
+	@$(TIME) -name spass -- ./spass problem.dfg
 
 depend:
 	gcc -MM $(SRCS) > .depend

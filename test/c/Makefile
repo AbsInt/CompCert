@@ -7,8 +7,7 @@ CFLAGS=-O1 -Wall
 
 LIBS=$(LIBMATH)
 
-TIME=xtime -o /dev/null -mintime 2.0     # Xavier's hack
-#TIME=time >/dev/null                    # Otherwise
+TIME=ocaml unix.cma ../../tools/xtime.ml -o /dev/null -mintime 2.0 -minruns 4
 
 PROGS=fib integr qsort fft fftsp fftw sha1 sha3 aes almabench \
   lists binarytrees fannkuch knucleotide mandelbrot nbody \
@@ -48,12 +47,12 @@ test_gcc:
 
 bench_gcc:
 	@for i in $(PROGS); do \
-	   echo -n "$$i: "; $(TIME) ./$$i.gcc; \
+	   $(TIME) -name $$i -- ./$$i.gcc; \
          done
 
 bench:
 	@for i in $(PROGS); do \
-	   echo -n "$$i: "; $(TIME) ./$$i.compcert; \
+	   $(TIME) -name $$i -- ./$$i.compcert; \
          done
 
 clean:
