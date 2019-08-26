@@ -412,7 +412,8 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
         (* Allocate a stackframe, to pass arguments in the stack*)
         Mem.alloc m0 0 0  = (m1, stk) ->
         targs = sig_args (fn_sig f) ->
-        Val.has_type_list args targs -> 
+        Val.has_type_list args targs ->
+        Mem.arg_well_formed args m0 ->
         l = build_ls_from_arguments (fn_sig f) args ->
         entry_point p m0
                     (Callstate (pre_main_staklist targs args)

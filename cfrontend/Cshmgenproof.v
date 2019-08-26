@@ -1835,30 +1835,20 @@ Lemma transl_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros * Hentry. inv Hentry.
-  exploit function_ptr_translated; eauto.
-  replace m2 with m0 by admit. (*remove alloc from Clight. *)
-  intros (?&f0'&(Hptr'&f_match& Hlink)). 
+  exploit function_ptr_translated; eauto. intros (?&f0'&(Hptr'&f_match& Hlink)). 
   inversion f_match; subst.
-  exploit transl_fundef_sig2; eauto.
-  instantiate(1:=cc_default).
-  instantiate(1:=type_int32s).
-  instantiate(1:=targs).
-  admit. (*add to Clight: *)
-
-  intros SIG. simpl in SIG.
+  exploit transl_fundef_sig2; eauto. intros SIG. simpl in SIG.
   econstructor; split.
   - econstructor; simpl; try rewrite SIG; eauto; simpl.
     + unfold globals_not_fresh.
       pose proof genb_preserved as Hgenb. subst ge tge.
       rewrite <- Hgenb. auto.
-    + admit. (* add to Clight: Mem.arg_well_formed arg m0*)
   - econstructor; simpl; eauto.
     + econstructor.
-    + reflexivity.
       
       Unshelve.
       unshelve econstructor.
-Admitted.
+Qed.
 
 Lemma transl_initial_states':
     forall s1 : Smallstep.state (semantics2 prog),

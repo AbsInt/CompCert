@@ -1552,58 +1552,10 @@ Lemma globals_not_fresh_nextb:
   globals_not_fresh ge m2.
 Proof. unfold globals_not_fresh. intros; xomega. Qed.
 
-Lemma flat_inj_incr:
-  forall a b,
-    Ple a b->
-    inject_incr (Mem.flat_inj a) (Mem.flat_inj b).
-Proof.
-  intros ** ? *.
-  unfold Mem.flat_inj.
-  repeat match goal with
-    |- context [match ?x with _ => _ end] =>
-    destruct x eqn:?
-         end; auto; try xomega.
-  intros; congruence.
-Qed.
 
 
 
-Lemma inject_neutral_empty_blocks:
-  forall m,
-    Mem.inject_neutral (Mem.nextblock m) m ->
-    forall B, Ple (Mem.nextblock m) B ->
-         Mem.inject_neutral B m. 
-Proof.
-  unfold Mem.inject_neutral; intros.
-  inv H.
-  econstructor.
-  - intros.
-    exploit Mem.perm_valid_block; eauto.
-    intros. eapply mi_perm; eauto.
-    unfold Mem.valid_block, Mem.flat_inj in *.
-    destruct (plt b1 (Mem.nextblock m));
-      destruct (plt b1 B); auto; try xomega.
-  - intros.
-    unfold Mem.range_perm in *.
-    pose proof (size_chunk_pos chunk).
-    exploit (H1 ofs). xomega. intros.
-    exploit Mem.perm_valid_block; eauto.
-    intros. eapply mi_align; eauto.
-    unfold Mem.valid_block, Mem.flat_inj in *.
-    destruct (plt b1 (Mem.nextblock m));
-      destruct (plt b1 B); eauto; try xomega.
-  - intros.
-    exploit Mem.perm_valid_block; eauto.
-    intros. exploit mi_memval; eauto.
-    unfold Mem.valid_block, Mem.flat_inj in *.
-    destruct (plt b1 (Mem.nextblock m));
-      destruct (plt b1 B); auto; try xomega.
-    intros. eapply memval_inject_incr.
-    + unfold Mem.flat_inj in H.
-      destruct (plt b1 B); inv H.
-      eapply H3.
-    + apply flat_inj_incr; auto.
-Qed.
+
     
    
 Lemma transf_entry_points:
@@ -1639,13 +1591,13 @@ Proof.
     + unfold Mem.arg_well_formed in *.
       eapply val_inject_list_incr; try eassumption.
       exploit Mem.nextblock_alloc; eauto; intros ->.
-      apply flat_inj_incr; xomega.
+      apply Mem.flat_inj_incr; xomega.
     + unfold Mem.mem_wd in *.
       exploit Mem.nextblock_alloc; eauto; intros ->.
       unfold Mem.inject_neutral.
       eapply Mem.alloc_inject_neutral; eauto; swap 1 2.
       xomega.
-      eapply inject_neutral_empty_blocks; auto.
+      eapply Mem.inject_neutral_empty_blocks; auto.
       xomega.
     + apply flat_injection_full.
 Qed.

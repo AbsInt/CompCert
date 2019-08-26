@@ -804,7 +804,7 @@ Inductive function_entry2 ge f vargs m e le m'
 *)
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
-    forall f fb m0 m1 args stk targs AT,
+    forall f fb m0 args targs AT,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       (* Assume there are no local variables, this could change*)
       f.(fn_vars) = nil ->
@@ -816,8 +816,10 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
       typlist_of_typelist targs =
       (map (fun x => typ_of_type (snd x)) (fn_vars f)) ->
       (* Allocate a stackframe, to pass arguments in the stack*)
-      Mem.alloc m0 0 0 = (m1, stk) ->
+      (*Mem.alloc m0 0 0 = (m1, stk) -> *)
       Val.has_type_list args (typlist_of_typelist targs) ->
+      Mem.arg_well_formed args m0 ->
+      type_of_fundef (Internal f) = Tfunction targs type_int32s cc_default ->
       (*Mem.arg_well_formed args m0 ->
       val_casted_list args targs ->
       val_casted_list_func args targs 
@@ -825,7 +827,7 @@ Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       entry_point ge m0
-                  (Callstate (Internal f) args (Kstop targs) m1) (Vptr fb Ptrofs.zero) args.
+                  (Callstate (Internal f) args (Kstop targs) m0) (Vptr fb Ptrofs.zero) args.
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=

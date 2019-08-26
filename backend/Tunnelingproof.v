@@ -543,9 +543,9 @@ Proof.
   intros. inv H. subst ge0.
   exploit (function_ptr_translated); eauto. intro A.
   econstructor; split.
-  - econstructor; eauto.
+  - econstructor; eauto. 
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
-      eapply match_program_gen_len_defs in TRANSL; eauto.
+    eapply match_program_gen_len_defs in TRANSL; eauto.
   - econstructor; eauto.
     + econstructor; auto.
     + econstructor.

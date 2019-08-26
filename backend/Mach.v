@@ -342,7 +342,7 @@ Definition at_external (c: state) : option (external_function * list val) :=
     Callstate s b rs m =>
       match Genv.find_funct_ptr ge b with
       | Some (External ef) =>
-          match get_extcall_arguments rs m (parent_sp s) (Conventions1.loc_arguments (ef_sig ef)) with
+          match get_extcall_arguments rs m (parent_sp s) (loc_arguments (ef_sig ef)) with
           | Some args => Some (ef, args)
           | None => None
           end
@@ -542,32 +542,35 @@ Fixpoint make_arguments (rs: regset) (m: mem) sp (al: list (rpair loc)) (lv: lis
   | _, _ => None
   end.
 
-(* When we spawn a thread, it should have a stack frame under it with its arguments. *)
+
+Definition build_ls_from_arguments (sg:signature) (args:list val): regset:=
+  fun _ => Vundef.
+  
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall fb f m0 m1 stk args,
+  | entry_point_intro: forall f fb rs stk m0 m1 m2 args targs,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       globals_not_fresh ge m0 ->
       Mem.arg_well_formed args m0 ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      Val.has_type_list args (sig_args (funsig (Internal f))) ->
-(*      size_arguments (funsig f) <= Z.max (max_over_instrs outgoing_space) (max_over_slots_of_funct outgoing_slot) ->*)
-      Mem.alloc m0 0 0 = (m1, stk) ->
-      let ls := LTL.build_ls_from_arguments (funsig (Internal f)) args in
-      entry_point p m0 (Callstate nil fb ls m1) (Vptr fb Ptrofs.zero) args.
-
+      Mem.alloc m0 0 (Z.of_nat (length args)) = (m1, stk) ->
+      targs = (sig_args (funsig (Internal f))) ->
+      Val.has_type_list args targs ->
+      let sp := Vptr stk Ptrofs.zero in
+      make_arguments (Regmap.init Vundef) m1 sp (loc_arguments (funsig (Internal f))) args = Some (rs, m2) ->
+      entry_point p m0 (Callstate nil fb rs m2) (Vptr fb Ptrofs.zero) args.
+(*
 forall b f b0 f0 rs stk m0 m1 m2 m3 m args,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       globals_not_fresh ge m0 ->
       Mem.arg_well_formed args m0 ->
       Genv.find_funct_ptr ge b = Some f ->
-      Mem.alloc m0 0 0 = (m1, stk) ->
       let sp := Vptr stk Ptrofs.zero in
       Mem.storev Mptr m1 (Val.offset_ptr sp f0.(fn_link_ofs)) Vnullptr = Some m2 ->
       Mem.storev Mptr m2 (Val.offset_ptr sp f0.(fn_retaddr_ofs)) Vnullptr = Some m3 ->
       make_arguments (Regmap.init Vundef) m3 sp (loc_arguments (funsig f)) args = Some (rs, m) ->
-      entry_point p m0 (Callstate b rs m) (Vptr b (Ptrofs.zero)) args.
+      entry_point p m0 (Callstate b rs m) (Vptr b (Ptrofs.zero)) args. *)
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m r retcode,

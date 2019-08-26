@@ -337,13 +337,6 @@ Definition pre_main_stack targs args: stackframe:=
 Definition pre_main_staklist sig args:=
   (pre_main_stack sig args)::nil.
 Definition has_pre_main (cs:list stackframe):= (0 < length cs)%nat.
-Lemma has_pre_main_cons:
-  forall hd tl, has_pre_main (hd::tl).
-Proof. intros. unfold has_pre_main. simpl; omega. Qed.
-(* Move to RTL.v*)
-Lemma nil_has_pre_main:
-      has_pre_main nil -> False.
-Proof. unfold has_pre_main; simpl; omega. Qed.
 
 
 
@@ -357,7 +350,8 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       (* Allocate a stackframe, to pass arguments in the stack*)
       Mem.alloc m0 0 0 = (m1, stk) ->
       targs = sig_args (fn_sig f) ->
-      Val.has_type_list args targs -> 
+      Val.has_type_list args targs ->
+      Mem.arg_well_formed args m0 ->
       let ls := LTL.build_ls_from_arguments (funsig (Internal f)) args in
       entry_point p m0 (Callstate (pre_main_staklist targs args)
                                   (Internal f) ls m1)

@@ -2805,32 +2805,26 @@ Lemma transl_entry_points:
   RTL.entry_point prog m0 s1 f arg ->
   exists s2 : LTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
-  intros. inv H. subst ge0.
+  intros. inv H. subst ge0. 
   exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
   exploit sig_function_translated; eauto. intros SIG.
-  monadInv TR. rename x into f.
+  monadInv TR. rename x into f. simpl in SIG.
   
   econstructor; split.
   - destruct (transf_function_inv _ _ EQ).
-      
-    econstructor; eauto.
+    econstructor; simpl; try rewrite SIG; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
-    + Search Mem.alloc.
-      
-
-      rewrite <- H15; auto.
   - (* assert (Val.has_type_list arg (sig_args (funsig (Internal f)))).
     { erewrite sig_function_translated; simpl; eauto. } *)
     econstructor; eauto.
     + simpl in *. rewrite SIG.
       eapply match_stackframes_one; auto.
     + simpl; rewrite EQ; reflexivity.
-    + simpl; subst.
+    + simpl; subst. rewrite SIG.
       unfold build_ls_from_arguments.
       erewrite loc_arguments_retrieved; eauto.
       * clear; induction arg; auto.
-      * simpl in SIG. rewrite SIG; reflexivity.  
     + intros ??; simpl. eauto.
     + apply Mem.extends_refl.
     + simpl in *; rewrite SIG; auto.

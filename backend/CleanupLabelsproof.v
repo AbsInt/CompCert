@@ -331,7 +331,7 @@ Proof.
   intros. inv H. subst ge0.
   pose proof (function_ptr_translated _ _ H2) as A.
   econstructor; split.
-  - econstructor; eauto.
+  - econstructor; eauto. 
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
     eapply match_program_gen_len_defs in TRANSL; eauto.
     (* rewrite sig_function_translated; auto. *)

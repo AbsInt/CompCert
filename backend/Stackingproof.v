@@ -1319,9 +1319,11 @@ Fixpoint stack_contents (j: meminj) (cs: list Linear.stackframe) (cs': list Mach
 
 Inductive match_stacks (j: meminj):
        list Linear.stackframe -> list stackframe -> signature -> Prop :=
-  | match_stacks_empty: forall sg,
+  | match_stacks_one: forall sg s,
       tailcall_possible sg ->
-      match_stacks j nil nil sg
+      (* parent_ra (s'::nil) = Vnullptr -> 
+      parent_sp (s'::nil) = Vnullptr -> *)
+      match_stacks j (s::nil) (*s'::nil*) nil sg
   | match_stacks_cons: forall f sp ls c cs fb sp' ra c' cs' sg trf
         (TAIL: is_tail c (Linear.fn_code f))
         (FINDF: Genv.find_funct_ptr tge fb = Some (Internal trf))
@@ -1686,7 +1688,8 @@ Lemma update_stackframe_match:
   match_stacks j (update_stackframe cs l v) cs' sg.
 Proof.
   induction 1; simpl.
-  - constructor; auto.
+  - destruct s, l. constructor; auto.
+    destruct sl; constructor; auto.
   - destruct l; [econstructor; eauto|].
     destruct sl; try (econstructor; eauto).
     apply agree_locs_set_slot; auto.
@@ -2305,7 +2308,9 @@ Proof.
   apply C. trivial.
 
 - (* return *)
-  inv STACKS. exploit wt_returnstate_agree; eauto. intros [AGCS OUTU].
+  inv STACKS.
+  inv Hnot_empty.
+  exploit wt_returnstate_agree; eauto. intros [AGCS OUTU].
   simpl in AGCS. simpl in SEP. rewrite sep_assoc in SEP.
   econstructor; exists E0, j1; split.
   apply plus_one. apply exec_return.
@@ -2354,7 +2359,7 @@ Qed.
 Lemma make_arguments_inject : forall m m1 sp sg args rs' m',
   Mem.arg_well_formed args m ->
   make_arguments (Regmap.init Vundef) m1 (Vptr sp Ptrofs.zero) (loc_arguments sg) args = Some (rs', m') ->
-  agree_regs (Mem.flat_inj (Mem.nextblock m)) (build_ls_from_arguments sg args) rs'.
+  agree_regs (Mem.flat_inj (Mem.nextblock m)) (LTL.build_ls_from_arguments sg args) rs'.
 Proof.
   intros; eapply make_arguments_inject_rec; eauto.
   intro; apply Val.val_inject_undef.
@@ -2422,7 +2427,7 @@ Proof.
 Qed.
 
 Lemma agree_locs_build_args: forall f sg args,
-  agree_locs f (build_ls_from_arguments sg args) (Locmap.init Vundef).
+  agree_locs f (LTL.build_ls_from_arguments sg args) (Locmap.init Vundef).
 Proof.
   intros; eapply agree_locs_setlist_args; apply incl_refl.
 Qed.
@@ -2498,7 +2503,7 @@ Proof.
 Qed.
 
 Lemma build_arguments_stack: forall sg args sl ofs ty,
-  build_ls_from_arguments sg args (S sl ofs ty) =
+  LTL.build_ls_from_arguments sg args (S sl ofs ty) =
   set_outgoing_list (loc_arguments sg) args (Locmap.init Vundef) (S sl ofs ty).
 Proof.
   intros; eapply build_arguments_stack_rec.
@@ -2511,18 +2516,25 @@ Lemma transf_entry_points:
   exists j s2, Mach.entry_point tprog m0 s2 f arg /\ match_states j s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
-  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
-  destruct (transf_function f1) eqn: Hf1; inv B0.
+  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  exploit sig_preserved; eauto. intros SIG.
+  simpl in B. destruct (transf_function f0) eqn:C; simpl in B; inv B.
+  simpl in SIG.
+
+  (*build the stackframe for pre-mai*)
+  destruct (Mem.alloc m0 0 (Z.of_nat (Datatypes.length arg))) as (m1,sp) eqn:Halloc.
+
+
+  
   edestruct function_prologue_correct with (j := Mem.flat_inj (Mem.nextblock m0))
     (ls := Locmap.init Vundef)(rs := Regmap.init Vundef)(cs := @nil stackframe)
     (fb := 1%positive)(k := @nil instruction)
-    as (j & rs & m2' & sp & m3' & m4' & m5' &
+    as (j & rs & m2' & sp' & m3' & m4' & m5' &
       Hstack & Hparent & Hret & Hsave & Hregs & Hlocs & Hm & Hsp & Hj);
     eauto; try reflexivity.
   { constructor. }
   { intro; reflexivity. }
-  { admit. }
+  { constructor. }
   { apply Val.Vnullptr_has_type. }
   { apply Val.Vnullptr_has_type. }
   { instantiate (1 := m0).
@@ -2537,7 +2549,7 @@ Proof.
       eapply Plt_Ple_trans; [eapply Genv.genv_symb_range; eauto | auto].
       eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_funct_ptr_iff; eauto | auto].
       eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_var_info_iff; eauto | auto]. }
-  assert (match_stacks j (Linear.Stackframe f1 (Vptr stk Ptrofs.zero)
+  (* assert (match_stacks j (Linear.Stackframe f1 (Vptr stk Ptrofs.zero)
      (LTL.undef_regs destroyed_at_function_entry (call_regs (Locmap.init Vundef)))
      nil :: nil) (Stackframe b0 (Vptr sp Ptrofs.zero) Vnullptr nil :: nil) (funsig tf)) as MS.
   { econstructor; eauto.
@@ -2548,8 +2560,67 @@ Proof.
       admit. (* This should probably be another hypothesis of entry_point, but the space taken
                 by a function is defined after Linear. *)
     - constructor; auto.
-      admit. (* remove tailcall_possible *) }
+      admit. (* remove tailcall_possible *) } *)
+
+  (*
   exploit (transl_make_arguments j); try apply MS.
+  { instantiate(1:=m).
+    instantiate(1:=pure True).
+    instantiate(2:= (pre_main_staklist (sig_args (Linear.funsig (Internal f0))) arg)).
+    instantiate(1:=(Stackframe xH (Vptr sp Ptrofs.zero) Vundef nil) ::nil).
+    simpl.
+    unfold pre_main_staklist.
+    rewrite sep_comm. eapply sep_pure. split ; eauto.
+    unfold frame_contents.
+    eapply mconj_intro; swap 1 2.
+    match goal with
+      |- context[function_bounds ?x] =>
+      remember (function_bounds x) as X
+    end.
+    unfold pre_main, function_bounds in *. simpl in HeqX.
+    unfold record_regs_of_function,
+    max_over_slots_of_funct,
+    max_over_instrs in *. simpl in HeqX.
+
+    subst X; simpl.
+
+    
+    simpl.
+    constructor. }
+  { constructor.  
+  *)
+  
+  (* Let 's explore this *)
+  do 2 eexists; split.
+  - econstructor; simpl; try rewrite SIG; eauto.
+    + unfold globals_not_fresh.
+      erewrite <- len_defs_genv_next.
+      * unfold ge in *. simpl in H1; eapply H1.
+      * eapply (@match_program_gen_len_defs _); eauto.
+        pose proof TRANSF as HH.
+        unfold match_prog, match_program,match_program_gen in *.
+        Unshelve.
+        4:{ e (fun (_ : AST.program Linear.fundef unit) (f : Linear.fundef) (tf : fundef)
+             => transf_fundef f = OK tf).
+
+        instantiate(1:=prog).
+
+        destruct HH as (?&?&?).
+        split; eauto.
+        Unshelve. all: eauto.
+        eapply H.
+      admit. (*Proven somewhere else from match_prog*)
+    + admit. (* make_arguments *) 
+  - econstructor; eauto.
+    + admit. (* match_stacks / change Mach inital_State *)
+    + simpl; rewrite C; simpl; auto.
+    + admit. (*agree_regs j ls ?goal *)
+    + admit. (*m1 |= stack_contnet ** minjection m2 ** global_inject *)
+    + admit.
+    + admit.
+    
+  
+  
   { simpl.
     rewrite (sep_comm (frame_contents _ _ _ _ _ _ _)), sep_assoc, sep_pure; eauto. }
   { eapply val_inject_list_incr; eauto. }
