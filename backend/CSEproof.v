@@ -1206,8 +1206,7 @@ Proof.
 
 - (* return *)
   inv STACK; eauto.
-  { exploit nil_has_pre_main; eauto.
-    intros HH; inv HH. }
+  { inv not_empty. }
   econstructor; split.
   eapply exec_return; eauto.
   inv STACKS; auto.
@@ -1268,16 +1267,17 @@ Lemma transf_entry_points:
   exists s2 : RTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H.
-  destruct (funct_ptr_translated _ _ H0) as (cu & tf & A & B & C).
-  monadInv B.
+  exploit funct_ptr_translated; eauto. intros (cu & tf & A & B & C).
+  exploit sig_preserved; eauto. intros SIG.
+  monadInv B. simpl in SIG.
   econstructor; split.
-  - econstructor; eauto.
-    + eapply transf_fundef_single_param;
+  - econstructor; simpl; try rewrite SIG; eauto. 
+    (* + eapply transf_fundef_single_param;
         eauto.
-      simpl; rewrite EQ; auto.
+      simpl; rewrite EQ; auto. *)
     + unfold globals_not_fresh.
       erewrite <- len_defs_genv_next.
-      * unfold ge0 in *. simpl in H2; eapply H2.
+      * unfold ge0 in *. simpl in H1; eapply H1.
       * eapply (@match_program_gen_len_defs program); eauto.
   - econstructor; try apply B; eauto.
     + unfold pre_main_staklist; constructor. 
@@ -1285,7 +1285,7 @@ Proof.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
 Qed.
-
+(*
 Lemma transf_initial_states':
    forall s1 : RTL.state,
   Smallstep.initial_state (semantics prog) s1 ->
@@ -1297,7 +1297,7 @@ Proof.
   - simpl. destruct TRANSF as (P & Q & R).
     admit.
 Admitted.
-
+*)
 Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.

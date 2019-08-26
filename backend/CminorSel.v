@@ -510,14 +510,19 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
     forall f fb m0 m1 args targs stk,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       (* Assume there are no local variables, this could change*)
-      f.(fn_vars) = nil ->
       (* The only argument is a pointer*)
-      f.(fn_params) = (xH)::nil ->
+      (*f.(fn_params) = (xH)::nil -> *) 
+      (* Return is int*)
+      sig_res f.(fn_sig) = Some Tint ->
       (*Make sure the memory is well formed *)
       globals_not_fresh ge m0 ->
       Mem.mem_wd m0 ->
       (* Allocate a stackframe, to pass arguments in the stack*)
       Mem.alloc m0 0 0 = (m1, stk) ->
+      (*Arguemtns are well typed and well formed in the memory*)
+      targs = sig_args (f.(fn_sig)) ->
+      Val.has_type_list args targs ->
+      Mem.arg_well_formed args m0 ->
       (*Mem.arg_well_formed args m0 ->
       val_casted_list args targs ->
       Val.has_type_list args (typlist_of_typelist targs) ->

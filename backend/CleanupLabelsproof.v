@@ -196,22 +196,21 @@ Inductive match_stackframes: stackframe -> stackframe -> Prop :=
         (Stackframe f sp ls c)
         (Stackframe (transf_function f) sp ls
           (remove_unused_labels (labels_branched_to f.(fn_code)) c)).
-
 Inductive match_states: state -> state -> Prop :=
   | match_states_intro:
       forall s f sp c ls m ts
-        (STACKS: list_forall2 match_stackframes s ts)
+        (STACKS: list_forall2_end match_stackframes eq s ts)
         (INCL: incl c f.(fn_code)),
       match_states (State s f sp c ls m)
                    (State ts (transf_function f) sp (remove_unused_labels (labels_branched_to f.(fn_code)) c) ls m)
   | match_states_call:
       forall s f ls m ts,
-      list_forall2 match_stackframes s ts ->
+      list_forall2_end match_stackframes eq s ts ->
       match_states (Callstate s f ls m)
                    (Callstate ts (transf_fundef f) ls m)
   | match_states_return:
       forall s ls m ts,
-      list_forall2 match_stackframes s ts ->
+      list_forall2_end match_stackframes eq s ts ->
       match_states (Returnstate s ls m)
                    (Returnstate ts ls m).
 
@@ -223,10 +222,10 @@ Definition measure (st: state) : nat :=
 
 Lemma match_parent_locset:
   forall s ts,
-  list_forall2 match_stackframes s ts ->
+  list_forall2_end match_stackframes eq s ts ->
   parent_locset ts = parent_locset s.
 Proof.
-  induction 1; simpl. auto. inv H; auto.
+  induction 1; simpl. subst; auto. inv H; auto.  
 Qed.
 
 Theorem transf_step_correct:
@@ -318,8 +317,9 @@ Proof.
   econstructor; eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto with coqlib.
 (* return *)
-  inv H3. inv H1. left; econstructor; split.
+  inv H3. inv Hnot_empty. inv H1. left; econstructor; split.
   econstructor; eauto.
+  inv H4; auto.
   econstructor; eauto.
 Qed.
 
@@ -329,7 +329,7 @@ Lemma transf_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  pose proof (function_ptr_translated _ _ H3) as A.
+  pose proof (function_ptr_translated _ _ H2) as A.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
@@ -339,7 +339,7 @@ Proof.
     econstructor; eauto.
     repeat constructor.
 Qed.
-
+(*
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
@@ -352,7 +352,7 @@ Proof.
   apply function_ptr_translated; auto.
   rewrite sig_function_translated. auto.
   constructor; auto. constructor.
-Qed.
+Qed.*)
   
 Lemma transf_initial_states':
   forall s1 : state,
@@ -372,6 +372,7 @@ Lemma transf_final_states:
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv H5. econstructor; eauto.
+  inv H4.
 Qed.
 
 Theorem transf_program_correct'':

@@ -1109,13 +1109,12 @@ Ltac UseTransfer :=
 
 - (* return *)
   inv STACKS.
-  + exploit nil_has_pre_main ; eauto.
-    intros HH; contradict HH.
-  + inv H1.
-    econstructor; split.
-    constructor.
-    inv H3; auto.
-    econstructor; eauto. apply mextends_agree; auto.
+  inv not_empty.
+  inv H1.
+  econstructor; split.
+  constructor.
+  inv H3; auto.
+  econstructor; eauto. apply mextends_agree; auto.
 Qed.
 
 
@@ -1155,15 +1154,17 @@ Lemma transf_entry_points:
 Proof.
   intros. inv H.
   destruct (function_ptr_translated _ _ H0) as (cu & tf & A & B & C).
-  monadInv B.
+  exploit sig_function_translated; eauto. intros SIG.
+  monadInv B. simpl in SIG.
   econstructor; split.
-  - econstructor; eauto.
-    + eapply transf_fundef_single_param; eauto.
-      simpl; rewrite EQ; auto.
+  - econstructor; try rewrite SIG; eauto.
+   (* + eapply transf_fundef_single_param; eauto.
+      simpl; rewrite EQ; auto. *)
     + unfold globals_not_fresh.
       erewrite <- len_defs_genv_next.
-      * unfold ge0 in *. simpl in H2; eapply H2.
+      * unfold ge0 in *. simpl in H1; eapply H1.
       * eapply (@match_program_gen_len_defs program); eauto.
+    + simpl; rewrite SIG; auto.
   - econstructor; try apply B; eauto.
     + unfold pre_main_staklist. econstructor.
     + simpl; rewrite EQ; auto.

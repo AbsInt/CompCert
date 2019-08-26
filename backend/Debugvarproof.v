@@ -393,29 +393,29 @@ Inductive match_stackframes: Linear.stackframe -> Linear.stackframe -> Prop :=
 Inductive match_states: Linear.state ->  Linear.state -> Prop :=
   | match_states_instr:
       forall s f sp c rs m tf ts tc
-        (STACKS: list_forall2 match_stackframes s ts)
+        (STACKS: list_forall2_end match_stackframes eq s ts)
         (TRF: match_function f tf)
         (TRC: match_code c tc),
       match_states (State s f sp c rs m)
                    (State ts tf sp tc rs m)
   | match_states_call:
       forall s f rs m tf ts,
-      list_forall2 match_stackframes s ts ->
+      list_forall2_end match_stackframes eq s ts ->
       transf_fundef f = OK tf ->
       match_states (Callstate s f rs m)
                    (Callstate ts tf rs m)
   | match_states_return:
       forall s rs m ts,
-      list_forall2 match_stackframes s ts ->
+      list_forall2_end match_stackframes eq s ts ->
       match_states (Returnstate s rs m)
                    (Returnstate ts rs m).
 
 Lemma parent_locset_match:
   forall s ts,
-  list_forall2 match_stackframes s ts ->
+  list_forall2_end match_stackframes eq s ts ->
   parent_locset ts = parent_locset s.
 Proof.
-  induction 1; simpl. auto. inv H; auto.
+  induction 1; simpl. subst; auto. inv H; auto.
 Qed.
 
 (** The simulation diagram. *)
@@ -521,16 +521,11 @@ Proof.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   constructor; auto.
 - (* return *)
-  inv H3. inv H1.
+  inv H3. inv Hnot_empty. inv H1.
   econstructor; split.
-  eapply plus_left. econstructor. apply eval_add_delta_ranges. traceEq.
+  eapply plus_left. econstructor. inv H4; auto. apply eval_add_delta_ranges. traceEq.
   constructor; auto.
 Qed.
-
-Lemma stacksize_preserved: forall f f', transf_function f = OK f' ->
-  fn_stacksize f' = fn_stacksize f.
-Proof.
-Admitted.
 
 Lemma transf_entry_points:
    forall (s1 : state) (f : val) (arg : list val) (m0 : mem),
@@ -538,7 +533,8 @@ Lemma transf_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  destruct (function_ptr_translated _ _ H3) as (tf & A & B).
+  destruct (function_ptr_translated _ _ H2) as (tf & A & B).
+  exploit sig_preserved; eauto. intros SIG.
   monadInv B.
   econstructor; split.
   - econstructor; eauto.
@@ -546,17 +542,16 @@ Proof.
       eapply match_program_gen_len_defs in TRANSF; eauto.
     erewrite sig_preserved; eauto.
     simpl; rewrite EQ; reflexivity.
+    simpl in SIG; rewrite SIG; auto.
   - (*erewrite sig_preserved by eauto.*)
     subst ls0.
     replace (funsig (Internal x)) with
         (funsig (Internal f0)).
     econstructor; eauto.
-    + econstructor.
+    + econstructor. simpl in SIG; rewrite SIG; auto.
     + simpl; rewrite EQ; reflexivity.
-    + symmetry; eapply sig_preserved.
-      simpl; rewrite EQ; reflexivity.
 Qed.
-
+(*
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
@@ -569,7 +564,7 @@ Proof.
   rewrite <- H3. apply sig_preserved. auto.
   constructor. constructor. auto.
 Qed.
-
+*)
 Lemma transf_initial_states':
   forall s1,
   Smallstep.initial_state (semantics prog) s1 ->
@@ -588,6 +583,7 @@ Lemma transf_final_states:
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
   intros. inv H0. inv H. inv H5. econstructor; eauto.
+  inv H4.
 Qed.
 
 Theorem transf_program_correct'':

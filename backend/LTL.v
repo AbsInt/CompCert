@@ -325,7 +325,8 @@ Inductive step: state -> trace -> state -> Prop :=
       rs' = Locmap.setpair (loc_result (ef_sig ef)) res (undef_caller_save_regs rs) ->
       step (Callstate s (External ef) rs m)
          t (Returnstate s rs' m')
-  | exec_return: forall f sp rs1 bb s rs m,
+  | exec_return: forall f sp rs1 bb s rs m
+      (Hnot_empty: not_empty s),
       step (Returnstate (Stackframe f sp rs1 bb :: s) rs m)
         E0 (Block s f sp bb rs m).
 
@@ -409,11 +410,13 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
         globals_not_fresh ge m0 ->
         Mem.mem_wd m0 ->
         (* Allocate a stackframe, to pass arguments in the stack*)
-        Mem.alloc m0 0 0 = (m1, stk) ->
+        Mem.alloc m0 0 0  = (m1, stk) ->
         targs = sig_args (fn_sig f) ->
+        Val.has_type_list args targs -> 
         l = build_ls_from_arguments (fn_sig f) args ->
         entry_point p m0
-                    (Callstate (pre_main_staklist targs args) (Internal f) l m1)
+                    (Callstate (pre_main_staklist targs args)
+                               (Internal f) l m1)
                     (Vptr fb Ptrofs.zero) (args).
 
 Inductive final_state: state -> int -> Prop :=

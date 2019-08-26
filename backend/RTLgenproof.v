@@ -477,7 +477,7 @@ Definition transl_expr_prop
     (TE: tr_expr f.(fn_code) map pr a ns nd rd dst)
     (ME: match_env map e le rs)
     (EXT: Mem.extends m tm)
-    (Has_pre_main:has_pre_main cs),
+    (Hnot_empty:not_empty cs),
   exists rs', exists tm',
      star (step tge) (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
   /\ match_env map (set_optvar dst v e) le rs'
@@ -492,7 +492,7 @@ Definition transl_exprlist_prop
     (TE: tr_exprlist f.(fn_code) map pr al ns nd rl)
     (ME: match_env map e le rs)
     (EXT: Mem.extends m tm)
-    (Has_pre_main:has_pre_main cs),
+    (Hnot_empty:not_empty cs),
   exists rs', exists tm',
      star (step tge) (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
   /\ match_env map e le rs'
@@ -507,7 +507,7 @@ Definition transl_condexpr_prop
     (TE: tr_condition f.(fn_code) map pr a ns ntrue nfalse)
     (ME: match_env map e le rs)
     (EXT: Mem.extends m tm)
-    (Has_pre_main:has_pre_main cs),
+    (Hnot_empty:not_empty cs),
   exists rs', exists tm',
      plus (step tge) (State cs f sp ns rs tm) E0 (State cs f sp (if v then ntrue else nfalse) rs' tm')
   /\ match_env map e le rs'
@@ -953,7 +953,7 @@ Definition transl_exitexpr_prop
     (TE: tr_exitexpr f.(fn_code) map a ns nexits)
     (ME: match_env map e le rs)
     (EXT: Mem.extends m tm)
-    (Has_pre_main:has_pre_main cs),
+    (Hnot_empty:not_empty cs),
   exists nd, exists rs', exists tm',
      star (step tge) (State cs f sp ns rs tm) E0 (State cs f sp nd rs' tm')
   /\ nth_error nexits x = Some nd
@@ -1219,7 +1219,7 @@ with match_stacks: CminorSel.cont -> list RTL.stackframe -> Prop :=
   (*| match_stacks_stop2:
       match_stacks Kstop nil *)
   | match_stacks_call: forall optid f sp e k r tf n rs cs map nexits ngoto nret rret
-    (Has_pre_main:has_pre_main cs),
+    (Hnot_empty:not_empty cs),
       map_wf map ->
       tr_fun tf map f ngoto nret rret ->
       match_env map e nil rs ->
@@ -1236,7 +1236,7 @@ Inductive match_states: CminorSel.state -> RTL.state -> Prop :=
         (TK: tr_cont tf.(fn_code) map k ncont nexits ngoto nret rret cs)
         (ME: match_env map e nil rs)
         (MEXT: Mem.extends m tm)
-        (Has_pre_main:has_pre_main cs),
+        (Hnot_empty:not_empty cs),
       match_states (CminorSel.State f s k sp e m)
                    (RTL.State cs tf sp ns rs tm)
   | match_callstate:
@@ -1245,7 +1245,7 @@ Inductive match_states: CminorSel.state -> RTL.state -> Prop :=
         (MS: match_stacks k cs)
         (LD: Val.lessdef_list args targs)
         (MEXT: Mem.extends m tm)
-        (Has_pre_main:has_pre_main cs),
+        (Hnot_empty:not_empty cs),
       match_states (CminorSel.Callstate f args k m)
                    (RTL.Callstate cs tf targs tm)
   | match_returnstate:
@@ -1253,7 +1253,7 @@ Inductive match_states: CminorSel.state -> RTL.state -> Prop :=
         (MS: match_stacks k cs)
         (LD: Val.lessdef v tv)
         (MEXT: Mem.extends m tm)
-        (Has_pre_main:has_pre_main cs),
+        (Hnot_empty:not_empty cs),
       match_states (CminorSel.Returnstate v k m)
                    (RTL.Returnstate cs tv tm).
 
@@ -1277,7 +1277,7 @@ Lemma tr_find_label:
   forall c map lbl n (ngoto: labelmap) nret rret s' k' cs,
   ngoto!lbl = Some n ->
   forall s k ns1 nd1 nexits1
-  (Has_pre_main: has_pre_main cs),
+  (Hnot_empty: not_empty cs),
   find_label lbl s k = Some (s', k') ->
   tr_stmt c map s ns1 nd1 nexits1 ngoto nret rret ->
   tr_cont c map k nd1 nexits1 ngoto nret rret cs ->
@@ -1596,91 +1596,20 @@ Lemma transl_entry_points:
 Proof.
   intros. inv H.
   replace ge0 with ge in * by reflexivity.
-  
-  destruct (function_ptr_translated _ _ H0) as (tf & A & B); auto.
-  monadInv B.
+  exploit (function_ptr_translated); eauto; intros (tf & A & B).
+  exploit (sig_transl_function); eauto. intros SIG.
+  monadInv B. simpl in SIG.
   econstructor; split.
-  - unfold transl_function in EQ.
-    destruct (reserve_labels _ _) eqn:Hres_lab.
-    destruct (transl_fun _ _ _) eqn:Htransl; inv EQ.
-    destruct p; inv H6.
-  
-    econstructor; eauto.
-    + simpl.
-      unfold transl_fun in Htransl.
-      unfold RTLgen.bind2 in *.
-      unfold RTLgen.bind in *.
-      Local Ltac match_case_hyp H:=
-  match type of H with
-    context[match ?x with _ => _ end] => destruct x eqn:?
-  end; first [ congruence
-        | solve[inversion H]
-        | auto].
-      
-      repeat (match_case_hyp Htransl).
-      assert (l0 = fst p).
-      { 
-      repeat (match_case_hyp Heqr0).
-      repeat (match_case_hyp Heqr2).
-      repeat (match_case_hyp Heqr4).
-      repeat (match_case_hyp Heqr6).
-        inv Htransl.
-        inv Heqr0.
-        inv Heqr2.
-        inv Heqr4.
-        inv Heqr6.
-        inv Heqr8.
-        reflexivity. }
-      subst l0.
-      clear Heqr0.
-      rewrite H2 in Heqr.
-      simpl in Heqr.
-      unfold RTLgen.bind2 in *.
-      unfold RTLgen.bind in *.
-      repeat (match_case_hyp Heqr).
-      repeat (match_case_hyp Heqr1).
-      inv Heqr.
-      inv Heqr1.
-      rename p into PP.
-      inv Heqr3; simpl.
-      inv Heqr0; simpl in *.
-      f_equal.
-      inv Heqr2; simpl in *.
-      inv Htransl.
-
-      (*I claim resreve labels doesn't change the regs *)
-      Lemma reserve_labels_regs:
-        forall s l1 l2 s1 s2,
-        reserve_labels s (l1, s1) =
-        (l2, s2) ->
-        st_nextreg s1 = st_nextreg s2.
-      Proof.
-        induction s; simpl;
-          intros * HH.
-        all: try solve[inv HH; auto].
-        + destruct (reserve_labels s2 (l1, s0)) eqn:?.
-          erewrite IHs2; try eassumption.
-          erewrite IHs1; eauto. 
-        + destruct (reserve_labels s2 (l1, s0)) eqn:?.
-          erewrite IHs2; try eassumption.
-          erewrite IHs1; eauto. 
-        + eapply IHs; eauto.
-        + eapply IHs; eauto.
-        + unfold alloc_label in *.
-          destruct (reserve_labels s (l1, s1)) eqn:?.
-          inv HH; simpl; eauto.
-      Qed.
-      eapply reserve_labels_regs in Hres_lab.
-      rewrite <- Hres_lab; reflexivity.
+  - econstructor; simpl in *; try rewrite SIG; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSL; eauto.
   - econstructor; eauto.
     + simpl. rewrite EQ; reflexivity.
-    + pose proof match_stacks_stop1.
-      admit. (* relate arg to kstop typ*)
-    + induction arg; auto.
+    + eapply match_stacks_stop1.
+    + clear; induction arg; eauto.
     + apply Mem.extends_refl.
-Admitted.
+    + constructor.
+Qed.
 
 Lemma transl_initial_states':
   forall s1 : CminorSel.state,

@@ -1326,8 +1326,8 @@ Proof.
 Qed.
 
 Inductive match_cont: composite_env -> type -> nat -> nat -> Clight.cont -> Csharpminor.cont -> Prop :=
-  | match_Kstop: forall ce tyret nbrk ncnt,
-      match_cont tyret ce nbrk ncnt Clight.Kstop Kstop
+  | match_Kstop: forall ce tyret nbrk ncnt targs,
+      match_cont tyret ce nbrk ncnt (Clight.Kstop targs) (Kstop (typlist_of_typelist targs))
   | match_Kseq: forall ce tyret nbrk ncnt s k ts tk,
       transl_statement ce tyret nbrk ncnt s = OK ts ->
       match_cont ce tyret nbrk ncnt k tk ->
@@ -1808,6 +1808,26 @@ Proof.
   destruct_bind H; try solve[inv H].
   inv H; reflexivity.
 Qed.
+
+
+Lemma next_block_match (C F1 V1 F2 V2 : Type) (LC: Linker C):
+  forall (match_fundef : C -> F1 -> F2 -> Prop)
+    (match_varinfo : V1 -> V2 -> Prop)
+    (ctx : C) (p : AST.program F1 V1)
+    (tp : AST.program F2 V2),
+    match_program_gen match_fundef match_varinfo ctx p tp ->
+    Genv.genv_next (Genv.globalenv p) =
+    Genv.genv_next (Genv.globalenv tp).
+Proof.
+  intros. inv H.
+  exploit list_forall2_length; eauto. 
+  eapply len_defs_genv_next.
+Qed.
+Arguments next_block_match {_ _ _ _ _ _ _ _ _ _ _}.
+
+Lemma genb_preserved:
+   Genv.genv_next ge = Genv.genv_next tge.
+Proof (next_block_match TRANSL). 
   
 Lemma transl_entry_points:
   forall (s1 : Clight.state) (f : val) (arg : list val) (m0 : mem),
@@ -1815,18 +1835,27 @@ Lemma transl_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros * Hentry. inv Hentry.
-  pose proof function_ptr_translated _ _ H as (?&f0'&(Hptr'&f_match& Hlink)). 
+  exploit function_ptr_translated; eauto.
+  replace m2 with m0 by admit. (*remove alloc from Clight. *)
+  intros (?&f0'&(Hptr'&f_match& Hlink)). 
   inversion f_match; subst.
+  exploit transl_fundef_sig2; eauto.
+  instantiate(1:=cc_default).
+  instantiate(1:=type_int32s).
+  instantiate(1:=targs).
+  admit. (*add to Clight: *)
+
+  intros SIG. simpl in SIG.
   econstructor; split.
-  - econstructor; eauto.
-    + eapply fn_vars_nil; eauto.
-    + erewrite fn_params_translate, H1; eauto.
-    + admit. (* global environments are preserved? *)
+  - econstructor; simpl; try rewrite SIG; eauto; simpl.
+    + unfold globals_not_fresh.
+      pose proof genb_preserved as Hgenb. subst ge tge.
+      rewrite <- Hgenb. auto.
+    + admit. (* add to Clight: Mem.arg_well_formed arg m0*)
   - econstructor; simpl; eauto.
     + econstructor.
-    + (unfold type_of_function; simpl).
-      f_equal.
-
+    + reflexivity.
+      
       Unshelve.
       unshelve econstructor.
 Admitted.

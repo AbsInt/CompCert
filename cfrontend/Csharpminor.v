@@ -544,19 +544,20 @@ Require Import Conventions.
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
 | initi_core:
     let ge := Genv.globalenv p in
-    forall f fb m0 m1 args targs stk,
+    forall f fb m0 args targs,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      (* Assume there are no local variables, this could change*)
+      (*(* Assume there are no local variables, this could change*)
       f.(fn_vars) = nil ->
       (* The only argument is a pointer*)
-      f.(fn_params) = (xH)::nil ->
+      f.(fn_params) = (xH)::nil ->  *)
+      (* Return is int*)
+      sig_res f.(fn_sig) = Some Tint ->
       (*Make sure the memory is well formed *)
       globals_not_fresh ge m0 ->
       Mem.mem_wd m0 ->
-      targs = (sig_args (funsig f)) ->
-      (* Allocate a stackframe, to pass arguments in the stack*)
-      Mem.alloc m0 0 0 = (m1, stk) ->
+      targs = (sig_args (funsig (Internal f))) ->
       Val.has_type_list args targs ->
+      Mem.arg_well_formed args m0 ->
       (*Mem.arg_well_formed args m0 ->
       Val.has_type_list args (typlist_of_typelist targs) ->
       val_casted_list_func args targs 
@@ -564,7 +565,7 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
                            && vals_defined args
                            && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
       entry_point p m0
-                  (Callstate (Internal f) args (Kstop targs) m1)
+                  (Callstate (Internal f) args (Kstop targs) m0)
                   (Vptr fb Ptrofs.zero) args.
 
 

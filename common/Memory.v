@@ -4278,6 +4278,57 @@ Proof.
   repeat rewrite Z.add_0_r. intros [m'' [A B]]. congruence.
 Qed.
 
+
+Lemma flat_inj_incr:
+  forall a b,
+    Ple a b->
+    inject_incr (Mem.flat_inj a) (Mem.flat_inj b).
+Proof.
+  intros ** ? *.
+  unfold Mem.flat_inj.
+  repeat match goal with
+    |- context [match ?x with _ => _ end] =>
+    destruct x eqn:?
+         end; auto; try xomega.
+  intros; congruence.
+Qed.
+Lemma inject_neutral_empty_blocks:
+  forall m,
+    inject_neutral (nextblock m) m ->
+    forall B, Ple (nextblock m) B ->
+         inject_neutral B m. 
+Proof.
+  unfold inject_neutral; intros.
+  inv H.
+  econstructor.
+  - intros.
+    exploit perm_valid_block; eauto.
+    intros. eapply mi_perm0; eauto.
+    unfold valid_block, flat_inj in *.
+    destruct (plt b1 (Mem.nextblock m));
+      destruct (plt b1 B); auto; try xomega.
+  - intros.
+    unfold range_perm in *.
+    pose proof (size_chunk_pos chunk).
+    exploit (H1 ofs). xomega. intros.
+    exploit perm_valid_block; eauto.
+    intros. eapply mi_align0; eauto.
+    unfold valid_block, flat_inj in *.
+    destruct (plt b1 (nextblock m));
+      destruct (plt b1 B); eauto; try xomega.
+  - intros.
+    exploit perm_valid_block; eauto.
+    intros. exploit mi_memval0; eauto.
+    unfold valid_block, flat_inj in *.
+    destruct (plt b1 (nextblock m));
+      destruct (plt b1 B); auto; try xomega.
+    intros. eapply memval_inject_incr.
+    + unfold flat_inj in H.
+      destruct (plt b1 B); inv H.
+      eapply H3.
+    + apply flat_inj_incr; auto.
+Qed.
+
 (** * Invariance properties between two memory states *)
 
 Section UNCHANGED_ON.

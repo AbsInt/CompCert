@@ -493,11 +493,17 @@ Inductive match_stackframes: LTL.stackframe -> Linear.stackframe -> Prop :=
       match_stackframes
         (LTL.Stackframe f sp ls bb)
         (Linear.Stackframe tf sp ls (linearize_block bb c)).
-
+Definition END: LTL.stackframe -> stackframe -> Prop :=
+  fun a b =>
+    match a with
+      LTL.Stackframe _ _ ls _ => ls
+    end = match b with
+            Stackframe _ _ ls _ => ls
+          end.
 Inductive match_states: LTL.state -> Linear.state -> Prop :=
   | match_states_add_branch:
       forall s f sp pc ls m tf ts c
-        (STACKS: list_forall2 match_stackframes s ts)
+        (STACKS: list_forall2_end match_stackframes END s ts)
         (TRF: transf_function f = OK tf)
         (REACH: (reachable f)!!pc = true)
         (TAIL: is_tail c tf.(fn_code)),
@@ -505,7 +511,7 @@ Inductive match_states: LTL.state -> Linear.state -> Prop :=
                    (Linear.State ts tf sp (add_branch pc c) ls m)
   | match_states_cond_taken:
       forall s f sp pc ls m tf ts cond args c
-        (STACKS: list_forall2 match_stackframes s ts)
+        (STACKS: list_forall2_end match_stackframes END s ts)
         (TRF: transf_function f = OK tf)
         (REACH: (reachable f)!!pc = true)
         (JUMP: eval_condition cond (reglist ls args) m = Some true),
@@ -513,7 +519,7 @@ Inductive match_states: LTL.state -> Linear.state -> Prop :=
                    (Linear.State ts tf sp (Lcond cond args pc :: c) ls m)
   | match_states_jumptable:
       forall s f sp pc ls m tf ts arg tbl c n
-        (STACKS: list_forall2 match_stackframes s ts)
+        (STACKS: list_forall2_end match_stackframes END s ts)
         (TRF: transf_function f = OK tf)
         (REACH: (reachable f)!!pc = true)
         (ARG: ls (R arg) = Vint n)
@@ -522,7 +528,7 @@ Inductive match_states: LTL.state -> Linear.state -> Prop :=
                    (Linear.State ts tf sp (Ljumptable arg tbl :: c) ls m)
   | match_states_block:
       forall s f sp bb ls m tf ts c
-        (STACKS: list_forall2 match_stackframes s ts)
+        (STACKS: list_forall2_end match_stackframes END s ts)
         (TRF: transf_function f = OK tf)
         (REACH: forall pc, In pc (successors_block bb) -> (reachable f)!!pc = true)
         (TAIL: is_tail c tf.(fn_code)),
@@ -530,13 +536,13 @@ Inductive match_states: LTL.state -> Linear.state -> Prop :=
                    (Linear.State ts tf sp (linearize_block bb c) ls m)
   | match_states_call:
       forall s f ls m tf ts,
-      list_forall2 match_stackframes s ts ->
+      list_forall2_end match_stackframes END s ts ->
       transf_fundef f = OK tf ->
       match_states (LTL.Callstate s f ls m)
                    (Linear.Callstate ts tf ls m)
   | match_states_return:
       forall s ls m ts,
-      list_forall2 match_stackframes s ts ->
+      list_forall2_end match_stackframes END s ts ->
       match_states (LTL.Returnstate s ls m)
                    (Linear.Returnstate ts ls m).
 
@@ -548,7 +554,7 @@ Definition measure (S: LTL.state) : nat :=
   end.
 
 Remark match_parent_locset:
-  forall s ts, list_forall2 match_stackframes s ts -> parent_locset ts = LTL.parent_locset s.
+  forall s ts, list_forall2_end match_stackframes END s ts -> parent_locset ts = LTL.parent_locset s.
 Proof.
   induction 1; simpl. auto. inv H; auto.
 Qed.
@@ -698,9 +704,10 @@ Proof.
   econstructor; eauto.
 
   (* return *)
-  inv H3. inv H1.
+  inv H3. inv Hnot_empty. inv H1.
   left; econstructor; split.
   apply plus_one. econstructor.
+  inv H4; constructor.
   econstructor; eauto.
 Qed.
 
@@ -711,36 +718,23 @@ Lemma transf_entry_points:
 Proof.
   intros. inv H. subst ge0.
   destruct (function_ptr_translated _ _ H0) as (tf & A & B); auto.
-  simpl in B.
-  destruct (transf_function f0) eqn: Hf0; inv B.
+  simpl in B; monadInv B.
+  (*destruct (transf_function f0) eqn: Hf0; inv B.*)
   econstructor; split.
   - econstructor; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
         eapply match_program_gen_len_defs in TRANSF; eauto.
     (* + erewrite sig_preserved; eauto. *)
-    + econstructor; auto.
-      assert (exists b, arg0 = Vptr b Ptrofs.zero
-             /\ Plt b (Mem.nextblock m0)) by admit.
-      destruct H as (b&?&?).
-      subst arg0.
-      econstructor; eauto.
-      unfold Mem.flat_inj.
-      destruct (plt b (Mem.nextblock m0)); try xomega.
-      reflexivity.
-      admit.
-    +  admit. (* should be in the entry_points. *)
-   
-  - assert ((Locmap.set (S Outgoing 0 Tany32) arg0 (Locmap.init Vundef))
-            =
-            (build_ls_from_arguments (funsig (Internal f)) (arg0 :: nil))
-           ) by admit.
-    rewrite H.
-    econstructor.
-    econstructor.
-    simpl.
-    rewrite Hf0; reflexivity.
-Admitted.
-
+    + monadInv EQ; auto.
+    + monadInv EQ; auto.
+  - assert (EQ':=EQ).
+    monadInv EQ; simpl.
+    eapply match_states_call; eauto.
+    2:{ simpl in *. rewrite EQ'; reflexivity. }
+    unfold LTL.pre_main_staklist, pre_main_staklist, END.
+    constructor; reflexivity.
+Qed.
+(*
 Lemma transf_initial_states:
   forall st1, LTL.initial_state prog st1 ->
   exists st2, Linear.initial_state tprog st2 /\ match_states st1 st2.
@@ -754,7 +748,7 @@ Proof.
   rewrite <- H3. apply sig_preserved. auto.
   constructor. constructor. auto.
 Qed.
-
+*)
 Lemma transf_initial_states':
   forall s1 : LTL.state,
   Smallstep.initial_state (LTL.semantics prog) s1 ->
@@ -772,7 +766,9 @@ Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> LTL.final_state st1 r -> Linear.final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv H5. econstructor; eauto.
+  intros. inv H0. inv H. inv H5.
+  econstructor; eauto.
+  inv H4.
 Qed.
 
 Theorem transf_program_correct'':

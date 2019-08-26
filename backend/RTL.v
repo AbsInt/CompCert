@@ -239,16 +239,6 @@ Definition find_function
       end
   end.
 
-Definition has_pre_main (cs:list stackframe):= (0 < length cs)%nat.
-Lemma has_pre_main_cons:
-  forall hd tl, has_pre_main (hd::tl).
-Proof. intros. unfold has_pre_main. simpl; omega. Qed.
-(* Move to RTL.v*)
-Lemma nil_has_pre_main:
-      has_pre_main nil -> False.
-Proof. unfold has_pre_main; simpl; omega. Qed.
-
-
 (** The transitions are presented as an inductive predicate
   [step ge st1 t st2], where [ge] is the global environment,
   [st1] the initial state, [st2] the final state, and [t] the trace
@@ -338,7 +328,7 @@ Inductive step: state -> trace -> state -> Prop :=
          t (Returnstate s res m')
   | exec_return:
       forall res f sp pc rs s vres m
-      (Has_pre_main: has_pre_main s), 
+      (not_empty: not_empty s), 
       step (Returnstate (Stackframe res f sp pc rs :: s) vres m)
         E0 (State s f sp pc (rs#res <- vres) m).
 
@@ -366,7 +356,6 @@ Proof.
 Qed.
 
 End RELSEM.
-Hint Resolve has_pre_main_cons.
 
 (** Execution of whole programs are described as sequences of transitions
   from an initial state to a final state.  An initial state is a [Callstate]
@@ -415,7 +404,7 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       (* Assume there are no local variables, this could change*)
       (* The only argument is a pointer*)
-      f.(fn_params) = (xH)::nil ->
+      (*f.(fn_params) = (xH)::nil -> *)
       (*Make sure the memory is well formed *)
       globals_not_fresh ge m0 ->
       Mem.mem_wd m0 ->
@@ -425,7 +414,7 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       (* arguments are well typed by targs *)
       targs = (sig_args (fn_sig f)) ->
       Val.has_type_list args targs ->
-      
+      Mem.arg_well_formed args m0 ->
       (* 
          Mem.arg_well_formed args m0 ->
       val_casted_list args targs ->

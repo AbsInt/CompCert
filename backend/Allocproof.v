@@ -2477,13 +2477,12 @@ Proof.
 
 (* return *)
 - inv STACKS.
-  + (*the impossible case*)
-    apply RTL.nil_has_pre_main in Has_pre_main; inv Has_pre_main.
-  + exploit STEPS; eauto. rewrite WTRES0; auto. intros [ls2 [A B]].
-    econstructor; split.
-    eapply plus_left. constructor. eexact A. traceEq.
-    econstructor; eauto.
-    apply wt_regset_assign; auto. rewrite WTRES0; auto.
+  inv not_empty. (* the impossible case *)
+  exploit STEPS; eauto. rewrite WTRES0; auto. intros [ls2 [A B]].
+  econstructor; split.
+  eapply plus_left. constructor. inv STACKS0; constructor. eexact A. traceEq.
+  econstructor; eauto.
+  apply wt_regset_assign; auto. rewrite WTRES0; auto.
 Qed.
 
 (* Can't prove this because I removed come things a bout initia_state *)
@@ -2817,6 +2816,10 @@ Proof.
     econstructor; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
+    + Search Mem.alloc.
+      
+
+      rewrite <- H15; auto.
   - (* assert (Val.has_type_list arg (sig_args (funsig (Internal f)))).
     { erewrite sig_function_translated; simpl; eauto. } *)
     econstructor; eauto.

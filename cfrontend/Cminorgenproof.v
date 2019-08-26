@@ -1609,8 +1609,8 @@ Qed.
 (** ** Semantic preservation for statements and functions *)
 
 Inductive match_cont: Csharpminor.cont -> Cminor.cont -> compilenv -> exit_env -> callstack -> Prop :=
-  | match_Kstop: forall cenv xenv,
-      match_cont Csharpminor.Kstop Kstop cenv xenv nil
+  | match_Kstop: forall cenv xenv targs,
+      match_cont (Csharpminor.Kstop targs) (Kstop targs) cenv xenv nil
   | match_Kseq: forall s k ts tk cenv xenv cs,
       transl_stmt cenv xenv s = OK ts ->
       match_cont k tk cenv xenv cs ->
@@ -2333,44 +2333,28 @@ Lemma transl_entry_point:
   exists j (s2 : state), entry_point tprog m0 s2 f arg /\ match_states j s1 s2.
 Proof.
   intros. inv H; subst ge0.
-  destruct (function_ptr_translated b f0) as (tf & A & B); auto.
-  destruct (function_ptr_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
-  monadInv B0.
+  exploit function_ptr_translated; eauto. intros (tf & A & B).
+  exploit sig_preserved; eauto. intros SIG. 
+  monadInv B. simpl in SIG.
+  destruct (Mem.alloc m0 0 0) as (m1,sp) eqn:Halloc.
+  
   do 2 econstructor; split.
-  - econstructor; eauto.
-    eapply globals_not_fresh_preserve; simpl in *; try eassumption;
+  - econstructor; simpl; try rewrite SIG; eauto.
+    + eapply globals_not_fresh_preserve; simpl in *; try eassumption;
       eapply match_program_gen_len_defs in TRANSL; eauto.
-    erewrite sig_preserved; eauto.
-(*    unfold transl_function in EQ.
-    destruct (build_compilenv f1).
-    destruct (zle _ _); try discriminate.
-    erewrite sig_preserved_body; eauto.*)
-  - eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m2)) (cenv := PTree.empty Z).
-    + auto.
-    + eapply Mem.neutral_inject, Mem.alloc_inject_neutral; eauto.
-      admit.
-      erewrite (Mem.nextblock_alloc _ _ _ m2) by eauto.
-      apply Plt_succ.
-    + eapply mcs_cons with (hi := Mem.nextblock m0) (sp := Mem.nextblock m0), mcs_nil with (Mem.nextblock m0).
-      * erewrite (Mem.nextblock_alloc _ _ _ m2) by eauto.
+  - eapply match_callstate with
+      (f := Mem.flat_inj (Mem.nextblock m0)) (cenv := PTree.empty Z); simpl; eauto.
+    + rewrite EQ; reflexivity.
+    + eapply Mem.alloc_right_inject; eauto.
+      eapply Mem.mem_wd_inject; assumption.
+    + eapply mcs_nil.
+      * eapply match_globalenvs_not_fresh; auto.
+      * reflexivity. 
+      * exploit Mem.nextblock_alloc; eauto. intros ->.
         apply Ple_succ.
-      * erewrite (Mem.nextblock_alloc _ _ _ m2) by eauto.
-        apply Plt_succ.
-      * instantiate (1 := PTree.empty _); instantiate (1 := PTree.empty _).
-        repeat intro.
-        rewrite PTree.gempty in *; discriminate.
-      * admit.
-      * instantiate (1 := PTree.empty _); repeat intro.
-        rewrite PTree.gempty in *; discriminate.
-      * admit.
-      * admit.
-      * apply Ple_refl.
-      * apply Ple_refl.
     + apply flat_injection_full.
-    + admit.
-    + red; auto.
-    + admit.
-Admitted.
+    + constructor.
+Qed.
 
 Lemma transl_initial_states':
     forall s1 : Smallstep.state (Csharpminor.semantics prog),

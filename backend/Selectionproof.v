@@ -1129,8 +1129,9 @@ Lemma sel_entry_points:
 Proof.
   intros. inv H. replace ge0 with ge in * by reflexivity.
   eapply function_ptr_translated in H0 as (cu & tf & A & B & C).
+  exploit sig_function_translated; eauto. intros SIG.
   destruct B as (? & ? & B); simpl in B.
-  monadInv B.
+  monadInv B. simpl in SIG.
   (* exploit Mem.alloc_extends; eauto.
   { apply Mem.extends_refl. }
   { apply Z.le_refl. }
@@ -1138,9 +1139,7 @@ Proof.
     admit. }
   intros (m2' & ? & ?). *)
   econstructor; split.
-  - econstructor; eauto.
-    + admit. (* selection preserves vars*)
-    + admit. (* selection preserves params*)
+  - econstructor; simpl; try rewrite SIG; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
   - econstructor; try apply B; eauto.
@@ -1150,7 +1149,7 @@ Proof.
     + (* This should be a lemma! *)
       clear. induction arg; auto.
     + apply Mem.extends_refl.
-Admitted.
+Qed.
 
 Lemma sel_initial_states':
   forall s1 : Cminor.state,

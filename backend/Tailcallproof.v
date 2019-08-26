@@ -401,8 +401,8 @@ Ltac EliminatedInstr :=
 Lemma match_stackframes_has_pre_main:
   forall stk1 stk2,
     match_stackframes stk1 stk2 ->
-    has_pre_main stk1 ->
-    has_pre_main stk2.
+    not_empty stk1 ->
+    not_empty stk2.
 Proof. intros; induction H; auto; inv H; auto. Qed.
   
 Lemma transf_step_correct:
@@ -563,8 +563,7 @@ Proof.
 - (* returnstate *)
   inv H2.
   + (*empty stackframe -> impossible*)
-    inv Has_pre_main.
-    
+    inv not_empty.
   + (* synchronous return in both programs *)
     left. econstructor; split.
     apply exec_return; auto.
@@ -596,30 +595,30 @@ Proof.
 Qed.*)
 
 Lemma transf_params:
-  forall f,
-    fn_params (transf_function f) = fn_params (f).
-Admitted.
+  forall f, fn_params (transf_function f) = fn_params (f).
+Proof.
+  intros. unfold transf_function.
+  destruct ( zeq (fn_stacksize f) 0); auto.
+Qed.
+
 Lemma transf_entry_points:
    forall (s1 : state) (f : val) (arg : list val) (m0 : mem),
   entry_point prog m0 s1 f arg ->
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H.
-  pose proof (funct_ptr_translated _ _ H0).
+  exploit (funct_ptr_translated); eauto. intros.
+  pose proof (sig_preserved (Internal f0)) as SIG; simpl in SIG. 
   econstructor; split.
-  - econstructor; eauto.
-    + rewrite transf_params; auto. (*parameters are preserved*)
+  - econstructor; try rewrite SIG; simpl; eauto.
+    (* + rewrite transf_params; auto. (*parameters are preserved*) *)
     + unfold globals_not_fresh.
       erewrite <- len_defs_genv_next.
-      unfold ge0 in *. simpl in H2; eapply H2.
+      unfold ge0 in *. simpl in H1; eapply H1.
       eapply (@match_program_gen_len_defs program); eauto.
+    + rewrite SIG; auto. 
   - econstructor; eauto.
-    + unfold pre_main_staklist, pre_main_stack.
-      pose proof (match_stackframes_normal
-                    nil nil pre_main_return
-                 ).
-      
-      econstructor.
+    + eapply match_stackframes_single.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
 Qed.

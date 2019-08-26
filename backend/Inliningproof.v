@@ -755,11 +755,11 @@ Qed.
 Lemma match_stk_pre_main:
   forall F m m' stk1 stk2 sp,
     match_stacks F m m' stk1 stk2 sp ->
-    has_pre_main stk2
+    not_empty stk2
 with match_stk_pre_main_inside: 
   forall F m m' stk1 stk2 f' ctx sp rs, 
     match_stacks_inside F m m' stk1 stk2 f' ctx sp rs-> 
-    has_pre_main stk2.
+    not_empty stk2.
 Proof.
   - intros. inv H; auto.
   - intros * H. induction H; auto.
@@ -1406,9 +1406,8 @@ Proof.
 - (* return fron noninlined function *)
   inv MS0.
   + (* one case*)
-    inv Has_pre_main.
+    inv not_empty.
   + (* normal case *)
-    
   left; econstructor; exists F, E0; split.
   eapply plus_one. eapply exec_return.
   eapply match_stk_pre_main_inside; eauto.
@@ -1545,43 +1544,111 @@ Proof.
       reflexivity.
 Qed.
 
-      
+
+Lemma globals_not_fresh_nextb:
+  forall {F V} (ge: Genv.t F V) m1 m2,
+  globals_not_fresh ge m1 ->
+  Ple (Mem.nextblock m1) (Mem.nextblock m2) -> 
+  globals_not_fresh ge m2.
+Proof. unfold globals_not_fresh. intros; xomega. Qed.
+
+Lemma flat_inj_incr:
+  forall a b,
+    Ple a b->
+    inject_incr (Mem.flat_inj a) (Mem.flat_inj b).
+Proof.
+  intros ** ? *.
+  unfold Mem.flat_inj.
+  repeat match goal with
+    |- context [match ?x with _ => _ end] =>
+    destruct x eqn:?
+         end; auto; try xomega.
+  intros; congruence.
+Qed.
+
+
+
+Lemma inject_neutral_empty_blocks:
+  forall m,
+    Mem.inject_neutral (Mem.nextblock m) m ->
+    forall B, Ple (Mem.nextblock m) B ->
+         Mem.inject_neutral B m. 
+Proof.
+  unfold Mem.inject_neutral; intros.
+  inv H.
+  econstructor.
+  - intros.
+    exploit Mem.perm_valid_block; eauto.
+    intros. eapply mi_perm; eauto.
+    unfold Mem.valid_block, Mem.flat_inj in *.
+    destruct (plt b1 (Mem.nextblock m));
+      destruct (plt b1 B); auto; try xomega.
+  - intros.
+    unfold Mem.range_perm in *.
+    pose proof (size_chunk_pos chunk).
+    exploit (H1 ofs). xomega. intros.
+    exploit Mem.perm_valid_block; eauto.
+    intros. eapply mi_align; eauto.
+    unfold Mem.valid_block, Mem.flat_inj in *.
+    destruct (plt b1 (Mem.nextblock m));
+      destruct (plt b1 B); eauto; try xomega.
+  - intros.
+    exploit Mem.perm_valid_block; eauto.
+    intros. exploit mi_memval; eauto.
+    unfold Mem.valid_block, Mem.flat_inj in *.
+    destruct (plt b1 (Mem.nextblock m));
+      destruct (plt b1 B); auto; try xomega.
+    intros. eapply memval_inject_incr.
+    + unfold Mem.flat_inj in H.
+      destruct (plt b1 B); inv H.
+      eapply H3.
+    + apply flat_inj_incr; auto.
+Qed.
+    
+   
 Lemma transf_entry_points:
   forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
   entry_point prog m0 s1 f arg ->
   exists j (s2 : RTL.state), entry_point tprog m0 s2 f arg /\ match_states j s1 s2.
 Proof.
   intros. inv H.
-  destruct (function_ptr_translated _ _ H0) as (cu & tf & FIND & TR & LINK).
+  exploit function_ptr_translated; eauto. intros (cu & tf & FIND & TR & LINK).
+  exploit sig_function_translated; eauto. intros SIG.
   assert (exists tf', tf = Internal tf').
   { unfold transf_fundef,transf_partial_fundef in *.
     destruct (transf_function (funenv_program cu) f0);
       try solve[inversion TR]. inversion TR; subst tf.
     eexists; eauto. }
   destruct H as (?&?); subst tf.
-  
+  simpl in SIG.
   do 2 econstructor; split.
-  - econstructor; try eassumption.
-    + eapply transf_fundef_single_param; eauto.
+  - econstructor; simpl; try rewrite SIG; eauto.
+    (* + eapply transf_fundef_single_param; eauto. *)
     + unfold globals_not_fresh.
       erewrite <- len_defs_genv_next.
-      * unfold ge0 in *. simpl in H2; eapply H2.
+      * unfold ge0 in *. simpl in H1; eapply H1.
       * eapply (@match_program_gen_len_defs program); eauto.
-  - econstructor; eauto.
-    + econstructor.
-      2: apply Ple_refl.
+  - econstructor;
+      try eapply Mem.neutral_inject; eauto.
+    + econstructor. 2: apply Ple_refl.
       eapply match_globalenvs_not_fresh.
-      subst ge0 ge.
-      admit. (* next block increased*)
-    + admit. (* args of init have to be well formed.*)
-    + eapply Mem.neutral_inject.
-      unfold Mem.mem_wd in *.
-      (* Mem.inject_neutral (Mem.nextblock m0) m0 
-         should be enough, since we added an empty block.
-       *)
-      admit.
+      eapply globals_not_fresh_nextb; eauto.
+      exploit Mem.nextblock_alloc; eauto.
+      unfold globals_not_fresh.
+      intros ->. xomega.
+    + unfold Mem.arg_well_formed in *.
+      eapply val_inject_list_incr; try eassumption.
+      exploit Mem.nextblock_alloc; eauto; intros ->.
+      apply flat_inj_incr; xomega.
+    + unfold Mem.mem_wd in *.
+      exploit Mem.nextblock_alloc; eauto; intros ->.
+      unfold Mem.inject_neutral.
+      eapply Mem.alloc_inject_neutral; eauto; swap 1 2.
+      xomega.
+      eapply inject_neutral_empty_blocks; auto.
+      xomega.
     + apply flat_injection_full.
-Admitted.
+Qed.
 
 Lemma transf_initial_states':
    forall s1 : RTL.state,

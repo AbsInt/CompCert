@@ -973,16 +973,16 @@ Proof.
   econstructor; eauto. simpl.
   eapply external_call_well_typed; eauto.
   (* return *)
-  inv H1.
-  apply nil_has_pre_main in Has_pre_main; inv Has_pre_main.
+  inv H1. inv not_empty.
   econstructor; eauto.
   apply wt_regset_assign; auto. rewrite H10; auto.
 Qed.
-
-(*Lemma wt_initial_state:
+(*
+Lemma wt_initial_state:
   forall S, initial_state p S -> wt_state S.
 Proof.
-  intros. inv H. constructor. constructor. rewrite H3; auto.
+  intros. inv H. constructor.
+  admit. (*constructor. rewrite H3; auto.*) 
   pattern f. apply Genv.find_funct_ptr_prop with fundef unit p b.
   exact wt_p. exact H2.
   rewrite H3. constructor.

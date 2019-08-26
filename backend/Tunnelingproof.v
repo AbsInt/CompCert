@@ -214,35 +214,35 @@ Inductive match_stackframes: stackframe -> stackframe -> Prop :=
 Inductive match_states: state -> state -> Prop :=
   | match_states_intro:
       forall s f sp pc ls m ts tls tm
-        (STK: list_forall2 match_stackframes s ts)
+        (STK: list_forall2_end match_stackframes eq s ts)
         (LS: locmap_lessdef ls tls)
         (MEM: Mem.extends m tm),
       match_states (State s f sp pc ls m)
                    (State ts (tunnel_function f) sp (branch_target f pc) tls tm)
   | match_states_block:
       forall s f sp bb ls m ts tls tm
-        (STK: list_forall2 match_stackframes s ts)
+        (STK: list_forall2_end match_stackframes eq s ts)
         (LS: locmap_lessdef ls tls)
         (MEM: Mem.extends m tm),
       match_states (Block s f sp bb ls m)
                    (Block ts (tunnel_function f) sp (tunneled_block f bb) tls tm)
   | match_states_interm:
       forall s f sp pc bb ls m ts tls tm
-        (STK: list_forall2 match_stackframes s ts)
+        (STK: list_forall2_end match_stackframes eq s ts)
         (LS: locmap_lessdef ls tls)
         (MEM: Mem.extends m tm),
       match_states (Block s f sp (Lbranch pc :: bb) ls m)
                    (State ts (tunnel_function f) sp (branch_target f pc) tls tm)
   | match_states_call:
       forall s f ls m ts tls tm
-        (STK: list_forall2 match_stackframes s ts)
+        (STK: list_forall2_end match_stackframes eq s ts)
         (LS: locmap_lessdef ls tls)
         (MEM: Mem.extends m tm),
       match_states (Callstate s f ls m)
                    (Callstate ts (tunnel_fundef f) tls tm)
   | match_states_return:
       forall s ls m ts tls tm
-        (STK: list_forall2 match_stackframes s ts)
+        (STK: list_forall2_end match_stackframes eq s ts)
         (LS: locmap_lessdef ls tls)
         (MEM: Mem.extends m tm),
       match_states (Returnstate s ls m)
@@ -392,11 +392,11 @@ Definition measure (st: state) : nat :=
 
 Lemma match_parent_locset:
   forall s ts,
-  list_forall2 match_stackframes s ts ->
+  list_forall2_end match_stackframes eq s ts ->
   locmap_lessdef (parent_locset s) (parent_locset ts).
 Proof.
   induction 1; simpl.
-- red; auto.
+- subst; red; auto.
 - inv H; auto.
 Qed.
 
@@ -528,9 +528,10 @@ Proof.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   simpl. econstructor; eauto using locmap_setpair_lessdef, locmap_undef_caller_save_regs_lessdef.
 - (* return *)
-  inv STK. inv H1.
+  inv STK. inv Hnot_empty. inv H1.
   left; econstructor; split.
   eapply exec_return; eauto.
+  inv H3; auto.
   constructor; auto.
 Qed.
 
@@ -540,17 +541,17 @@ Lemma transf_entry_points:
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  pose proof (function_ptr_translated _ _ H0) as A.
+  exploit (function_ptr_translated); eauto. intro A.
   econstructor; split.
   - econstructor; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSL; eauto.
   - econstructor; eauto.
-    + econstructor.
+    + econstructor; auto.
     + econstructor.
     + apply Mem.extends_refl.
 Qed.
-
+(*
 Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists st2, initial_state tprog st2 /\ match_states st1 st2.
@@ -564,7 +565,7 @@ Proof.
   apply function_ptr_translated; auto.
   rewrite <- H3. apply sig_preserved.
   constructor. constructor. red; simpl; auto. apply Mem.extends_refl.
-Qed.
+Qed. *)
 
 Lemma transf_initial_states':
   forall s1 : state,
@@ -587,6 +588,7 @@ Proof.
   set (p := map_rpair R (Conventions1.loc_result signature_main)) in *.
   generalize (locmap_getpair_lessdef p _ _ LS). rewrite H1; intros LD; inv LD.
   econstructor; eauto.
+  inv H4.
 Qed.
 
 Theorem transf_program_correct'':

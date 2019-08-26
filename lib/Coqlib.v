@@ -1332,3 +1332,22 @@ Lemma nlist_forall2_imply:
 Proof.
   induction 1; simpl; intros; constructor; auto.
 Qed.
+
+
+
+Inductive not_empty {A}: list A -> Prop:=
+| not_empty_intros: forall s ls, not_empty (s::ls).
+Lemma nil_not_empty:
+      forall A, @not_empty A nil -> False.
+Proof. intros * H; inv H. Qed.
+Hint Resolve not_empty_intros.
+
+
+
+Inductive list_forall2_end {A B : Type} (P : A -> B -> Prop)
+          (END : A -> B -> Prop): list A -> list B -> Prop :=
+    list_forall2_one: forall a b, END a b -> list_forall2_end P END (a::nil) (b::nil)
+  | list_forall2_end_cons : forall (a1 : A) (al : list A) (b1 : B) (bl : list B),
+                        P a1 b1 ->
+                        list_forall2_end P END al bl ->
+                        list_forall2_end P END (a1 :: al) (b1 :: bl).
