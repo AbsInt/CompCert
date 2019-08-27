@@ -14,7 +14,7 @@
    of the PPC assembly code. *)
 
 open Camlcoq
-open Integers
+open! Integers
 open AST
 open Asm
 open Asmexpandaux
@@ -30,8 +30,8 @@ let eref =
 
 (* Useful constants and helper functions *)
 
-let _0 = Integers.Int.zero
-let _1 = Integers.Int.one
+let _0 = Int.zero
+let _1 = Int.one
 let _2 = coqint_of_camlint 2l
 let _4 = coqint_of_camlint 4l
 let _6 = coqint_of_camlint 6l
@@ -45,7 +45,7 @@ let _m4 = coqint_of_camlint (-4l)
 let _m8 = coqint_of_camlint (-8l)
 let _m16 = coqint_of_camlint (-16l)
 
-let _0L = Integers.Int64.zero
+let _0L = Int64.zero
 let _32L = coqint_of_camlint64 32L
 let _64L = coqint_of_camlint64 64L
 let _m1L = coqint_of_camlint64 (-1L)
