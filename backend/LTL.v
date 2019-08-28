@@ -375,11 +375,13 @@ Definition pre_main (stck_sz:Z): function:=
    It generally only needs the types of arguemtns targs.
    For RISC-V, it also takes calling conventions.
  *)
-Definition pre_main_locset targs args: locset:=
-  let sg:= {| sig_args := targs;
+
+Definition sig_wrapper targs:signature :=
+  {| sig_args := targs;
               sig_res := None;
-              sig_cc := cc_default |} in
-  build_ls_from_arguments sg args.
+              sig_cc := cc_default |}.
+Definition pre_main_locset targs args: locset:=
+  build_ls_from_arguments (sig_wrapper targs) args.
 Definition arg_size (args : list typ):= Z.of_nat (Datatypes.length args).
 Definition pre_main_stack targs args: stackframe:=
   Stackframe

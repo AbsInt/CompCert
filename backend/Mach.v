@@ -545,20 +545,30 @@ Fixpoint make_arguments (rs: regset) (m: mem) sp (al: list (rpair loc)) (lv: lis
 
 Definition build_ls_from_arguments (sg:signature) (args:list val): regset:=
   fun _ => Vundef.
-  
+Definition pre_main_stack sp: stackframe:=
+  Stackframe
+    xH
+    sp                         (* We have a statck! *)
+    Vnullptr                   (* NOWHERE TO RETURN  *)
+    nil                        (* No continuation in pre_main *).
+
+Definition pre_main_staklist sp:=
+  (pre_main_stack sp)::nil.
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall f fb rs stk m0 m1 m2 args targs,
+  | entry_point_intro: forall f fb rs spb m0 m1 m2 args targs arg_siz,
       let ge := Genv.globalenv p in
       Mem.mem_wd m0 ->
       globals_not_fresh ge m0 ->
       Mem.arg_well_formed args m0 ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      Mem.alloc m0 0 (Z.of_nat (length args)) = (m1, stk) ->
+      arg_siz = size_arguments (fn_sig f) ->
+      Mem.alloc m0 0 arg_siz = (m1, spb) ->
       targs = (sig_args (funsig (Internal f))) ->
       Val.has_type_list args targs ->
-      let sp := Vptr stk Ptrofs.zero in
+      let sp := Vptr spb Ptrofs.zero in
       make_arguments (Regmap.init Vundef) m1 sp (loc_arguments (funsig (Internal f))) args = Some (rs, m2) ->
-      entry_point p m0 (Callstate nil fb rs m2) (Vptr fb Ptrofs.zero) args.
+      entry_point p m0 (Callstate (pre_main_staklist sp) fb rs m2) (Vptr fb Ptrofs.zero) args.
+
 (*
 forall b f b0 f0 rs stk m0 m1 m2 m3 m args,
       let ge := Genv.globalenv p in
