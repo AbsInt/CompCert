@@ -73,9 +73,9 @@ let print_condition reg pp = function
   | (Ccomplushift(c, s, a), [r1;r2]) ->
       fprintf pp "%a %slu %a %a" reg r1 (comparison_name c) reg r2 shift (s, a)
   | (Cmasklzero n, [r1]) ->
-      fprintf pp "%a & 0x%Lx == 0" reg r1 (camlint64_of_coqint n)
+      fprintf pp "%a &l 0x%Lx == 0" reg r1 (camlint64_of_coqint n)
   | (Cmasklnotzero n, [r1]) ->
-      fprintf pp "%a & 0x%Lx != 0" reg r1 (camlint64_of_coqint n)
+      fprintf pp "%a &l 0x%Lx != 0" reg r1 (camlint64_of_coqint n)
   | (Ccompf c, [r1;r2]) ->
       fprintf pp "%a %sf %a" reg r1 (comparison_name c) reg r2
   | (Cnotcompf c, [r1;r2]) ->
