@@ -19,6 +19,7 @@
 Require Import Coqlib.
 Require Import AST Integers Values Memory Events Globalenvs Smallstep.
 Require Import Op Locations LTL Conventions.
+Require Import Premain.
 
 (** * Abstract syntax *)
 
@@ -307,54 +308,40 @@ Inductive initial_state (p: program): state -> Prop :=
       funsig f = signature_main ->
       initial_state p (Callstate nil f (Locmap.init Vundef) m0).
 
-(*
-Definition pre_main_sig: signature:=
-  {| sig_args := nil;
-     sig_res := None ;
-     sig_cc := cc_default |}.
-*)
 Definition pre_main sig (stck_sz:Z): function:=
   {| fn_sig := pre_main_sig;
      fn_stacksize := stck_sz;
      fn_code := (Lcall sig (inr xH) ::nil) |}.
-(* loc_arguments takes a signature, 
-   It generally only needs the types of arguemtns targs.
-   For RISC-V, it also takes calling conventions.
- *)
-Definition pre_main_locset targs args: locset:=
-  let sg:= {| sig_args := targs;
-              sig_res := None;
-              sig_cc := cc_default |} in
-  build_ls_from_arguments sg args.
-Definition arg_size (args : list typ):= Z.of_nat (Datatypes.length args).
+
 Definition pre_main_stack sig sp targs args: stackframe:=
   Stackframe
-    (pre_main sig 0 (*arg_size targs*))
-    (Vptr sp Ptrofs.zero)       (* no stack pointere for pre_main *)
-    (pre_main_locset targs args) (* empty environment in pre_main *)
-    nil.                         (* No continuation in pre_main *)
-
+    (pre_main sig 0)
+    (Vptr sp Ptrofs.zero)        (* no stack pointere for pre_main *)
+    (pre_main_locset_all targs args) (* environment in pre_main *)
+    nil                          (* No continuation in pre_main *).
 Definition pre_main_staklist sp sig targs args:=
   (pre_main_stack sp sig targs args)::nil.
 
-
-
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall fb f m0 m1 sp args targs,
-      let ge := Genv.globalenv p in
-      Mem.mem_wd m0 ->
-      globals_not_fresh ge m0 ->
-      Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      Val.has_type_list args (sig_args (funsig (Internal f))) ->
-      (* Allocate a stackframe, to pass arguments in the stack*)
-      Mem.alloc m0 0 0 = (m1, sp) ->
-      targs = sig_args (fn_sig f) ->
-      Val.has_type_list args targs ->
-      Mem.arg_well_formed args m0 ->
-      let ls := LTL.build_ls_from_arguments (funsig (Internal f)) args in
-      entry_point p m0 (Callstate (pre_main_staklist (fn_sig f) sp targs args)
-                                  (Internal f) ls m1)
-                  (Vptr fb Ptrofs.zero) args.
+| entry_point_intro: forall fb f m0 m1 sp args targs,
+    let sg:= fn_sig f in
+    let ge := Genv.globalenv p in
+    Mem.mem_wd m0 ->
+    globals_not_fresh ge m0 ->
+    Genv.find_funct_ptr ge fb = Some (Internal f) ->
+    Val.has_type_list args (sig_args sg) ->
+    (* Allocate a stackframe, to pass arguments in the stack*)
+    Mem.alloc m0 0 0 = (m1, sp) ->
+    targs = sig_args (fn_sig f) ->
+    Val.has_type_list args targs ->
+    Mem.arg_well_formed args m0 ->
+    (* arguments fit in the stack *)
+    bounded_args sg ->
+    let ls := pre_main_locset_all targs args 
+              (*LTL.build_ls_from_arguments (funsig (Internal f)) args*) in
+    entry_point p m0 (Callstate (pre_main_staklist (fn_sig f) sp targs args)
+                                (Internal f) ls m1)
+                (Vptr fb Ptrofs.zero) args.
 
 Inductive final_state: state -> int -> Prop :=
   | final_state_intro: forall rs m retcode pre_main,

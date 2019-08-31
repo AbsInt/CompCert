@@ -414,7 +414,7 @@ Proof.
   - inv H.
     do 2 eexists; eauto.
     apply agree_set_mreg_parallel; auto.
-  - unfold store_stack in H.
+  - unfold Mach.store_stack in H.
     erewrite agree_sp by eauto.
     destruct (Mem.storev _ _ _ _); inv H; eauto.
 Qed.
@@ -945,8 +945,11 @@ Section MATCH_STACK.
 Variable ge: Mach.genv.
 
 Inductive match_stack: list Mach.stackframe -> Prop :=
-  | match_stack_nil:
-      match_stack nil
+ (* | match_stack_nil:
+      match_stack nil *)
+  | match_stack_one: forall fb sp,
+      sp <> Vundef ->
+      match_stack (Stackframe fb sp Vnullptr nil :: nil)
   | match_stack_cons: forall fb sp ra c s f tf tc,
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       transl_code_at_pc ge ra fb f c false tf tc ->
@@ -958,14 +961,14 @@ Lemma parent_sp_def: forall s, match_stack s -> parent_sp s <> Vundef.
 Proof.
   induction 1; simpl.
   unfold Vnullptr; destruct Archi.ptr64; congruence.
-  auto.
+  unfold Vnullptr; destruct Archi.ptr64; congruence.
 Qed.
 
 Lemma parent_ra_def: forall s, match_stack s -> parent_ra s <> Vundef.
 Proof.
   induction 1; simpl.
   unfold Vnullptr; destruct Archi.ptr64; congruence.
-  inv H0. congruence.
+  inv H0; congruence.
 Qed.
 
 Lemma lessdef_parent_sp:

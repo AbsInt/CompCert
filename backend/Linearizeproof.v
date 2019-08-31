@@ -716,23 +716,23 @@ Lemma transf_entry_points:
   LTL.entry_point prog m0 s1 f arg ->
   exists s2 : Linear.state, Linear.entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
-  intros. inv H. subst ge0.
+  intros. inv H. subst ge0 sg.
   destruct (function_ptr_translated _ _ H0) as (tf & A & B); auto.
   simpl in B; monadInv B.
+  assert (SIG: fn_sig x = LTL.fn_sig f0).
+  { monadInv EQ. auto. }
   (*destruct (transf_function f0) eqn: Hf0; inv B.*)
   econstructor; split.
-  - econstructor; eauto.
+  - econstructor; simpl; try rewrite SIG; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
         eapply match_program_gen_len_defs in TRANSF; eauto.
-    (* + erewrite sig_preserved; eauto. *)
-    + monadInv EQ; auto.
-    + monadInv EQ; auto.
   - assert (EQ':=EQ).
     monadInv EQ; simpl.
+    simpl.
     eapply match_states_call; eauto.
     2:{ simpl in *. rewrite EQ'; reflexivity. }
-    unfold LTL.pre_main_staklist, pre_main_staklist, END.
-    constructor; reflexivity.
+    constructor; simpl.
+    reflexivity.
 Qed.
 (*
 Lemma transf_initial_states:

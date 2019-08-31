@@ -1603,6 +1603,7 @@ Proof.
   - econstructor; simpl in *; try rewrite SIG; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSL; eauto.
+    + 
   - econstructor; eauto.
     + simpl. rewrite EQ; reflexivity.
     + eapply match_stacks_stop1.

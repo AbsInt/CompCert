@@ -2789,7 +2789,7 @@ Inductive type_lessdef a : typ -> Prop :=
             LOC = loc_arguments sg ->
             (map (fun p : rpair loc =>
                     Locmap.getpair p
-                    (setlist LOC args (Locmap.init Vundef)))
+                    (Premain.make_locset_all LOC args (Locmap.init Vundef)))
                LOC)= args.
         Proof.
           intros; subst.
@@ -2815,17 +2815,21 @@ Proof.
     econstructor; simpl; try rewrite SIG; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
       eapply match_program_gen_len_defs in TRANSF; eauto.
-  - (* assert (Val.has_type_list arg (sig_args (funsig (Internal f)))).
-    { erewrite sig_function_translated; simpl; eauto. } *)
-    econstructor; eauto.
+  - econstructor; eauto.
     + simpl in *. rewrite SIG.
       eapply match_stackframes_one; auto.
     + simpl; rewrite EQ; reflexivity.
     + simpl; subst. rewrite SIG.
-      unfold build_ls_from_arguments.
+      unfold Premain.pre_main_locset_all.
       erewrite loc_arguments_retrieved; eauto.
       * clear; induction arg; auto.
-    + intros ??; simpl. eauto.
+    + intros ??; simpl.
+      unfold callee_save_loc in H.
+      unfold Premain.pre_main_locset_outgoing,
+      Premain.pre_main_locset_all.
+      unfold Premain.make_locset_outgoing,
+      Premain.make_locset_all.
+      eauto.
     + apply Mem.extends_refl.
     + simpl in *; rewrite SIG; auto.
 Qed.

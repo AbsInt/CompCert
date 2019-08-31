@@ -1843,6 +1843,7 @@ Proof.
     + unfold globals_not_fresh.
       pose proof genb_preserved as Hgenb. subst ge tge.
       rewrite <- Hgenb. auto.
+    +
   - econstructor; simpl; eauto.
     + econstructor.
       

@@ -499,6 +499,7 @@ Inductive step: state -> trace -> state -> Prop :=
          t (Returnstate s rs' m')
   | exec_return:
       forall s f sp ra c rs m,
+        not_empty s ->
       step (Returnstate (Stackframe f sp ra c :: s) rs m)
         E0 (State s f sp c rs m).
 
@@ -555,19 +556,31 @@ Definition pre_main_stack sp: stackframe:=
 Definition pre_main_staklist sp:=
   (pre_main_stack sp)::nil.
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall f fb rs spb m0 m1 m2 args targs arg_siz,
+  | entry_point_intro: forall f fb rs spb m0 m1 m2 m3 m4 args targs stk_sz,
       let ge := Genv.globalenv p in
+      let linear_pre_main:= Linear.pre_main (fn_sig f) 0 in
+      let pre_main_env:= Stacklayout.make_env (Bounds.function_bounds linear_pre_main) in
       Mem.mem_wd m0 ->
       globals_not_fresh ge m0 ->
       Mem.arg_well_formed args m0 ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      arg_siz = size_arguments (fn_sig f) ->
-      Mem.alloc m0 0 arg_siz = (m1, spb) ->
+      (*Allocatee the stack block *)
+      stk_sz = Bounds.fe_size pre_main_env ->
+      Mem.alloc m0 0 stk_sz = (m1, spb) ->
+      let sp:= Vptr spb Ptrofs.zero in
+      (* store pointer to parent *)
+      let parent_ofs:=(Ptrofs.repr (Bounds.fe_ofs_link pre_main_env)) in
+      store_stack m1 sp Tptr parent_ofs Vnullptr = Some m2 ->
+      (* store return pointer *)
+      let ret_ofs:=(Ptrofs.repr (Bounds.fe_ofs_retaddr pre_main_env)) in
+      store_stack m2 sp Tptr ret_ofs Vnullptr = Some m3 ->
       targs = (sig_args (funsig (Internal f))) ->
       Val.has_type_list args targs ->
       let sp := Vptr spb Ptrofs.zero in
-      make_arguments (Regmap.init Vundef) m1 sp (loc_arguments (funsig (Internal f))) args = Some (rs, m2) ->
-      entry_point p m0 (Callstate (pre_main_staklist sp) fb rs m2) (Vptr fb Ptrofs.zero) args.
+      make_arguments (Regmap.init Vundef) m3 sp
+                     (loc_arguments (funsig (Internal f))) args = Some (rs, m4) ->
+      entry_point p m0 (Callstate (pre_main_staklist sp) fb rs m4)
+                  (Vptr fb Ptrofs.zero) args.
 
 (*
 forall b f b0 f0 rs stk m0 m1 m2 m3 m args,
@@ -583,10 +596,10 @@ forall b f b0 f0 rs stk m0 m1 m2 m3 m args,
       entry_point p m0 (Callstate b rs m) (Vptr b (Ptrofs.zero)) args. *)
 
 Inductive final_state: state -> int -> Prop :=
-  | final_state_intro: forall rs m r retcode,
+  | final_state_intro: forall rs m r retcode pre_main_stk,
       loc_result signature_main = One r ->
       rs r = Vint retcode ->
-      final_state (Returnstate nil rs m) retcode.
+      final_state (Returnstate (pre_main_stk::nil) rs m) retcode.
 
 Definition semantics (rao: function -> code -> ptrofs -> Prop) (p: program) :=
   let ge:= (Genv.globalenv p) in
@@ -656,7 +669,7 @@ Proof.
 - (* jumptable *)
   assert (f0 = f) by congruence. subst f0. econstructor; eauto using find_label_tail.  
 - (* return *)
-  inv STACK. inv H1. econstructor; eauto.
+  inv STACK. inv H2. econstructor; eauto.
 Qed.
 
 End WF_STATES.

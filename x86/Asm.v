@@ -1184,21 +1184,31 @@ Fixpoint make_arguments (rs: regset) (m: mem) (al: list (rpair loc)) (lv: list v
   | _, _ => None
  end.
 
+Definition store_stack (m: mem) (sp: val) (ty: typ) (ofs: ptrofs) (v: val) :=
+  Mem.storev (chunk_of_type ty) m (Val.offset_ptr sp ofs) v.
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop:=
 | INIT_CORE:
-    forall f b rs stk m0 m1 m2 m3 m args,
-      Genv.find_funct_ptr ge b = Some f ->
-      Mem.alloc m0 0 (3 * size_chunk Mptr) = (m1, stk) ->
-      let sp := Vptr stk Ptrofs.zero in
-      Mem.storev Mptr m1 (Val.offset_ptr sp (Ptrofs.repr (2 * size_chunk Mptr))) Vnullptr = Some m2 ->
-      Mem.storev Mptr m2 (Val.offset_ptr sp Ptrofs.zero) Vnullptr = Some m3 ->
+    forall f b rs spb m0 m1 m2 m3 m4 args stk_sz,
+      let linear_pre_main:= Linear.pre_main (fn_sig f) 0 in
+      let pre_main_env:= Stacklayout.make_env (Bounds.function_bounds linear_pre_main) in
+      Genv.find_funct_ptr ge b = Some (Internal f) ->
+      (*Allocatee the stack block *)
+      stk_sz = Bounds.fe_size pre_main_env ->
+      Mem.alloc m0 0 stk_sz = (m1, spb) ->
+      let sp := Vptr spb Ptrofs.zero in
+      (* store pointer to parent *)
+      let parent_ofs:=(Ptrofs.repr (Bounds.fe_ofs_link pre_main_env)) in
+      store_stack m1 sp Tptr parent_ofs Vnullptr = Some m2 ->
+      (* store return pointer *)
+      let ret_ofs:=(Ptrofs.repr (Bounds.fe_ofs_retaddr pre_main_env)) in
+      store_stack m2 sp Tptr ret_ofs Vnullptr = Some m3 ->
       let rs0 :=
         (Pregmap.init Vundef)
         # PC <- (Vptr b Ptrofs.zero) 
         # RA <- Vnullptr
         # RSP <- sp in
-      make_arguments rs0 m3 (loc_arguments (funsig f)) args = Some (rs, m) ->
-      entry_point ge m0 (State rs m) (Vptr b Ptrofs.zero) args.
+      make_arguments rs0 m3 (loc_arguments (funsig (Internal f))) args = Some (rs, m4) ->
+      entry_point ge m0 (State rs m4) (Vptr b Ptrofs.zero) args.
 
 Definition get_extcall_arg (rs: regset) (m: mem) (l: Locations.loc) : option val :=
  match l with
@@ -1361,12 +1371,10 @@ Ltac Equalities :=
   eapply external_call_trace_length; eauto.
 - (* initial cores *)
   inv H; inv H0.
-  rewrite H7 in H2; inv H2.
-  subst sp sp0.
-  rewrite H8 in H3; inv H3.
-  rewrite H9 in H4; inv H4.
-  rewrite H6 in H1; inv H1.
-  subst rs0 rs2; congruence.
+  subst linear_pre_main linear_pre_main0 sp sp0
+        ret_ofs ret_ofs0 pre_main_env pre_main_env0
+  parent_ofs parent_ofs0 rs0 rs2. 
+  repeat Equalities. auto.
 - (* final no step *)
   assert (NOTNULL: forall b ofs, Vnullptr <> Vptr b ofs).
   { intros; unfold Vnullptr; destruct Archi.ptr64; congruence. }

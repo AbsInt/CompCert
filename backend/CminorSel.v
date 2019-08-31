@@ -23,6 +23,7 @@ Require Import Cminor.
 Require Import Op.
 Require Import Globalenvs.
 Require Import Smallstep.
+Require Import Premain.
 
 (** * Abstract syntax *)
 
@@ -508,28 +509,24 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
 | entry_point_intro: 
     let ge := Genv.globalenv p in
     forall f fb m0 m1 args targs stk,
+      let sg:= fn_sig f in
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       (* Assume there are no local variables, this could change*)
       (* The only argument is a pointer*)
       (*f.(fn_params) = (xH)::nil -> *) 
       (* Return is int*)
-      sig_res f.(fn_sig) = Some Tint ->
+      sig_res sg = Some Tint ->
       (*Make sure the memory is well formed *)
       globals_not_fresh ge m0 ->
       Mem.mem_wd m0 ->
       (* Allocate a stackframe, to pass arguments in the stack*)
       Mem.alloc m0 0 0 = (m1, stk) ->
       (*Arguemtns are well typed and well formed in the memory*)
-      targs = sig_args (f.(fn_sig)) ->
+      targs = sig_args sg ->
       Val.has_type_list args targs ->
       Mem.arg_well_formed args m0 ->
-      (*Mem.arg_well_formed args m0 ->
-      val_casted_list args targs ->
-      Val.has_type_list args (typlist_of_typelist targs) ->
-      val_casted_list_func args targs 
-                           && tys_nonvoid targs 
-                           && vals_defined args
-                           && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
+      (* arguments fit in the stack *)
+      bounded_args sg ->
       entry_point p m0
                   (Callstate (Internal f) args (Kstop targs) m1) (Vptr fb Ptrofs.zero) args.
 

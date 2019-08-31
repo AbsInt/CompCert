@@ -19,6 +19,7 @@
 Require Import Coqlib Maps.
 Require Import AST Integers Values Events Memory Globalenvs Smallstep.
 Require Import Op Registers.
+Require Import Premain.
 
 (** * Abstract syntax *)
 
@@ -401,6 +402,7 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
 | entry_point_intro: 
     let ge := Genv.globalenv p in
     forall f fb m0 m1 args targs stk,
+      let sg:= fn_sig f in
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       (* Assume there are no local variables, this could change*)
       (* The only argument is a pointer*)
@@ -412,17 +414,11 @@ Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
       Mem.alloc m0 0 0 = (m1, stk) ->
       (funsig (Internal f)).(sig_res) = Some Tint ->
       (* arguments are well typed by targs *)
-      targs = (sig_args (fn_sig f)) ->
+      targs = sig_args sg ->
       Val.has_type_list args targs ->
       Mem.arg_well_formed args m0 ->
-      (* 
-         Mem.arg_well_formed args m0 ->
-      val_casted_list args targs ->
-      Val.has_type_list args (typlist_of_typelist targs) ->
-      val_casted_list_func args targs 
-                           && tys_nonvoid targs 
-                           && vals_defined args
-                           && zlt (4*(2*(Zlength args))) Int.max_unsigned = true ->*)
+      (* arguments fit in the stack *)
+      bounded_args sg ->
       entry_point p m0
                   (Callstate (pre_main_staklist targs)
                              (Internal f) args m1) (Vptr fb Ptrofs.zero) args.

@@ -19,7 +19,7 @@ Require Import Integers AST Linking.
 Require Import Values Memory Separation Events Globalenvs Smallstep ExposedSimulations.
 Require Import LTL Op Locations Linear Mach.
 Require Import Bounds Conventions Stacklayout Lineartyping.
-Require Import Stacking.
+Require Import Stacking Premain. 
 
 Local Open Scope sep_scope.
 
@@ -1329,7 +1329,7 @@ Inductive match_stacks (j: meminj):
         (TRC: not_empty cs' -> transl_code (make_env (function_bounds f)) c = c')
         (INJ: j sp = Some(sp', (fe_stack_data (make_env (function_bounds f)))))
         (TY_RA: Val.has_type ra Tptr)
-        (AGL: agree_locs f ls (parent_locset cs))
+        (AGL: not_empty cs' -> agree_locs f ls (parent_locset cs))
         (ARGS: forall ofs ty,
            In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments sg)) ->
            slot_within_bounds (function_bounds f) Outgoing ofs ty)
@@ -1690,7 +1690,7 @@ Proof.
   - constructor; auto.
   - destruct l; [econstructor; eauto|].
     destruct sl; try (econstructor; eauto).
-    apply agree_locs_set_slot; auto. (*agree_locs f ls (parent_locset cs) *)
+    intros; apply agree_locs_set_slot; auto. (*agree_locs f ls (parent_locset cs) *)
 Qed.
 
 Lemma update_stackframe_list_match:
@@ -2314,7 +2314,7 @@ Proof.
   exploit wt_returnstate_agree; eauto. intros [AGCS OUTU].
   simpl in AGCS. simpl in SEP. rewrite sep_assoc in SEP.
   econstructor; exists E0, j1; split.
-  apply plus_one. apply exec_return.
+  apply plus_one. apply exec_return; auto.
   split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
   econstructor; eauto.
   apply agree_locs_return with rs0; auto.
@@ -2340,7 +2340,7 @@ Lemma make_arguments_inject_rec : forall j ls rs m sp sigs args rs' m',
   agree_regs j ls rs ->
   Val.inject_list j args args ->
   make_arguments rs m (Vptr sp Ptrofs.zero) sigs args = Some (rs', m') ->
-  agree_regs j (setlist sigs args ls) rs'.
+  agree_regs j (make_locset_all sigs args ls) rs'.
 Proof.
   intros until sigs; revert ls rs m; induction sigs; simpl; intros.
   - destruct args; inv H1; auto.
@@ -2504,7 +2504,7 @@ Proof.
 Qed.
 
 Lemma build_arguments_stack: forall sg args sl ofs ty,
-  LTL.build_ls_from_arguments sg args (S sl ofs ty) =
+  pre_main_locset_all (sig_args sg) args (S sl ofs ty) =
   set_outgoing_list (loc_arguments sg) args (Locmap.init Vundef) (S sl ofs ty).
 Proof.
   intros; eapply build_arguments_stack_rec.
@@ -2614,31 +2614,80 @@ Proof.
 
   set (pre_main:= pre_main (Linear.fn_sig f0) 0).
   assert ( Mem.alloc m0 0 (Linear.fn_stacksize pre_main) = (m2, sp)) by eassumption.
-  destruct (Mem.alloc m0 0 (size_arguments (Linear.fn_sig f0)))
-    as (m2', sp') eqn:Halloc.
-  assert (sp' = sp).
-  { erewrite (Mem.alloc_result _ _ _ _ sp'); eauto.
-    erewrite (Mem.alloc_result _ _ _ _ sp); eauto. }
-  subst.
+  
   remember (make_env (function_bounds pre_main)) as pre_main_env.
   pose proof (make_env_pre_main (Linear.fn_sig f0)) as Henv.
+  
+  edestruct function_prologue_correct with
+      (j := Mem.flat_inj (Mem.nextblock m0))
+      (ls := Locmap.init Vundef)(rs := Regmap.init Vundef)(cs := @nil stackframe)
+      (fb := 1%positive)(k := @nil instruction)
+    as (j & rs & m2'' & sp' & m3' & m4' & m5' &
+        Hstack & Hparent & Hret & Hsave & Hregs & Hlocs & Hm & Hsp & Hj);
+      try apply H; eauto; try reflexivity.
+  { unfold transf_function.
+    rewrite <- Heqpre_main_env.
+    replace (wt_function pre_main) with true by reflexivity.
+    simpl negb. simpl.
+    
+    destruct (zlt Ptrofs.max_unsigned (fe_size pre_main_env)) .
+    { exfalso. subst pre_main_env sg.
+      unfold pre_main in l. rewrite Henv in l.
+      clear - l H8.
+      apply args_bound_max in H8. simpl in *.
+      xomega. }  
+    reflexivity. }
+  { constructor. }
+  { intro; reflexivity. }
+  { unfold agree_outgoing_arguments; reflexivity.  }
+  { (*instantiate(1:=Vundef). simpl; auto.*)
+    apply Val.Vnullptr_has_type. }
+  { (*instantiate(1:=Vundef). simpl; auto. *)
+    apply Val.Vnullptr_has_type. }
+  { instantiate (1 := m0).
+    instantiate (1 := pure True).
+    rewrite <- sep_assoc, sep_comm, sep_pure; split; auto.
+    split; [|split; unfold disjoint_footprint; auto]; simpl.
+    { apply Mem.mem_wd_inject; auto. }
+    exists (Mem.nextblock m0); split; [apply Ple_refl|].
+    (* - erewrite (Mem.nextblock_alloc _ _ _ m2); eauto; xomega. *)
+    subst ge; unfold Mem.flat_inj; constructor; intros.
+    apply pred_dec_true; auto.
+    destruct (plt b1 (Mem.nextblock m0)); congruence.
+    eapply Plt_Ple_trans; [eapply Genv.genv_symb_range; eauto | auto].
+    eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_funct_ptr_iff; eauto | auto].
+    eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_var_info_iff; eauto | auto]. }
 
-  exploit transl_make_arguments.
-  3:{ eapply H7. }
+    assert (sp' = sp).
+  { erewrite (Mem.alloc_result _ _ _ _ sp'); eauto.
+    erewrite (Mem.alloc_result _ _ _ _ sp); eauto. }
+  subst sp'.
+  exploit Mem.alloc_result; try eapply H4; eauto.
+  intros Heqsp.
+  
+  assert (Hstar0:m5'= m4' /\ (undef_regs destroyed_at_function_entry (Regmap.init Vundef)) = rs).
+      { clear -Henv Hsave.
+        unfold pre_main in Hsave.
+        rewrite Henv in Hsave.
+        unfold save_callee_save in *. simpl in Hsave.
+        inv Hsave; auto. inv H. }
+      destruct Hstar0 as (? & ?); subst m5' rs. 
+
+  exploit (transl_make_arguments j).
+  3:{ eapply val_inject_list_incr; eauto. }
   3:{ eauto. }
   2:{ instantiate(1:=(pre_main_staklist (Vptr sp Ptrofs.zero))).
-      instantiate (1:=Linear.pre_main_staklist (Linear.fn_sig f0)
-                                     sp
-                                     (sig_args (Linear.fn_sig f0))
-                                     arg).
+      instantiate (1:=  ((Linear.Stackframe (pre_main)
+                         (Vptr sp Ptrofs.zero)
+                         (Locmap.init Vundef) nil)::nil)).
       unfold Linear.pre_main_staklist, pre_main_staklist.
       unfold Linear.pre_main_stack, pre_main_stack.
       simpl.
       econstructor;
         try solve[intros HH; inv HH].
-      - shelve.
+      - assumption. 
       - apply Val.Vnullptr_has_type.
-      - eapply agree_locs_build_args.
+       
       - intros ? ? HH.
         eapply loc_arguments_bounded in HH; eauto.
         simpl.
@@ -2662,159 +2711,52 @@ Proof.
         auto. simpl.
         rewrite empty_locs. intros ? Hin. inv Hin.
   }
-  { shelve. }
+  { simpl.
+    replace (Locmap.init Vundef) with
+        (LTL.undef_regs destroyed_at_function_entry
+                        (call_regs (Locmap.init Vundef))) at 1.
+    2:{ eapply Axioms.extensionality; intros.
+        simpl. unfold LTL.undef_regs, call_regs.
+        clear.
+        induction destroyed_at_function_entry; simpl.
+        - destruct x; try destruct sl; try reflexivity.
+        - simpl. 
+          unfold Locmap.set.
+          destruct (Loc.eq (R a) x).
+          reflexivity.
+          destruct (Loc.diff_dec (R a) x); eauto. }
+    instantiate(1:=m4').
+    rewrite sep_assoc.
+    rewrite sep_swap3,  <- sep_assoc, sep_swap2 in Hm.
+    rewrite (sep_comm (pure True)).
+    eauto. }
+  intros (rs' & m' & Hmake_args & SEP).
 
-  intros (rs' & m' & Hmake_args & Hsep).
-
-        
-      
   
-  (* edestruct function_prologue_correct with
-      (j := Mem.flat_inj (Mem.nextblock m0))
-      (ls := Locmap.init Vundef)(rs := Regmap.init Vundef)(cs := @nil stackframe)
-      (fb := 1%positive)(k := @nil instruction)
-    as (j & rs & m2' & sp' & m3' & m4' & m5' &
-        Hstack & Hparent & Hret & Hsave & Hregs & Hlocs & Hm & Hsp & Hj);
-      try apply H; eauto; try reflexivity.
-  { unfold transf_function.
-    rewrite <- Heqpre_main_env.
-    replace (wt_function pre_main) with true by reflexivity.
-    simpl negb.
-    simpl.
-    destruct (zlt Ptrofs.max_unsigned (fe_size pre_main_env)) .
-    { clear - l. admit. }      
-    reflexivity. }
-  { constructor. }
-  { intro; reflexivity. }
-  { unfold agree_outgoing_arguments; reflexivity.  }
-  { apply Val.Vnullptr_has_type. }
-  { apply Val.Vnullptr_has_type. }
-  { instantiate (1 := m0).
-    instantiate (1 := pure True).
-    rewrite <- sep_assoc, sep_comm, sep_pure; split; auto.
-    split; [|split; unfold disjoint_footprint; auto]; simpl.
-    { apply Mem.mem_wd_inject; auto. }
-    exists (Mem.nextblock m0); split; [apply Ple_refl|].
-    (* - erewrite (Mem.nextblock_alloc _ _ _ m2); eauto; xomega. *)
-    subst ge; unfold Mem.flat_inj; constructor; intros.
-    apply pred_dec_true; auto.
-    destruct (plt b1 (Mem.nextblock m0)); congruence.
-    eapply Plt_Ple_trans; [eapply Genv.genv_symb_range; eauto | auto].
-    eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_funct_ptr_iff; eauto | auto].
-    eapply Plt_Ple_trans; [eapply Genv.genv_defs_range, Genv.find_var_info_iff; eauto | auto]. } *)
   
-  Definition f_args_size f0:=
-    fe_stack_data (make_env (function_bounds (pre_main (Linear.fn_sig f0) (arg_size (sig_args (Linear.fn_sig f0)))))).
-  Definition initial_inj sp f0 :=
-    fun b => if peq b sp then  Some (sp, f_args_size f0) else (Mem.flat_inj sp b).
-  
-      
   (* Let 's explore this *)
   do 2 eexists; split.
   - (*construct the state *)
-    econstructor; simpl; try rewrite SIG; eauto.
+    econstructor; try rewrite SIG; eauto.
     + unfold globals_not_fresh.
       erewrite <- len_defs_genv_next.
       * unfold ge in *. simpl in H1; eapply H1.
       * eapply (match_program_gen_len_defs _ _ _ _ _ TRANSF); eauto.
-
-        
-      (*unfold make_arguments.
-
-
-      rewrite <- Hstack. f_equal.
-      subst pre_main_env.
-      unfold make_env.
-      remember (if Archi.ptr64 then 8 else 4) as w.
-      remember ((function_bounds pre_main)) as b.
-      remember (align (4 * bound_outgoing b) w) as olink.
-      replace (bound_outgoing b) with (size_arguments (Linear.fn_sig f0)) in Heqolink.
-      2:{ subst b. simpl. unfold pre_main; simpl; unfold Linear.pre_main; simpl.
-          unfold max_over_instrs, max_over_slots_of_instr,
-          max_over_slots_of_funct, max_over_instrs; simpl.
-          unfold max_over_slots_of_instr, max_over_list; simpl.
-          pose proof (size_arguments_above (Linear.fn_sig f0)) as HH.
-          xomega. }
-      remember (olink + w) as ocs.
-      remember (align (size_callee_save_area b ocs) 8) as ol.
-      replace (size_callee_save_area b ocs) with ocs in Heqol.
-      2:{ subst b; unfold size_callee_save_area; unfold pre_main.
-          reflexivity. }
-      remember (align (ol + 4 * bound_local b) 8) as ostkdata.
-      replace (bound_local b) with 0 in Heqostkdata.
-      2:{ subst b; simpl.
-          unfold max_over_slots_of_funct, max_over_instrs.
-          unfold  max_over_slots_of_instr, max_over_list; simpl.
-          xomega. }
-      remember (align (ostkdata + bound_stack_data b) w) as oretaddr.
-      replace ( bound_stack_data b) with 0 in Heqoretaddr.
-      2:{ subst b; simpl.
-          unfold max_over_slots_of_funct, max_over_instrs.
-          unfold  max_over_slots_of_instr, max_over_list; simpl.
-          xomega. }
-      repeat match goal with
-        | [H: context[?x+0]|- _ ]=> replace (x + 0) with x in H by xomega
-        | [H: context[?x*0]|- _ ]=> replace (x * 0) with 0 in H by xomega
-             end.
-      repeat match goal with
-        | [ |- context[?x+0] ]=> replace (x + 0) with x in H by xomega
-        | [ |- context[?x*0] ]=> replace (x * 0) with 0 in H by xomega
-             end.
-      remember (oretaddr + w ) as sz.
-      subst ocs.
-      subst ol.
-      subst ostkdata.
-      subst oretaddr.
-      subst sz.
-
-      
-
-      
-        - subst. f_equal.
-          
-          assert (exists k, 8 = k * w).
-          { subst w. destruct Archi.ptr64; [exists 1 |exists 2]; xomega. }
-          destruct H as (k & HH).
-          assert (w > 0) by (subst w; destruct Archi.ptr64; xomega).
-          erewrite align_twice_multiple; eauto.
-          rewrite align_twice; auto.
-        - subst.
-          
-          assert (exists k, 8 = k * w).
-          { subst w. destruct Archi.ptr64; [exists 1 |exists 2]; xomega. }
-          destruct H as (k & HH).
-          assert (w>0) by admit.
-          assert (8>0) by admit.
-          repeat BLAH; reflexivity.
-          
-      - simpl. 
-
-
-      subst ocs.
-      subst ol.
-      subst ostkdata.
-      subst oretaddr.
-      subst sz.
-      
-      rewrite <- H5.
-
-      
-      simpl.
-      admit. (* make this th bound.*)
-    + *)
-      
+    + simpl in Hstack.
+      move Hstack at bottom. subst pre_main_env. eauto.
+    + rewrite <- Hparent. f_equal. simpl fn_link_ofs.
+      subst pre_main_env pre_main. reflexivity.
+    + rewrite <- Hret. f_equal. simpl fn_retaddr_ofs.
+      subst pre_main_env pre_main. reflexivity.
+    + simpl. rewrite SIG. eauto.
+    + simpl; rewrite SIG. eauto.
+    
   - (*match_states *)
-    assert (inject_incr (Mem.flat_inj (Mem.nextblock m0)) (initial_inj sp f0)).
-    { admit. }
     econstructor; eauto.
     + unfold Linear.pre_main_staklist, pre_main_staklist.
-      instantiate (1:= initial_inj sp f0).
+      instantiate (1:= j).
       econstructor; try solve[intros HH'; inv HH'];
         eauto; try solve[econstructor].
-      * unfold initial_inj. 
-        destruct (peq sp sp). 2: xomega.
-        reflexivity.        
-      * eapply agree_locs_build_args.
       * intros ? ? HH.
         eapply loc_arguments_bounded in HH; eauto.
         simpl.
@@ -2842,174 +2784,46 @@ Proof.
       unfold parent_sp,pre_main_staklist,pre_main_stack in Hmake_args.
       eapply make_arguments_inject in Hmake_args; eauto.
       eapply agree_regs_inject_incr; eauto.
-    + eapply stack_contents_change_meminj; eauto.
-      match goal with
-      | [ H: context[stack_contents _ ?stk_ls _ ]  |-
-        context[stack_contents _ ?stk_ls' _ ] ] =>
-        replace stk_ls' with stk_ls
-      end;  eauto.
-      unfold Linear.pre_main_staklist; simpl; f_equal. 
-      rewrite update_stackframe_eq; simpl. f_equal.
-      unfold Linear.pre_main_stack; simpl.
-      f_equal.
       
-      
-      
-      rewrite <- sep_assoc.
-      Lemma sep_no_foot:
-        forall P Q,
-          (forall b ofs, ~m_footprint Q b ofs) ->
-          forall m, m |= P -> m |= Q -> m |= P ** Q.
-      Proof.
-        intros; econstructor; eauto. split; eauto.
-        intros ? ? ?. apply H.
-      Qed.
-      eapply sep_no_foot; auto.
-      * simpl.
-        rewrite sep_comm, <- sep_assoc, sep_comm.
-        erewrite sep_pure; split; auto.
-        Lemma mconj_foot:
-            forall P Q, m_footprint (mconj P Q) =
-                   fun (b : block) (ofs : Z) =>
-                     m_footprint P b ofs \/ m_footprint Q b ofs.
-          Proof. reflexivity. Qed.
-          Lemma sep_foot:
-            forall P Q, m_footprint (P ** Q) =
-                   fun (b : block) (ofs : Z) =>
-                     m_footprint P b ofs \/ m_footprint Q b ofs.
-          Proof. reflexivity. Qed.
-          Lemma range_foot:
-            forall b lo hi b0,
-              b0 <> b -> forall ofs,
-                ~ m_footprint (range b lo hi) b0 ofs.
-          Proof. simpl. tauto. Qed.
-          Lemma contains_locations_foot:
-            forall j sp pos bound sl ls,
-              forall b0 ofs, b0 <> sp ->
-                        ~ m_footprint (contains_locations j sp pos bound sl ls) b0 ofs.
-          Proof. simpl; tauto. Qed.
+    +
+      (*
+        frame_contents f j sp' ls (parent_locset cs0) 
+                                  (parent_sp cs'0) 
+                                  (parent_ra cs'0) **
           
-          Lemma hasvalue_foot:
-            forall chunk sp ofs' v,
-              forall b0 ofs, b0 <> sp ->
-                        ~ m_footprint (hasvalue chunk sp ofs' v) b0 ofs.
-          Proof. simpl; tauto. Qed.
-          Ltac simpl_foot:=
-          repeat match goal with
-                 |  |- ~ (_ \/ _) => eapply Classical_Prop.and_not_or; split
-                 |  |- context[m_footprint (_ ** _)] => rewrite sep_foot
-                 |  |- context[m_footprint ( mconj _ _)] => rewrite  mconj_foot
-                 end.
-          Lemma contains_callee_saves_foot:
-            forall rl j sp pos sl,
-              forall b0 ofs, b0 <> sp ->
-                        ~ m_footprint (contains_callee_saves j sp pos rl sl) b0 ofs.
-          Proof. induction rl; auto.
-                 intros. simpl. simpl_foot; simpl; try tauto.
-                 eapply IHrl; auto.
-          Qed.
-          
-        Lemma frame_contents_footprint:
-          forall f j sp l1 l2 v1 v2,
-            forall b0 ofs, b0 <> sp ->
-            ~ m_footprint
-              (frame_contents f j sp l1 l2 v1 v2) b0 ofs.
-        Proof.
-          intros **. unfold frame_contents, frame_contents_1.
-          simpl_foot; first[
-                          apply range_foot|
-                          apply contains_locations_foot|
-                          apply hasvalue_foot|
-                          apply contains_callee_saves_foot];
-          assumption.
-        Qed.
-        rewrite sep_comm. constructor; [|split].
-        3:{ intros ? ? Hfoot1 Hfoot2.
-            destruct (Pos.eq_dec sp b).
-            - subst b. destruct Hfoot2 as (?&?&?&?).
-              unfold initial_inj in *.
-              destruct (peq x sp); subst.
-              + eapply Mem.perm_alloc_3 in H8; eauto.
-                simpl in H8. clear - H8; omega.
-              + unfold Mem.flat_inj in *.
-                destruct (plt x sp); congruence.
-            - eapply frame_contents_footprint in Hfoot1; eauto. }
-        -- unfold frame_contents.
-           split; swap 1 2.
-           ++ match goal with
-                |- context[?x+?y] => replace (x+y) with x by (simpl;xomega)  
-              end.
-              Lemma range_split_noframe:
-                forall (b : block) (lo hi : Z) (mid : Z) (m : mem),
-                  lo <= mid <= hi ->
-                  m |= range b lo hi ->
-                  m |= range b lo mid ** range b mid hi.
-              Proof. intros. exploit range_split; eauto.
-                     - rewrite sep_comm.
-                       eapply sep_pure; split.
-                       + exact I.
-                       + eassumption.
-                     - rewrite <- (sep_assoc).
-                       intros (?&?&?); auto.
-              Qed.
-              eapply range_split_noframe.
-              rewrite Henv. simpl.
-              remember (4 * (size_arguments (Linear.fn_sig f0))) as XX.
-              assert (HH:=HeqXX).
-              simpl in HeqXX; rewrite <- HeqXX.
-              assert (0<= XX).
-              { pose proof (size_arguments_above (Linear.fn_sig f0)).
-                subst XX. xomega. }
-              split; try (destruct Archi.ptr64; xomega).
-              etransitivity; swap 1 2.
-              eapply align_le; xomega.
+       *)
+      rewrite update_stackframe_eq in SEP.
+      unfold pre_main in SEP; simpl in SEP.
+      rewrite sep_assoc in SEP.
+      rewrite (sep_comm (minjection j m2)).
+      simpl; rewrite sep_assoc.
+      eapply frame_contents_exten; try apply SEP.
+      * (* locsets match in LOCALS*)
+        intros. rewrite build_arguments_stack; constructor.
+      * (* locsets match in OUTGOING*)
+        intros. rewrite build_arguments_stack; constructor.
+      * reflexivity.
+    + clear - SEP.
+      destruct SEP as (?&((?&?&?)&?)).
+      eapply H1.
+    + intros ? Hvalid.
+      destruct (Pos.eq_dec b sp).
+      * subst. rewrite Hsp. intros; discriminate.
+      * unfold Mem.valid_block in *.
+        specialize (Hj b b 0).
+        erewrite (Mem.nextblock_alloc _ _ _ m2) in Hvalid;
+          eauto.
+        subst sp.
+        clear - n Hj Hvalid.
+        unfold Mem.flat_inj in *.
+        destruct (plt b (Mem.nextblock m0)).
+        erewrite Hj; intros; eauto; try discriminate.
+        xomega.
 
-              assert ((if Archi.ptr64 then 8 else 4) > 0)
-                     by (destruct Archi.ptr64; xomega). 
-              pose proof (align_le XX (if Archi.ptr64 then 8 else 4) H8); eauto.
-              xomega.
-              rewrite Henv; split; auto; try xomega; simpl.
-              split.
-              ** simpl.
-                 admit.
-              ** admit.
-           ++ 
-                
+        Unshelve.
+        all: exact f.
+Qed.
 
-              
-              match goal with
-                |- _ <= ?x <= _ => remember x as X
-              end.
-              assert (0<=X).
-              { subst. 
-              rewrite <- sep_pure.
-             eapply range_split.
-              
-        
-      * admit.
-      constructor.
-
-      revert H5;
-      replace (update_stackframe_list
-          (Linear.Stackframe
-             (pre_main (Linear.fn_sig f0) (arg_size (sig_args (Linear.fn_sig f0))))
-             (Vptr sp Ptrofs.zero) (Locmap.init Vundef) nil :: nil)
-          (loc_arguments
-             (sig_wrapper (sig_args (Linear.fn_sig f0)))) arg) with
-            (Linear.Stackframe
-          (pre_main (Linear.fn_sig f0) (arg_size (sig_args (Linear.fn_sig f0))))
-          (Vptr sp Ptrofs.zero) (pre_main_locset (sig_args (Linear.fn_sig f0)) arg)
-          nil :: nil).
-      auto.
-      admit.
-    + admit.
-    + admit.
-
-      Unshelve.
-      2:{ 
-      fail "Seems good!".
-      
-Admitted.
 
 Lemma transf_initial_states:
   forall st1, Linear.initial_state prog st1 ->
@@ -3053,6 +2867,7 @@ Proof.
   }
   destruct R as [rres EQ]. rewrite EQ in H1. simpl in H1.
   generalize (AGREGS rres). rewrite H1. intros A; inv A.
+  inv STK.
   econstructor; eauto.
 Qed.
 

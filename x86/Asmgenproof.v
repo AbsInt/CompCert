@@ -876,7 +876,8 @@ Transparent destroyed_at_function_entry.
   apply agree_undef_caller_save_regs; auto. 
 
 - (* return *)
-  inv STACKS. simpl in *.
+  inv STACKS; simpl in *.
+  inv H.
   right. split. omega. split. auto.
   econstructor; eauto. rewrite ATPC; eauto. congruence.
 Qed.
@@ -925,30 +926,30 @@ Lemma transf_entry_points:
   exists s2 : Asm.state, Asm.entry_point tge m0 s2 f arg /\ match_states s1 s2.
 Proof.
   intros. inv H. subst ge0.
-  destruct (functions_translated b f0) as (tf & A & B); auto.
-  destruct (functions_translated b0 (Internal f1)) as (tf0 & A0 & B0); auto; simpl in B0.
-  destruct (transf_function f1) eqn: Hf1; inv B0.
+  exploit functions_translated; eauto. intros (tf & A & B).
+  exploit sig_preserved; eauto.
+  monadInv B. simpl; intros SIG.
+
   exploit make_arguments_match; eauto.
   { instantiate (1 := (Pregmap.init Vundef)
-        # PC <- (Vptr b Ptrofs.zero) 
+        # PC <- (Vptr fb Ptrofs.zero) 
         # RA <- Vnullptr
-        # RSP <- (Vptr stk Ptrofs.zero)).
+        # RSP <- (Vptr spb Ptrofs.zero)).
     constructor; auto; discriminate. }
   intros (rs' & ? & ?).
   econstructor; split.
-  - replace (fn_stacksize f1) with (3 * size_chunk Mptr) in * by admit.
-    replace (fn_link_ofs f1) with (Ptrofs.repr (2 * size_chunk Mptr)) in * by admit.
-    replace (fn_retaddr_ofs f1) with Ptrofs.zero in * by admit.
-    econstructor; eauto.
-    erewrite sig_preserved; eauto.
+  - econstructor; try rewrite SIG; eauto.
+    + simpl funsig.
+      simpl Mach.funsig in H.
+      rewrite SIG; eauto.
   - eapply make_arguments_PC in H as [HPC HRA].
     econstructor; eauto.
-    + repeat econstructor; eauto; try discriminate.
-      admit. (* return address shouldn't be null *)
+    + unfold pre_main_staklist, pre_main_stack ; simpl.
+      repeat econstructor. discriminate.
     + apply Mem.extends_refl.
-Admitted.
+Qed.
 
-Lemma transf_initial_states:
+(*Lemma transf_initial_states:
   forall st1, Mach.initial_state prog st1 ->
   exists st2, Asm.initial_state tprog st2 /\ match_states st1 st2.
 Proof.
@@ -968,7 +969,7 @@ Proof.
   rewrite (match_program_main TRANSF).
   rewrite symbols_preserved.
   unfold ge; rewrite H1. auto.
-Qed.
+Qed. *)
 
 Lemma transf_initial_states':
   forall s1,
@@ -987,11 +988,15 @@ Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> Mach.final_state st1 r -> Asm.final_state st2 r.
 Proof.
-  intros. inv H0. inv H. constructor. auto.
+  intros. inv H0. inv H.
+  inv STACKS.
+  simpl in *.
+  constructor; eauto.
   assert (r0 = AX).
   { unfold loc_result in H1; destruct Archi.ptr64; compute in H1; congruence. }
   subst r0.
   generalize (preg_val _ _ _ AX AG). rewrite H2. intros LD; inv LD. auto.
+  inversion H6.
 Qed.
 
 Theorem transf_program_correct'':

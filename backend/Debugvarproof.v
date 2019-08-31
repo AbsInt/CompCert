@@ -532,17 +532,14 @@ Lemma transf_entry_points:
   entry_point prog m0 s1 f arg ->
   exists s2 : state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
 Proof.
-  intros. inv H. subst ge0.
+  intros. inv H. subst ge0 sg.
   destruct (function_ptr_translated _ _ H2) as (tf & A & B).
   exploit sig_preserved; eauto. intros SIG.
-  monadInv B.
+  monadInv B. simpl in SIG.
   econstructor; split.
-  - econstructor; eauto.
+  - econstructor; simpl; try rewrite SIG; eauto.
     eapply globals_not_fresh_preserve; simpl in *; try eassumption.
-      eapply match_program_gen_len_defs in TRANSF; eauto.
-    erewrite sig_preserved; eauto.
-    simpl; rewrite EQ; reflexivity.
-    simpl in SIG; rewrite SIG; auto.
+    eapply match_program_gen_len_defs in TRANSF; eauto.
   - (*erewrite sig_preserved by eauto.*)
     subst ls0.
     replace (funsig (Internal x)) with

@@ -1351,3 +1351,23 @@ Inductive list_forall2_end {A B : Type} (P : A -> B -> Prop)
                         P a1 b1 ->
                         list_forall2_end P END al bl ->
                         list_forall2_end P END (a1 :: al) (b1 :: bl).
+
+
+
+(*Do case analysis to simplify a match _ with*)
+Ltac common_tacs_after_destruct H:=
+  first [ congruence
+        | solve[inversion H]
+        | auto].
+      
+Ltac match_case_goal:=
+  match goal with
+    |- context[match ?x with _ => _ end] =>
+    destruct x eqn:?; try congruence
+  end.
+Ltac match_case_hyp H:=
+  match type of H with
+    context[match ?x with _ => _ end] => destruct x eqn:?
+  end; common_tacs_after_destruct H.
+Tactic Notation "match_case":= match_case_goal.
+Tactic Notation "match_case" "in" hyp(H):= (match_case_hyp H).
