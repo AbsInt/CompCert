@@ -277,7 +277,8 @@ Section ExposingMemory.
         Injorder: Injindex -> Injindex -> Prop;
         Injmatch_states: Injindex -> meminj -> state L1 -> state L2 -> Prop;  
         Injfsim_order_wf: well_founded Injorder;
-        Injfsim_match_meminj: forall i f s1 s2, Injmatch_states i f s1 s2 ->  Mem.inject f (get_mem1 s1) (get_mem2 s2);
+        Injfsim_match_meminj: forall i f s1 s2, Injmatch_states i f s1 s2 ->
+                                           Mem.inject f (get_mem1 s1) (get_mem2 s2);
         Injfsim_match_full: forall i f s1 s2, Injmatch_states i f s1 s2 ->  injection_full f (get_mem1 s1);
         Injfsim_match_entry_points:
           forall s1 m0 fb args, entry_point L1 m0 s1 fb args -> 

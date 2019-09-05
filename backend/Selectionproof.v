@@ -803,7 +803,8 @@ Inductive match_states: Cminor.state -> CminorSel.state -> Prop :=
         (LDA: Val.lessdef_list args args')
         (LDE: env_lessdef e e')
         (ME: Mem.extends m m')
-        (EA: list_forall2 (CminorSel.eval_builtin_arg tge sp e' m') al args'),
+        (EA: list_forall2 (CminorSel.eval_builtin_arg tge sp e' m') al args')
+        (INL: ef_inline ef = true),
       match_states
         (Cminor.Callstate (External ef) args (Cminor.Kcall optid f sp e k) m)
         (State f' (Sbuiltin (sel_builtin_res optid) ef al) k' sp e' m')
@@ -969,7 +970,7 @@ Proof.
   econstructor; eauto.
 - (* Scall *)
   exploit classify_call_correct; eauto.
-  destruct (classify_call (prog_defmap cunit) a) as [ | id | ef].
+  destruct (classify_call (prog_defmap cunit) a) as [ | id | ef] eqn:CLASS.
 + (* indirect *)
   exploit sel_expr_correct; eauto. intros [vf' [A B]].
   exploit sel_exprlist_correct; eauto. intros [vargs' [C D]].
@@ -994,6 +995,8 @@ Proof.
   exploit sel_builtin_args_correct; eauto. intros [vargs' [C D]].
   right; split. simpl. omega. split. auto.
   econstructor; eauto.
+  unfold classify_call in CLASS;
+    repeat match_case in CLASS.
 - (* Stailcall *)
   exploit Mem.free_parallel_extends; eauto. intros [m2' [P Q]].
   erewrite <- stackspace_function_translated in P by eauto.
@@ -1132,12 +1135,6 @@ Proof.
   exploit sig_function_translated; eauto. intros SIG.
   destruct B as (? & ? & B); simpl in B.
   monadInv B. simpl in SIG.
-  (* exploit Mem.alloc_extends; eauto.
-  { apply Mem.extends_refl. }
-  { apply Z.le_refl. }
-  { instantiate (1 := fn_stackspace x0).
-    admit. }
-  intros (m2' & ? & ?). *)
   econstructor; split.
   - econstructor; simpl; try rewrite SIG; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
@@ -1197,36 +1194,33 @@ Proof.
   apply sel_step_correct; auto.
 Qed.
 
+Lemma preserves_atx_proof:
+  preserves_atx
+    (fun (idx : Cminor.state) (s1 : Smallstep.state (Cminor.semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
+Proof.
+  unfold preserves_atx. simpl.
+  intros. destruct H; subst.
+  destruct s1 eqn:Hs1; try discriminate. simpl in H0.
+  destruct f0 eqn:Hf0; try discriminate.
+  destruct (ef_inline e) eqn:HH; try discriminate.
+  inversion H0; subst.
+  inversion H1; subst.
+  - (* real external function *)
+    simpl.
+    inversion TF. destruct H. inversion H2.
+    eexists; split; eauto.
+  - (* match_builtin_1 *) 
+    rewrite INL in HH; discriminate.
+Qed.
+
 Theorem transf_program_correct:
   @fsim_properties_ext (Cminor.semantics prog) (CminorSel.semantics tprog)
                       (Cminor.get_mem) (CminorSel.get_mem).
 Proof.
   eapply sim_extSim; try eapply transf_program_correct'.
   - eapply simulation_atx.
-  - Lemma preserves_atx_proof:
-      preserves_atx
-        (fun (idx : Cminor.state) (s1 : Smallstep.state (Cminor.semantics prog))
-             (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
-    Proof.
-      unfold preserves_atx.
-      intros. destruct H; subst.
-      destruct s1 eqn:Hs1; try discriminate. simpl in H0.
-      destruct f0 eqn:Hf0; try discriminate.
-      destruct (ef_inline e) eqn:HH; try discriminate.
-      inversion H0; subst.
-      inversion H1; subst.
-      - (* real external function *)
-        simpl.
-        inversion TF. destruct H. inversion H2.
-        eexists; split; eauto.
-      - (* match_builtin_1 *)
-        simpl.
-        inversion TF. inversion H2.
-        admit. (* matching external function and buiting ? *)
-        (*eexists; split; eauto. *)
-        
-    Admitted.
-    apply preserves_atx_proof.
+  - apply preserves_atx_proof.
   - simpl; intros ? ? ? [? ?]; subst; inversion H0; eauto.
   
 Qed.

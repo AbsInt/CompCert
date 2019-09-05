@@ -2405,18 +2405,13 @@ Proof.
   - intros. inversion H.
     exploit transl_entry_point; eauto.
     intros (j & s1' & INIT & MATCH).
-    exists s1, j, s1'. split; eauto.
-    admit.
-  (*- intros.
-    exploit transl_initial_states'; eauto.
-    intros (j & s1' & INIT & MATCH).
-    exists s1, j, s1'. split; eauto. *)
+    exists s1, j, s1'. subst; split; eauto. 
   - intros. destruct H.
     eapply transl_final_states; eauto.
   - intros. inv H0.
     exploit transl_step_correct; eauto.
     intros [[s2' [f' [t' [STEP [MATCH [INCR TRACEINJ]]]]]]| [f' [A [B [MATCH INCR]]]]].
-    + exists s1', s2', f', t'; intuition.
+    + exists s1', s2', f', t'; intuition. 
       admit.
     + exists s1', s2, f', E0; intuition.
       right. split. constructor. auto.
