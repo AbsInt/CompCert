@@ -329,7 +329,14 @@ Fixpoint get_extcall_arguments
      | None => None
     end
   | nil => Some nil
- end.
+  end.
+Lemma get_arguments_correct:
+  forall rs m sp sg args,
+    get_extcall_arguments rs m sp (loc_arguments sg) = Some args <->
+    extcall_arguments rs m sp sg args.
+Proof.
+Admitted.
+
 
 Definition parent_sp (s: list stackframe) : val :=
   match s with

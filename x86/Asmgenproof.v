@@ -17,6 +17,7 @@ Require Import Integers Floats AST Linking.
 Require Import Values Memory Events Globalenvs Smallstep ExposedSimulations.
 Require Import Op Locations Mach Conventions Asm.
 Require Import Asmgen Asmgenproof0 Asmgenproof1.
+Set Nested Proofs Allowed.
 
 Definition match_prog (p: Mach.program) (tp: Asm.program) :=
   match_program (fun _ f tf => transf_fundef f = OK tf) eq p tp.
@@ -420,6 +421,35 @@ Proof.
   exists (State rs2 m2'); split.
   eapply exec_straight_exec; eauto.
   econstructor; eauto. eapply exec_straight_at; eauto.
+Qed.
+
+(* The compiler doesn't changee the enumber of steps for external calls
+   could replace one of thee cases beellow.
+*)
+Lemma atx_sim:
+  simulation_atx
+    (fun idx
+       (s1 : Smallstep.state (Mach.semantics return_address_offset prog))
+       (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
+Proof.
+  intros ? **. destruct H1; subst i.
+  inv H2; simpl in H; try discriminate.
+  inv H0.
+  (*internal *) rewrite H5 in H; discriminate.
+  
+  exploit functions_translated; eauto.
+  intros [tf [A B]]. simpl in B. inv B.
+  exploit extcall_arguments_match; eauto.
+  intros [args' [C D]].
+  exploit external_call_mem_extends; eauto.
+  intros [res' [m2' [P [Q [R S]]]]].
+  do 2 econstructor; split.
+  eapply exec_step_external; eauto.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  split; eauto.
+  econstructor; eauto.
+  unfold loc_external_result. apply agree_set_other; auto. apply agree_set_pair; auto.
+  apply agree_undef_caller_save_regs; auto.
 Qed.
 
 Lemma exec_straight_steps_goto:
@@ -976,7 +1006,6 @@ Lemma transf_initial_states':
     Smallstep.initial_state (Mach.semantics return_address_offset prog) s1 ->
     exists s2, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
 Proof.
-  
   eapply init_states_from_entry; try apply transf_entry_points.
   - pose proof (Genv.init_mem_transf_partial TRANSF) as HH. eauto.
   - simpl. unfold transf_program in TRANSF.
@@ -1023,6 +1052,32 @@ Proof.
   exact step_simulation.
 Qed.
 
+Lemma atx_preserved:
+  preserves_atx
+    (fun (idx : Mach.state) (s1 : Smallstep.state (Mach.semantics return_address_offset prog))
+       (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
+Proof.
+  intros ?**.
+  destruct H as [? MATCH]; subst i.
+  inv MATCH; simpl in H0; try discriminate.
+  simpl.
+  rewrite ATPC.
+  match_case.
+  repeat match_case in H0; subst.
+  exploit functions_translated; eauto.
+  intros (tf & A & B).
+  unfold tge in A; rewrite A.
+  monadInv B.
+  inv H0.
+  exploit extcall_arguments_match; eauto.
+  { eapply Mach.get_arguments_correct; eauto;
+      try (intros; exact True). (*deletable*)
+  }
+  intros [args' [C D]].
+  eapply get_arguments_correct in C; rewrite C.
+  repeat (econstructor; eauto).
+Qed.
+    
 Theorem transf_program_correct:
   @fsim_properties_ext (Mach.semantics return_address_offset prog) (Asm.semantics tprog)
                        Mach.get_mem Asm.get_mem
@@ -1031,9 +1086,9 @@ Theorem transf_program_correct:
                   (fun idx s1 s2 => idx = s1 /\ match_states s1 s2) *).
 Proof.
   eapply sim_extSim; try apply transf_program_correct'.
-  - admit.
-  - admit.
+  - apply atx_sim.
+  - eapply atx_preserved.
   - intros. destruct H as [? H']; inv H'; auto.
-Admitted.
+Qed.
 
 End PRESERVATION.

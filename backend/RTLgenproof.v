@@ -1602,8 +1602,7 @@ Proof.
   econstructor; split.
   - econstructor; simpl in *; try rewrite SIG; eauto.
     + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
-      eapply match_program_gen_len_defs in TRANSL; eauto.
-    + 
+      eapply match_program_gen_len_defs in TRANSL; eauto. 
   - econstructor; eauto.
     + simpl. rewrite EQ; reflexivity.
     + eapply match_stacks_stop1.
@@ -1666,7 +1665,8 @@ Proof.
   eapply sim_extSim; try apply transf_program_correct'.
   3: { simpl; intros ? ? ? [? ?]; subst.
        inversion H0; simpl; auto. }
-  - admit.
+  - econstructor.
+    admit.
   - admit.
 Admitted.
 

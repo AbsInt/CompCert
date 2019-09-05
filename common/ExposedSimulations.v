@@ -81,12 +81,9 @@ Section ExposingMemory.
         Eqmatch_states: Eqindex -> state L1 -> state L2 -> Prop;  
         Eqfsim_order_wf: well_founded Eqorder;
         Eqfsim_match_meminj: forall i s1 s2, Eqmatch_states i s1 s2 ->  (get_mem1 s1) = (get_mem2 s2);
-        (*    fsim_match_initial_states:
-      forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
-      exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
-        Eqfsim_match_initial_states:
-          forall s1, initial_state L1 s1 -> 
-                exists i s2, initial_state L2 s2 /\ Eqmatch_states i s1 s2;
+        Eqfsim_match_entry_points:
+          forall s1 m0 fb args, entry_point L1 m0 s1 fb args -> 
+                exists i s2, entry_point L2 m0 s2 fb args /\ Eqmatch_states i s1 s2;
         Eqfsim_match_final_states:
           forall i s1 s2 r ,
             Eqmatch_states i s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
@@ -132,12 +129,9 @@ Section ExposingMemory.
     Extmatch_states: Extindex -> state L1 -> state L2 -> Prop;  
     Extfsim_order_wf: well_founded Extorder;
     Extfsim_match_meminj: forall i s1 s2, Extmatch_states i s1 s2 ->  Mem.extends (get_mem1 s1) (get_mem2 s2);
-(*    fsim_match_initial_states:
-      forall s1 m1 f m2, initial_state L1 (s1,m1) -> Mem.inject f m1 m2 ->
-      exists i, exists s2, initial_state L2 (s2,m2) /\ match_states i f (s1,m1) (s2,m2);*)
-    Extfsim_match_initial_states:
-      forall s1, initial_state L1 s1 -> 
-               exists i s2, initial_state L2 s2 /\ Extmatch_states i s1 s2;
+    Extfsim_match_entry_points:
+          forall s1 m0 fb args, entry_point L1 m0 s1 fb args -> 
+                exists i s2, entry_point L2 m0 s2 fb args /\ Extmatch_states i s1 s2;
     Extfsim_match_final_states:
       forall i s1 s2 r ,
       Extmatch_states i s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
@@ -285,9 +279,9 @@ Section ExposingMemory.
         Injfsim_order_wf: well_founded Injorder;
         Injfsim_match_meminj: forall i f s1 s2, Injmatch_states i f s1 s2 ->  Mem.inject f (get_mem1 s1) (get_mem2 s2);
         Injfsim_match_full: forall i f s1 s2, Injmatch_states i f s1 s2 ->  injection_full f (get_mem1 s1);
-        Injfsim_match_initial_states:
-          forall s1, initial_state L1 s1 -> 
-                exists i f s2, initial_state L2 s2 /\ Injmatch_states i f s1 s2;
+        Injfsim_match_entry_points:
+          forall s1 m0 fb args, entry_point L1 m0 s1 fb args -> 
+                exists i f s2, entry_point L2 m0 s2 fb args /\ Injmatch_states i f s1 s2;
         Injfsim_match_final_states:
           forall i s1 s2 r f,
             Injmatch_states i f s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
@@ -325,10 +319,6 @@ Section ExposingMemory.
                                  exists i', exists s2',
                                      Step L2 s2 t' s2' /\
                                      match_states i' f' s1' s2'.
-
-
-
-        
         Record fsim_properties_inj_relaxed: Type :=
       {  InjindexX: Type;
         InjorderX: InjindexX -> InjindexX -> Prop;
@@ -336,9 +326,9 @@ Section ExposingMemory.
         Injfsim_order_wfX: well_founded InjorderX;
         Injfsim_match_meminjX: forall i f s1 s2, Injmatch_statesX i f s1 s2 ->  Mem.inject f (get_mem1 s1) (get_mem2 s2);
         Injfsim_match_fullX: forall i f s1 s2, Injmatch_statesX i f s1 s2 ->  injection_full f (get_mem1 s1);
-        Injfsim_match_initial_statesX:
-          forall s1, initial_state L1 s1 -> 
-                exists i f s2, initial_state L2 s2 /\ Injmatch_statesX i f s1 s2;
+        Injfsim_match_entry_pointsX:
+          forall s1 m0 fb args, entry_point L1 m0 s1 fb args -> 
+                exists i f s2, entry_point L2 m0 s2 fb args /\ Injmatch_statesX i f s1 s2;
         Injfsim_match_final_statesX:
           forall i s1 s2 r f,
             Injmatch_statesX i f s1 s2 -> final_state L1 s1 r -> (final_state L2 s2 r);
@@ -537,8 +527,8 @@ Section Composition.
   intros ? ? ? ? [s2' [MATCH12 MATCH23]] b VALID.
   eapply SIM12; eauto.
 - (* initial states *)
-  intros. exploit (Injfsim_match_initial_states SIM12); eauto. intros [i [ f [s2 [A B]]]].
-  exploit (Extfsim_match_initial_states SIM23); eauto. intros [i' [s3 [C D]]].
+  intros. exploit (Injfsim_match_entry_points SIM12); eauto. intros [i [ f [s2 [A B]]]].
+  exploit (Extfsim_match_entry_points SIM23); eauto. intros [i' [s3 [C D]]].
   exists (i', i); exists f; exists s3; split; auto. exists s2; auto.
 - (* final states *)
   intros. destruct H as [s3 [A B]].
@@ -640,9 +630,9 @@ Section Composition.
   eapply Extfsim_match_meminj in MATCH12; eauto.
   inv MATCH12. unfold Mem.valid_block; rewrite <- mext_next; auto.
   
-- (* initial states *)
-  intros. exploit (Extfsim_match_initial_states SIM12); eauto. intros [i [s2 [A B]]].
-  exploit (Injfsim_match_initial_states SIM23); eauto. intros [i' [f [s3 [C D]]]].
+- (* entry points *)
+  intros. exploit (Extfsim_match_entry_points SIM12); eauto. intros [i [s2 [A B]]].
+  exploit (Injfsim_match_entry_points SIM23); eauto. intros [i' [f [s3 [C D]]]].
   exists (i', i); exists f; exists s3; split; auto. exists s2; auto.
 - (* final states *)
   intros. destruct H as [s3 [A B]].
@@ -780,9 +770,9 @@ Section Composition.
   intros HH. apply VALID2. destruct (f23 b0); inversion HH; auto.
   destruct p. inversion HH.
 - (* initial states *)
-  intros. exploit (Injfsim_match_initial_states SIM12); eauto.
+  intros. exploit (Injfsim_match_entry_points SIM12); eauto.
   intros [i [ f12 [s2 [A B]]]].
-  exploit (Injfsim_match_initial_states SIM23); eauto. intros [i' [f23 [s3 [C D]]]].
+  exploit (Injfsim_match_entry_points SIM23); eauto. intros [i' [f23 [s3 [C D]]]].
   exists (i', i); exists (compose_meminj f12 f23); exists s3; split; auto. exists s2; auto.
   exists f12, f23; repeat (split; auto). 
 - (* final states *)
@@ -907,9 +897,9 @@ Section Composition.
   intros HH. apply VALID2. destruct (f23 b0); inversion HH; auto.
   destruct p. inversion HH.
 - (* initial states *)
-  intros. exploit (Injfsim_match_initial_states SIM12); eauto.
+  intros. exploit (Injfsim_match_entry_points SIM12); eauto.
   intros [i [ f12 [s2 [A B]]]].
-  exploit (Injfsim_match_initial_statesX SIM23); eauto. intros [i' [f23 [s3 [C D]]]].
+  exploit (Injfsim_match_entry_pointsX SIM23); eauto. intros [i' [f23 [s3 [C D]]]].
   exists (i', i); exists (compose_meminj f12 f23); exists s3; split; auto. exists s2; auto.
   exists f12, f23; repeat (split; auto). 
 - (* final states *)

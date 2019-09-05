@@ -1678,13 +1678,11 @@ Proof.
   - apply well_founded_ltof.
   - intros. destruct H; subst. inv H0; trivial.
   - intros. destruct H; subst. inv H0; eauto.
-  - intros. inv H; simpl in *; eauto.
+  - intros. (* inv H; simpl in *; eauto. *)
     exploit transf_entry_points; eauto.
     intros (j & s & INIT & MATCH).
     exists s1, j, s; repeat (split; auto).
-    admit. (* econstructor; eauto. *)
-    (*
-  - intros. inv H; simpl in *.
+  (* - intros. inv H; simpl in *.
     exploit transf_initial_states'; eauto.
     intros (f & s & INIT & MATCH).
     exists s1, f, s; auto. *)

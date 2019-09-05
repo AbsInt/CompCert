@@ -1245,7 +1245,14 @@ Fixpoint get_extcall_arguments
      | None => None
     end
   | nil => Some nil
- end.
+  end.
+
+Lemma get_arguments_correct:
+  forall rs m sg args,
+    get_extcall_arguments rs m (loc_arguments sg) = Some args <->
+    extcall_arguments rs m sg args.
+Proof.
+Admitted.
 
 Definition at_external (ge:genv) (c: state) : option (external_function * list val) :=
   match c with
