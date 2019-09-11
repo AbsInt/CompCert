@@ -41,7 +41,9 @@ let trim s =
 let str_match n re s =
   if not (Str.string_match re s 0) then [||] else begin
     let res = Array.make (n+1) "" in
-    for i = 1 to n do res.(i) <- Str.matched_group i s done;
+    for i = 1 to n do
+      res.(i) <- (try Str.matched_group i s with Not_found -> "")
+    done;
     for i = 1 to n do res.(i) <- trim res.(i) done;
     res
   end
@@ -87,6 +89,11 @@ let match_temps args =
 let parenpats p =
   "(" ^ Str.global_replace re_comma ") (" p ^ ")"
 
+(* "foo, bar, gee" -> "_ _ _" *)
+
+let underscores_for s =
+  Str.global_replace re_arg "_" (remove_commas s)
+
 (* Extract the bound variables in a pattern.  Heuristic: any identifier
    that starts with a lowercase letter and is not "nil". *)
 
@@ -123,7 +130,7 @@ let re_nd = Str.regexp(
 
 let re_split_cases = Str.regexp "|"
 
-let re_case = Str.regexp "\\(.*\\)=>\\(.*\\)"
+let re_case = Str.regexp "\\([^?]*\\)\\(\\?\\?\\(.*\\)\\)?=>\\(.*\\)"
 
 let re_default_pat = Str.regexp "[ _,]*$"
 
@@ -165,16 +172,20 @@ let transl_ndfun filename lineno s =
   (* Adding each case *)
   let numcase = ref 0 in
   let transl_case s =
-    let res = str_match 2 re_case s in
+    let res = str_match 4 re_case s in
     if Array.length res = 0 then
       error filename lineno ("ill-formed case: " ^ s);
-    let patlist = res.(1) and rhs = res.(2) in
+    let patlist = res.(1) and guard = res.(3) and rhs = res.(4) in
     let bv = boundvarspat patlist in
     if not (Str.string_match re_default_pat patlist 0) then begin
       incr numcase;
       bprintf a "  | %s_case%d: forall %s, %s_cases %s\n"
           name !numcase bv name (parenpats patlist);
-      bprintf b "  | %s => %s_case%d %s\n" patlist name !numcase bv;
+      if guard = "" then
+        bprintf b "  | %s => %s_case%d %s\n" patlist name !numcase bv
+      else
+        bprintf b "  | %s => if %s then %s_case%d %s else %s_default %s\n"
+                  patlist guard name !numcase bv name (underscores_for args);
       bprintf c "  | %s_case%d %s => (* %s *) \n" name !numcase bv patlist;
       bprintf c "      %s\n" rhs
     end else begin

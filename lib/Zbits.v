@@ -557,7 +557,7 @@ Definition Zzero_ext (n: Z) (x: Z) : Z :=
 Definition Zsign_ext (n: Z) (x: Z) : Z :=
   Z.iter (Z.pred n)
     (fun rec x => Zshiftin (Z.odd x) (rec (Z.div2 x)))
-    (fun x => if Z.odd x then -1 else 0)
+    (fun x => if Z.odd x && zlt 0 n then -1 else 0)
     x.
 
 Lemma Ziter_base:
@@ -606,32 +606,34 @@ Proof.
 Qed.
 
 Lemma Zsign_ext_spec:
-  forall n x i, 0 <= i -> 0 < n ->
+  forall n x i, 0 <= i ->
   Z.testbit (Zsign_ext n x) i = Z.testbit x (if zlt i n then i else n - 1).
 Proof.
-  intros n0 x i I0 N0.
-  revert x i I0. pattern n0. apply Zlt_lower_bound_ind with (z := 1).
-  - unfold Zsign_ext. intros.
-    destruct (zeq x 1).
-    + subst x; simpl.
-      replace (if zlt i 1 then i else 0) with 0.
-      rewrite Ztestbit_base.
-      destruct (Z.odd x0).
-      apply Ztestbit_m1; auto.
-      apply Ztestbit_0.
-      destruct (zlt i 1); omega.
-    + set (x1 := Z.pred x). replace x1 with (Z.succ (Z.pred x1)).
-      rewrite Ziter_succ. rewrite Ztestbit_shiftin.
-      destruct (zeq i 0).
-      * subst i. rewrite zlt_true. rewrite Ztestbit_base; auto. omega.
-      * rewrite H. unfold x1. destruct (zlt (Z.pred i) (Z.pred x)).
-        rewrite zlt_true. rewrite (Ztestbit_eq i x0); auto. rewrite zeq_false; auto. omega.
-        rewrite zlt_false. rewrite (Ztestbit_eq (x - 1) x0). rewrite zeq_false; auto.
-        omega. omega. omega. unfold x1; omega. omega.
-      * omega.
-      * unfold x1; omega.
-      * omega.
-  - omega.
+  intros n0 x i I0. unfold Zsign_ext. 
+  unfold proj_sumbool; destruct (zlt 0 n0) as [N0|N0]; simpl.
+- revert x i I0. pattern n0. apply Zlt_lower_bound_ind with (z := 1); [ | omega ].
+  unfold Zsign_ext. intros.
+  destruct (zeq x 1).
+  + subst x; simpl.
+    replace (if zlt i 1 then i else 0) with 0.
+    rewrite Ztestbit_base.
+    destruct (Z.odd x0); [ apply Ztestbit_m1; auto | apply Ztestbit_0 ].
+    destruct (zlt i 1); omega.
+  + set (x1 := Z.pred x). replace x1 with (Z.succ (Z.pred x1)) by omega.
+    rewrite Ziter_succ by (unfold x1; omega). rewrite Ztestbit_shiftin by auto.
+    destruct (zeq i 0).
+    * subst i. rewrite zlt_true. rewrite Ztestbit_base; auto. omega.
+    * rewrite H by (unfold x1; omega).
+      unfold x1; destruct (zlt (Z.pred i) (Z.pred x)).
+      ** rewrite zlt_true by omega.
+         rewrite (Ztestbit_eq i x0) by omega.
+         rewrite zeq_false by omega. auto.
+      ** rewrite zlt_false by omega.
+         rewrite (Ztestbit_eq (x - 1) x0) by omega.
+         rewrite zeq_false by omega. auto.
+- rewrite Ziter_base by omega. rewrite andb_false_r. 
+  rewrite Z.testbit_0_l, Z.testbit_neg_r. auto.
+  destruct (zlt i n0); omega.
 Qed.
 
 (** [Zzero_ext n x] is [x modulo 2^n] *)
@@ -661,7 +663,7 @@ Qed.
 (** Relation between [Zsign_ext n x] and (Zzero_ext n x] *)
 
 Lemma Zsign_ext_zero_ext:
-  forall n, 0 < n -> forall x,
+  forall n, 0 <= n -> forall x,
   Zsign_ext n x = Zzero_ext n x - (if Z.testbit x (n - 1) then two_p n else 0).
 Proof.
   intros. apply equal_same_bits; intros.
@@ -698,12 +700,12 @@ Proof.
   assert (C: two_p n = 2 * two_p (n - 1)).
   { rewrite <- two_p_S by omega. f_equal; omega. }
   rewrite Zzero_ext_spec, zlt_true in B by omega.
-  rewrite Zsign_ext_zero_ext by auto. rewrite B.
+  rewrite Zsign_ext_zero_ext by omega. rewrite B.
   destruct (zlt (Zzero_ext n x) (two_p (n - 1))); omega.
 Qed.
 
 Lemma eqmod_Zsign_ext:
-  forall n x, 0 < n ->
+  forall n x, 0 <= n ->
   eqmod (two_p n) (Zsign_ext n x) x.
 Proof.
   intros. rewrite Zsign_ext_zero_ext by auto. 
@@ -822,6 +824,14 @@ Proof.
   apply Z.log2_nonneg.
 - reflexivity.
 Qed.
+
+Lemma Z_is_power2_nonneg:
+  forall x i, Z_is_power2 x = Some i -> 0 <= i.
+Proof.
+  unfold Z_is_power2; intros. destruct x; try discriminate.
+  destruct (P_is_power2 p) eqn:P; try discriminate.
+  replace i with (Z.log2 (Z.pos p)) by congruence. apply Z.log2_nonneg.
+Qed.
  
 Lemma Z_is_power2_sound:
   forall x i, Z_is_power2 x = Some i -> x = two_p i /\ i = Z.log2 x.
@@ -856,6 +866,12 @@ Opaque Z.log2.
 Qed.
 
 Definition Z_is_power2m1 (x: Z) : option Z := Z_is_power2 (Z.succ x).
+
+Lemma Z_is_power2m1_nonneg:
+  forall x i, Z_is_power2m1 x = Some i -> 0 <= i.
+Proof.
+  unfold Z_is_power2m1; intros. eapply Z_is_power2_nonneg; eauto.
+Qed.
 
 Lemma Z_is_power2m1_sound:
   forall x i, Z_is_power2m1 x = Some i -> x = two_p i - 1.
@@ -1025,4 +1041,61 @@ Proof.
   intros. apply Z.ge_le. apply Zsize_interval_2. apply Zsize_pos.
   exploit (Zsize_interval_1 y). omega.
   omega.
+Qed.
+
+(** ** Bit insertion, bit extraction *)
+
+(** Extract and optionally sign-extend bits [from...from+len-1] of [x] *)
+Definition Zextract_u (x: Z) (from: Z) (len: Z) : Z :=
+  Zzero_ext len (Z.shiftr x from).
+
+Definition Zextract_s (x: Z) (from: Z) (len: Z) : Z :=
+  Zsign_ext len (Z.shiftr x from).
+
+Lemma Zextract_u_spec:
+  forall x from len i,
+  0 <= from -> 0 <= len -> 0 <= i ->
+  Z.testbit (Zextract_u x from len) i =
+  if zlt i len then Z.testbit x (from + i) else false.
+Proof.
+  unfold Zextract_u; intros. rewrite Zzero_ext_spec, Z.shiftr_spec by auto.
+  rewrite Z.add_comm. auto.
+Qed.
+
+Lemma Zextract_s_spec:
+  forall x from len i,
+  0 <= from -> 0 < len -> 0 <= i ->
+  Z.testbit (Zextract_s x from len) i =
+  Z.testbit x (from + (if zlt i len then i else len - 1)).
+Proof.
+  unfold Zextract_s; intros. rewrite Zsign_ext_spec by auto. rewrite Z.shiftr_spec.
+  rewrite Z.add_comm. auto.
+  destruct (zlt i len); omega.
+Qed.
+
+(** Insert bits [0...len-1] of [y] into bits [to...to+len-1] of [x] *)
+
+Definition Zinsert (x y: Z) (to: Z) (len: Z) : Z :=
+  let mask := Z.shiftl (two_p len - 1) to in
+  Z.lor (Z.land (Z.shiftl y to) mask) (Z.ldiff x mask).
+
+Lemma Zinsert_spec:
+  forall x y to len i,
+  0 <= to -> 0 <= len -> 0 <= i ->
+  Z.testbit (Zinsert x y to len) i =
+    if zle to i && zlt i (to + len)
+    then Z.testbit y (i - to)
+    else Z.testbit x i.
+Proof.
+  unfold Zinsert; intros. set (mask := two_p len - 1).
+  assert (M: forall j, 0 <= j -> Z.testbit mask j = if zlt j len then true else false).
+  { intros; apply Ztestbit_two_p_m1; auto. }
+  rewrite Z.lor_spec, Z.land_spec, Z.ldiff_spec by auto. 
+  destruct (zle to i).
+- rewrite ! Z.shiftl_spec by auto. rewrite ! M by omega. 
+  unfold proj_sumbool; destruct (zlt (i - to) len); simpl;
+  rewrite andb_true_r, andb_false_r.
++ rewrite zlt_true by omega. apply orb_false_r.
++ rewrite zlt_false by omega; auto.
+- rewrite ! Z.shiftl_spec_low by omega. simpl. apply andb_true_r.
 Qed.

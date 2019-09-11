@@ -116,6 +116,7 @@ let init () =
     | "riscV"   -> if Configuration.model = "64"
                    then Machine.rv64
                    else Machine.rv32
+    | "aarch64" -> Machine.aarch64
     | _         -> assert false
   end;
   Env.set_builtins C2C.builtins;

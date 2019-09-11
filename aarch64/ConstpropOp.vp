@@ -1,0 +1,401 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*         Xavier Leroy, Collège de France and INRIA Paris             *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(** Strength reduction for operators and conditions.
+    This is the machine-dependent part of [Constprop]. *)
+
+Require Archi.
+Require Import Coqlib Compopts.
+Require Import AST Integers Floats.
+Require Import Op Registers.
+Require Import ValueDomain ValueAOp.
+
+(** * Converting known values to constants *)
+
+Definition const_for_result (a: aval) : option operation :=
+  match a with
+  | I n => Some(Ointconst n)
+  | L n => Some(Olongconst n)
+  | F n => if Compopts.generate_float_constants tt then Some(Ofloatconst n) else None
+  | FS n => if Compopts.generate_float_constants tt then Some(Osingleconst n) else None
+  | Ptr(Gl id ofs) => Some(Oaddrsymbol id ofs)
+  | Ptr(Stk ofs) => Some(Oaddrstack ofs)
+  | _ => None
+  end.
+
+(** * Operator strength reduction *)
+
+Definition eval_static_shift (s: shift) (v: int) (n: amount32) : int :=
+  match s with
+  | Slsl => Int.shl v n
+  | Slsr => Int.shru v n
+  | Sasr => Int.shr v n
+  | Sror => Int.ror v n
+  end.
+
+Definition eval_static_shiftl (s: shift) (v: int64) (n: amount64) : int64 :=
+  match s with
+  | Slsl => Int64.shl' v n
+  | Slsr => Int64.shru' v n
+  | Sasr => Int64.shr' v n
+  | Sror => Int64.ror v (Int64.repr (Int.unsigned n))
+  end.
+
+Definition eval_static_extend (x: extension) (v: int) (n: amount64) : int64 :=
+  Int64.shl' (match x with Xsgn32 => Int64.repr (Int.signed v)
+                         | Xuns32 => Int64.repr (Int.unsigned v) end)
+             n.
+
+Nondetfunction cond_strength_reduction 
+              (cond: condition) (args: list reg) (vl: list aval) :=
+  match cond, args, vl with
+  | Ccomp c, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
+      (Ccompimm (swap_comparison c) n1, r2 :: nil)
+  | Ccomp c, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Ccompimm c n2, r1 :: nil)
+  | Ccompu c, r1 :: r2 :: nil, I n1 :: v2 :: nil =>
+      (Ccompuimm (swap_comparison c) n1, r2 :: nil)
+  | Ccompu c, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Ccompuimm c n2, r1 :: nil)
+  | Ccompshift c s a, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Ccompimm c (eval_static_shift s n2 a), r1 :: nil)
+  | Ccompushift c s a, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Ccompuimm c (eval_static_shift s n2 a), r1 :: nil)
+  | Ccompl c, r1 :: r2 :: nil, L n1 :: v2 :: nil =>
+      (Ccomplimm (swap_comparison c) n1, r2 :: nil)
+  | Ccompl c, r1 :: r2 :: nil, v1 :: L n2 :: nil =>
+      (Ccomplimm c n2, r1 :: nil)
+  | Ccomplu c, r1 :: r2 :: nil, L n1 :: v2 :: nil =>
+      (Ccompluimm (swap_comparison c) n1, r2 :: nil)
+  | Ccomplu c, r1 :: r2 :: nil, v1 :: L n2 :: nil =>
+      (Ccompluimm c n2, r1 :: nil)
+  | Ccomplshift c s a, r1 :: r2 :: nil, v1 :: L n2 :: nil =>
+      (Ccomplimm c (eval_static_shiftl s n2 a), r1 :: nil)
+  | Ccomplushift c s a, r1 :: r2 :: nil, v1 :: L n2 :: nil =>
+      (Ccompluimm c (eval_static_shiftl s n2 a), r1 :: nil)
+  | Ccompf c, r1 :: r2 :: nil, F n1 :: v2 :: nil =>
+      if Float.eq_dec n1 Float.zero
+      then (Ccompfzero (swap_comparison c), r2 :: nil)
+      else (cond, args)
+  | Ccompf c, r1 :: r2 :: nil, v1 :: F n2 :: nil =>
+      if Float.eq_dec n2 Float.zero
+      then (Ccompfzero c, r1 :: nil)
+      else (cond, args)
+  | Cnotcompf c, r1 :: r2 :: nil, F n1 :: v2 :: nil =>
+      if Float.eq_dec n1 Float.zero
+      then (Cnotcompfzero (swap_comparison c), r2 :: nil)
+      else (cond, args)
+  | Cnotcompf c, r1 :: r2 :: nil, v1 :: F n2 :: nil =>
+      if Float.eq_dec n2 Float.zero
+      then (Cnotcompfzero c, r1 :: nil)
+      else (cond, args)
+  | Ccompfs c, r1 :: r2 :: nil, FS n1 :: v2 :: nil =>
+      if Float32.eq_dec n1 Float32.zero
+      then (Ccompfszero (swap_comparison c), r2 :: nil)
+      else (cond, args)
+  | Ccompfs c, r1 :: r2 :: nil, v1 :: FS n2 :: nil =>
+      if Float32.eq_dec n2 Float32.zero
+      then (Ccompfszero c, r1 :: nil)
+      else (cond, args)
+  | Cnotcompfs c, r1 :: r2 :: nil, FS n1 :: v2 :: nil =>
+      if Float32.eq_dec n1 Float32.zero
+      then (Cnotcompfszero (swap_comparison c), r2 :: nil)
+      else (cond, args)
+  | Cnotcompfs c, r1 :: r2 :: nil, v1 :: FS n2 :: nil =>
+      if Float32.eq_dec n2 Float32.zero
+      then (Cnotcompfszero c, r1 :: nil)
+      else (cond, args)
+  | _, _, _ => 
+      (cond, args)
+  end.
+
+Definition make_cmp_base (c: condition) (args: list reg) (vl: list aval) :=
+  let (c', args') := cond_strength_reduction c args vl in (Ocmp c', args').
+
+Definition make_cmp_imm_eq (c: condition) (args: list reg) (vl: list aval) 
+                           (n: int) (r1: reg) (v1: aval) :=
+  if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
+  else if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
+  else make_cmp_base c args vl.
+
+Definition make_cmp_imm_ne (c: condition) (args: list reg) (vl: list aval) 
+                           (n: int) (r1: reg) (v1: aval) :=
+  if Int.eq_dec n Int.zero && vincl v1 (Uns Ptop 1) then (Omove, r1 :: nil)
+  else if Int.eq_dec n Int.one && vincl v1 (Uns Ptop 1) then (Oxorimm Int.one, r1 :: nil)
+  else make_cmp_base c args vl.
+
+Nondetfunction make_cmp (c: condition) (args: list reg) (vl: list aval) :=
+  match c, args, vl with
+  | Ccompimm Ceq n, r1 :: nil, v1 :: nil =>
+      make_cmp_imm_eq c args vl n r1 v1
+  | Ccompimm Cne n, r1 :: nil, v1 :: nil =>
+      make_cmp_imm_ne c args vl n r1 v1
+  | Ccompuimm Ceq n, r1 :: nil, v1 :: nil =>
+      make_cmp_imm_eq c args vl n r1 v1
+  | Ccompuimm Cne n, r1 :: nil, v1 :: nil =>
+      make_cmp_imm_ne c args vl n r1 v1
+  | _, _, _ =>
+      make_cmp_base c args vl
+  end.
+
+Definition make_select (c: condition) (ty: typ)
+                       (r1 r2: reg) (args: list reg) (vl: list aval) :=
+  match resolve_branch (eval_static_condition c vl) with
+  | Some b => (Omove, (if b then r1 else r2) :: nil)
+  | None =>
+      let (c', args') := cond_strength_reduction c args vl in
+      (Osel c' ty, r1 :: r2 :: args')
+  end.
+
+Definition make_addimm (n: int) (r: reg) :=
+  if Int.eq n Int.zero
+  then (Omove, r :: nil)
+  else (Oaddimm n, r :: nil).
+
+Definition make_shlimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int.iwordsize then (Oshift Slsl (mk_amount32 n), r1 :: nil)
+  else (Oshl, r1 :: r2 :: nil).
+
+Definition make_shrimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int.iwordsize then (Oshift Sasr (mk_amount32 n), r1 :: nil)
+  else (Oshr, r1 :: r2 :: nil).
+
+Definition make_shruimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int.iwordsize then (Oshift Slsr (mk_amount32 n), r1 :: nil)
+  else (Oshru, r1 :: r2 :: nil).
+
+Definition make_mulimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then
+    (Ointconst Int.zero, nil)
+  else if Int.eq n Int.one then
+    (Omove, r1 :: nil)
+  else
+    match Int.is_power2 n with
+    | Some l => (Oshift Slsl (mk_amount32 l), r1 :: nil)
+    | None => (Omul, r1 :: r2 :: nil)
+    end.
+
+Definition make_andimm (n: int) (r: reg) (a: aval) :=
+  if Int.eq n Int.zero then (Ointconst Int.zero, nil)
+  else if Int.eq n Int.mone then (Omove, r :: nil)
+  else if match a with Uns _ m => Int.eq (Int.zero_ext m (Int.not n)) Int.zero
+                     | _ => false end
+  then (Omove, r :: nil)
+  else (Oandimm n, r :: nil).
+
+Definition make_orimm (n: int) (r: reg) :=
+  if Int.eq n Int.zero then (Omove, r :: nil)
+  else if Int.eq n Int.mone then (Ointconst Int.mone, nil)
+  else (Oorimm n, r :: nil).
+
+Definition make_xorimm (n: int) (r: reg) :=
+  if Int.eq n Int.zero then (Omove, r :: nil)
+  else (Oxorimm n, r :: nil).
+
+Definition make_divimm n (r1 r2: reg) :=
+  if Int.eq n Int.one then
+    (Omove, r1 :: nil)
+  else
+    match Int.is_power2 n with
+    | Some l => if Int.ltu l (Int.repr 31)
+                then (Oshrximm l, r1 :: nil)
+                else (Odiv, r1 :: r2 :: nil)
+    | None   => (Odiv, r1 :: r2 :: nil)
+    end.
+
+Definition make_divuimm n (r1 r2: reg) :=
+  if Int.eq n Int.one then
+    (Omove, r1 :: nil)
+  else
+    match Int.is_power2 n with
+    | Some l => (Oshift Slsr (mk_amount32 l), r1 :: nil)
+    | None   => (Odivu, r1 :: r2 :: nil)
+    end.
+
+Definition make_addlimm (n: int64) (r: reg) :=
+  if Int64.eq n Int64.zero
+  then (Omove, r :: nil)
+  else (Oaddlimm n, r :: nil).
+
+Definition make_shllimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int64.iwordsize' then (Oshiftl Slsl (mk_amount64 n), r1 :: nil)
+  else (Oshll, r1 :: r2 :: nil).
+
+Definition make_shrlimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int64.iwordsize' then (Oshiftl Sasr (mk_amount64 n), r1 :: nil)
+  else (Oshrl, r1 :: r2 :: nil).
+
+Definition make_shrluimm (n: int) (r1 r2: reg) :=
+  if Int.eq n Int.zero then (Omove, r1 :: nil)
+  else if Int.ltu n Int64.iwordsize' then (Oshiftl Slsr (mk_amount64 n), r1 :: nil)
+  else (Oshrlu, r1 :: r2 :: nil).
+
+Definition make_mullimm (n: int64) (r1 r2: reg) :=
+  if Int64.eq n Int64.zero then
+    (Olongconst Int64.zero, nil)
+  else if Int64.eq n Int64.one then
+    (Omove, r1 :: nil)
+  else
+    match Int64.is_power2' n with
+    | Some l => (Oshiftl Slsl (mk_amount64 l), r1 :: nil)
+    | None => (Omull, r1 :: r2 :: nil)
+    end.
+
+Definition make_andlimm (n: int64) (r: reg) (a: aval) :=
+  if Int64.eq n Int64.zero then (Olongconst Int64.zero, nil)
+  else if Int64.eq n Int64.mone then (Omove, r :: nil)
+  else (Oandlimm n, r :: nil).
+
+Definition make_orlimm (n: int64) (r: reg) :=
+  if Int64.eq n Int64.zero then (Omove, r :: nil)
+  else if Int64.eq n Int64.mone then (Olongconst Int64.mone, nil)
+  else (Oorlimm n, r :: nil).
+
+Definition make_xorlimm (n: int64) (r: reg) :=
+  if Int64.eq n Int64.zero then (Omove, r :: nil)
+  else (Oxorlimm n, r :: nil).
+
+Definition make_divlimm n (r1 r2: reg) :=
+  match Int64.is_power2' n with
+  | Some l => if Int.ltu l (Int.repr 63)
+              then (Oshrlximm l, r1 :: nil)
+              else (Odivl, r1 :: r2 :: nil)
+  | None   => (Odivl, r1 :: r2 :: nil)
+  end.
+
+Definition make_divluimm n (r1 r2: reg) :=
+  match Int64.is_power2' n with
+  | Some l => (Oshiftl Slsr (mk_amount64 l), r1 :: nil)
+  | None   => (Odivlu, r1 :: r2 :: nil)
+  end.
+
+Definition make_mulfimm (n: float) (r r1 r2: reg) :=
+  if Float.eq_dec n (Float.of_int (Int.repr 2))
+  then (Oaddf, r :: r :: nil)
+  else (Omulf, r1 :: r2 :: nil).
+
+Definition make_mulfsimm (n: float32) (r r1 r2: reg) :=
+  if Float32.eq_dec n (Float32.of_int (Int.repr 2))
+  then (Oaddfs, r :: r :: nil)
+  else (Omulfs, r1 :: r2 :: nil).
+
+Definition make_zext (s: Z) (r: reg) (a: aval) :=
+  if vincl a (Uns Ptop s) then (Omove, r :: nil) else (Ozext s, r :: nil).
+
+Definition make_sext (s: Z) (r: reg) (a: aval) :=
+  if vincl a (Sgn Ptop s) then (Omove, r :: nil) else (Osext s, r :: nil).
+
+Nondetfunction op_strength_reduction 
+              (op: operation) (args: list reg) (vl: list aval) :=
+  match op, args, vl with
+  | Oadd, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_addimm n1 r2
+  | Oadd, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm n2 r1
+  | Oaddshift s a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm (eval_static_shift s n2 a) r1
+  | Osub, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm (Int.neg n2) r1
+  | Osubshift s a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addimm (Int.neg (eval_static_shift s n2 a)) r1
+  | Omul, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_mulimm n1 r2 r1
+  | Omul, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_mulimm n2 r1 r2
+  | Odiv, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divimm n2 r1 r2
+  | Odivu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_divuimm n2 r1 r2
+  | Oand, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_andimm n1 r2 v2
+  | Oand, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_andimm n2 r1 v1
+  | Oandshift s a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_andimm (eval_static_shift s n2 a) r1 v1
+  | Oandimm n, r1 :: nil, v1 :: nil => make_andimm n r1 v1
+  | Oor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_orimm n1 r2
+  | Oor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_orimm n2 r1
+  | Oorshift s a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_orimm (eval_static_shift s n2 a) r1
+  | Oxor, r1 :: r2 :: nil, I n1 :: v2 :: nil => make_xorimm n1 r2
+  | Oxor, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_xorimm n2 r1
+  | Oxorshift s a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_xorimm (eval_static_shift s n2 a) r1
+  | Obic, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_andimm (Int.not n2) r1 v1
+  | Obicshift s a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_andimm (Int.not (eval_static_shift s n2 a)) r1 v1
+  | Oorn, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_orimm (Int.not n2) r1
+  | Oornshift s a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_orimm (Int.not (eval_static_shift s n2 a)) r1
+  | Oeqv, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_xorimm (Int.not n2) r1
+  | Oeqvshift s a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_xorimm (Int.not (eval_static_shift s n2 a)) r1
+  | Oshl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shlimm n2 r1 r2
+  | Oshr, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrimm n2 r1 r2
+  | Oshru, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shruimm n2 r1 r2
+  | Ozext s, r1 :: nil, v1 :: nil => make_zext s r1 v1
+  | Osext s, r1 :: nil, v1 :: nil => make_sext s r1 v1
+
+  | Oaddl, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_addlimm n1 r2
+  | Oaddl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_addlimm n2 r1
+  | Oaddlshift s a, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_addlimm (eval_static_shiftl s n2 a) r1
+  | Oaddlext x a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addlimm (eval_static_extend x n2 a) r1
+  | Osubl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_addlimm (Int64.neg n2) r1
+  | Osublshift s a, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_addlimm (Int64.neg (eval_static_shiftl s n2 a)) r1
+  | Osublext x a, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_addlimm (Int64.neg (eval_static_extend x n2 a)) r1
+  | Omull, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_mullimm n1 r2 r1
+  | Omull, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_mullimm n2 r1 r2
+  | Odivl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_divlimm n2 r1 r2
+  | Odivlu, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_divluimm n2 r1 r2
+  | Oandl, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_andlimm n1 r2 v2
+  | Oandl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_andlimm n2 r1 v1
+  | Oandlshift s a, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_andlimm (eval_static_shiftl s n2 a) r1 v1
+  | Oandlimm n, r1 :: nil, v1 :: nil => make_andlimm n r1 v1
+  | Oorl, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_orlimm n1 r2
+  | Oorl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_orlimm n2 r1
+  | Oorlshift s a, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_orlimm (eval_static_shiftl s n2 a) r1
+  | Oxorl, r1 :: r2 :: nil, L n1 :: v2 :: nil => make_xorlimm n1 r2
+  | Oxorl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_xorlimm n2 r1
+  | Oxorlshift s a, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_xorlimm (eval_static_shiftl s n2 a) r1
+  | Obicl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_andlimm (Int64.not n2) r1 v1
+  | Obiclshift s a, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_andlimm (Int64.not (eval_static_shiftl s n2 a)) r1 v1
+  | Oornl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_orlimm (Int64.not n2) r1
+  | Oornlshift s a, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_orlimm (Int64.not (eval_static_shiftl s n2 a)) r1
+  | Oeqvl, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_xorlimm (Int64.not n2) r1
+  | Oeqvlshift s a, r1 :: r2 :: nil, v1 :: L n2 :: nil => make_xorlimm (Int64.not (eval_static_shiftl s n2 a)) r1
+  | Oshll, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shllimm n2 r1 r2
+  | Oshrl, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrlimm n2 r1 r2
+  | Oshrlu, r1 :: r2 :: nil, v1 :: I n2 :: nil => make_shrluimm n2 r1 r2
+  | Ocmp c, args, vl => make_cmp c args vl
+  | Osel c ty, r1 :: r2 :: args, v1 :: v2 :: vl => make_select c ty r1 r2 args vl
+  | Omulf, r1 :: r2 :: nil, v1 :: F n2 :: nil => make_mulfimm n2 r1 r1 r2
+  | Omulf, r1 :: r2 :: nil, F n1 :: v2 :: nil => make_mulfimm n1 r2 r1 r2
+  | Omulfs, r1 :: r2 :: nil, v1 :: FS n2 :: nil => make_mulfsimm n2 r1 r1 r2
+  | Omulfs, r1 :: r2 :: nil, FS n1 :: v2 :: nil => make_mulfsimm n1 r2 r1 r2
+  | _, _, _ => (op, args)
+  end.
+
+Nondetfunction addr_strength_reduction
+                (addr: addressing) (args: list reg) (vl: list aval) :=
+  match addr, args, vl with
+  | Aindexed n, r1 :: nil, Ptr(Gl symb n1) :: nil =>
+      (Aglobal symb (Ptrofs.add n1 (Ptrofs.of_int64 n)), nil)
+  | Aindexed n, r1 :: nil, Ptr(Stk n1) :: nil =>
+      (Ainstack (Ptrofs.add n1 (Ptrofs.of_int64 n)), nil)
+  | Aindexed2, r1 :: r2 :: nil, Ptr(Stk n1) :: L n2 :: nil =>
+      (Ainstack (Ptrofs.add n1 (Ptrofs.of_int64 n2)), nil)
+  | Aindexed2, r1 :: r2 :: nil, L n1 :: Ptr(Stk n2) :: nil =>
+      (Ainstack (Ptrofs.add (Ptrofs.of_int64 n1) n2), nil)
+  | Aindexed2, r1 :: r2 :: nil, L n1 :: v2 :: nil =>
+      (Aindexed n1, r2 :: nil)
+  | Aindexed2, r1 :: r2 :: nil, v1 :: L n2 :: nil =>
+      (Aindexed n2, r1 :: nil)
+  | Aindexed2shift a, r1 :: r2 :: nil, Ptr(Stk n1) :: L n2 :: nil =>
+      (Ainstack (Ptrofs.add n1 (Ptrofs.of_int64 (Int64.shl' n2 a))), nil)
+  | Aindexed2shift a, r1 :: r2 :: nil, v1 :: L n2 :: nil =>
+      (Aindexed (Int64.shl' n2 a), r1 :: nil)
+  | Aindexed2ext x a, r1 :: r2 :: nil, Ptr(Stk n1) :: I n2 :: nil =>
+      (Ainstack (Ptrofs.add n1 (Ptrofs.of_int64 (eval_static_extend x n2 a))), nil)
+  | Aindexed2ext x a, r1 :: r2 :: nil, v1 :: I n2 :: nil =>
+      (Aindexed (eval_static_extend x n2 a), r1 :: nil)
+  | _, _, _ =>
+      (addr, args)
+  end.
+

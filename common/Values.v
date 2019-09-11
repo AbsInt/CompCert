@@ -783,6 +783,18 @@ Definition rolml (v: val) (amount: int) (mask: int64): val :=
   | _ => Vundef
   end.
 
+Definition zero_ext_l (nbits: Z) (v: val) : val :=
+  match v with
+  | Vlong n => Vlong(Int64.zero_ext nbits n)
+  | _ => Vundef
+  end.
+
+Definition sign_ext_l (nbits: Z) (v: val) : val :=
+  match v with
+  | Vlong n => Vlong(Int64.sign_ext nbits n)
+  | _ => Vundef
+  end.
+
 (** Comparisons *)
 
 Section COMPARISONS.
@@ -1898,10 +1910,18 @@ Qed.
 
 Lemma zero_ext_and:
   forall n v,
-  0 < n < Int.zwordsize ->
+  0 <= n ->
   Val.zero_ext n v = Val.and v (Vint (Int.repr (two_p n - 1))).
 Proof.
-  intros. destruct v; simpl; auto. decEq. apply Int.zero_ext_and; auto. omega.
+  intros. destruct v; simpl; auto. decEq. apply Int.zero_ext_and; auto.
+Qed.
+
+Lemma zero_ext_andl:
+  forall n v,
+  0 <= n ->
+  Val.zero_ext_l n v = Val.andl v (Vlong (Int64.repr (two_p n - 1))).
+Proof.
+  intros. destruct v; simpl; auto. decEq. apply Int64.zero_ext_and; auto.
 Qed.
 
 Lemma rolm_lt_zero:

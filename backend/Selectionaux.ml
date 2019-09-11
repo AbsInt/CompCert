@@ -68,6 +68,8 @@ let rec cost_expr = function
 
 let fast_cmove ty =
   match Configuration.arch, Configuration.model with
+  | "aarch64", _ ->
+      (match ty with Tint | Tlong | Tfloat | Tsingle -> true | _ -> false)
   | "arm", _ ->
       (match ty with Tint | Tfloat | Tsingle -> true | _ -> false)
   | "powerpc", "e5500" -> 

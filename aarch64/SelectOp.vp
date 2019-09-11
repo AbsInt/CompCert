@@ -1,0 +1,566 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*              The Compcert verified compiler                         *)
+(*                                                                     *)
+(*         Xavier Leroy, Collège de France and INRIA Paris             *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(** Instruction selection for operators *)
+
+Require Import Coqlib Zbits.
+Require Import Compopts AST Integers Floats Builtins.
+Require Import Op CminorSel.
+
+Local Open Scope cminorsel_scope.
+
+(** "ror" shifted operands are not supported by arithmetic operations *)
+
+Definition arith_shift (s: shift) :=
+  match s with Sror => false | _ => true end.
+
+(** ** Constants **)
+
+Definition addrsymbol (id: ident) (ofs: ptrofs) :=
+  Eop (Oaddrsymbol id ofs) Enil.
+
+Definition addrstack (ofs: ptrofs) :=
+  Eop (Oaddrstack ofs) Enil.
+
+(** ** Integer addition *)
+
+Nondetfunction addimm (n: int) (e: expr) :=
+  if Int.eq n Int.zero then e else
+  match e with
+  | Eop (Ointconst m) Enil => Eop (Ointconst (Int.add n m)) Enil
+  | Eop (Oaddimm m) (t ::: Enil) => Eop (Oaddimm(Int.add n m)) (t ::: Enil)
+  | _ => Eop (Oaddimm n) (e ::: Enil)
+  end.
+
+Nondetfunction add (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Ointconst n1) Enil, t2 => addimm n1 t2
+  | t1, Eop (Ointconst n2) Enil => addimm n2 t1
+  | Eop (Oaddimm n1) (t1:::Enil), Eop (Oaddimm n2) (t2:::Enil) =>
+      addimm (Int.add n1 n2) (Eop Oadd (t1:::t2:::Enil))
+  | Eop (Oaddimm n1) (t1:::Enil), t2 =>
+      addimm n1 (Eop Oadd (t1:::t2:::Enil))
+  | t1, Eop (Oaddimm n2) (t2:::Enil) =>
+      addimm n2 (Eop Oadd (t1:::t2:::Enil))
+  | Eop (Oshift s a) (t1:::Enil), t2 ?? arith_shift s =>
+      Eop (Oaddshift s a) (t2 ::: t1 ::: Enil)
+  | t1, Eop (Oshift s a) (t2:::Enil) ?? arith_shift s =>
+      Eop (Oaddshift s a) (t1 ::: t2 ::: Enil)
+  | Eop Omul (t1:::t2:::Enil), t3 =>
+      Eop Omuladd (t3:::t1:::t2:::Enil)
+  | t1, Eop Omul (t2:::t3:::Enil) =>
+      Eop Omuladd (t1:::t2:::t3:::Enil)
+  | _, _ => Eop Oadd (e1:::e2:::Enil)
+  end.
+
+(** ** Opposite *)
+
+Nondetfunction negint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.neg n)) Enil
+  | Eop (Oshift s a) (t1:::Enil) ?? arith_shift s => Eop (Onegshift s a) (t1:::Enil)
+  | _ =>  Eop Oneg (e ::: Enil)
+  end.
+
+(** ** Integer and pointer subtraction *)
+
+Nondetfunction sub (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | t1, Eop (Ointconst n2) Enil =>
+      addimm (Int.neg n2) t1
+  | Eop (Oaddimm n1) (t1:::Enil), Eop (Oaddimm n2) (t2:::Enil) =>
+      addimm (Int.sub n1 n2) (Eop Osub (t1:::t2:::Enil))
+  | Eop (Oaddimm n1) (t1:::Enil), t2 =>
+      addimm n1 (Eop Osub (t1:::t2:::Enil))
+  | t1, Eop (Oaddimm n2) (t2:::Enil) =>
+      addimm (Int.neg n2) (Eop Osub (t1:::t2:::Enil))
+  | t1, Eop (Oshift s a) (t2:::Enil) ?? arith_shift s =>
+      Eop (Osubshift s a) (t1:::t2::: Enil)
+  | t1, Eop Omul (t2:::t3:::Enil) =>
+      Eop Omulsub (t1:::t2:::t3:::Enil)
+  | _, _ => Eop Osub (e1:::e2:::Enil)
+  end.
+
+(** ** Immediate shift left *)
+
+Definition shlimm_base (e1: expr) (n: int) :=
+  Eop (Oshift Slsl (mk_amount32 n)) (e1 ::: Enil).
+
+Nondetfunction shlimm (e1: expr) (n: int) :=
+  if Int.eq n Int.zero then
+    e1
+  else if negb (Int.ltu n Int.iwordsize) then
+    Eop Oshl (e1 ::: Eop (Ointconst n) Enil ::: Enil)
+  else match e1 with
+    | Eop (Ointconst n1) Enil =>
+        Eop (Ointconst (Int.shl n1 n)) Enil
+    | Eop (Oshift Slsl a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int.iwordsize
+        then shlimm_base t1 (Int.add a n)
+        else shlimm_base e1 n
+    | Eop (Ozext s) (t1:::Enil) =>
+        Eop (Oshlzext s (mk_amount32 n)) (t1:::Enil)
+    | Eop (Osext s) (t1:::Enil) =>
+        Eop (Oshlsext s (mk_amount32 n)) (t1:::Enil)
+    | Eop (Oshlzext s a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int.iwordsize
+        then Eop (Oshlzext s (mk_amount32 (Int.add a n))) (t1:::Enil)
+        else shlimm_base e1 n
+    | Eop (Oshlsext s a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int.iwordsize
+        then Eop (Oshlsext s (mk_amount32 (Int.add a n))) (t1:::Enil)
+        else shlimm_base e1 n
+    | _ =>
+        shlimm_base e1 n
+  end.
+
+(** ** Immediate shift right (logical) *)
+
+Definition shruimm_base (e1: expr) (n: int) :=
+  Eop (Oshift Slsr (mk_amount32 n)) (e1 ::: Enil).
+
+Nondetfunction shruimm (e1: expr) (n: int) :=
+  if Int.eq n Int.zero then
+    e1
+  else if negb (Int.ltu n Int.iwordsize) then
+    Eop Oshru (e1 ::: Eop (Ointconst n) Enil ::: Enil)
+  else match e1 with
+    | Eop (Ointconst n1) Enil =>
+        Eop (Ointconst (Int.shru n1 n)) Enil
+    | Eop (Oshift Slsl a) (t1:::Enil) =>
+        if Int.ltu n a
+        then Eop (Oshlzext (Int.zwordsize - Int.unsigned a) (mk_amount32 (Int.sub a n))) (t1:::Enil)
+        else Eop (Ozextshr (mk_amount32 (Int.sub n a)) (Int.zwordsize - Int.unsigned n)) (t1:::Enil)
+    | Eop (Oshift Slsr a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int.iwordsize
+        then shruimm_base t1 (Int.add a n)
+        else shruimm_base e1 n
+    | Eop (Ozext s) (t1:::Enil) =>
+        if zlt (Int.unsigned n) s
+        then Eop (Ozextshr (mk_amount32 n) (s - Int.unsigned n)) (t1:::Enil)
+        else Eop (Ointconst Int.zero) Enil
+    | _ =>
+        shruimm_base e1 n
+    end.
+
+(** ** Immediate shift right (arithmetic) *)
+
+Definition shrimm_base (e1: expr) (n: int) :=
+  Eop (Oshift Sasr (mk_amount32 n)) (e1 ::: Enil).
+
+Nondetfunction shrimm (e1: expr) (n: int) :=
+  if Int.eq n Int.zero then
+    e1
+  else if negb (Int.ltu n Int.iwordsize) then
+    Eop Oshr (e1 ::: Eop (Ointconst n) Enil ::: Enil)
+  else match e1 with
+    | Eop (Ointconst n1) Enil =>
+        Eop (Ointconst (Int.shr n1 n)) Enil
+    | Eop (Oshift Slsl a) (t1:::Enil) =>
+        if Int.ltu n a
+        then Eop (Oshlsext (Int.zwordsize - Int.unsigned a) (mk_amount32 (Int.sub a n))) (t1:::Enil)
+        else Eop (Osextshr (mk_amount32 (Int.sub n a)) (Int.zwordsize - Int.unsigned n)) (t1:::Enil)
+    | Eop (Oshift Sasr a) (t1:::Enil) =>
+        if Int.ltu (Int.add a n) Int.iwordsize
+        then shrimm_base t1 (Int.add a n)
+        else shrimm_base e1 n
+    | Eop (Osext s) (t1:::Enil) =>
+        if zlt (Int.unsigned n) s && zlt s Int.zwordsize
+        then Eop (Osextshr (mk_amount32 n) (s - Int.unsigned n)) (t1:::Enil)
+        else shrimm_base e1 n
+    | _ =>
+        shrimm_base e1 n
+    end.
+
+(** ** Integer multiply *)
+
+Definition mulimm_base (n1: int) (e2: expr) :=
+  match Int.one_bits n1 with
+  | i :: nil =>
+      shlimm e2 i
+  | i :: j :: nil =>
+      Elet e2 (add (shlimm (Eletvar 0) i) (shlimm (Eletvar 0) j))
+  | _ =>
+      Eop Omul (Eop (Ointconst n1) Enil ::: e2 ::: Enil)
+  end.
+
+Nondetfunction mulimm (n1: int) (e2: expr) :=
+  if Int.eq n1 Int.zero then Eop (Ointconst Int.zero) Enil
+  else if Int.eq n1 Int.one then e2
+  else match e2 with
+  | Eop (Ointconst n2) Enil => Eop (Ointconst (Int.mul n1 n2)) Enil
+  | Eop (Oaddimm n2) (t2:::Enil) => addimm (Int.mul n1 n2) (mulimm_base n1 t2)
+  | _ => mulimm_base n1 e2
+  end.
+
+Nondetfunction mul (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Ointconst n1) Enil, t2 => mulimm n1 t2
+  | t1, Eop (Ointconst n2) Enil => mulimm n2 t1
+  | _, _ => Eop Omul (e1:::e2:::Enil)
+  end.
+
+Definition mulhs (e1: expr) (e2: expr) :=
+  Eop Olowlong
+    (Eop (Oshiftl Sasr (mk_amount64 (Int.repr 32)))
+       (Eop Omull (Eop (Oextend Xsgn32 (mk_amount64 Int.zero)) (e1 ::: Enil) :::
+                   Eop (Oextend Xsgn32 (mk_amount64 Int.zero)) (e2 ::: Enil) ::: Enil) ::: Enil)
+        ::: Enil).
+
+Definition mulhu (e1: expr) (e2: expr) :=
+  Eop Olowlong
+    (Eop (Oshiftl Slsr (mk_amount64 (Int.repr 32)))
+       (Eop Omull (Eop (Oextend Xuns32 (mk_amount64 Int.zero)) (e1 ::: Enil) :::
+                   Eop (Oextend Xuns32 (mk_amount64 Int.zero)) (e2 ::: Enil) ::: Enil) ::: Enil)
+        ::: Enil).
+
+(** ** Integer conversions *)
+
+Nondetfunction zero_ext (sz: Z) (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.zero_ext sz n)) Enil
+  | Eop (Oshift Slsr a) (t1:::Enil) => Eop (Ozextshr a sz) (t1:::Enil)
+  | Eop (Oshift Slsl a) (t1:::Enil) =>
+      if zlt (Int.unsigned a) sz
+      then Eop (Oshlzext (sz - Int.unsigned a) a) (t1:::Enil)
+      else Eop (Ozext sz) (e:::Enil)
+  | _ => Eop (Ozext sz) (e:::Enil)
+  end.
+
+Nondetfunction sign_ext (sz: Z) (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.sign_ext sz n)) Enil
+  | Eop (Oshift Sasr a) (t1:::Enil) => Eop (Osextshr a sz) (t1:::Enil)
+  | Eop (Oshift Slsl a) (t1:::Enil) =>
+      if zlt (Int.unsigned a) sz
+      then Eop (Oshlsext (sz - Int.unsigned a) a) (t1:::Enil)
+      else Eop (Osext sz) (e:::Enil)
+  | _ => Eop (Osext sz) (e:::Enil)
+  end.
+
+Definition cast8unsigned (e: expr) := zero_ext 8 e.
+Definition cast8signed (e: expr) := sign_ext 8 e.
+Definition cast16unsigned (e: expr) := zero_ext 16 e.
+Definition cast16signed (e: expr) := sign_ext 16 e.
+
+(** ** Bitwise not *)
+
+Nondetfunction notint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ointconst (Int.not n)) Enil
+  | Eop (Oshift s a) (t1:::Enil) => Eop (Onotshift s a) (t1:::Enil)
+  | Eop Onot (t1:::Enil) => t1
+  | Eop (Onotshift s a) (t1:::Enil) => Eop (Oshift s a) (t1:::Enil)
+  | Eop Obic (t1:::t2:::Enil) => Eop Oorn (t2:::t1:::Enil)
+  | Eop Oorn (t1:::t2:::Enil) => Eop Obic (t2:::t1:::Enil)
+  | Eop Oxor (t1:::t2:::Enil) => Eop Oeqv (t1:::t2:::Enil)
+  | Eop Oeqv (t1:::t2:::Enil) => Eop Oxor (t1:::t2:::Enil)
+  | _ => Eop Onot (e:::Enil)
+  end.
+
+(** ** Bitwise and *)
+
+Definition andimm_base (n1: int) (e2: expr) :=
+  if Int.eq n1 Int.zero then Eop (Ointconst Int.zero) Enil else
+  if Int.eq n1 Int.mone then e2 else
+  match Z_is_power2m1 (Int.unsigned n1) with
+  | Some s => zero_ext s e2
+  | None => Eop (Oandimm n1) (e2 ::: Enil)
+  end.
+
+Nondetfunction andimm (n1: int) (e2: expr) :=
+  match e2 with
+  | Eop (Ointconst n2) Enil => Eop (Ointconst (Int.and n1 n2)) Enil
+  | Eop (Oandimm n2) (t2:::Enil) => andimm_base (Int.and n1 n2) t2
+  | Eop (Ozext s) (t2:::Enil) =>
+      if zle 0 s
+      then andimm_base (Int.and n1 (Int.repr (two_p s - 1))) t2
+      else andimm_base n1 e2
+  | _ => andimm_base n1 e2
+  end.
+
+Nondetfunction and (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Ointconst n1) Enil, t2 => andimm n1 t2
+  | t1, Eop (Ointconst n2) Enil => andimm n2 t1
+  | Eop Onot (t1:::Enil), t2 => Eop Obic (t2:::t1:::Enil)
+  | t1, Eop Onot (t2:::Enil) => Eop Obic (t1:::t2:::Enil)
+  | Eop (Onotshift s a) (t1:::Enil), t2 => Eop (Obicshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Onotshift s a) (t2:::Enil) => Eop (Obicshift s a) (t1:::t2:::Enil)
+  | Eop (Oshift s a) (t1:::Enil), t2 => Eop (Oandshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Oshift s a) (t2:::Enil) => Eop (Oandshift s a) (t1:::t2:::Enil)
+  | _, _ => Eop Oand (e1:::e2:::Enil)
+  end.
+
+(** ** Bitwise or *)
+
+Nondetfunction orimm (n1: int) (e2: expr) :=
+  if Int.eq n1 Int.zero then e2
+  else if Int.eq n1 Int.mone then Eop (Ointconst Int.mone) Enil
+  else match e2 with
+  | Eop (Ointconst n2) Enil => Eop (Ointconst (Int.or n1 n2)) Enil
+  | Eop (Oorimm n2) (t2:::Enil) => Eop (Oorimm (Int.or n1 n2)) (t2:::Enil)
+  | _ => Eop (Oorimm n1) (e2:::Enil)
+  end.
+
+Definition same_expr_pure (e1 e2: expr) :=
+  match e1, e2 with
+  | Evar v1, Evar v2 => if ident_eq v1 v2 then true else false
+  | _, _ => false
+  end.
+
+Nondetfunction or (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Ointconst n1) Enil, t2 => orimm n1 t2
+  | t1, Eop (Ointconst n2) Enil => orimm n2 t1
+  | Eop Onot (t1:::Enil), t2 => Eop Oorn (t2:::t1:::Enil)
+  | t1, Eop Onot (t2:::Enil) => Eop Oorn (t1:::t2:::Enil)
+  | Eop (Onotshift s a) (t1:::Enil), t2 => Eop (Oornshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Onotshift s a) (t2:::Enil) => Eop (Oornshift s a) (t1:::t2:::Enil)
+  | Eop (Oshift Slsl a1) (t1:::Enil), Eop (Oshift Slsr a2) (t2:::Enil) =>
+      if Int.eq (Int.add a1 a2) Int.iwordsize && same_expr_pure t1 t2
+      then Eop (Oshift Sror a2) (t2:::Enil)
+      else Eop (Oorshift Slsr a2) (Eop (Oshift Slsl a1) (t1:::Enil):::t2:::Enil)
+  | Eop (Oshift Slsr a1) (t1:::Enil), Eop (Oshift Slsl a2) (t2:::Enil) =>
+      if Int.eq (Int.add a2 a1) Int.iwordsize && same_expr_pure t1 t2
+      then Eop (Oshift Sror a1) (t1:::Enil)
+      else Eop (Oorshift Slsl a2) (Eop (Oshift Slsr a1) (t1:::Enil):::t2:::Enil)
+  | Eop (Oshift s a) (t1:::Enil), t2 => Eop (Oorshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Oshift s a) (t2:::Enil) => Eop (Oorshift s a) (t1:::t2:::Enil)
+  | _, _ => Eop Oor (e1:::e2:::Enil)
+  end.
+
+(** ** Bitwise xor *)
+
+Definition xorimm_base (n1: int) (e2: expr) :=
+  if Int.eq n1 Int.zero then e2 else
+  if Int.eq n1 Int.mone then notint e2 else
+  Eop (Oxorimm n1) (e2:::Enil).  
+
+Nondetfunction xorimm (n1: int) (e2: expr) :=
+  match e2 with
+  | Eop (Ointconst n2) Enil => Eop (Ointconst (Int.xor n1 n2)) Enil
+  | Eop (Oxorimm n2) (t2:::Enil) => xorimm_base (Int.xor n1 n2) t2
+  | _ => xorimm_base n1 e2
+  end.
+
+Nondetfunction xor (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Ointconst n1) Enil, t2 => xorimm n1 t2
+  | t1, Eop (Ointconst n2) Enil => xorimm n2 t1
+  | Eop Onot (t1:::Enil), t2 => Eop Oeqv (t2:::t1:::Enil)
+  | t1, Eop Onot (t2:::Enil) => Eop Oeqv (t1:::t2:::Enil)
+  | Eop (Onotshift s a) (t1:::Enil), t2 => Eop (Oeqvshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Onotshift s a) (t2:::Enil) => Eop (Oeqvshift s a) (t1:::t2:::Enil)
+  | Eop (Oshift s a) (t1:::Enil), t2 => Eop (Oxorshift s a) (t2:::t1:::Enil)
+  | t1, Eop (Oshift s a) (t2:::Enil) => Eop (Oxorshift s a) (t1:::t2:::Enil)
+  | _, _ => Eop Oxor (e1:::e2:::Enil)
+  end.
+
+(** ** Integer division and modulus *)
+
+Definition mod_aux (divop: operation) (e1 e2: expr) :=
+  Elet e1
+    (Elet (lift e2)
+      (Eop Omulsub (Eletvar 1 :::
+                    Eop divop (Eletvar 1 ::: Eletvar 0 ::: Enil) :::
+                    Eletvar 0 :::
+                    Enil))).
+
+Definition divs_base (e1: expr) (e2: expr) := Eop Odiv (e1:::e2:::Enil).
+Definition mods_base := mod_aux Odiv.
+Definition divu_base (e1: expr) (e2: expr) := Eop Odivu (e1:::e2:::Enil).
+Definition modu_base := mod_aux Odivu.
+
+Definition shrximm (e1: expr) (n2: int) :=
+  if Int.eq n2 Int.zero then e1 else Eop (Oshrximm n2) (e1:::Enil).
+
+(** ** General shifts *)
+
+Nondetfunction shl (e1: expr) (e2: expr) :=
+  match e2 with
+  | Eop (Ointconst n2) Enil => shlimm e1 n2
+  | _ => Eop Oshl (e1:::e2:::Enil)
+  end.
+
+Nondetfunction shr (e1: expr) (e2: expr) :=
+  match e2 with
+  | Eop (Ointconst n2) Enil => shrimm e1 n2
+  | _ => Eop Oshr (e1:::e2:::Enil)
+  end.
+
+Nondetfunction shru (e1: expr) (e2: expr) :=
+  match e2 with
+  | Eop (Ointconst n2) Enil => shruimm e1 n2
+  | _ => Eop Oshru (e1:::e2:::Enil)
+  end.
+
+(** ** Floating-point arithmetic *)
+
+Definition negf (e: expr) :=  Eop Onegf (e ::: Enil).
+Definition absf (e: expr) :=  Eop Oabsf (e ::: Enil).
+Definition addf (e1 e2: expr) :=  Eop Oaddf (e1 ::: e2 ::: Enil).
+Definition subf (e1 e2: expr) :=  Eop Osubf (e1 ::: e2 ::: Enil).
+Definition mulf (e1 e2: expr) :=  Eop Omulf (e1 ::: e2 ::: Enil).
+
+Definition negfs (e: expr) :=  Eop Onegfs (e ::: Enil).
+Definition absfs (e: expr) :=  Eop Oabsfs (e ::: Enil).
+Definition addfs (e1 e2: expr) :=  Eop Oaddfs (e1 ::: e2 ::: Enil).
+Definition subfs (e1 e2: expr) :=  Eop Osubfs (e1 ::: e2 ::: Enil).
+Definition mulfs (e1 e2: expr) :=  Eop Omulfs (e1 ::: e2 ::: Enil).
+
+(** ** Comparisons *)
+
+Nondetfunction compimm (default: comparison -> int -> condition)
+                       (sem: comparison -> int -> int -> bool)
+                       (c: comparison) (e1: expr) (n2: int) :=
+  match c, e1 with
+  | c, Eop (Ointconst n1) Enil =>
+      Eop (Ointconst (if sem c n1 n2 then Int.one else Int.zero)) Enil
+  | Ceq, Eop (Ocmp c) el =>
+      if Int.eq_dec n2 Int.zero then
+        Eop (Ocmp (negate_condition c)) el
+      else if Int.eq_dec n2 Int.one then
+        Eop (Ocmp c) el
+      else
+        Eop (Ointconst Int.zero) Enil
+  | Cne, Eop (Ocmp c) el =>
+      if Int.eq_dec n2 Int.zero then
+        Eop (Ocmp c) el
+      else if Int.eq_dec n2 Int.one then
+        Eop (Ocmp (negate_condition c)) el
+      else
+        Eop (Ointconst Int.one) Enil
+  | Ceq, Eop (Oandimm m) (t1:::Enil) =>
+      if Int.eq n2 Int.zero
+      then Eop (Ocmp (Cmaskzero m)) (t1:::Enil)
+      else Eop (Ocmp (default c n2)) (e1:::Enil)
+  | Cne, Eop (Oandimm m) (t1:::Enil) =>
+      if Int.eq n2 Int.zero
+      then Eop (Ocmp (Cmasknotzero m)) (t1:::Enil)
+      else Eop (Ocmp (default c n2)) (e1:::Enil)
+  | _, _ =>
+      Eop (Ocmp (default c n2)) (e1:::Enil)
+  end.
+
+Nondetfunction comp (c: comparison) (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Ointconst n1) Enil, t2 =>
+      compimm Ccompimm Int.cmp (swap_comparison c) t2 n1
+  | t1, Eop (Ointconst n2) Enil =>
+      compimm Ccompimm Int.cmp c t1 n2
+  | Eop (Oshift s a) (t1:::Enil), t2 ?? arith_shift s =>
+      Eop (Ocmp (Ccompshift (swap_comparison c) s a)) (t2:::t1:::Enil)
+  | t1, Eop (Oshift s a) (t2:::Enil) ?? arith_shift s =>
+      Eop (Ocmp (Ccompshift c s a)) (t1:::t2:::Enil)
+  | _, _ =>
+      Eop (Ocmp (Ccomp c)) (e1:::e2:::Enil)
+  end.
+
+Nondetfunction compu (c: comparison) (e1: expr) (e2: expr) :=
+  match e1, e2 with
+  | Eop (Ointconst n1) Enil, t2 =>
+      compimm Ccompuimm Int.cmpu (swap_comparison c) t2 n1
+  | t1, Eop (Ointconst n2) Enil =>
+      compimm Ccompuimm Int.cmpu c t1 n2
+  | Eop (Oshift s a) (t1:::Enil), t2 ?? arith_shift s =>
+      Eop (Ocmp (Ccompushift (swap_comparison c) s a)) (t2:::t1:::Enil)
+  | t1, Eop (Oshift s a) (t2:::Enil) ?? arith_shift s =>
+      Eop (Ocmp (Ccompushift c s a)) (t1:::t2:::Enil)
+  | _, _ =>
+      Eop (Ocmp (Ccompu c)) (e1:::e2:::Enil)
+  end.
+
+Definition compf (c: comparison) (e1: expr) (e2: expr) :=
+  Eop (Ocmp (Ccompf c)) (e1:::e2:::Enil).
+
+Definition compfs (c: comparison) (e1: expr) (e2: expr) :=
+  Eop (Ocmp (Ccompfs c)) (e1:::e2:::Enil).
+
+(** ** Floating-point conversions *)
+
+Definition intoffloat  (e: expr) := Eop Ointoffloat (e ::: Enil).
+Definition intuoffloat (e: expr) := Eop Ointuoffloat (e ::: Enil).
+
+Nondetfunction floatofintu (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.of_intu n)) Enil
+  | _ => Eop Ofloatofintu (e ::: Enil)
+  end.
+
+Nondetfunction floatofint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Ofloatconst (Float.of_int n)) Enil
+  | _ => Eop Ofloatofint (e ::: Enil)
+  end.
+
+Definition intofsingle (e: expr) := Eop Ointofsingle (e ::: Enil).
+Definition intuofsingle (e: expr) := Eop Ointuofsingle (e ::: Enil).
+
+Nondetfunction singleofint (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Osingleconst (Float32.of_int n)) Enil
+  | _ => Eop Osingleofint (e ::: Enil)
+  end.
+
+Nondetfunction singleofintu (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => Eop (Osingleconst (Float32.of_intu n)) Enil
+  | _ => Eop Osingleofintu (e ::: Enil)
+  end.
+
+Definition singleoffloat (e: expr) := Eop Osingleoffloat (e ::: Enil).
+Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).
+
+(** ** Selection *)
+
+Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
+  if match ty with
+     | Tint => true
+     | Tlong => true
+     | Tfloat => true
+     | Tsingle => true
+     | _ => false
+     end
+  then Some (Eop (Osel cond ty) (e1 ::: e2 ::: args))
+  else None.
+
+(** ** Recognition of addressing modes for load and store operations *)
+
+Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
+  match e with
+  | Eop (Oaddrstack n) Enil => (Ainstack n, Enil)
+  | Eop (Oaddrsymbol id ofs) Enil => (Aglobal id ofs, Enil)
+  | Eop (Oaddlimm n) (e1:::Enil) => (Aindexed n, e1:::Enil)
+  | Eop (Oaddlshift Slsl a) (e1:::e2:::Enil) => (Aindexed2shift a, e1:::e2:::Enil)
+  | Eop (Oaddlext x a) (e1:::e2:::Enil) => (Aindexed2ext x a, e1:::e2:::Enil)
+  | Eop Oaddl (e1:::e2:::Enil) => (Aindexed2, e1:::e2:::Enil)
+  | _ => (Aindexed Int64.zero, e:::Enil)
+  end.
+
+(** ** Arguments of builtins *)
+
+Nondetfunction builtin_arg (e: expr) :=
+  match e with
+  | Eop (Ointconst n) Enil => BA_int n
+  | Eop (Olongconst n) Enil => BA_long n
+  | Eop (Oaddrsymbol id ofs) Enil => BA_addrglobal id ofs
+  | Eop (Oaddrstack ofs) Enil => BA_addrstack ofs
+  | Eload chunk (Ainstack ofs) Enil => BA_loadstack chunk ofs
+  | Eop (Oaddlimm n) (e1:::Enil) => BA_addptr (BA e1) (BA_long n)
+  | _ => BA e
+  end.
+
+(** Platform-specific known builtins *)
+
+Definition platform_builtin (b: platform_builtin) (args: exprlist) : option expr :=
+  None.

@@ -594,7 +594,8 @@ Proof.
 Qed.
 
 (** Modular arithmetic operations: add, mul, opposite.
-    (But not subtraction because of the pointer - pointer case. *)
+    Also subtraction, but only on 64-bit targets, otherwise
+    the pointer - pointer case does not fit. *)
 
 Definition modarith (x: nval) :=
   match x with
@@ -612,6 +613,19 @@ Proof.
 - auto.
 - unfold Val.add; InvAgree.
   apply eqmod_iagree. apply eqmod_add; apply iagree_eqmod; auto.
+- inv H; auto. inv H0; auto. destruct w1; auto.
+Qed.
+
+Lemma sub_sound:
+  forall v1 w1 v2 w2 x,
+  vagree v1 w1 (modarith x) -> vagree v2 w2 (modarith x) ->
+  Archi.ptr64 = true ->
+  vagree (Val.sub v1 v2) (Val.sub w1 w2) x.
+Proof.
+  unfold modarith; intros. destruct x; simpl in *.
+- auto.
+- unfold Val.sub; rewrite H1; InvAgree.
+  apply eqmod_iagree. apply eqmod_sub; apply iagree_eqmod; auto.
 - inv H; auto. inv H0; auto. destruct w1; auto.
 Qed.
 
@@ -680,7 +694,7 @@ Definition sign_ext (n: Z) (x: nval) :=
 Lemma sign_ext_sound:
   forall v w x n,
   vagree v w (sign_ext n x) ->
-  0 < n < Int.zwordsize ->
+  0 < n ->
   vagree (Val.sign_ext n v) (Val.sign_ext n w) x.
 Proof.
   unfold sign_ext; intros. destruct x; simpl in *.
@@ -889,7 +903,8 @@ Lemma default_needs_of_operation_sound:
   eval_operation ge (Vptr sp Ptrofs.zero) op args1 m1 = Some v1 ->
   vagree_list args1 args2 nil
   \/ vagree_list args1 args2 (default nv :: nil)
-  \/ vagree_list args1 args2 (default nv :: default nv :: nil) ->
+  \/ vagree_list args1 args2 (default nv :: default nv :: nil)
+  \/ vagree_list args1 args2 (default nv :: default nv :: default nv :: nil) ->
   nv <> Nothing ->
   exists v2,
      eval_operation ge (Vptr sp Ptrofs.zero) op args2 m2 = Some v2
@@ -901,7 +916,8 @@ Proof.
   {
     destruct H0. auto with na.
     destruct H0. inv H0; constructor; auto with na.
-    inv H0; constructor; auto with na. inv H8; constructor; auto with na.
+    destruct H0. inv H0. constructor. inv H8; constructor; auto with na. 
+    inv H0; constructor; auto with na. inv H8; constructor; auto with na. inv H9; constructor; auto with na.
   }
   exploit (@eval_operation_inj _ _ _ _ ge ge inject_id).
   eassumption. auto. auto. auto.

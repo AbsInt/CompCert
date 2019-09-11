@@ -2093,6 +2093,7 @@ Proof.
 Qed.
 
 Definition sign_ext (nbits: Z) (v: aval) :=
+  if zle nbits 0 then Uns (provenance v) 0 else
   match v with
   | I i => I (Int.sign_ext nbits i)
   | Uns p n => if zlt n nbits then Uns p n else sgn p nbits
@@ -2101,18 +2102,37 @@ Definition sign_ext (nbits: Z) (v: aval) :=
   end.
 
 Lemma sign_ext_sound:
-  forall nbits v x, 0 < nbits -> vmatch v x -> vmatch (Val.sign_ext nbits v) (sign_ext nbits x).
+  forall nbits v x, vmatch v x -> vmatch (Val.sign_ext nbits v) (sign_ext nbits x).
 Proof.
   assert (DFL: forall p nbits i, 0 < nbits -> vmatch (Vint (Int.sign_ext nbits i)) (sgn p nbits)).
   {
     intros. apply vmatch_sgn. apply is_sign_ext_sgn; auto with va.
   }
-  intros. inv H0; simpl; auto with va.
-- destruct (zlt n nbits); eauto with va.
+  intros. unfold sign_ext. destruct (zle nbits 0).
+- destruct v; simpl; auto with va. constructor. omega. 
+  rewrite Int.sign_ext_below by auto. red; intros; apply Int.bits_zero.
+- inv H; simpl; auto with va.
++ destruct (zlt n nbits); eauto with va.
   constructor; auto. eapply is_sign_ext_uns; eauto with va.
-- destruct (zlt n nbits); auto with va.
-- apply vmatch_sgn. apply is_sign_ext_sgn; auto with va.
++ destruct (zlt n nbits); auto with va.
++ apply vmatch_sgn. apply is_sign_ext_sgn; auto with va.
   apply Z.min_case; auto with va.
+Qed.
+
+Definition zero_ext_l (s: Z) := unop_long (Int64.zero_ext s).
+
+Lemma zero_ext_l_sound:
+  forall s v x, vmatch v x -> vmatch (Val.zero_ext_l s v) (zero_ext_l s x).
+Proof.
+  intros s. exact (unop_long_sound (Int64.zero_ext s)).
+Qed.
+
+Definition sign_ext_l (s: Z) := unop_long (Int64.sign_ext s).
+
+Lemma sign_ext_l_sound:
+  forall s v x, vmatch v x -> vmatch (Val.sign_ext_l s v) (sign_ext_l s x).
+Proof.
+  intros s. exact (unop_long_sound (Int64.sign_ext s)).
 Qed.
 
 Definition longofint (v: aval) :=
@@ -4712,6 +4732,7 @@ Hint Resolve cnot_sound symbol_address_sound
        negfs_sound absfs_sound
        addfs_sound subfs_sound mulfs_sound divfs_sound
        zero_ext_sound sign_ext_sound longofint_sound longofintu_sound
+       zero_ext_l_sound sign_ext_l_sound
        singleoffloat_sound floatofsingle_sound
        intoffloat_sound intuoffloat_sound floatofint_sound floatofintu_sound
        intofsingle_sound intuofsingle_sound singleofint_sound singleofintu_sound
