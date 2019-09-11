@@ -426,7 +426,7 @@ Lemma exec_addimm_aux_32:
 Proof.
   intros insn sem SEM ASSOC; intros. unfold addimm_aux.
   set (nlo := Zzero_ext 12 (Int.unsigned n)). set (nhi := Int.unsigned n - nlo).
-  assert (E: Int.unsigned n = nhi + nlo) by (unfold nlo, nhi; omega).
+  assert (E: Int.unsigned n = nhi + nlo) by (unfold nhi; omega).
   rewrite <- (Int.repr_unsigned n).
   destruct (Z.eqb_spec nhi 0); [|destruct (Z.eqb_spec nlo 0)].
 - econstructor; split. apply exec_straight_one. apply SEM. Simpl. 
@@ -484,7 +484,7 @@ Lemma exec_addimm_aux_64:
 Proof.
   intros insn sem SEM ASSOC; intros. unfold addimm_aux.
   set (nlo := Zzero_ext 12 (Int64.unsigned n)). set (nhi := Int64.unsigned n - nlo).
-  assert (E: Int64.unsigned n = nhi + nlo) by (unfold nlo, nhi; omega).
+  assert (E: Int64.unsigned n = nhi + nlo) by (unfold nhi; omega).
   rewrite <- (Int64.repr_unsigned n).
   destruct (Z.eqb_spec nhi 0); [|destruct (Z.eqb_spec nlo 0)].
 - econstructor; split. apply exec_straight_one. apply SEM. Simpl. 
