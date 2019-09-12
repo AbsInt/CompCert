@@ -17,12 +17,10 @@ open AST
 open BinNums
 open Camlcoq
 open Json
-open Format
 open JsonAST
 
 let pp_reg pp t n =
-  let s = sprintf "%s%s" t n in
-  pp_jsingle_object pp "Register" pp_jstring s
+  pp_jsingle_object pp "Register" pp_jstring (t ^ n)
 
 let pp_ireg pp reg =
   pp_reg pp "r" (TargetPrinter.int_reg_name reg)
@@ -31,8 +29,8 @@ let pp_freg pp reg =
   pp_reg pp "f" (TargetPrinter.float_reg_name reg)
 
 let preg_annot = function
-  | IR r -> sprintf "r%s" (TargetPrinter.int_reg_name r)
-  | FR r -> sprintf "f%s" (TargetPrinter.float_reg_name r)
+  | IR r -> "r" ^ (TargetPrinter.int_reg_name r)
+  | FR r -> "f" ^ (TargetPrinter.float_reg_name r)
   | _    -> assert false
 
 let pp_constant pp c =
@@ -86,28 +84,31 @@ let pp_arg pp = function
   | Atom a -> pp_atom_constant pp a
   | String s -> pp_jsingle_object pp "String" pp_jstring s
 
-let mnemonic_names  =["Padd"; "Paddc"; "Padde"; "Paddi"; "Paddic"; "Paddis"; "Paddze"; "Pand_";
-                      "Pandc"; "Pandi_"; "Pandis_"; "Pannot"; "Pb"; "Pbctr"; "Pbctrl"; "Pbdnz";
-                      "Pbf"; "Pbl"; "Pblr"; "Pbs"; "Pbt"; "Pbtbl"; "Pcmpb"; "Pcmpd"; "Pcmpdi";
-                      "Pcmpld"; "Pcmpldi"; "Pcmplw"; "Pcmplwi"; "Pcmpw"; "Pcmpwi"; "Pcntlzd";
-                      "Pcntlzw"; "Pcreqv"; "Pcror"; "Pcrxor"; "Pdcbf"; "Pdcbi"; "Pdcbt";
-                      "Pdcbtls"; "Pdcbtst"; "Pdcbz"; "Pdivd"; "Pdivdu"; "Pdivw"; "Pdivwu";
-                      "Peieio"; "Peqv"; "Pextsb"; "Pextsh"; "Pextsw"; "Pfabs"; "Pfadd"; "Pfadds";
-                      "Pfcfid"; "Pfcmpu"; "Pfctidz"; "Pfctiw"; "Pfctiwz"; "Pfdiv"; "Pfdivs";
-                      "Pfmadd"; "Pfmr"; "Pfmsub"; "Pfmul"; "Pfmuls"; "Pfneg"; "Pfnmadd";
-                      "Pfnmsub"; "Pfres"; "Pfrsp"; "Pfrsqrte"; "Pfsel"; "Pfsqrt"; "Pfsub";
-                      "Pfsubs"; "Picbi"; "Picbtls"; "Pinlineasm"; "Pisel"; "Pisync"; "Plabel";
-                      "Plbz"; "Plbzx"; "Pld"; "Pldbrx"; "Pldi"; "Pldx"; "Plfd"; "Plfdx"; "Plfi"; "Plfis";
-                      "Plfs"; "Plfsx"; "Plha"; "Plhax"; "Plhbrx"; "Plhz"; "Plhzx"; "Plwarx";
-                      "Plwbrx"; "Plwsync"; "Plwz"; "Plwzu"; "Plwzx"; "Pmbar"; "Pmfcr"; "Pmflr";
-                      "Pmfspr"; "Pmr"; "Pmtctr"; "Pmtlr"; "Pmtspr"; "Pmulhd"; "Pmulhdu"; "Pmulhw";
-                      "Pmulhwu"; "Pmulld"; "Pmulli"; "Pmullw"; "Pnand"; "Pnor"; "Por"; "Porc";
-                      "Pori"; "Poris"; "Prldicl"; "Prldimi"; "Prldinm"; "Prlwimi"; "Prlwinm";
-                      "Psld"; "Pslw"; "Psrad"; "Psradi"; "Psraw"; "Psrawi"; "Psrd"; "Psrw";
-                      "Pstb"; "Pstbx"; "Pstd"; "Pstdbrx"; "Pstdu"; "Pstdx"; "Pstfd"; "Pstfdu"; "Pstfdx";
-                      "Pstfs"; "Pstfsx"; "Psth"; "Psthbrx"; "Psthx"; "Pstw"; "Pstwbrx"; "Pstwcx_";
-                      "Pstwu"; "Pstwux"; "Pstwx"; "Psubfc"; "Psubfe"; "Psubfic"; "Psubfze";
-                      "Psync"; "Ptrap"; "Pxor"; "Pxori"; "Pxoris"]
+module StringSet = Set.Make(String)
+
+let mnemonic_names = StringSet.of_list
+    ["Padd"; "Paddc"; "Padde"; "Paddi"; "Paddic"; "Paddis"; "Paddze"; "Pand_";
+     "Pandc"; "Pandi_"; "Pandis_"; "Pannot"; "Pb"; "Pbctr"; "Pbctrl"; "Pbdnz";
+     "Pbf"; "Pbl"; "Pblr"; "Pbs"; "Pbt"; "Pbtbl"; "Pcmpb"; "Pcmpd"; "Pcmpdi";
+     "Pcmpld"; "Pcmpldi"; "Pcmplw"; "Pcmplwi"; "Pcmpw"; "Pcmpwi"; "Pcntlzd";
+     "Pcntlzw"; "Pcreqv"; "Pcror"; "Pcrxor"; "Pdcbf"; "Pdcbi"; "Pdcbt";
+     "Pdcbtls"; "Pdcbtst"; "Pdcbz"; "Pdivd"; "Pdivdu"; "Pdivw"; "Pdivwu";
+     "Peieio"; "Peqv"; "Pextsb"; "Pextsh"; "Pextsw"; "Pfabs"; "Pfadd"; "Pfadds";
+     "Pfcfid"; "Pfcmpu"; "Pfctidz"; "Pfctiw"; "Pfctiwz"; "Pfdiv"; "Pfdivs";
+     "Pfmadd"; "Pfmr"; "Pfmsub"; "Pfmul"; "Pfmuls"; "Pfneg"; "Pfnmadd";
+     "Pfnmsub"; "Pfres"; "Pfrsp"; "Pfrsqrte"; "Pfsel"; "Pfsqrt"; "Pfsub";
+     "Pfsubs"; "Picbi"; "Picbtls"; "Pinlineasm"; "Pisel"; "Pisync"; "Plabel";
+     "Plbz"; "Plbzx"; "Pld"; "Pldbrx"; "Pldi"; "Pldx"; "Plfd"; "Plfdx"; "Plfi";
+     "Plfis"; "Plfs"; "Plfsx"; "Plha"; "Plhax"; "Plhbrx"; "Plhz"; "Plhzx";
+     "Plwarx"; "Plwbrx"; "Plwsync"; "Plwz"; "Plwzu"; "Plwzx"; "Pmbar"; "Pmfcr";
+     "Pmflr"; "Pmfspr"; "Pmr"; "Pmtctr"; "Pmtlr"; "Pmtspr"; "Pmulhd"; "Pmulhdu";
+     "Pmulhw"; "Pmulhwu"; "Pmulld"; "Pmulli"; "Pmullw"; "Pnand"; "Pnor"; "Por";
+     "Porc"; "Pori"; "Poris"; "Prldicl"; "Prldimi"; "Prldinm"; "Prlwimi";
+     "Prlwinm"; "Psld"; "Pslw"; "Psrad"; "Psradi"; "Psraw"; "Psrawi"; "Psrd";
+     "Psrw"; "Pstb"; "Pstbx"; "Pstd"; "Pstdbrx"; "Pstdu"; "Pstdx"; "Pstfd";
+     "Pstfdu"; "Pstfdx"; "Pstfs"; "Pstfsx"; "Psth"; "Psthbrx"; "Psthx"; "Pstw";
+     "Pstwbrx"; "Pstwcx_"; "Pstwu"; "Pstwux"; "Pstwx"; "Psubfc"; "Psubfe";
+     "Psubfic"; "Psubfze"; "Psync"; "Ptrap"; "Pxor"; "Pxori"; "Pxoris"]
 
 let pp_instructions pp ic =
   let ic = List.filter (fun s -> match s with
@@ -126,7 +127,7 @@ let pp_instructions pp ic =
       | Pcfi_rel_offset _ -> false
       | _ -> true) ic in
   let instruction pp n args =
-    assert (List.mem n mnemonic_names);
+    assert (StringSet.mem n mnemonic_names);
     pp_jobject_start pp;
     pp_jmember ~first:true pp "Instruction Name" pp_jstring n;
     pp_jmember pp "Args" (pp_jarray pp_arg) args;
@@ -251,7 +252,7 @@ let pp_instructions pp ic =
   | Plhbrx (ir1,ir2,ir3) -> instruction pp "Plhbrx" [Ireg ir1; Ireg ir2; Ireg ir3]
   | Plhz (ir1,c,ir2) -> instruction pp "Plhz" [Ireg ir1; Constant c; Ireg ir2]
   | Plhzx (ir1,ir2,ir3) -> instruction pp "Plhzx" [Ireg ir1; Ireg ir2; Ireg ir3]
-  | Pldi (ir,c) -> instruction pp "Pldi" [Ireg ir; Long c] (* FIXME Cint is too small, we need Clong *)
+  | Pldi (ir,c) -> instruction pp "Pldi" [Ireg ir; Long c]
   | Plmake _ (* Should not occur *)
   | Pllo _ (* Should not occur *)
   | Plhi _ -> assert false (* Should not occur *)
@@ -385,8 +386,8 @@ let print_if prog sourcename =
   | Some f ->
     let f = Filename.concat !sdump_folder f in
     let oc = open_out_bin f in
-    pp_ast (formatter_of_out_channel oc) pp_instructions prog sourcename;
+    pp_ast oc pp_instructions prog sourcename;
     close_out oc
 
 let pp_mnemonics pp =
-  pp_mnemonics pp mnemonic_names
+  pp_mnemonics pp (StringSet.elements mnemonic_names)

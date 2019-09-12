@@ -10,7 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-open Format
 open Camlcoq
 
 
@@ -18,16 +17,21 @@ open Camlcoq
 
 (* Print a string as json string *)
 let pp_jstring oc s =
-  fprintf oc "\"%s\"" s
+  output_string oc "\"";
+  output_string oc s;
+  output_string oc "\""
 
 (* Print a bool as json bool *)
-let pp_jbool oc = fprintf oc "%B"
+let pp_jbool oc b = output_string oc (string_of_bool b)
 
 (* Print an int as json int *)
-let pp_jint oc = fprintf oc "%d"
+let pp_jint oc i = output_string oc (string_of_int i)
 
 (* Print an int32 as json int *)
-let pp_jint32 oc = fprintf oc "%ld"
+let pp_jint32 oc i = output_string oc (Int32.to_string i)
+
+(* Print an int64 as json int *)
+let pp_jint64 oc i = output_string oc (Int64.to_string i)
 
 (* Print optional value *)
 let pp_jopt pp_elem oc = function
@@ -36,15 +40,19 @@ let pp_jopt pp_elem oc = function
 
 (* Print opening and closing curly braces for json dictionaries *)
 let pp_jobject_start pp =
-  fprintf pp "@[<v 1>{"
+  output_string pp "\n{"
 
 let pp_jobject_end pp =
-  fprintf pp "@;<0 -1>}@]"
+  output_string pp "}"
 
 (* Print a member of a json dictionary *)
 let pp_jmember ?(first=false) pp name pp_mem mem =
-  let sep = if first then "" else "," in
-  fprintf pp "%s@ \"%s\": %a" sep name pp_mem mem
+  if not first then output_string pp ",";
+  output_string pp " ";
+  pp_jstring pp name;
+  output_string pp " :";
+  pp_mem pp mem;
+  output_string pp "\n"
 
 (* Print singleton object *)
 let pp_jsingle_object pp name pp_mem mem =
@@ -54,29 +62,31 @@ let pp_jsingle_object pp name pp_mem mem =
 
 (* Print a list as json array *)
 let pp_jarray elem pp l =
-  match l with
-  | []  ->  fprintf pp "[]";
+  let pp_sep () = output_string pp ", " in
+  output_string pp "[";
+  begin match l with
+  | []  -> ()
   | hd::tail ->
-    fprintf pp "@[<v 1>[";
-    fprintf pp "%a" elem hd;
-    List.iter (fun l -> fprintf pp ",@ %a" elem l) tail;
-  fprintf pp "@;<0 -1>]@]"
+    elem pp hd;
+    List.iter (fun l -> pp_sep (); elem pp l) tail;
+  end;
+  output_string pp "]"
 
 (* Helper functions for printing coq integer and floats *)
 let pp_int pp i =
-  fprintf pp "%ld" (camlint_of_coqint i)
+  pp_jint32 pp (camlint_of_coqint i)
 
 let pp_int64 pp i =
-  fprintf pp "%Ld" (camlint64_of_coqint i)
+  pp_jint64 pp (camlint64_of_coqint i)
 
 let pp_float32 pp f =
-  fprintf pp "%ld" (camlint_of_coqint (Floats.Float32.to_bits f))
+  pp_jint32 pp (camlint_of_coqint (Floats.Float32.to_bits f))
 
 let pp_float64 pp f =
-  fprintf pp "%Ld" (camlint64_of_coqint (Floats.Float.to_bits f))
+  pp_jint64 pp (camlint64_of_coqint (Floats.Float.to_bits f))
 
 let pp_z pp z =
-  fprintf pp "%s" (Z.to_string z)
+  output_string pp (Z.to_string z)
 
 (* Helper functions for printing assembler constructs *)
 let pp_atom pp a =
@@ -106,4 +116,4 @@ let reset_id () =
 
 let pp_id_const pp () =
   let i = next_id () in
-  pp_jsingle_object pp "Integer" (fun pp i -> fprintf pp "%d" i) i
+  pp_jsingle_object pp "Integer" pp_jint i

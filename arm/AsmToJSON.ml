@@ -19,21 +19,25 @@ open BinNums
 open Camlcoq
 open Json
 
-let mnemonic_names = [ "Padc"; "Padd"; "Padds"; "Pand";"Pannot"; "Pasr"; "Pb"; "Pbc"; "Pbic"; "Pblreg";
-                       "Pblsymb"; "Pbne"; "Pbreg"; "Pbsymb"; "Pbtbl"; "Pclz"; "Pcmp"; "Pcmn"; "Pconstants"; "Pfcpy_iif";
-                       "Pfcpy_fii"; "Pfcpy_fi"; "Pfcpy_sf"; "Pflid_lbl"; "Pflis_lbl"; "Pdmb"; "Pdsb"; "Peor"; "Pfabsd";
-                       "Pfabss"; "Pfaddd"; "Pfadds"; "Pfcmpd"; "Pfcmps"; "Pfcmpzd"; "Pfcmpzs";
-                       "Pfcpyd"; "Pfcpy_fs"; "Pfcpy_if";"Pfcvtds"; "Pfcvtsd"; "Pfdivd"; "Pfdivs"; "Pfldd";
-                       "Pflid"; "Pflds"; "Pflid_imm"; "Pflis_imm"; "Pfmuld"; "Pfmuls"; "Pfnegd";
-                       "Pfnegs"; "Pfsitod"; "Pfsitos"; "Pfsqrt"; "Pfstd";
-                       "Pfsts"; "Pfsubd"; "Pfsubs"; "Pftosizd"; "Pftosizs"; "Pftouizd";
-                       "Pftouizs"; "Pfuitod"; "Pfuitos"; "Pinlineasm"; "Pisb"; "Plabel"; "Pldr";
-                       "Ploadsymbol_lbl"; "Pldr_p"; "Pldrb"; "Pldrb_p"; "Pldrh"; "Pldrh_p"; "Pldrsb";
-                       "Pldrsh"; "Plsl"; "Plsr"; "Pmla"; "Pmov"; "Pmovite"; "Pfmovite";
-                       "Pmovt"; "Pmovw"; "Pmul"; "Pmvn";  "Ploadsymbol_imm"; "Pnop"; "Porr";
-                       "Ppush"; "Prev"; "Prev16"; "Prsb"; "Prsbs"; "Prsc"; "Psbc"; "Psbfx"; "Psdiv"; "Psmull";
-                       "Pstr"; "Pstr_p"; "Pstrb"; "Pstrb_p"; "Pstrh"; "Pstrh_p"; "Psub"; "Psubs"; "Pudiv";
-                       "Pumull" ]
+module StringSet = Set.Make(String)
+
+let mnemonic_names = StringSet.of_list
+    [ "Padc"; "Padd"; "Padds"; "Pand";"Pannot"; "Pasr"; "Pb"; "Pbc"; "Pbic";
+      "Pblreg"; "Pblsymb"; "Pbne"; "Pbreg"; "Pbsymb"; "Pbtbl"; "Pclz"; "Pcmp";
+      "Pcmn"; "Pconstants"; "Pfcpy_iif"; "Pfcpy_fii"; "Pfcpy_fi"; "Pfcpy_sf";
+      "Pflid_lbl"; "Pflis_lbl"; "Pdmb"; "Pdsb"; "Peor"; "Pfabsd"; "Pfabss";
+      "Pfaddd"; "Pfadds"; "Pfcmpd"; "Pfcmps"; "Pfcmpzd"; "Pfcmpzs"; "Pfcpyd";
+      "Pfcpy_fs"; "Pfcpy_if";"Pfcvtds"; "Pfcvtsd"; "Pfdivd"; "Pfdivs"; "Pfldd";
+      "Pflid"; "Pflds"; "Pflid_imm"; "Pflis_imm"; "Pfmuld"; "Pfmuls"; "Pfnegd";
+      "Pfnegs"; "Pfsitod"; "Pfsitos"; "Pfsqrt"; "Pfstd"; "Pfsts"; "Pfsubd";
+      "Pfsubs"; "Pftosizd"; "Pftosizs"; "Pftouizd"; "Pftouizs"; "Pfuitod";
+      "Pfuitos"; "Pinlineasm"; "Pisb"; "Plabel"; "Pldr"; "Ploadsymbol_lbl";
+      "Pldr_p"; "Pldrb"; "Pldrb_p"; "Pldrh"; "Pldrh_p"; "Pldrsb"; "Pldrsh";
+      "Plsl"; "Plsr"; "Pmla"; "Pmov"; "Pmovite"; "Pfmovite"; "Pmovt"; "Pmovw";
+      "Pmul"; "Pmvn";  "Ploadsymbol_imm"; "Pnop"; "Porr"; "Ppush"; "Prev";
+      "Prev16"; "Prsb"; "Prsbs"; "Prsc"; "Psbc"; "Psbfx"; "Psdiv"; "Psmull";
+      "Pstr"; "Pstr_p"; "Pstrb"; "Pstrb_p"; "Pstrh"; "Pstrh_p"; "Psub"; "Psubs";
+      "Pudiv";"Pumull" ]
 
 type instruction_arg =
   | ALabel of positive
@@ -143,7 +147,7 @@ let pp_instructions pp ic =
       | _ -> true) ic in
 
   let instruction pp n args =
-    assert (List.mem n mnemonic_names);
+    assert (StringSet.mem n mnemonic_names);
     pp_jobject_start pp;
     pp_jmember ~first:true pp "Instruction Name" pp_jstring n;
     pp_jmember pp "Args" (pp_jarray pp_arg) args;
@@ -313,8 +317,8 @@ let print_if prog sourcename =
   | Some f ->
     let f = Filename.concat !sdump_folder f in
     let oc = open_out_bin f in
-    JsonAST.pp_ast (Format.formatter_of_out_channel oc) pp_instructions prog sourcename;
+    JsonAST.pp_ast oc pp_instructions prog sourcename;
     close_out oc
 
 let pp_mnemonics pp =
-  JsonAST.pp_mnemonics pp mnemonic_names
+  JsonAST.pp_mnemonics pp (StringSet.elements mnemonic_names)

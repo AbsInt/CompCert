@@ -15,7 +15,6 @@ open Asm
 open AST
 open C2C
 open Json
-open Format
 open Sections
 
 
@@ -54,8 +53,8 @@ let pp_section pp sec =
   | Section_ais_annotation -> () (* There should be no info in the debug sections *)
 
 let pp_int_opt pp = function
-  | None -> fprintf pp "0"
-  | Some i -> fprintf pp "%d" i
+  | None -> output_string pp "0"
+  | Some i -> pp_jint pp i
 
 let pp_fundef pp_inst pp (name,fn) =
   let alignment = atom_alignof name
@@ -119,9 +118,8 @@ let pp_program pp pp_inst prog =
   pp_jobject_end pp
 
 let pp_mnemonics pp mnemonic_names =
-  let mnemonic_names = List.sort (String.compare) mnemonic_names in
-  let new_line pp () = pp_print_string pp "\n" in
-  pp_print_list ~pp_sep:new_line pp_print_string pp mnemonic_names
+  let new_line pp () = Format.pp_print_string pp "\n" in
+  Format.pp_print_list ~pp_sep:new_line Format.pp_print_string pp mnemonic_names
 
 let jdump_magic_number = "CompCertJDUMPRelease: " ^ Version.version
 
@@ -153,4 +151,4 @@ let pp_ast pp pp_inst ast sourcename =
     pp_jmember pp "Compilation Unit" pp_jstring sourcename;
     pp_jmember pp "Asm Ast" (fun pp prog -> pp_program pp pp_inst prog) ast;
     pp_jobject_end pp;
-    Format.pp_print_flush pp ()
+    flush pp
