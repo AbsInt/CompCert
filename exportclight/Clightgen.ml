@@ -45,7 +45,7 @@ let compile_c_ast sourcename csyntax ofile =
     | Errors.Error msg ->
       fatal_error loc "%a" print_error msg in
   (* Dump Clight in C syntax if requested *)
-  PrintClight.print_if clight;
+  PrintClight.print_if_2 clight;
   (* Print Clight in Coq syntax *)
   let oc = open_out ofile in
   ExportClight.print_program (Format.formatter_of_out_channel oc)

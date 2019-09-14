@@ -236,10 +236,20 @@ and print_stmt_for p s =
   | _ ->
       fprintf p "({ %a })" print_stmt s
 
-let print_function p id f =
+(* There are two versions of Clight, Clight1 and Clight2, that differ
+   only in the meaning of function parameters:
+ - in Clight1, function parameters are variables
+ - in Clight2, function parameters are temporaries.
+*)
+
+type clight_version = Clight1 | Clight2
+
+let name_param = function Clight1 -> extern_atom | Clight2 -> temp_name
+
+let print_function ver p id f =
   fprintf p "%s@ "
-            (name_cdecl (name_function_parameters (extern_atom id)
-                                                  f.fn_params f.fn_callconv)
+            (name_cdecl (name_function_parameters (name_param ver)
+                                 (extern_atom id) f.fn_params f.fn_callconv)
                         f.fn_return);
   fprintf p "@[<v 2>{@ ";
   List.iter
@@ -253,12 +263,12 @@ let print_function p id f =
   print_stmt p f.fn_body;
   fprintf p "@;<0 -2>}@]@ @ "
 
-let print_fundef p id fd =
+let print_fundef ver p id fd =
   match fd with
   | Ctypes.External(_, _, _, _) ->
       ()
   | Internal f ->
-      print_function p id f
+      print_function ver p id f
 
 let print_fundecl p id fd =
   match fd with
@@ -271,9 +281,9 @@ let print_fundecl p id fd =
       fprintf p "%s;@ "
                 (name_cdecl (extern_atom id) (Clight.type_of_function f))
 
-let print_globdef p (id, gd) =
+let print_globdef var p (id, gd) =
   match gd with
-  | AST.Gfun f -> print_fundef p id f
+  | AST.Gfun f -> print_fundef var p id f
   | AST.Gvar v -> print_globvar p id v  (* from PrintCsyntax *)
 
 let print_globdecl p (id, gd) =
@@ -281,20 +291,29 @@ let print_globdecl p (id, gd) =
   | AST.Gfun f -> print_fundecl p id f
   | AST.Gvar v -> ()
 
-let print_program p prog =
+let print_program ver p prog =
   fprintf p "@[<v 0>";
   List.iter (declare_composite p) prog.prog_types;
   List.iter (define_composite p) prog.prog_types;
   List.iter (print_globdecl p) prog.prog_defs;
-  List.iter (print_globdef p) prog.prog_defs;
+  List.iter (print_globdef ver p) prog.prog_defs;
   fprintf p "@]@."
 
 let destination : string option ref = ref None
 
-let print_if prog =
+let print_if_gen ver prog =
   match !destination with
   | None -> ()
   | Some f ->
       let oc = open_out f in
-      print_program (formatter_of_out_channel oc) prog;
+      print_program ver (formatter_of_out_channel oc) prog;
       close_out oc
+
+(* print_if is called from driver/Compiler.v between the SimplExpr
+   and SimplLocals passes.  It receives Clight1 syntax. *)
+let print_if prog = print_if_gen Clight1 prog
+
+(* print_if_2 is called from clightgen/Clightgen.ml, after the
+   SimplLocals pass.  It receives Clight2 syntax. *)
+let print_if_2 prog = print_if_gen Clight2 prog
+

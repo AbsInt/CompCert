@@ -391,7 +391,7 @@ and print_stmt_for p s =
   | _ ->
       fprintf p "({ %a })" print_stmt s
 
-let name_function_parameters fun_name params cconv =
+let name_function_parameters name_param fun_name params cconv =
   let b = Buffer.create 20 in
   Buffer.add_string b fun_name;
   Buffer.add_char b '(';
@@ -404,7 +404,7 @@ let name_function_parameters fun_name params cconv =
           if cconv.cc_vararg then Buffer.add_string b ",..."
       | (id, ty) :: rem ->
           if not first then Buffer.add_string b ", ";
-          Buffer.add_string b (name_cdecl (extern_atom id) ty);
+          Buffer.add_string b (name_cdecl (name_param id) ty);
           add_params false rem in
       add_params true params
   end;
@@ -413,8 +413,8 @@ let name_function_parameters fun_name params cconv =
 
 let print_function p id f =
   fprintf p "%s@ "
-            (name_cdecl (name_function_parameters (extern_atom id)
-                                                  f.fn_params f.fn_callconv)
+            (name_cdecl (name_function_parameters extern_atom
+                             (extern_atom id) f.fn_params f.fn_callconv)
                         f.fn_return);
   fprintf p "@[<v 2>{@ ";
   List.iter
