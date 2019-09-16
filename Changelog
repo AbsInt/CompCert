@@ -1,3 +1,65 @@
+Release 3.6, 2019-09-17
+=======================
+
+New features and optimizations:
+- New port targeting the AArch64 architecture: ARMv8 in 64-bit mode.
+- New optimization: if-conversion.  Some `if`/`else` statements
+  and `a ? b : c` conditional expressions are compiled to branchless
+  conditional move instructions, when supported by the target processor
+- New optimization flag: `-Obranchless`, to favor the generation of
+  branchless instruction sequences, even if probably slower than branches.
+- Built-in functions can now be given a formal semantics within
+  CompCert, instead of being treated as I/O interactions.
+  Currently, `__builtin_fsqrt` and `__builtin_bswap*` have semantics.
+- Extend constant propagation and CSE optimizations to built-in
+  functions that have known semantics.
+- New "polymorphic" built-in function: `__builtin_sel(a,b,c)`.
+  Similar to `a ? b : c` but `b` and `c` are always evaluated,
+  and a branchless conditional move instruction is produced if possible.
+- x86 64 bits: faster, branchless instruction sequences are produced
+  for conversions between `double` and `unsigned int`.
+- `__builtin_bswap64` is now available for all platforms.
+
+Usability and diagnostics:
+- Improved the DWARF debug information generated in -g mode.
+- Added options -fcommon and -fno-common to control the generation
+  of "common" declarations for uninitialized global.
+- Check for reserved keywords `_Complex` and `_Imaginary`.
+- Reject function declarations with multiple `void` parameters.
+- Define macros `__COMPCERT_MAJOR__`, `__COMPCERT_MINOR__`, and
+  `__COMPCERT_VERSION__` with CompCert's version number. (#284)
+- Prepend `$(DESTDIR)` to the installation target. (#169)
+- Extended inline asm: print register names according to the
+  types of the corresponding arguments (e.g. for x86_64,
+  `%eax` if int and `%rax` if long).
+
+Bug fixing:
+- Introduce distinct scopes for iteration and selection statements,
+  as required by ISO C99.
+- Handle dependencies in sequences of declarations
+  (e.g. `int * x, sz = sizeof(x);`).  (#267)
+- Corrected the check for overflow in integer literals.
+- On x86, __builtin_fma was producing wrong code in some cases.
+- `float` arguments to `__builtin_annot` and `__builtin_ais_annot`
+  were uselessly promoted to type `double`.
+
+Coq formalization and development:
+- Improved C parser based on Menhir version 20190626:
+  fewer run-time checks, faster validation, no axioms. (#276)
+- Compatibility with Coq versions 8.9.1 and 8.10.0.
+- Compatibility with OCaml versions 4.08.0 and 4.08.1.
+- Updated to Flocq version 3.1.
+- Revised the construction of NaN payloads in processor descriptions
+  so as to accommodate FMA.
+- Removed some definitions and lemmas from lib/Coqlib.v, using Coq's
+  standard library instead.
+
+The clightgen tool:
+- Fix normalization of Clight `switch` statements. (#285)
+- Add more tracing options: `-dprepro`, `-dall`. (#298)
+- Fix the output of `-dclight`. (#314)
+
+
 Release 3.5, 2019-02-27
 =======================
 
