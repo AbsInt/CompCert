@@ -864,7 +864,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pisel rd r1 r2 bit =>
       let v :=
           match rs#(reg_of_crbit bit) with
-          | Vint n => if Int.eq n Int.zero then rs#r2 else rs#r1
+          | Vint n => if Int.eq n Int.zero then rs#r2 else (gpr_or_zero rs r1)
           | _ => Vundef
           end in
       Next (nextinstr (rs #rd <- v #GPR0 <- Vundef)) m

@@ -1284,7 +1284,9 @@ Proof.
       reflexivity.
     + Simpl.
       rewrite <- (C r1), <- (C r2) by auto.
-      rewrite B. destruct dir; destruct ob as [[]|]; simpl; auto using Val.lessdef_normalize.
+      rewrite B, gpr_or_zero_not_zero.
+      destruct dir; destruct ob as [[]|]; simpl; auto using Val.lessdef_normalize.
+      destruct dir; intros e; subst; discriminate.
     + intros. Simpl.
 Qed.
 
