@@ -62,6 +62,8 @@ Section ExposingMemory.
           exists args',
             @at_external L2 s2 = Some (f,args') /\
             Val.lessdef_list args args'.
+  
+
 
   Definition simulation_atx {index:Type} {L1 L2} (match_states: index -> _ -> _ -> Prop)
     :=
@@ -71,6 +73,9 @@ Section ExposingMemory.
                   forall i s2, match_states i s1 s2 ->
                           exists i', exists s2', Step L2 s2 t s2' /\
                                        match_states i' s1' s2'.
+  
+
+
   
   (** *Equality Phases*)
   Section Equality.
@@ -265,12 +270,12 @@ Section ExposingMemory.
         forall s1 f args,
           @at_external L1 s1 = Some (f,args) -> 
           forall t s1', Step L1 s1 t s1' ->
-                    forall i f s2, match_states i f s1 s2 ->
-                              exists i', exists s2' f' t',
+                    forall i j s2, match_states i j s1 s2 ->
+                              exists i', exists s2' j' t',
                                   Step L2 s2 t' s2' /\
-                                  match_states i' f' s1' s2' /\
-                                  Values.inject_incr f f' /\
-                                  inject_trace_strong f' t t'.
+                                  match_states i' j' s1' s2' /\
+                                  Values.inject_incr j j' /\
+                                  inject_trace_strong j' t t'.
     
     Record fsim_properties_inj: Type :=
       {  Injindex: Type;
@@ -987,3 +992,29 @@ Section Composition.
    Qed.
   
   End Composition.
+
+
+(*   *)
+Ltac atx_sim_start_proof:=
+  intros ? *  Hatx t s1' Hstep * MATCH;
+  repeat match type of MATCH with
+    _ /\ _ => destruct MATCH as [? MATCH]; subst
+  end;
+  inv MATCH; try discriminate;
+  inv Hstep; try discriminate;
+  try do 7 (first [ econstructor | solve[eauto]]).
+Ltac atx_preserved_start_proof:=
+  intros ? * MATCH f args Hatx;
+  repeat match type of MATCH with
+    _ /\ _ => destruct MATCH as [? MATCH]; subst
+  end;
+  inv MATCH; simpl in *;
+  try (match_case in Hatx; inv Hatx);
+  try discriminate; subst; simpl in *;
+  try match goal with
+    |[H:?F _ = ?F _ |- _] => inversion H
+    |[H:?F _ _ = ?F _ _ |- _] => inversion H
+    |[H:?F _ _ _ = ?F _ _ _ |- _] => inversion H
+      end;
+  try solve[do 2 econstructor; eauto;
+            apply Val.lessdef_list_refl].

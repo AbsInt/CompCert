@@ -1531,9 +1531,9 @@ End EVAL_EXPR.
 (** Matching continuations *)
 
 Inductive match_cont (f: meminj): compilenv -> cont -> cont -> mem -> block -> block -> Prop :=
-  | match_Kstop: forall cenv m bound tbound hi,
+  | match_Kstop: forall cenv m bound tbound hi targs,
       match_globalenvs f hi -> Ple hi bound -> Ple hi tbound ->
-      match_cont f cenv Kstop Kstop m bound tbound
+      match_cont f cenv (Kstop targs) (Kstop targs) m bound tbound
   | match_Kseq: forall cenv s k ts tk m bound tbound,
       simpl_stmt cenv s = OK ts ->
       match_cont f cenv k tk m bound tbound ->
@@ -2257,31 +2257,32 @@ Lemma entry_points_simulation:
        exists R, entry_point tge m R v args /\ match_states S R.
 Proof.
   intros. inv H.
-  apply function_ptr_translated in H0
+  apply function_ptr_translated in H1
     as (tf&Hfunc_ptr&Htranslate).
+  exploit type_of_fundef_preserved; eauto. intros Hfundef_pres.
   simpl in Htranslate.
   destruct ( transf_function f ) eqn: Htrans_f;
     simpl in *; inversion Htranslate; subst.
   rename f0 into ft.
-  eexists. split; eauto.
-  - econstructor; try (instantiate (3 := tf)); eauto.
-    + admit. (* Should be easy obvious. *)
-    + admit. (* params don't change*)
-    + admit. (* does the ge change? *)
+  eexists. split.
+  - econstructor; try apply Hfunc_ptr; eauto.
+    + rewrite Hfundef_pres; assumption.
+    + admit. (* globals fresh*)
+    + admit. (* params don't change, should vars be params? *)
   - !goal (match_states _ _).
     econstructor; eauto.
-    + simpl; rewrite Htrans_f.
-      reflexivity.
+    + simpl; rewrite Htrans_f; reflexivity.
     + intros.
-      econstructor.
-      * admit. (*this comes from globals_fresh?*)
-      * instantiate(1:=stk).
-        apply Mem.valid_new_block in H5.
-        unfold Mem.valid_block in H5. auto.
-        xomega.
-      * apply Mem.valid_new_block in H5.
-        unfold Mem.valid_block in H5. auto.
-        xomega.
+      econstructor; eauto. (* two golas by [globals not fresh] *)
+      econstructor; intros.
+      * eapply pred_dec_true. eapply Plt_Ple_trans; eauto.
+      * unfold Mem.flat_inj in H; match_case in H.
+      * admit. (* need this? in entry_points*)
+      * admit. (* need this? in entry_points*)
+      * admit. (* need this? in entry_points*)
+    + apply Mem.mem_wd_inject; auto.
+    + admit. (* Need this?*)
+        
 Admitted.
                           
 (*

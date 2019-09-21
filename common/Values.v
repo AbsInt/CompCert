@@ -1960,6 +1960,10 @@ Proof.
   left; congruence. tauto. tauto.
 Qed.
 
+Lemma lessdef_list_refl:
+  forall vl, lessdef_list vl vl.
+Proof. induction vl; auto. Qed.
+
 Lemma lessdef_list_trans:
   forall vl1 vl2, lessdef_list vl1 vl2 -> forall vl3, lessdef_list vl2 vl3 -> lessdef_list vl1 vl3.
 Proof.

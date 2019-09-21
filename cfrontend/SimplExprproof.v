@@ -923,8 +923,8 @@ Qed.
 (** Matching between continuations *)
 
 Inductive match_cont : Csem.cont -> cont -> Prop :=
-  | match_Kstop:
-      match_cont Csem.Kstop Kstop
+  | match_Kstop: forall targs,
+      match_cont Csem.Kstop (Kstop targs)
   | match_Kseq: forall s k ts tk,
       tr_stmt s ts ->
       match_cont k tk ->

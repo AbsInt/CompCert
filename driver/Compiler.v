@@ -323,17 +323,45 @@ Proof.
 - subst s2. exists s1'; auto.
 Qed.
 
-Remark forward_injection_identity:
+(*Remark forward_injection_identity:
   forall sem get_mem, fsim_properties_inj sem sem get_mem get_mem.
 Proof.
-  intros. econstructor.
-Admitted.
+  intros. eapply Build_fsim_properties_inj with
+              (Injindex:= unit)
+              (Injorder:=fun _ _ => False)
+              (Injmatch_states:=
+                 fun _ f s1 s2=> s1 = s2 /\
+                              Memory.Mem.inject f (get_mem s1) (get_mem s2) /\
+                              Events.injection_full f (get_mem s1)).
+  - instantiate .
+    intros ?. econstructor; intros; inv H.
+  - intros ? ? ? ? (?&?&?); auto.
+  - intros ? ? ? ? (?&?&?); auto.
+  - intros. exists tt, (Memory.Mem.flat_inj (Memory.Mem.nextblock (get_mem s1))), s1. 
+Admitted. *)
 
+(* TODO: Move to Smallstep*)
 Remark forward_extension_identity:
   forall sem get_mem, fsim_properties_ext sem sem get_mem get_mem.
 Proof.
-  intros. econstructor.
-Admitted.
+  intros.
+  eapply Build_fsim_properties_ext with
+      (Extindex:= unit)
+      (Extorder:=fun _ _ => False)
+      (Extmatch_states:=
+         fun _ s1 s2=> s1 = s2).
+  - instantiate .
+    intros ?. econstructor; intros; inv H.
+  - intros; subst. apply Memory.Mem.extends_refl.
+  - intros; repeat econstructor; eauto.
+  - intros; subst; eauto.
+  - intros; subst; do 3 eexists; eauto.
+    left. apply plus_one; eauto.
+  - intros ?**; subst. do 3 eexists; eauto.
+  - intros ?**; subst. do 2 eexists; eauto.
+    apply Values.Val.lessdef_list_refl.
+  - intros; reflexivity.
+Qed.
 
 Lemma match_if_simulation:
   forall (A: Type) (sem: A -> semantics) (flag: unit -> bool) (transf: A -> A -> Prop) (prog tprog: A),
@@ -344,7 +372,7 @@ Proof.
   intros. unfold match_if in *. destruct (flag tt). eauto. subst. apply forward_simulation_identity.
 Qed.
 
-Lemma exposed_match_if_injection:
+(*Lemma exposed_match_if_injection:
   forall (A: Type) (sem: A -> semantics)(get_mem: forall p, state (sem p) -> Memory.Mem.mem ) (flag: unit -> bool) (transf: A -> A -> Prop) (prog tprog: A),
   match_if flag transf prog tprog ->
   (forall p tp, transf p tp -> fsim_properties_inj (sem p) (sem tp) (get_mem p) (get_mem tp)) ->
@@ -352,7 +380,7 @@ Lemma exposed_match_if_injection:
 Proof.
   intros. unfold match_if in *. destruct (flag tt). eauto. subst.
   apply forward_injection_identity.
-Qed.
+Qed.*)
 
 Lemma exposed_match_if_extension:
   forall (A: Type) (sem: A -> semantics)(get_mem: forall p, state (sem p) -> Memory.Mem.mem ) (flag: unit -> bool) (transf: A -> A -> Prop) (prog tprog: A),
@@ -445,6 +473,8 @@ Proof.
     eapply Asmgenproof.transf_program_correct.
     apply Asmgenproof.transf_program_match; auto.
 Qed.
+
+Print Assumptions simpl_clight_semantic_preservation.
 
 (*
 Theorem simpl_clight_semantic_preservation:

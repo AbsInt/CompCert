@@ -977,6 +977,7 @@ Proof.
   econstructor; eauto.
   apply wt_regset_assign; auto. rewrite H10; auto.
 Qed.
+
 (*
 Lemma wt_initial_state:
   forall S, initial_state p S -> wt_state S.
@@ -987,6 +988,15 @@ Proof.
   exact wt_p. exact H2.
   rewrite H3. constructor.
 Qed.*)
+Lemma wt_entry_points:
+  forall m0 S v args, entry_point p m0 S v args -> wt_state S.
+Proof.
+  intros. inv H. constructor.
+  constructor; auto.
+  (*constructor. rewrite H3; auto.*) 
+  pattern (Internal f). eapply Genv.find_funct_ptr_prop; eauto. 
+  subst sg; simpl; assumption.
+Qed.
 
 Lemma wt_instr_inv:
   forall s f sp pc rs m i,

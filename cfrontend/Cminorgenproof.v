@@ -2003,7 +2003,7 @@ Lemma transl_step_correct:
   forall S1 t S2, Csharpminor.step ge S1 t S2 ->
   forall T1 f, match_states f S1 T1 ->
           (exists T2 f' t', plus (step tge) T1 t' T2 /\ match_states f' S2 T2 /\
-          inject_incr f f' /\ inject_trace f' t t')
+          inject_incr f f' /\ inject_trace_strong f' t t')
   \/ (exists f', measure S2 < measure S1 /\ t = E0 /\ match_states f' S2 T1 /\  inject_incr f f')%nat.
 Proof.
   induction 1; intros T1 j MSTATE; inv MSTATE.
@@ -2387,7 +2387,36 @@ Proof.
   eexact transl_initial_states'.
   eexact transl_final_states.
   eexact transl_step_correct.*)
-
+Lemma atx_sim:
+  @simulation_atx_inj _ (Csharpminor.semantics prog) (Cminor.semantics tprog)
+                      (fun idx f s1 s2  => idx = s1 /\ match_states f s1 s2).
+Proof.
+  atx_sim_start_proof.
+  monadInv TR.
+  exploit match_callstack_match_globalenvs; eauto. intros [hi MG].
+  exploit external_call_mem_inject; eauto.
+  eapply inj_preserves_globals; eauto.
+  intros [f' [vres' [tm' [t' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR [SEPARATED [INJTRACE FULL']]]]]]]]]]]].
+  do 4 eexists; split.
+  econstructor.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  do 2 split; eauto; econstructor; eauto.
+  apply match_callstack_incr_bound with (Mem.nextblock m) (Mem.nextblock tm).
+  eapply match_callstack_external_call; eauto.
+  auto.
+  intros. eapply external_call_max_perm; eauto.
+  xomega. xomega.
+  eapply external_call_nextblock; eauto.
+  eapply external_call_nextblock; eauto.
+Qed.
+Lemma atx_preserved:
+      @preserves_atx_inj  _ (Csharpminor.semantics prog) (Cminor.semantics tprog)
+                          (fun idx f s1 s2  => idx = s1 /\ match_states f s1 s2).
+Proof.
+  atx_preserved_start_proof.
+  match_case in H0. inv H0.
+  eexists; split; eauto.
+Qed.
 Theorem transl_program_correct:
   @fsim_properties_inj
     (Csharpminor.semantics prog) (Cminor.semantics tprog)
@@ -2411,16 +2440,14 @@ Proof.
   - intros. inv H0.
     exploit transl_step_correct; eauto.
     intros [[s2' [f' [t' [STEP [MATCH [INCR TRACEINJ]]]]]]| [f' [A [B [MATCH INCR]]]]].
-    + exists s1', s2', f', t'; intuition. 
-      admit.
+    + exists s1', s2', f', t'; intuition.
     + exists s1', s2, f', E0; intuition.
       right. split. constructor. auto.
       subst t; constructor.
-  - admit.
-  - admit.
+  - exact atx_sim.
+  - exact atx_preserved.
   - apply senv_preserved.
-Admitted.
-
+Qed.
 (*
 Theorem transl_program_correct:
   @fsim_properties_inj

@@ -1991,7 +1991,8 @@ Inductive match_states: meminj -> Linear.state -> Mach.state -> Prop :=
 Theorem transf_step_correct:
   forall s1 t s2, Linear.step ge s1 t s2 ->
   forall (WTS: wt_state s1) s1' j1 (MS: match_states j1 s1 s1'),
-  exists s2' t2 j2, plus (step tge) s1' t2 s2' /\ match_states j2 s2 s2' /\  inject_incr j1 j2 /\ inject_trace j2 t t2.
+  exists s2' t2 j2, plus (step tge) s1' t2 s2' /\ match_states j2 s2 s2' /\
+               inject_incr j1 j2 /\ inject_trace_strong j2 t t2.
 Proof.
   induction 1; intros;
   try inv MS;
@@ -2884,6 +2885,55 @@ Qed.
 
 Definition measure (S: Linear.state) : nat := 0.
 
+Lemma atx_sim:
+  @simulation_atx_inj
+    _ (Linear.semantics prog) (Mach.semantics return_address_offset tprog)
+    (fun idx f s1 s2 => idx = s1 /\ wt_state s1 /\ match_states f s1 s2).
+Proof.
+  intros ? * Hatx t s1' Hstep * MATCH;
+    repeat match type of MATCH with
+           | _ /\ _ => destruct MATCH as [? MATCH]; subst
+           end; inv MATCH; try discriminate.
+  assert (Hstep':=Hstep).
+  inv Hstep; try discriminate.
+  simpl in TRANSL. inversion TRANSL; subst tf.
+  exploit wt_callstate_agree; eauto. intros [AGCS AGARGS].
+  exploit transl_external_arguments; eauto. apply sep_proj1 in SEP; eauto. intros [vl [ARGS VINJ]].
+  rewrite sep_comm, sep_assoc in SEP.
+  exploit external_call_parallel_rule_strong; eauto.
+  intros (j' & res' & m1' & t' & A & B & C & D & E & F & G).
+  do 4 eexists; split.
+  eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  split; [split| split]; eauto. split.
+  - eapply step_type_preservation; eauto. eexact wt_prog. eassumption.
+  - eapply match_states_return with (j := j').
+    eapply match_stacks_change_meminj; eauto.
+    apply agree_regs_set_pair. apply agree_regs_undef_caller_save_regs. 
+    apply agree_regs_inject_incr with j; auto.
+    auto.
+    apply stack_contents_change_meminj with j; auto.
+    rewrite sep_comm, sep_assoc; auto.
+    apply C. trivial.
+Qed.
+Lemma atx_preserves:
+  @preserves_atx_inj
+    _ (Linear.semantics prog) (Mach.semantics return_address_offset tprog)
+    (fun idx f s1 s2 => idx = s1 /\ wt_state s1 /\ match_states f s1 s2).
+Proof.
+  atx_preserved_start_proof.
+  
+  exploit wt_callstate_agree; eauto. intros [AGCS AGARGS].
+  exploit transl_external_arguments; eauto.
+  apply sep_proj1 in SEP; eauto. intros [vl [ARGS VINJ]].
+    
+  eexists; split.
+  - unfold tge in *.
+    rewrite FIND. subst tf.
+    eapply get_arguments_correct in ARGS; eauto.
+    rewrite ARGS; reflexivity; eauto.
+  - eauto.
+Qed.
 Theorem transl_program_correct:
   @fsim_properties_inj
     (Linear.semantics prog) (Mach.semantics return_address_offset tprog)
@@ -2895,7 +2945,11 @@ Proof.
   - apply well_founded_ltof. 
   - intros. destruct H as [? [? H']]; inv H'; auto.
   - intros. destruct H as [? [? H']]; inv H'; auto.
-  - admit.
+  - intros; exploit transf_entry_points; eauto.
+    intros (?&?&?&?).
+    do 3 eexists; repeat (split; eauto).
+    apply wt_entry_point with prog m0 fb args; auto.
+    exact wt_prog.
   - intros. destruct H as [? [? ?]]; subst.
     eapply transf_final_states; eauto.
   - intros. destruct H0 as [? [? ?]]; subst.
@@ -2904,11 +2958,11 @@ Proof.
     exists s1', s2', f', t'; split. left; apply STEP.
     repeat split; eauto. 
     eapply step_type_preservation; eauto. eexact wt_prog. eexact H.
-    admit.
-  - admit.
-  - admit.
+  - exact atx_sim.
+  - exact atx_preserves.
   - apply senv_preserved.
-Admitted.
+Qed.
+
 (*Theorem transf_program_correct:
   forward_simulation (Linear.semantics prog) (Mach.semantics return_address_offset tprog).
 Proof.

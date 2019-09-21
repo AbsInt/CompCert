@@ -616,14 +616,37 @@ Proof.
   eexact tunnel_step_correct.
 Qed.
 
+Lemma atx_sim:
+      simulation_atx
+    (fun (idx : LTL.state) (s1 : Smallstep.state (semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
+Proof.
+  atx_sim_start_proof.
+  exploit external_call_mem_extends; eauto using locmap_getpairs_lessdef.
+  intros (tvres & tm' & A & B & C & D).
+  do 2 econstructor; split.
+  eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  econstructor; eauto.
+  econstructor; eauto using locmap_setpair_lessdef, locmap_undef_caller_save_regs_lessdef.
+Qed.
+
+Lemma atx_preserved:
+   preserves_atx
+    (fun (idx : state) (s1 : Smallstep.state (semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
+Proof. atx_preserved_start_proof.
+       do 2 econstructor; eauto; try apply Val.lessdef_list_refl.
+       apply locmap_getpairs_lessdef; auto.
+Qed.
 Theorem transf_program_correct:
   @fsim_properties_ext
     (LTL.semantics prog) (LTL.semantics tprog)
     LTL.get_mem LTL.get_mem.
 Proof.
   eapply sim_extSim; try eapply transf_program_correct'.
-  - admit.
-  - admit.
+  - exact atx_sim.
+  - exact atx_preserved.
   - simpl; intros ? ? ? [? ?]; subst;  destruct H0; auto.
-Admitted.
+Qed.
 End PRESERVATION.

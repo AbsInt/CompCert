@@ -191,8 +191,7 @@ Definition at_external (c: state) : option (external_function * list val) :=
   | Callstate fd args k _ =>
       match fd with
         Internal f => None
-      | External ef => 
-          Some (ef, args)
+      | External ef => if ef_inline ef then None else Some (ef, args) 
       end
   | Returnstate _ _ _ => None
  end.

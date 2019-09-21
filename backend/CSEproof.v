@@ -1285,19 +1285,6 @@ Proof.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
 Qed.
-(*
-Lemma transf_initial_states':
-   forall s1 : RTL.state,
-  Smallstep.initial_state (semantics prog) s1 ->
-  exists s2 : RTL.state, Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
-Proof.
-  eapply (@init_states_from_entry (semantics prog) (semantics tprog));
-    try apply transf_entry_points.
-  - apply (Genv.init_mem_match TRANSF); eauto.
-  - simpl. destruct TRANSF as (P & Q & R).
-    admit.
-Admitted.
-*)
 Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
@@ -1306,26 +1293,39 @@ Proof.
   inv STACKS.
 Qed.
 
-Theorem transf_program_correct'':
+(* Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   eapply forward_simulation_step with
     (match_states := fun s1 s2 => sound_state prog s1 /\ match_states s1 s2).
   - apply senv_preserved.
-  - admit.
+  - simpl; intros; exploit transf_entry_points; eauto.
+    intros (?&?&?).
+    econstructor. do 2 (split; eauto).
+    (* sound state *)
+    econstructor; intros.
+    inv H0; inv H.
+    eapply sound_call_state.
+    + simpl.
+      unfold pre_main_staklist,pre_main_stack.
+      adm it. (* change sound_stack to include pre_main (instead nil)*)
+    + intros.
+      
+    ad mit.
 - (*intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
-  exists s2. split. auto. split. apply sound_initial; auto. auto.*) admit.
+  exists s2. split. auto. split. apply sound_initial; auto. auto.*) ad mit.
 - intros. destruct H. eapply transf_final_states; eauto.
 - intros. destruct H0. exploit transf_step_correct; eauto.
   intros [s2' [A B]]. exists s2'; split. auto. split. eapply sound_step; eauto. auto.
-Admitted.
+Admit ted. *)
 
 Theorem transl_program_correct':
   @fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
                   (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
                   ( fun idx s1 s2 => idx = s1 /\ (sound_state prog s1 /\ match_states s1 s2)).
 Proof.
-(*  eapply forward_simulation_step'. 
+(*
+  eapply forward_simulation_step. 
 - apply senv_preserved.
 - intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
   exists s2. split. auto. split. apply sound_initial; auto. auto.

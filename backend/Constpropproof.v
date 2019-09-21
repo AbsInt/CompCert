@@ -294,7 +294,7 @@ Inductive match_states: nat -> state -> state -> Prop :=
   | match_states_intro:
       forall s sp pc rs m f s' pc' rs' m' cu n
            (LINK: linkorder cu prog)
-           (STACKS: list_forall2 match_stackframes s s')
+           (STACKS: list_forall2_end match_stackframes eq s s')
            (PC: match_pc f rs m n pc pc')
            (REGS: regs_lessdef rs rs')
            (MEM: Mem.extends m m'),
@@ -303,24 +303,23 @@ Inductive match_states: nat -> state -> state -> Prop :=
   | match_states_call:
       forall s f args m s' args' m' cu
            (LINK: linkorder cu prog)
-           (STACKS: list_forall2 match_stackframes s s')
+           (STACKS: list_forall2_end match_stackframes eq s s')
            (ARGS: Val.lessdef_list args args')
            (MEM: Mem.extends m m'),
       match_states O (Callstate s f args m)
                      (Callstate s' (transf_fundef (romem_for cu) f) args' m')
   | match_states_return:
       forall s v m s' v' m'
-           (STACKS: list_forall2 match_stackframes s s')
+           (STACKS: list_forall2_end match_stackframes eq s s')
            (RES: Val.lessdef v v')
            (MEM: Mem.extends m m'),
-      list_forall2 match_stackframes s s' ->
       match_states O (Returnstate s v m)
                      (Returnstate s' v' m').
 
 Lemma match_states_succ:
   forall s f sp pc rs m s' rs' m' cu,
   linkorder cu prog ->
-  list_forall2 match_stackframes s s' ->
+  list_forall2_end match_stackframes eq s s' ->
   regs_lessdef rs rs' ->
   Mem.extends m m' ->
   match_states O (State s f sp pc rs m)
@@ -550,14 +549,14 @@ Opaque builtin_strength_reduction.
   constructor; auto.
 
 - (* return *)
-  inv H4. inv H1.
+  inv STACKS. inv not_empty. inv H1.
   left; exists O; econstructor; split.
   eapply exec_return; eauto.
   { inv H3; auto. }
   econstructor; eauto. constructor. apply set_reg_lessdef; auto.
 Qed.
 
-Lemma transf_initial_states:
+(*Lemma transf_initial_states:
   forall st1, initial_state prog st1 ->
   exists n, exists st2, initial_state tprog st2 /\ match_states n st1 st2.
 Proof.
@@ -570,28 +569,71 @@ Proof.
   rewrite symbols_preserved. eauto.
   symmetry; eapply match_program_main; eauto.
   rewrite <- H3. apply sig_function_translated.
-  constructor. auto. constructor. constructor. apply Mem.extends_refl.
+  constructor. auto. econstructor. constructor. apply Mem.extends_refl.
+Qed.*)
+
+Lemma transf_entry_points:
+ forall (s1 : state) (f : val) (arg : list val) (m0 : mem),
+  entry_point prog m0 s1 f arg ->
+  exists (i : nat) (s2 : state),
+    entry_point tprog m0 s2 f arg /\  match_states i s1 s2.
+Proof.
+  intros. inversion H.
+  exploit function_ptr_translated; eauto. intros (cu & FIND & LINK).
+  pose proof (sig_function_translated (romem_for cu) (Internal f0)) as SIG.
+  subst sg; subst. simpl in SIG. 
+  subst.
+  exists O; eexists; split.
+  - econstructor; eauto.
+    subst ge0.
+    eapply globals_not_fresh_preserve; try eassumption.
+    eapply (match_program_gen_len_defs _ _ _ _ _ TRANSL).
+  - replace (Internal (transf_function (romem_for cu) f0))
+      with (transf_fundef (romem_for cu) (Internal f0)) by reflexivity.
+    econstructor; eauto.
+    unfold pre_main_staklist,pre_main_stack; econstructor.
+    simpl. reflexivity.
+    apply Val.lessdef_list_refl.
+    apply Mem.extends_refl.
+Qed.
+
+Lemma transf_initial_states':
+   forall s1 : state,
+  Smallstep.initial_state (semantics prog) s1 ->
+  exists i (s2 : state), Smallstep.initial_state (semantics tprog) s2 /\ 
+                    match_states i s1 s2.
+Proof.
+  apply (@init_states_from_entry_index (semantics prog) (semantics tprog));
+    try apply transf_entry_points.
+  - apply (Genv.init_mem_match TRANSL); eauto.
+  - simpl. destruct TRANSL as (P & Q & R).
+    rewrite symbols_preserved, Q; auto.
 Qed.
 
 Lemma transf_final_states:
   forall n st1 st2 r,
   match_states n st1 st2 -> final_state st1 r -> final_state st2 r.
 Proof.
-  intros. inv H0. inv H. inv STACKS. inv RES.
-  inv H3. constructor.
+  intros. inv H0. inv H. inv STACKS.
+  - inv RES. constructor.
+  - inv RES. inv H3. 
 Qed.
 
 (** The preservation of the observable behavior of the program then
   follows. *)
-
+(*
 Theorem transf_program_correct'':
   forward_simulation (RTL.semantics prog) (RTL.semantics tprog).
 Proof.
   apply Forward_simulation with lt (fun n s1 s2 => sound_state prog s1 /\ match_states n s1 s2); constructor.
 - apply lt_wf.
-- admit.
+- intros; exploit transf_entry_points; eauto.
+  intros (?&?&?&?).
+  do 3 econstructor; try split; simpl; eauto.
+  admit.
 - (*simpl; intros. exploit transf_initial_states; eauto. intros (n & st2 & A & B).
-  exists n, st2; intuition. eapply sound_initial; eauto.*)
+  exists n, st2; intuition. eapply soun
+d_initial; eauto.*)
   admit.
 - simpl; intros. destruct H. eapply transf_final_states; eauto.
 - simpl; intros. destruct H0.
@@ -603,18 +645,42 @@ Proof.
   exists n2; exists s2; split; auto. right; split; auto. subst t; apply star_refl.
 - apply senv_preserved.
 Admitted.
+ *)
 
+  (*
+Lemma sound_entry:
+    forall prog (st: Smallstep.state (semantics prog)) m0 f arg,
+      Smallstep.entry_point (semantics prog) m0 st f arg ->
+      sound_state prog st.
+Proof.
+  econstructor; intros.
+  inv H.
+  econstructor.
+  - admit. (* add this to the constructor.*)
+  - intros. destruct v; constructor.
+    eapply pmatch_top.
+    admit. (*Yes. al pointers in argument should be valid. *)
+  - split; [|split].
+    + admit. (*yes. every glob is Gl or Glo.*)
+    + constructor.
+      * constructor.
+        -- intros.*)
+           
 Theorem transf_program_correct':
   fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
                   _ lt
 (fun n s1 s2 => sound_state prog s1 /\ match_states n s1 s2).
 Proof.
   constructor.
-  
 - apply lt_wf.
-- admit.
-- (*simpl; intros. exploit transf_initial_states; eauto. intros (n & st2 & A & B).
-  exists n, st2; intuition. eapply sound_initial; eauto.*) admit.
+- intros; exploit transf_entry_points; eauto.
+  intros (?&?&?&?).
+  do 3 econstructor; try split; simpl; eauto.
+  
+  admit. (* sound state*)
+- intros; exploit transf_initial_states'; eauto; intros (?&?&?&?).
+  repeat(econstructor; eauto).
+  admit. (* sound state*)
 - simpl; intros. destruct H. eapply transf_final_states; eauto.
 - simpl; intros. destruct H0.
   assert (sound_state prog s1') by (eapply sound_step; eauto).
@@ -626,15 +692,40 @@ Proof.
 - apply senv_preserved.
 Admitted.
 
+
+Lemma atx_sim:
+ simulation_atx
+    (fun (n : nat) (s1 : Smallstep.state (semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) => sound_state prog s1 /\ match_states n s1 s2).
+Proof.
+  intros ? * Hatx t s1' Hstep * [SOUND MATCH].
+  assert (sound_state prog s1') by (eapply sound_step; eauto).
+  repeat match type of MATCH with
+          | _ /\ _ => destruct MATCH as [? MATCH]; subst
+         end; inv MATCH; try discriminate; inv Hstep; try discriminate.
+  exploit external_call_mem_extends; eauto.
+  intros [v' [m2' [A [B [C D]]]]].
+  do 3 (econstructor; eauto).
+  eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto; apply senv_preserved.
+  split; eauto.
+  - constructor; auto.
+Qed.
+Lemma atx_preserved:
+  preserves_atx
+    (fun (n : nat) (s1 : Smallstep.state (semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) => sound_state prog s1 /\ match_states n s1 s2).
+Proof. atx_preserved_start_proof. Qed.
 Theorem transf_program_correct:
   @fsim_properties_ext
     (RTL.semantics prog) (RTL.semantics tprog)
     RTL.get_mem RTL.get_mem.
 Proof.
   eapply sim_extSim; try eapply transf_program_correct'.
-  - admit.
-  - admit.
+  - exact atx_sim. 
+  - exact atx_preserved.
   - simpl; intros ? ? ? [? ?]; subst; inversion H0; auto.
-Admitted.
+Qed.
+
 
 End PRESERVATION.

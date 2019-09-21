@@ -671,17 +671,34 @@ Proof.
   eexact transf_initial_states'.
   eexact transf_final_states.
   exact transf_step_correct.
-Qed.
+Qed. 
+Lemma atx_sim:
+  simulation_atx
+    (fun (idx s1 : Smallstep.state (semantics prog)) (s2 : Smallstep.state (semantics tprog))
+     => idx = s1 /\ match_states s1 s2).
+Proof.
+  atx_sim_start_proof.
 
+  exploit external_call_mem_extends; eauto.
+  intros [res' [m2' [A [B [C D]]]]].
+  do 4 (econstructor; eauto).
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  constructor; auto.
+Qed.
+Lemma atx_preserved:
+  preserves_atx
+    (fun (idx s1 : Smallstep.state (semantics prog)) (s2 : Smallstep.state (semantics tprog))
+     => idx = s1 /\ match_states s1 s2).
+Proof. atx_preserved_start_proof. Qed.
 Theorem transf_program_correct:
   @fsim_properties_ext  (RTL.semantics prog) (RTL.semantics tprog)
                        RTL.get_mem RTL.get_mem.
 Proof.
   eapply sim_extSim; try eapply transf_program_correct'.
-  - admit.
-  - admit.
+  - exact atx_sim. 
+  - exact atx_preserved.
   - simpl; intros ? ? ? [? ?]; subst; inversion H0; simpl; auto.
-Admitted.
+Qed.
 
 End PRESERVATION.
 

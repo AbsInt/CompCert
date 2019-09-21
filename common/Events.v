@@ -100,7 +100,8 @@ Record inject_delta_map (mu: meminj)(dpm1 dpm2: delta_perm_map): Prop:=
    NOTE: alloc records the new block. This helps on injections.
 *)
 Inductive mem_effect :=
-  Write : forall (b : block) (ofs : Z) (bytes : list memval), mem_effect
+  Write : forall (b : block) (ofs : Z)
+            (bytes : list memval), mem_effect
 | Alloc: forall (b : block)(lo hi:Z), mem_effect
 | Free: forall (l: list (block * Z * Z)), mem_effect.
 
@@ -111,7 +112,15 @@ Inductive list_map_rel {A B} (r:A-> B -> Prop): list A -> list B-> Prop:=
                    r a b ->
                    list_map_rel r (l1) (l2)->
                    list_map_rel r (a::l1) (b::l2).
-
+Lemma list_map_rel_prop:
+  forall {A B} (r1 r2:A-> B -> Prop) l1 l2, (forall a b, r1 a b -> r2 a b) ->
+          list_map_rel r1 l1 l2 -> list_map_rel r2 l1 l2.
+Proof.
+  intros until l1; induction l1.
+  - intros * ? H; inv H; constructor.
+  - intros * ? H; inv H; constructor; eauto.
+Qed.
+    
 Inductive inject_strong (mi : meminj) : val -> val -> Prop :=
     inject_int : forall i : int, inject_strong mi (Vint i) (Vint i)
   | inject_long : forall i : int64, inject_strong mi (Vlong i) (Vlong i)
@@ -131,6 +140,13 @@ Inductive memval_inject_strong (f : meminj) : memval -> memval -> Prop :=
                                               
 Definition list_memval_inject mu:= list_map_rel (memval_inject mu).
 Definition list_memval_inject_strong mu:= list_map_rel (memval_inject_strong mu).
+Lemma memval_inject_strong_weak:
+         forall f v1 v2, memval_inject_strong f v1 v2 ->  memval_inject f v1 v2.
+Proof. intros * HH; inv HH; econstructor; auto. inv H; econstructor; eauto. Qed.
+Lemma list_memval_inject_strong_weak:
+  forall f vals1 vals2, list_memval_inject_strong f vals1 vals2 ->
+                   list_memval_inject f vals1 vals2.
+Proof. intros *; eapply list_map_rel_prop; apply memval_inject_strong_weak. Qed.
 
 Inductive inject_hi_low (mu:meminj): (block * Z * Z) -> (block * Z * Z) -> Prop:=
 | HiLow: forall b1 b2 hi low delt,
@@ -163,7 +179,15 @@ Inductive inject_mem_effect_strong (mu: meminj): mem_effect -> mem_effect -> Pro
     list_inject_hi_low mu l1 l2 ->
     inject_mem_effect_strong mu (Free l1) (Free l2).
 Definition list_inject_mem_effect_strong (mu:meminj):= list_map_rel (inject_mem_effect_strong mu).
-
+Lemma inj_mem_effect_strong_weak:
+  forall f a b, inject_mem_effect_strong f a b -> inject_mem_effect f a b.
+Proof. intros * HH; inv HH; econstructor; eauto.
+       apply list_memval_inject_strong_weak; auto.
+Qed.
+Lemma list_inj_mem_effect_strong_weak:
+    forall f ls1 ls2, list_inject_mem_effect_strong f ls1 ls2->
+               list_inject_mem_effect f ls1 ls2.
+Proof. intros *; eapply list_map_rel_prop. eapply inj_mem_effect_strong_weak. Qed.
 
 Inductive event: Type :=
   | Event_syscall: string -> list eventval -> eventval -> event
@@ -765,6 +789,14 @@ Inductive inject_event_strong: meminj -> event -> event -> Prop :=
 Definition inject_trace mu:= list_map_rel (inject_event mu). 
 Definition inject_trace_strong mu:= list_map_rel (inject_event_strong mu).
 
+Lemma inj_event_strong_weak:
+      forall f a b, inject_event_strong f a b -> inject_event f a b.
+Proof.
+  intros. inv H; econstructor; eauto; apply list_inj_mem_effect_strong_weak; auto. Qed.
+Lemma inject_trace_strong_weak:
+  forall f l1 l2, inject_trace_strong f l1 l2 -> inject_trace f l1 l2.
+Proof. intros *; eapply list_map_rel_prop; apply inj_event_strong_weak. Qed.
+Hint Resolve inject_trace_strong_weak.
 Section StrongRelaxedInjections.
 
 Lemma val_inject_strong_compose:
@@ -1217,7 +1249,7 @@ Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
                   /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
                   /\ inject_incr f f'
                   /\ inject_separated f f' m1 m1'
-                  /\ inject_trace f' t t'
+                  /\ inject_trace_strong f' t t'
                   /\ injection_full f' m2;
       
       (** External calls must commute with memory injections,
@@ -2348,7 +2380,7 @@ Lemma external_call_mem_inject:
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
     /\ inject_incr f f'
     /\ inject_separated f f' m1 m1'
-    /\ inject_trace f' t t' /\ injection_full f' m2.
+    /\ inject_trace_strong f' t t' /\ injection_full f' m2.
 Proof.
   intros. destruct H as (A & B & C).
   eapply external_call_mem_inject_gen with (ge1 := ge); eauto.

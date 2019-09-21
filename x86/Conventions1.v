@@ -473,3 +473,157 @@ Lemma loc_arguments_main:
 Proof.
   unfold loc_arguments; destruct Archi.ptr64; reflexivity.
 Qed.
+
+
+(*New properties of loc_args*)
+
+  Definition twolong {T} (a: rpair T):=
+    match a with
+    | Twolong _ _ => True
+    | _ => False
+    end.
+  Definition twolong_type_diff p:=
+    match p with
+      Twolong rhi rlo =>
+      Loc.type rlo = Tint /\
+      Loc.type rhi = Tint /\
+      Loc.diff rlo rhi
+    | _ => True
+    end.
+
+  Definition twolong_type_diff_list ls:=
+    Forall twolong_type_diff ls.
+  Definition two_only32_list {T}
+             (ls:list (rpair T)):=
+    Forall (fun a => twolong a -> Archi.ptr64 = false)
+           ls.
+  Inductive type_lessdef a : typ -> Prop :=
+  | type_lessdef_refl: 
+      type_lessdef a a
+  | type_lessdef_any64:
+        type_lessdef a Tany64.
+  (*
+          let targs0:=fresh "targs" in
+          remember targs as targs0 eqn:?Htargs; clear Htargs *)
+  Ltac loc_args_64_induction:=
+        match goal with
+          |- context[loc_arguments_64 ?targs 0 0 0] =>
+          let x:= fresh "x" in let y:= fresh "y" in let z:= fresh "z" in
+          remember 0 as x eqn:?HHx;
+          remember 0 as y eqn:?HHy;
+          remember 0 as z eqn:?HHz;
+          replace (loc_arguments_64 targs x x x) with
+              (loc_arguments_64 targs x y z) by (subst x y z; reflexivity);
+          clear HHx HHy HHz; revert x y z; induction targs
+        end.
+  Ltac loc_args_32_induction:=
+        match goal with
+          |- context[loc_arguments_32 ?targs 0] =>
+          let x:= fresh "x" in
+          remember 0 as x eqn:?HHx;
+          clear HHx; revert x; induction targs
+        end.
+  Ltac loc_args_induction:=
+    match goal with
+      | |- context[loc_arguments_64 _ _ _ _] => loc_args_64_induction
+      | |- context[loc_arguments_32 _ _] => loc_args_32_induction
+    end.
+  Definition loc2typ:= typ_rpair Loc.type.
+  Lemma loc_arguments_less_type:
+    forall sg,
+      Forall2 type_lessdef
+              (sig_args sg)
+              (map loc2typ (loc_arguments sg)).
+  Proof.
+    intros. unfold loc_arguments.
+    simpl. remember (sig_args sg) as targs. clear Heqtargs.
+    match_case; simpl.
+    - loc_args_induction. 
+      + constructor.
+      + intros.
+        destruct a; simpl;
+         (try match_case;
+          [repeat match_case in Heqo; inv Heqo;
+            try solve[econstructor; simpl; eauto; try rewrite Heqb; constructor] |
+           repeat match_case in Heqo; econstructor; eauto; econstructor]);
+         try (econstructor; eauto; simpl;  unfold mreg_type; repeat match_case; constructor).
+    - loc_args_induction.
+      + constructor.
+      + intros. simpl. destruct a;
+        try (simpl; constructor; eauto; constructor).
+  Qed.
+  Lemma loc_arguments_two_only32_list:
+    forall sg,
+      two_only32_list (loc_arguments sg).
+  Proof.
+    unfold two_only32_list. intros. unfold loc_arguments.
+    remember (sig_args sg) as targs; clear Heqtargs.
+    match_case; auto; loc_args_induction; try solve[econstructor].
+    - simpl; intros.
+      destruct a; match_case; constructor; eauto.
+    - econstructor; intros; auto.
+  Qed.
+  Lemma loc_arguments_twolong_type_diff:
+    forall sg,
+      twolong_type_diff_list (loc_arguments sg).
+  Proof.
+    intros. unfold twolong_type_diff_list, loc_arguments.
+    remember (sig_args sg) as targs; clear Heqtargs.
+    match_case; loc_args_induction; try solve[econstructor].
+    - intros. destruct a; simpl; try match_case; constructor; simpl; auto.
+    - econstructor; destruct a; simpl; auto.
+      repeat (split; auto).
+      right. left; omega.
+  Qed.
+  Inductive each_pair {A} (r:A -> A -> Prop): list A -> Prop:=
+  | each_pair_nil: each_pair r nil
+  | each_pair_cons: forall a ls,
+      each_pair r ls ->
+      (forall x, In x ls -> r a x) ->
+      each_pair r (a::ls).
+  
+  Definition rpair_loc_diff (p q:rpair loc):=
+    match p, q with
+      One a, One b => Loc.diff a b
+    | One a, Twolong b b' => Loc.diff a b /\ Loc.diff a b' 
+    | Twolong a a', One b => Loc.diff a b /\ Loc.diff a' b 
+    | Twolong a a', Twolong b b' =>
+      Loc.diff a b /\ Loc.diff a' b /\
+      Loc.diff a b' /\ Loc.diff a' b'
+    end.
+  Definition all_diff_locs:= each_pair rpair_loc_diff.
+  
+  Lemma loc_arguments_non_rep:
+    forall sg, all_diff_locs (loc_arguments sg).
+  Proof.
+    intros.
+    intros. unfold all_diff_locs, loc_arguments.
+    pose proof loc_arguments_bounded.
+    remember (sig_args sg) as targs; clear Heqtargs.
+    match_case; loc_args_induction; try solve[econstructor].
+    - admit.
+      (* intros. simpl. 
+      destruct a; match_case; econstructor; eauto.
+      + repeat match_case in Heqo; inv Heqo.
+        intros. *)
+    - intros. destruct a; simpl.
+      econstructor; eauto.
+      admit.
+  Admitted.
+  Lemma loc_argumetn_properties:
+    forall sg,
+      all_diff_locs (loc_arguments sg) /\
+      twolong_type_diff_list (loc_arguments sg) /\
+      two_only32_list (loc_arguments sg) /\
+      Forall2 type_lessdef
+              (sig_args sg)
+              (map loc2typ (loc_arguments sg)).
+  Proof.
+    intros; repeat split;
+      first [apply loc_arguments_non_rep|
+             apply loc_arguments_twolong_type_diff|
+             apply loc_arguments_two_only32_list|
+             apply loc_arguments_less_type].
+  Qed.
+
+  

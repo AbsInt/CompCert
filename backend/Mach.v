@@ -562,24 +562,32 @@ Definition pre_main_stack sp: stackframe:=
 
 Definition pre_main_staklist sp:=
   (pre_main_stack sp)::nil.
+(* Definition stack_defs:=
+  let linear_pre_main:= Linear.pre_main (fn_sig f) 0 in
+      let pre_main_env:= Stacklayout.make_env (Bounds.function_bounds linear_pre_main) in
+      let parent_ofs:=(Ptrofs.repr (Bounds.fe_ofs_link pre_main_env)) in
+      let ret_ofs:=(Ptrofs.repr (Bounds.fe_ofs_retaddr pre_main_env)) in
+      let stk_sz:= Bounds.fe_size pre_main_env in
+      (stk_sz,ret_ofs,parent_ofs). *)
 Inductive entry_point (p: program): mem -> state -> val -> list val -> Prop :=
-  | entry_point_intro: forall f fb rs spb m0 m1 m2 m3 m4 args targs stk_sz,
+  | entry_point_intro: forall f fb rs spb m0 m1 m2 m3 m4 args targs,
       let ge := Genv.globalenv p in
       let linear_pre_main:= Linear.pre_main (fn_sig f) 0 in
       let pre_main_env:= Stacklayout.make_env (Bounds.function_bounds linear_pre_main) in
+      let parent_ofs:=(Ptrofs.repr (Bounds.fe_ofs_link pre_main_env)) in
+      let ret_ofs:=(Ptrofs.repr (Bounds.fe_ofs_retaddr pre_main_env)) in
+      let stk_sz:= Bounds.fe_size pre_main_env in
+      
       Mem.mem_wd m0 ->
       globals_not_fresh ge m0 ->
       Mem.arg_well_formed args m0 ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
       (*Allocatee the stack block *)
-      stk_sz = Bounds.fe_size pre_main_env ->
       Mem.alloc m0 0 stk_sz = (m1, spb) ->
       let sp:= Vptr spb Ptrofs.zero in
       (* store pointer to parent *)
-      let parent_ofs:=(Ptrofs.repr (Bounds.fe_ofs_link pre_main_env)) in
       store_stack m1 sp Tptr parent_ofs Vnullptr = Some m2 ->
       (* store return pointer *)
-      let ret_ofs:=(Ptrofs.repr (Bounds.fe_ofs_retaddr pre_main_env)) in
       store_stack m2 sp Tptr ret_ofs Vnullptr = Some m3 ->
       targs = (sig_args (funsig (Internal f))) ->
       Val.has_type_list args targs ->

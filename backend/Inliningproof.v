@@ -1058,7 +1058,7 @@ Theorem step_simulation:
   step ge S1 t S2 ->
   forall F S1' (MS: match_states F S1 S1'),
   (exists S2' F' t', plus (step tge) S1' t' S2' /\ match_states F' S2 S2' /\ 
-                     inject_incr F F' /\ inject_trace F' t t')
+                     inject_incr F F' /\ inject_trace_strong F' t t')
   \/ t = E0 /\ (measure S2 < measure S1)%nat /\ match_states F S2 S1'.
 Proof.
   induction 1; intros; inv MS.
@@ -1240,7 +1240,6 @@ Proof.
   auto.
   intros. apply SSZ2. eapply external_call_max_perm; eauto.
   trivial.
-
 - (* cond *)
   exploit tr_funbody_inv; eauto. intros TR; inv TR.
   assert (eval_condition cond rs'##(sregs ctx args) m' = Some b).
@@ -1401,7 +1400,7 @@ Proof.
     xomega.
     eapply external_call_nextblock; eauto.
     auto. auto.
-  trivial.
+  trivial. 
 
 - (* return fron noninlined function *)
   inv MS0.
@@ -1667,7 +1666,37 @@ Proof.
   eexact step_simulation.
 Qed.
 *)
-
+Lemma atx_sim:
+  @simulation_atx_inj _
+    (semantics prog) (semantics tprog)
+    (fun (idx : RTL.state)
+       (f : meminj) s1 s2 => idx = s1 /\ match_states f s1 s2).
+Proof.
+  atx_sim_start_proof.
+  exploit match_stacks_globalenvs; eauto. intros [bound MG].
+  exploit external_call_mem_inject; eauto.
+    eapply match_globalenvs_preserves_globals; eauto.
+  intros [F1 [v1 [m1' [t' [A [B [C [D [E [J [K [INJTR FULL']]]]]]]]]]]].
+  simpl in FD. inv FD.
+  do 2 eexists; exists F1, t'; split.
+  eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  split; [| split; eauto].
+  do 2 econstructor; auto.
+  eapply match_stacks_bound with (Mem.nextblock m').
+  eapply match_stacks_extcall with (F1 := j) (F2 := F1) (m1 := m) (m1' := m');
+    eauto.
+  intros; eapply external_call_max_perm; eauto.
+  intros; eapply external_call_max_perm; eauto.
+  xomega.
+  eapply external_call_nextblock; eauto.
+Qed.  
+Lemma atx_preserved:
+  @preserves_atx_inj _
+    (semantics prog) (semantics tprog)
+    (fun (idx : RTL.state) (f : meminj) (s1 s2 : RTL.state) =>
+     idx = s1 /\ match_states f s1 s2).
+Proof. atx_preserved_start_proof. Qed.  
 Theorem transf_program_correct:
   @fsim_properties_inj (semantics prog) (semantics tprog)
     get_mem get_mem.
@@ -1682,22 +1711,16 @@ Proof.
     exploit transf_entry_points; eauto.
     intros (j & s & INIT & MATCH).
     exists s1, j, s; repeat (split; auto).
-  (* - intros. inv H; simpl in *.
-    exploit transf_initial_states'; eauto.
-    intros (f & s & INIT & MATCH).
-    exists s1, f, s; auto. *)
   - intros. destruct H; subst.
     eapply transf_final_states; eauto.
   - intros. destruct H0; subst.
     exploit step_simulation; eauto. 
     intros [[s2' [f' [t' [STEP [MATCH [IINCR INJT]]]]]] | [MEAS [TR MATCH]]]. 
     exists s1', s2', f', t'; split. left; trivial. repeat (split; eauto).
-    admit.
     exists s1', s2, f, E0; split. right. split; trivial. constructor.
     split; auto. split. apply inject_incr_refl. subst; apply list_rel_nil.
-  - admit.
-  - admit.
+  - exact atx_sim.
+  - exact atx_preserved.
   - apply senv_preserved.
-Admitted. 
-
+Qed.
 End INLINING.

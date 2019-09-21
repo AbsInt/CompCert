@@ -1080,10 +1080,7 @@ Qed.
     
 Theorem transf_program_correct:
   @fsim_properties_ext (Mach.semantics return_address_offset prog) (Asm.semantics tprog)
-                       Mach.get_mem Asm.get_mem
-                       (*
-                  _ (ltof _ measure)
-                  (fun idx s1 s2 => idx = s1 /\ match_states s1 s2) *).
+                       Mach.get_mem Asm.get_mem.
 Proof.
   eapply sim_extSim; try apply transf_program_correct'.
   - apply atx_sim.

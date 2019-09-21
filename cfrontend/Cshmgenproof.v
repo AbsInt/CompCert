@@ -1856,7 +1856,6 @@ Lemma transl_initial_states':
   exists s2 : Smallstep.state (semantics tprog),
     Smallstep.initial_state (semantics tprog) s2 /\ match_states s1 s2.
 Proof.
-  
   eapply init_states_from_entry; try apply transl_entry_points.
   - apply (Genv.init_mem_match TRANSL); eauto.
   - simpl. destruct TRANSL as (P & Q & R). auto.
@@ -1893,18 +1892,37 @@ Proof.
   eexact transl_final_states.
   eexact transl_step.
 Qed.
-
+Lemma atx_sim:
+ simulation_atx
+    (fun (idx s1 : Smallstep.state (semantics2 prog)) (s2 : Smallstep.state (semantics tprog))
+     => idx = s1 /\ match_states s1 s2).
+Proof.
+  atx_sim_start_proof.
+  inv TR.
+  exploit match_cont_is_call_cont; eauto. intros [A B].
+  do 4 (econstructor; eauto).
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply match_returnstate with (ce := ce); eauto.
+Qed.
+Lemma atx_preserved:
+  preserves_atx
+    (fun (idx s1 : Smallstep.state (semantics2 prog)) (s2 : Smallstep.state (semantics tprog))
+     => idx = s1 /\ match_states s1 s2).
+Proof. atx_preserved_start_proof; inv TR.
+       repeat (econstructor; eauto).
+       apply Val.lessdef_list_refl.
+Qed.
 Theorem transf_program_correct:
   @fsim_properties_ext
     (Clight.semantics2 prog) (Csharpminor.semantics tprog)
     Clight.get_mem Csharpminor.get_mem.
 Proof.
   eapply EqEx_sim'; eapply sim_eqSim'; try eapply transl_program_correct'.
-  - admit.
-  - admit.
+  - exact atx_sim. 
+  - exact atx_preserved.
   - simpl; intros ? ? ? [? ?].
     inversion H0; reflexivity.
-Admitted.
+Qed.
 
 End CORRECTNESS.
 

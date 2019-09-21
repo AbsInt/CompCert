@@ -308,6 +308,9 @@ Definition wt_fundef (fd: fundef) :=
 Inductive wt_callstack: list stackframe -> Prop :=
   | wt_callstack_nil:
       wt_callstack nil
+  | wt_callstack_one: forall pre_main,
+      wt_locset (parent_locset (pre_main::nil)) ->
+      wt_callstack (pre_main::nil)
   | wt_callstack_cons: forall f sp rs c s
         (WTSTK: wt_callstack s)
         (WTF: wt_function f = true)
@@ -319,8 +322,9 @@ Lemma wt_parent_locset:
   forall s, wt_callstack s -> wt_locset (parent_locset s).
 Proof.
   induction 1; simpl.
-- apply wt_init.
-- auto.
+  - apply wt_init.
+  - auto.
+  - auto.
 Qed.
 
 Inductive wt_state: state -> Prop :=
@@ -457,7 +461,7 @@ Local Opaque mreg_type.
   rewrite locmap_get_set_loc_result by auto. simpl. destruct sl; auto; congruence.
   red; simpl; intros. rewrite locmap_get_set_loc_result by auto. auto.
 - (* return *)
-  inv WTSTK. econstructor; eauto.
+  inv WTSTK. inv Hnot_empty. econstructor; eauto.
 Qed.
 
 Theorem wt_initial_state:
@@ -469,6 +473,30 @@ Proof.
   apply wt_init.
   red; auto.
   red; auto.
+Qed.
+
+Lemma wt_pre_main_locset_all:
+      forall args (sg : signature),
+        Val.has_type_list args (sig_args sg) ->
+        wt_locset (Premain.pre_main_locset_all (sig_args sg) args).
+Proof.
+  intros.
+  eapply wt_build_from_arguments in H.
+  (*The two things are the same!*)
+Admitted.
+
+Theorem wt_entry_point:
+  forall m0 S v args, entry_point prog m0 S v args  -> wt_state S.
+Proof.
+  induction 1. econstructor.
+  - unfold pre_main_staklist,pre_main_stack.
+    econstructor; simpl.
+    apply wt_pre_main_locset_all; auto.
+  - unfold ge0 in H1. exploit Genv.find_funct_ptr_inversion; eauto.
+    intros [id IN]. eapply wt_prog; eauto.
+  - apply wt_pre_main_locset_all; auto.
+  - red; auto.
+  - red; auto.
 Qed.
 
 (* relies on x86-specific proofs *)

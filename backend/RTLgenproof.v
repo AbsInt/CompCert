@@ -1656,7 +1656,23 @@ Proof.
   apply lt_state_wf.
   exact transl_step_correct.
 Qed.
-
+Lemma atx_sim:
+    simulation_atx
+    (fun (idx : CminorSel.state) (s1 : Smallstep.state (CminorSel.semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
+Proof.
+  atx_sim_start_proof.
+  monadInv TF.
+  edestruct external_call_mem_extends as [tvres [tm' [A [B [C D]]]]]; eauto.
+  do 4 (econstructor; eauto).
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  constructor; auto.
+Qed.
+Lemma atx_preserved:
+  preserves_atx
+    (fun (idx : CminorSel.state) (s1 : Smallstep.state (CminorSel.semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
+Proof. atx_preserved_start_proof. Qed.
 Theorem transf_program_correct:
   @fsim_properties_ext
     (CminorSel.semantics prog) (RTL.semantics tprog)
@@ -1665,9 +1681,9 @@ Proof.
   eapply sim_extSim; try apply transf_program_correct'.
   3: { simpl; intros ? ? ? [? ?]; subst.
        inversion H0; simpl; auto. }
-  - econstructor.
-    admit.
-  - admit.
-Admitted.
+  - exact atx_sim. 
+  - exact atx_preserved.
+Qed.
+
 
 End CORRECTNESS.

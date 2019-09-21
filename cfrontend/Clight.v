@@ -518,7 +518,7 @@ Definition at_external (c: state) : option (external_function * list val) :=
       match fd with
         Internal f => None
       | External ef targs tres cc => 
-          Some (ef, args)
+        if ef_inline ef then None else Some (ef, args)
       end
   | Returnstate _ _ _ => None
  end.
@@ -750,25 +750,30 @@ Inductive val_casted_list: list val -> typelist -> Prop :=
       val_casted v1 ty1 -> val_casted_list vl tyl ->
       val_casted_list (v1 :: vl) (Tcons  ty1 tyl).
 
+Definition vars_have_type (vars: list  (ident * type)) (typs:typelist):=
+  typlist_of_typelist typs =
+  (map (fun x => typ_of_type (snd x)) vars).
+Definition vals_have_type (vals: list val) (typs:typelist):=
+  Val.has_type_list vals (typlist_of_typelist typs). 
+  
 Inductive entry_point (ge:genv): mem -> state -> val -> list val -> Prop :=
 | initi_core:
-    forall f fb m0 args targs AT,
+    forall f fb m0 args targs,
       let sg:= signature_of_type targs type_int32s cc_default in
+      type_of_fundef (Internal f) = Tfunction targs type_int32s cc_default ->
       Genv.find_funct_ptr ge fb = Some (Internal f) ->
-      (* The only argument is a pointer*)
-      f.(fn_params) = (xH, Tpointer (Tfunction targs type_int32s  cc_default)  AT)::nil ->
-      (*Make sure the memory is well formed *)
       globals_not_fresh ge m0 ->
       Mem.mem_wd m0 ->
-      typlist_of_typelist targs =
-      (map (fun x => typ_of_type (snd x)) (fn_vars f)) ->
-      (* Allocate a stackframe, to pass arguments in the stack*)
       Val.has_type_list args (typlist_of_typelist targs) ->
+      vars_have_type (fn_vars f) targs ->
+      vals_have_type args targs ->
       Mem.arg_well_formed args m0 ->
-      type_of_fundef (Internal f) = Tfunction targs type_int32s cc_default ->
       bounded_args sg ->
       entry_point ge m0
-                  (Callstate (Internal f) args (Kstop targs) m0) (Vptr fb Ptrofs.zero) args.
+                  (Callstate (Internal f) args (Kstop targs) m0)
+                  (Vptr fb Ptrofs.zero) args.
+  
+  
 
 (** A final state is a [Returnstate] with an empty continuation. *)
 Inductive final_state: state -> int -> Prop :=

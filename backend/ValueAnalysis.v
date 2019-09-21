@@ -1558,6 +1558,52 @@ Proof.
   destruct (Genv.invert_symbol (Genv.globalenv prog) b); congruence.
 Qed.
 
+
+Lemma entry_block_classification:
+  forall m, Ple (Genv.genv_next ge) (Mem.nextblock m) ->
+  exists bc,
+     genv_match bc ge
+  /\ bc_below bc (Mem.nextblock m)
+  /\ bc_nostack bc
+  /\ (forall b id, bc b = BCglob id -> Genv.find_symbol ge id = Some b)
+  /\ (forall b, Mem.valid_block m b -> bc b <> BCinvalid).
+Proof.
+  intros.
+  set (f := fun b =>
+              if plt b (Mem.nextblock m) then
+                match Genv.invert_symbol ge b with None => BCother | Some id => BCglob id end
+              else
+                BCinvalid).
+  assert (F_glob: forall b1 b2 id, f b1 = BCglob id -> f b2 = BCglob id -> b1 = b2).
+  {
+    unfold f; intros.
+    do 2 match_case in H1; do 2 match_case in H0.
+    rewrite <- H1 in H0; inv H0.
+    exploit Genv.invert_find_symbol. eexact Heqo.
+    exploit Genv.invert_find_symbol. eexact Heqo0.
+    congruence.
+  }
+  assert (F_stack: forall b1 b2, f b1 = BCstack -> f b2 = BCstack -> b1 = b2).
+  { unfold f; intros. do 2 match_case in H0. }
+  set (bc := BC f F_stack F_glob). unfold f in bc.
+  exists bc; splitall.
+- split; simpl; intros.
+  + split; intros.
+    * rewrite pred_dec_true by
+          (eapply Plt_Ple_trans; try eapply Genv.genv_symb_range; eauto).
+      erewrite Genv.find_invert_symbol; eauto.
+    * apply Genv.invert_find_symbol.
+      do 2 match_case in H0.
+  + rewrite pred_dec_true by (eapply Plt_Ple_trans; eauto).
+    split; match_case; auto.
+- red; simpl; intros. match_case in H0.
+- red; simpl; intros. do 2 match_case; auto.
+- simpl; intros. do 2 match_case in H0; inv H0.
+  apply Genv.invert_find_symbol; auto.
+- intros; simpl. rewrite pred_dec_true by assumption.
+  match_case; auto.
+Qed.
+
 Section INIT.
 
 Variable bc: block_classification.
@@ -1834,11 +1880,40 @@ Proof.
   split. subst ab. apply store_init_data_list_summary. constructor.
   split. subst ab. eapply A; eauto.
   exploit Genv.init_mem_characterization; eauto.
-  intros (P & Q & R).
+  intros (P & Q & R). 
   intros; red; intros. exploit Q; eauto. intros [U V].
-  unfold Genv.perm_globvar in V; rewrite RO, NVOL in V. inv V.
+  unfold Genv.perm_globvar in V. rewrite RO, NVOL in V. inv V.
 Qed.
 
+Theorem entry_mem_matches:
+  forall m, Ple (Genv.genv_next ge) (Mem.nextblock m) ->
+  exists bc,
+     genv_match bc ge
+  /\ bc_below bc (Mem.nextblock m)
+  /\ bc_nostack bc
+  /\ (forall cunit, linkorder cunit prog -> romatch bc m (romem_for cunit))
+  /\ (forall b, Mem.valid_block m b -> bc b <> BCinvalid).
+Proof.
+  intros.
+  exploit entry_block_classification; eauto. intros (bc & GE & BELOW & NOSTACK & INV & VALID).
+  exists bc; splitall; auto.
+  intros. 
+  assert (B: romem_consistent (prog_defmap prog) (romem_for cunit)) by (apply romem_for_consistent_2; auto).
+  red; intros.
+  exploit B; eauto. intros (v & DM & RO & NVOL & DEFN & EQ).
+  rewrite Genv.find_def_symbol in DM. destruct DM as (b1 & FS & FD).
+  rewrite <- Genv.find_var_info_iff in FD.
+  assert (b1 = b). { apply INV in H1. unfold ge in H1; congruence. }
+  subst b1.
+  split. subst ab. apply store_init_data_list_summary. constructor.
+  split. subst ab.
+  - admit.
+  - intros.
+    intros; red; intros .
+    clear - RO FD H3.
+    admit. (* add that readonly globals are not writable! *)
+Admitted.    
+    
 End INITIAL.
 
 Require Import Axioms.
@@ -1863,6 +1938,20 @@ Proof.
 - exact NOSTACK.
 Qed.
 
+Theorem sound_entry:
+  forall prog m st fptr args, entry_point prog m st fptr args ->
+                         sound_state prog st.
+Proof.
+  destruct 1.
+  exploit entry_mem_matches; eauto. intros (bc & GE & BELOW & NOSTACK & RM & VALID).
+  constructor; intros. apply sound_call_state with bc.
+- admit. (* generalize sound_stack to admit the pre-stack as "other"?*)
+- admit. (* should follow from H6  *)
+- admit. (* Follows from RM + allocation rules *)
+- admit. (* don't know *)
+- exact GE.
+- exact NOSTACK.
+Admitted.
 Hint Resolve areg_sound aregs_sound: va.
 
 (** * Interface with other optimizations *)

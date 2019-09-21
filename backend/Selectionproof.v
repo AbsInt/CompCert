@@ -926,7 +926,7 @@ Proof.
     econstructor; eauto.
 Qed.
 
-Lemma simulation_atx:
+Lemma atx_sim:
   @simulation_atx _ (Cminor.semantics prog) (CminorSel.semantics tprog)
                   (fun (idx s1 : Cminor.state) (s2 : state) => idx = s1 /\ match_states s1 s2).
 Proof.
@@ -1194,7 +1194,7 @@ Proof.
   apply sel_step_correct; auto.
 Qed.
 
-Lemma preserves_atx_proof:
+Lemma atx_preserved:
   preserves_atx
     (fun (idx : Cminor.state) (s1 : Smallstep.state (Cminor.semantics prog))
        (s2 : Smallstep.state (semantics tprog)) => idx = s1 /\ match_states s1 s2).
@@ -1219,8 +1219,8 @@ Theorem transf_program_correct:
                       (Cminor.get_mem) (CminorSel.get_mem).
 Proof.
   eapply sim_extSim; try eapply transf_program_correct'.
-  - eapply simulation_atx.
-  - apply preserves_atx_proof.
+  - exact atx_sim.
+  - exact atx_preserved.
   - simpl; intros ? ? ? [? ?]; subst; inversion H0; eauto.
   
 Qed.
