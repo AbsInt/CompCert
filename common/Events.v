@@ -70,17 +70,14 @@ Inductive eventval: Type :=
   - return [Some perm], if the new permission is [perm].
 *)
 Notation delta_perm_map := (Maps.PTree.t (Z -> option (option permission))).
-Inductive inject_Z_map {A} (delt: Z) (f1 f2: (Z -> A)): Prop:=
-| InjectZ: (forall ofs x, f1 ofs = x ->
-                     f2 (ofs+ delt) = x) ->
-           inject_Z_map delt f1 f2.
+Definition inject_Z_map {A} (delt: Z) (f1 f2: (Z -> A)): Prop:=
+forall ofs, f1 ofs = f2 (ofs+ delt).
     
-                            
 Record inject_delta_map (mu: meminj)(dpm1 dpm2: delta_perm_map): Prop:=
-  { DPM_image: forall b1 b2 delt f1,
-      mu b1 = Some (b2, delt) ->
-      (Maps.PTree.get b1 dpm1) = Some f1 ->
-      exists f2, Maps.PTree.get b2 dpm2 = Some f2 /\
+  { DPM_image: (*All permissions changed are mapped*)
+      forall b1 f1, (Maps.PTree.get b1 dpm1) = Some f1 ->
+      exists b2 delt f2, mu b1 = Some (b2, delt) /\
+                     Maps.PTree.get b2 dpm2 = Some f2 /\
             inject_Z_map delt f1 f2
     ;DPM_preimage:
        forall b2 ofs2 f2 p,
@@ -120,7 +117,8 @@ Proof.
   - intros * ? H; inv H; constructor.
   - intros * ? H; inv H; constructor; eauto.
 Qed.
-    
+
+(* New strong injection. This relation is injective! *)
 Inductive inject_strong (mi : meminj) : val -> val -> Prop :=
     inject_int : forall i : int, inject_strong mi (Vint i) (Vint i)
   | inject_long : forall i : int64, inject_strong mi (Vlong i) (Vlong i)
@@ -159,9 +157,9 @@ Inductive inject_mem_effect (mu: meminj): mem_effect -> mem_effect -> Prop :=
     mu b1 = Some (b2, delt) ->
     list_memval_inject mu vals1 vals2 ->
     inject_mem_effect mu (Write b1 ofs1 vals1) (Write b2 (ofs1 + delt) vals2)
-| InjectAlloc: forall lo hi b1 b2,
-    mu b1 = Some (b2, 0) ->
-    inject_mem_effect mu (Alloc b1 hi lo) (Alloc b2 hi lo)
+| InjectAlloc: forall lo hi b1 b2 delt,
+    mu b1 = Some (b2, delt) -> (* should delt = 0 *)
+    inject_mem_effect mu (Alloc b1 hi lo) (Alloc b2 (hi+delt) (lo+delt))
 | InjectFree: forall l1 l2,
     list_inject_hi_low mu l1 l2 ->
     inject_mem_effect mu (Free l1) (Free l2).
@@ -172,9 +170,9 @@ Inductive inject_mem_effect_strong (mu: meminj): mem_effect -> mem_effect -> Pro
     mu b1 = Some (b2, delt) ->
     list_memval_inject_strong mu vals1 vals2 ->
     inject_mem_effect_strong mu (Write b1 ofs1 vals1) (Write b2 (ofs1 + delt) vals2)
-| InjectAllocStrong:forall lo hi b1 b2,
-    mu b1 = Some (b2, 0) ->
-    inject_mem_effect_strong mu (Alloc b1 hi lo) (Alloc b2 hi lo)
+| InjectAllocStrong:forall lo hi b1 b2 delt,
+    mu b1 = Some (b2, delt) -> (* should delt = 0 *)
+    inject_mem_effect_strong mu (Alloc b1 hi lo) (Alloc b2 (hi+delt) (lo+delt))
 | InjectFreeStrong: forall l1 l2,
     list_inject_hi_low mu l1 l2 ->
     inject_mem_effect_strong mu (Free l1) (Free l2).
@@ -799,6 +797,75 @@ Proof. intros *; eapply list_map_rel_prop; apply inj_event_strong_weak. Qed.
 Hint Resolve inject_trace_strong_weak.
 Section StrongRelaxedInjections.
 
+  (* Properties of inject_trace / _strong*)
+
+  Definition inj_monotone{A} (R:meminj -> A -> A-> Prop):Prop:=
+    forall (a b:A) f f',  R f a b -> inject_incr f f' -> R f' a b.
+  Lemma list_map_rel_incr:
+    forall {A} (R: meminj -> A -> A -> Prop),
+      inj_monotone R ->
+      inj_monotone (fun j => list_map_rel (R j)).
+  Proof.
+    intros A R HR.
+    unfold inj_monotone.
+    induction a; intros ? ? ? HH; inv HH;
+      intros; constructor; eauto.
+  Qed.
+  Create HintDb inj_mono.
+  Hint Resolve list_map_rel_incr.
+  Ltac inj_mono_tac:=
+    match goal with
+      [|- inj_monotone ?R ] =>
+      (* If it's a list try the list lemma *)
+      try (eapply list_map_rel_incr; eauto with  inj_mono);
+      intros ???? ?HR ?Hincr; inv HR;
+      try solve[econstructor; eauto with inj_mono]
+          | _ => fail "Expected goal: inj_monotone ?R" 
+    end.
+  Lemma injtrace_app:
+    forall f t1 t1' t2 t2',
+      inject_trace f (t1) (t1') ->
+      inject_trace f (t2) (t2') ->
+      inject_trace f (t1 ** t2) (t1' ** t2').
+  Proof.
+    intros f; induction t1; intros; inv H.
+    - simpl; auto.
+    - Transparent Eapp.
+      unfold Eapp; do 2 rewrite <- app_comm_cons.
+      constructor; auto. eapply IHt1; auto.
+  Qed.
+  Lemma inject_strong_mono: inj_monotone inject_strong.
+  Proof. inj_mono_tac. Qed.
+  Hint Resolve inject_strong_mono: inj_mono.
+  Lemma list_inject_strong_mono: inj_monotone list_memval_inject_strong.
+  Proof. inj_mono_tac. Qed.
+  Hint Resolve list_inject_strong_mono: inj_mono.
+  Lemma list_inject_hi_low_mono: inj_monotone list_inject_hi_low.
+  Proof. inj_mono_tac. Qed.
+  Hint Resolve list_inject_hi_low_mono: inj_mono.
+  Lemma inject_mem_effect_strong_incr: inj_monotone inject_mem_effect_strong.
+  Proof. inj_mono_tac. Qed.
+  Lemma list_inject_mem_effect_strong_incr:
+    inj_monotone list_inject_mem_effect_strong.
+  Proof. inj_mono_tac. Qed.
+  Hint Resolve list_inject_mem_effect_strong_incr: inj_mono.
+  Lemma inj_delta_map_mono: inj_monotone inject_delta_map.
+  Proof. inj_mono_tac. econstructor.
+         + intros. exploit DPM_image0; eauto.
+           intros (?&?&?&?&?&?).
+           repeat (econstructor; eauto).
+         + intros; exploit DPM_preimage0; eauto.
+           intros (?&?&?&?&?&?&?&?).
+           repeat (econstructor; eauto).
+  Qed.
+  Hint Resolve inj_delta_map_mono: inj_mono.
+  Lemma inject_incr_event_strong: inj_monotone inject_event_strong.
+  Proof. inj_mono_tac. Qed.
+  Hint Resolve inject_incr_event_strong: inj_mono.
+  Lemma inject_incr_trace_strong:
+    inj_monotone inject_trace_strong.
+  Proof. inj_mono_tac. Qed.
+  Hint Resolve inject_incr_trace_strong: inj_mono.
 Lemma val_inject_strong_compose:
   forall j12 j23 v1 v2 v3,
     inject_strong j12 v1 v2 ->
@@ -845,23 +912,6 @@ Lemma val_inject_strong_compose':
     Val.inject (compose_meminj j12 j23) v1 v3.
 Proof. composed_injections. Qed.
 
-Lemma val_inject_strong_interpolation:
-  forall j12 j23 v1 v3,
-    Val.inject (compose_meminj j12 j23) v1 v3 ->
-    exists v2,
-    inject_strong j12 v1 v2 /\ Val.inject j23 v2 v3.
-Proof.
-  intros.
-  inv H; try solve[ eexists; split; econstructor].
-  - (* ptr *)
-    unfold compose_meminj in H0.
-    destruct (j12 b1) as [[??]|] eqn:H12; try congruence.
-    destruct (j23 b) as [[??]|] eqn:H23; try congruence.
-    inversion H0; subst.
-    eexists; split; try econstructor; eauto.
-    rewrite Ptrofs.add_assoc. decEq. unfold Ptrofs.add.
-    apply Ptrofs.eqm_samerepr. auto with ints.    
-Qed.
 
 Lemma list_map_rel_trans:
   forall {A B C},
@@ -906,7 +956,27 @@ Lemma inject_delta_map_compose:
     inject_delta_map j12 dpm1 dpm2 ->
     inject_delta_map j23 dpm2 dpm3 ->
     inject_delta_map (compose_meminj j12 j23) dpm1 dpm3.
-Admitted.
+Proof. intros.
+       inv H; inv H0.
+       constructor.
+       - intros; exploit  DPM_image0; eauto.
+         intros (?&?&?&?&?&?).
+         exploit  DPM_image1; eauto.
+         intros (?&?&?&?&?&?).
+         repeat (econstructor; eauto).
+         unfold compose_meminj;
+           rewrite H0, H3; reflexivity.
+         intros ** ofs. 
+         rewrite H2, H5. f_equal. omega.
+       - intros; exploit  DPM_preimage1; eauto.
+         intros (?&?&?&?&?&?&?&?).
+         exploit  DPM_preimage0; eauto.
+         intros (?&?&?&?&?&?&?&?).
+         repeat (econstructor; eauto).
+         unfold compose_meminj;
+           rewrite H5, H1; reflexivity.
+         subst; eauto. omega.
+Qed.
 Lemma list_inject_hi_low_compose:
   forall j12 j23 le1 le2 le3,
     list_inject_hi_low j12 le1 le2 ->
@@ -945,6 +1015,8 @@ Proof.
     eapply InjectWrites; auto.
     (unfold compose_meminj; rewrite H; rewrite H6); auto.
     eapply list_memval_inject_strong_compose; eassumption.
+  - repeat rewrite <- Z.add_assoc. econstructor.
+    unfold compose_meminj; rewrite H, H5; auto.
   - econstructor.
     eapply list_inject_hi_low_compose; eassumption.
 Qed.
@@ -967,16 +1039,116 @@ Lemma inject_event_strong_compose:
     inject_event (compose_meminj j12 j23) v1 v3.
 Proof.
   intros. inv H; auto; inv H0; auto; try solve[econstructor].
-  -  econstructor.
-     + eapply list_inject_event_strong_compose; eassumption.
-     + eapply inject_delta_map_compose; eassumption.
-     + eapply list_inject_event_strong_compose; eassumption.
+  - econstructor.
+    + eapply list_inject_event_strong_compose; eassumption.
+    + eapply inject_delta_map_compose; eassumption.
+    + eapply list_inject_event_strong_compose; eassumption.
   - econstructor; try eassumption.
     + rewrite_compose_meminj; reflexivity.
     + eapply inject_delta_map_compose; eassumption. 
     + eapply inject_delta_map_compose; eassumption.
 Qed.
 
+
+Definition strong_interpolation {A}
+           (R: meminj -> A -> A -> Prop)
+           (R_strong: meminj -> A -> A -> Prop):=
+  forall v1 v3 j12 j23,
+    R (compose_meminj j12 j23) v1 v3 ->
+    exists v2,  R_strong j12 v1 v2 /\ R j23 v2 v3.
+Create HintDb str_interp.
+Ltac case_compose_meminj:=
+  match goal with
+  | [ H: compose_meminj ?f1 ?f2 ?b = Some _  |- _ ] =>
+    unfold compose_meminj in H; repeat match_case in H;
+    subst;
+    try match goal with
+    | [ H: Some _ = Some _ |- _ ] => inv H
+    end
+  end.
+(* apply a strong interpolation lemma in a hypothesis*)
+Ltac hyp_str_interp R R_lemma:=
+  match goal with
+  | [ H: R (compose_meminj _ _) _ _ |- _ ] =>
+    eapply R_lemma in H; destruct H as (?&?&?)
+  end.
+Lemma list_str_interpol:
+  forall {A} (R R_str: meminj -> A -> A -> Prop) ,
+  strong_interpolation R R_str ->
+  strong_interpolation (fun f => list_map_rel (R f))
+                       (fun f => list_map_rel (R_str f)).
+Proof.
+  intros.
+  unfold strong_interpolation.
+  induction v1; intros.
+  - inv H0; do 3 econstructor. 
+  - inv H0.
+    exploit IHv1; eauto. intros (?&?&?).
+    exploit H; eauto. intros (?&?&?).
+    do 3 econstructor; eauto.
+Qed.
+Lemma str_interpol_cut:
+  forall A R R_str,
+    @strong_interpolation A R R_str -> 
+    @strong_interpolation A R R_str.
+Proof. eauto. Qed.
+Ltac use_interpolations_in_hyps:=
+  exploit str_interpol_cut;
+  [|eassumption|];
+  [eauto with str_interp| intros (?&?&?)]. 
+Ltac str_interp:=
+  match goal with
+    [|- strong_interpolation ?R ?R_Str] =>
+    (* try if it's a list*)
+    try (eapply list_str_interpol; eauto with str_interp);
+    intros ???? ?HR; inv HR;
+    try case_compose_meminj;
+    (* exploit one interpolation from the hypothesis *)
+    try use_interpolations_in_hyps;
+    (*try easy cases *)
+    try solve[ do 3 econstructor];
+    try solve[repeat (econstructor; eauto with str_interp)]
+  end.
+    
+Lemma val_inject_strong_interpolation:
+  strong_interpolation Val.inject inject_strong.  
+Proof. 
+  str_interp. eexists; split.
+  - econstructor; eauto.
+  - econstructor; eauto.
+    rewrite Ptrofs.add_assoc. decEq. unfold Ptrofs.add. apply Ptrofs.eqm_samerepr. auto with ints.
+Qed.
+Hint Resolve val_inject_strong_interpolation: str_interp.
+Lemma str_interp_memval:
+  strong_interpolation memval_inject memval_inject_strong.
+Proof. str_interp. Qed.
+Hint Resolve str_interp_memval: str_interp.
+Lemma str_interp_list_memval:
+  strong_interpolation list_memval_inject list_memval_inject_strong.
+Proof. str_interp. Qed.
+Hint Resolve str_interp_list_memval: str_interp.
+Lemma str_interpolation_list_inject_hi_low:
+  strong_interpolation list_inject_hi_low list_inject_hi_low.
+Proof. str_interp.
+       repeat econstructor; eauto.
+       replace (hi + (z + z0)) with ((hi + z) + z0) by omega.
+       replace (low + (z + z0)) with ((low + z) + z0) by omega.
+       econstructor; assumption.
+Qed.
+Hint Resolve str_interpolation_list_inject_hi_low: str_interp.
+Lemma str_interpolation_mem_effect:
+  strong_interpolation inject_mem_effect inject_mem_effect_strong.
+Proof. str_interp.
+       - repeat (econstructor; eauto).
+         replace (ofs1 + (z + z0)) with ((ofs1 + z) + z0) by omega.
+         eapply InjectWrites; eauto.
+       - repeat rewrite Z.add_assoc.
+         repeat (econstructor; eauto).
+Qed.
+Hint Resolve str_interpolation_mem_effect: str_interp.
+Lemma str_interpolation_list_mem_effect:
+  strong_interpolation list_inject_mem_effect list_inject_mem_effect_strong.
+Proof.  str_interp. Qed.
 Lemma inject_event_strong_interpolation:
   forall j12 j23 v1 v3,
     inject_event (compose_meminj j12 j23) v1 v3 ->
@@ -985,6 +1157,8 @@ Lemma inject_event_strong_interpolation:
 Proof.
   intros.
   inv H; try solve[ eexists; split; econstructor].
+  - 
+    
 Admitted.
 
 Lemma inject_trace_strong_compose:
