@@ -1067,11 +1067,6 @@ Ltac case_compose_meminj:=
     end
   end.
 (* apply a strong interpolation lemma in a hypothesis*)
-Ltac hyp_str_interp R R_lemma:=
-  match goal with
-  | [ H: R (compose_meminj _ _) _ _ |- _ ] =>
-    eapply R_lemma in H; destruct H as (?&?&?)
-  end.
 Lemma list_str_interpol:
   forall {A} (R R_str: meminj -> A -> A -> Prop) ,
   strong_interpolation R R_str ->
@@ -1093,18 +1088,21 @@ Lemma str_interpol_cut:
     @strong_interpolation A R R_str.
 Proof. eauto. Qed.
 Ltac use_interpolations_in_hyps:=
-  exploit str_interpol_cut;
-  [|eassumption|];
-  [eauto with str_interp| intros (?&?&?)]. 
+  match goal with
+  | [ H: ?R (compose_meminj ?j12 ?j23) _ _ |- _ ] =>
+    eapply (@str_interpol_cut _ R) in H;
+    [ destruct H as (?&?&?) | solve[eauto with str_interp]]
+  end.
 Ltac str_interp:=
   match goal with
     [|- strong_interpolation ?R ?R_Str] =>
     (* try if it's a list*)
-    try (eapply list_str_interpol; eauto with str_interp);
+    try (eapply list_str_interpol;
+         eauto with str_interp);
     intros ???? ?HR; inv HR;
     try case_compose_meminj;
     (* exploit one interpolation from the hypothesis *)
-    try use_interpolations_in_hyps;
+    repeat use_interpolations_in_hyps;
     (*try easy cases *)
     try solve[ do 3 econstructor];
     try solve[repeat (econstructor; eauto with str_interp)]
@@ -1129,7 +1127,7 @@ Proof. str_interp. Qed.
 Hint Resolve str_interp_list_memval: str_interp.
 Lemma str_interpolation_list_inject_hi_low:
   strong_interpolation list_inject_hi_low list_inject_hi_low.
-Proof. str_interp.
+Proof. str_interp. 
        repeat econstructor; eauto.
        replace (hi + (z + z0)) with ((hi + z) + z0) by omega.
        replace (low + (z + z0)) with ((low + z) + z0) by omega.
@@ -1149,17 +1147,34 @@ Hint Resolve str_interpolation_mem_effect: str_interp.
 Lemma str_interpolation_list_mem_effect:
   strong_interpolation list_inject_mem_effect list_inject_mem_effect_strong.
 Proof.  str_interp. Qed.
-Lemma inject_event_strong_interpolation:
-  forall j12 j23 v1 v3,
-    inject_event (compose_meminj j12 j23) v1 v3 ->
-    exists v2,
-      inject_event_strong j12 v1 v2 /\ inject_event j23 v2 v3.
-Proof.
-  intros.
-  inv H; try solve[ eexists; split; econstructor].
-  - 
-    
+Hint Resolve str_interpolation_list_mem_effect: str_interp.
+Lemma list_inject_mem_effectstrong_interpolation:
+    strong_interpolation list_inject_mem_effect list_inject_mem_effect_strong.
+Proof.  str_interp. Qed.
+Hint Resolve list_inject_mem_effectstrong_interpolation: str_interp.
+Lemma inject_delta_interpolation:
+             strong_interpolation inject_delta_map inject_delta_map.
+Proof. str_interp.
+       set (mapped_delta:= fun {A} (j:meminj) (d: Maps.PTree.t (Z -> A)) =>
+                             @Maps.PTree.fold (Z -> A) (Maps.PTree.t (Z -> A)) 
+                              (fun dmap b1 f => match j b1  with
+                                           | Some (b2, delt) =>
+                                             Maps.PTree.set
+                                               b1 (fun ofs => f (ofs - delt)) dmap
+                                           | _ => dmap
+                                           end)
+                              d (Maps.PTree.empty (Z -> A))).
+       exists (mapped_delta _ j12 v1); split.
+       - econstructor; intros.
+         + exploit DPM_image0; try eassumption;
+             intros (?&?&?&?&?&?).
+           case_compose_meminj.
+           repeat (econstructor; eauto).
 Admitted.
+Hint Resolve inject_delta_interpolation: str_interp.
+Lemma inject_event_strong_interpolation:
+  strong_interpolation inject_event inject_event_strong.
+Proof. str_interp. Qed.
 
 Lemma inject_trace_strong_compose:
   forall j12 j23 l1 l2 l3,
@@ -1193,14 +1208,8 @@ Proof.
 Qed.
 
 Lemma inject_trace_strong_interpolation:
-  forall j12 j23 v1 v3,
-    inject_trace (compose_meminj j12 j23) v1 v3 ->
-    exists v2,
-      inject_trace_strong j12 v1 v2 /\ inject_trace j23 v2 v3.
-Proof.
-  intros ??; eapply list_map_rel_interpolation.
-  apply inject_event_strong_interpolation.
-Qed.
+  strong_interpolation inject_trace inject_trace_strong.
+Proof. str_interp. Qed.
 
 Section DETERMINISM.
 
