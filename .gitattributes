@@ -1,0 +1,3 @@
+# Files that should be ignored by Github linguist
+test/* linguist-vendored
+doc/* linguist-documentation
