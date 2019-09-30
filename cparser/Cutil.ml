@@ -836,6 +836,12 @@ let is_anonymous_composite = function
   | TUnion (id,_) -> id.C.name = ""
   | _ -> false
 
+let is_anonymous_type = function
+  | TEnum (id,_)
+  | TStruct (id,_)
+  | TUnion (id,_) -> id.C.name = ""
+  | _ -> false
+
 let is_function_pointer_type env t =
   match unroll env t with
   | TPtr (ty, _) -> is_function_type env ty

@@ -39,7 +39,16 @@ let warning loc =
 let print_typ env fmt ty =
   match ty with
   | TNamed _  ->
-      Format.fprintf fmt "'%a' (aka '%a')" Cprint.typ_raw ty Cprint.typ_raw (unroll env ty)
+    Format.fprintf fmt "'%a'" Cprint.typ_raw ty;
+    let ty' = unroll env ty in
+    if not (is_anonymous_type ty')
+    then Format.fprintf fmt " (aka '%a')" Cprint.typ_raw ty'
+  | TStruct (id,_) when id.C.name = "" ->
+    Format.fprintf fmt "'struct <anonymous>'"
+  | TUnion (id,_) when id.C.name = "" ->
+    Format.fprintf fmt "'union <anonymous>'"
+  | TEnum (id,_) when id.C.name = "" ->
+    Format.fprintf fmt "'enum <anonymous>'"
   | _ -> Format.fprintf fmt "'%a'" Cprint.typ_raw ty
 
 let pp_field fmt id =
@@ -1056,7 +1065,7 @@ and elab_struct_or_union_info kind loc env members attrs =
   | fld :: rem ->
       if wrap incomplete_type loc env' fld.fld_typ then
         (* Must be fatal otherwise we get problems constructing the init *)
-        fatal_error loc "member '%a' has incomplete type" pp_field fld.fld_name;
+        fatal_error loc "member '%a' has incomplete type '%a'" pp_field fld.fld_name (print_typ env) fld.fld_typ;
       if wrap contains_flex_array_mem loc env' fld.fld_typ && kind = Struct then
         warning loc Flexible_array_extensions "%a may not be used as a struct member due to flexible array member" (print_typ env) fld.fld_typ;
       check_reduced_alignment loc env' fld.fld_typ;
@@ -1611,7 +1620,7 @@ end;
 try
   elab_item (I.top env root ty_root) ie []
 with No_default_init ->
-  error loc "variable has incomplete type %a" Cprint.typ ty_root;
+  error loc "variable has incomplete type %a" (print_typ env) ty_root;
   raise Exit
 
 (* Elaboration of a top-level initializer *)
@@ -1909,6 +1918,8 @@ let elab_expr ctx loc env a =
 
   | CAST ((spec, dcl), ie) ->
       let (ty, env) = elab_type loc env spec dcl in
+      if not (is_array_type env ty) && incomplete_type env ty then
+        fatal_error "ill-formed compound literal with incomplete type %a" (print_typ env) ty;
       begin match elab_initializer loc env "<compound literal>" ty ie with
       | (ty', Some i) -> { edesc = ECompound(ty', i); etyp = ty' },env
       | (ty', None)   -> fatal_error "ill-formed compound literal"
@@ -2425,9 +2436,10 @@ let enter_typedef loc env sto (s, ty, init) =
 
 let enter_decdef local nonstatic_inline loc sto (decls, env) (s, ty, init) =
   let isfun = is_function_type env ty in
+  let has_init = init <> NO_INIT in
   if sto = Storage_register && has_std_alignas env ty then
     error loc "alignment specified for 'register' object '%s'" s;
-  if sto = Storage_extern && init <> NO_INIT then
+  if sto = Storage_extern && has_init then
     error loc "'extern' declaration variable has an initializer";
   if local && isfun then begin
     match sto with
@@ -2451,10 +2463,14 @@ let enter_decdef local nonstatic_inline loc sto (decls, env) (s, ty, init) =
      initializer can refer to the ident *)
   let (id, sto', env1, ty, linkage) =
     enter_or_refine_ident local loc env s sto1 ty in
-  if init <> NO_INIT && not local then
+  if has_init && not local then
     add_global_define loc s;
-  if not isfun && is_void_type env ty then
-    fatal_error loc "'%s' has incomplete type" s;
+  (* check if the type is void or incomplete and the declaration is initialized *)
+  if not isfun then begin
+    let incomplete_init = not (is_array_type env1 ty) && wrap incomplete_type loc env1 ty && has_init in
+    if is_void_type env1 ty || incomplete_init then
+      fatal_error loc "variable '%s' has incomplete type %a" s (print_typ env) ty;
+  end;
   (* process the initializer *)
   let (ty', init') = elab_initializer loc env1 s ty init in
   (* update environment with refined type *)
@@ -2465,7 +2481,7 @@ let enter_decdef local nonstatic_inline loc sto (decls, env) (s, ty, init) =
       warning loc Tentative_incomplete_static "tentative static definition with incomplete type";
     end
     else if local && sto' <> Storage_extern then
-      error loc "variable has incomplete type %a" (print_typ env) ty';
+      error loc "variable '%s' has incomplete type %a" s (print_typ env) ty';
   (* check if alignment is reduced *)
   check_reduced_alignment loc env ty';
   (* check for static variables in nonstatic inline functions *)
@@ -2659,10 +2675,10 @@ let elab_fundef genv spec name defs body loc =
      and additionally they should have an identifier. In both cases a fatal
      error is raised in order to avoid problems at later places. *)
   let add_param env (id, ty) =
-    if wrap incomplete_type loc env ty then
-      fatal_error loc "parameter has incomplete type";
     if id.C.name = "" then
       fatal_error loc "parameter name omitted";
+    if wrap incomplete_type loc env ty then
+      fatal_error loc "parameter '%s' has incomplete type '%a'" id.C.name (print_typ env) ty;
     Env.add_ident env id Storage_default ty
   in
   (* Enter parameters and extra declarations in the local environment.
