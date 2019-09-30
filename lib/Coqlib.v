@@ -1353,7 +1353,7 @@ Inductive list_forall2_end {A B : Type} (P : A -> B -> Prop)
                         list_forall2_end P END (a1 :: al) (b1 :: bl).
 
 
-
+(* New tactics added by Santiago Cuellar: *)
 (*Do case analysis to simplify a match _ with*)
 Ltac common_tacs_after_destruct H:=
   first [ congruence
@@ -1371,3 +1371,20 @@ Ltac match_case_hyp H:=
   end; common_tacs_after_destruct H.
 Tactic Notation "match_case":= match_case_goal.
 Tactic Notation "match_case" "in" hyp(H):= (match_case_hyp H).
+
+Ltac split_hyp:=
+  match goal with [H: _ /\ _ |- _ ]=> destruct H end.
+Ltac hard_split:= match goal with [ |- _ /\ _ ]=> split end.
+Lemma ex_impl:
+      forall {A} (P P':A->Prop),  (forall x, P x -> P' x) ->
+                         (exists x, P x) -> (exists x, P' x).
+Proof. intros * ? [].  eexists; eauto. Qed.
+Lemma and_impl:
+  forall (P P' Q: Prop), (P -> P') -> (P /\ Q) -> (P' /\ Q).
+Proof. tauto. Qed.
+(* removes statements from inside existentials and conjunctions *)
+Ltac solve_inside HH:= try solve[eauto];
+  try solve [eapply and_impl; [| solve[eapply HH; eauto]]; simpl;
+       let HH':=fresh in intros HH'; solve_inside HH' ];
+  try solve [eapply ex_impl; [| solve[eapply HH; eauto]]; simpl;
+       let HH':=fresh in intros ? HH'; solve_inside HH'].

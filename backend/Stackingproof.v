@@ -2178,13 +2178,13 @@ Proof.
     exact BND2.
   intros [vargs' [P Q]].
   rewrite <- sep_assoc, sep_comm, sep_assoc in SEP.
-  exploit external_call_parallel_rule_strong; eauto.
+  exploit builtin_call_parallel_rule_strong; eauto.
   clear SEP; intros (j' & res' & m1' & t' & EC & RES & SEP & INCR & ISEP & INJTR & IFULL).
   rewrite <- sep_assoc, sep_comm, sep_assoc in SEP.
   econstructor; exists t', j'; split.
   apply plus_one. econstructor; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   split; [| split; trivial].
   eapply match_states_intro with (j := j'); eauto with coqlib.
   eapply match_stacks_change_meminj; eauto.

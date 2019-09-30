@@ -296,7 +296,7 @@ Lemma step_Sdebug_temp:
 Proof.
   intros. unfold Sdebug_temp. eapply step_builtin with (optid := None).
   econstructor. constructor. eauto. simpl. eapply cast_typeconv; eauto. constructor.
-  simpl. constructor.
+  simpl. repeat constructor.
 Qed.
 
 Lemma step_Sdebug_var:
@@ -308,7 +308,7 @@ Proof.
   intros. unfold Sdebug_var. eapply step_builtin with (optid := None).
   econstructor. constructor. constructor. eauto.
   simpl. reflexivity. constructor.
-  simpl. constructor.
+  simpl. repeat constructor.
 Qed.
 
 Lemma step_Sset_debug:
@@ -2065,7 +2065,7 @@ Proof.
   admit.
   intros [j' [tvres [tm' [P [Q [R [S [T [U V]]]]]]]]].
   econstructor; split.
-  apply plus_one. econstructor; eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  apply plus_one. econstructor; eauto. eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   admit.
   econstructor; eauto with compat.
   eapply match_envs_set_opttemp; eauto.

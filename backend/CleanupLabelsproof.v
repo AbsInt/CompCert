@@ -275,7 +275,7 @@ Proof.
   left; econstructor; split.
   econstructor.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   eauto.
   econstructor; eauto with coqlib.
 (* Llabel *)

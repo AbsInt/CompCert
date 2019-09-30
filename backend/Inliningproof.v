@@ -1224,7 +1224,7 @@ Proof.
   intros (F1 & v1 & m1' & t' & A & B & C & D & E & INCR & ? & ? & FULL').
   left; econstructor; exists F1, t'; split.
   eapply plus_one. eapply exec_Ibuiltin; eauto.
-    eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   split; [| split; trivial]. 
   econstructor.
     eapply match_stacks_inside_set_res.
@@ -1234,7 +1234,7 @@ Proof.
   auto. eauto. auto.
   destruct res; simpl; [apply agree_set_reg;auto|idtac|idtac]; eapply agree_regs_incr; eauto.
   auto. auto.
-  eapply external_call_valid_block; eauto.
+  eapply builtin_call_valid_block; eauto.
   eapply range_private_extcall; eauto.
     intros; eapply external_call_max_perm; eauto.
   auto.

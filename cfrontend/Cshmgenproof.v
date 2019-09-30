@@ -972,7 +972,7 @@ Proof.
   change le with (set_optvar None Vundef le) at 2.
   econstructor.
   econstructor. eauto. econstructor. eauto. constructor.
-  econstructor; eauto.
+  do 2 (econstructor; eauto).
   apply alignof_blockcopy_1248.
   apply sizeof_pos.
   apply sizeof_alignof_blockcopy_compat.
@@ -1568,7 +1568,7 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor.
   eapply transl_arglist_correct; eauto.
-  eapply external_call_symbols_preserved with (ge1 := ge). apply senv_preserved. eauto.
+  eapply builtin_call_symbols_preserved with (ge1 := ge). apply senv_preserved. eauto.
   eapply match_states_skip; eauto.
 
 - (* seq *)

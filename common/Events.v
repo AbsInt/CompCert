@@ -2497,6 +2497,27 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_debug kind txt targs => extcall_debug_sem
   end.
 
+Definition builtin_call  (ef: external_function): extcall_sem :=
+  fun ev vals m t ret m' =>
+    ef_inline ef = true /\ external_call ef ev vals m t ret m'.
+Lemma reduce_ext_calls:
+  forall ef ev vals m t ret m',
+  builtin_call ef ev vals m t ret m' ->
+  external_call ef ev vals m t ret m'.
+Proof. intros * H; apply H. Qed.
+Hint Resolve reduce_ext_calls.
+Lemma inline_ext_calls:
+  forall ef ev vals m t ret m',
+  builtin_call ef ev vals m t ret m' ->
+  ef_inline ef = true.
+Proof. intros * H; apply H. Qed.
+Hint Resolve inline_ext_calls.
+Lemma builtin_from_calls:
+  forall ef ev vals m t ret m',
+  external_call ef ev vals m t ret m' -> ef_inline ef = true ->
+  builtin_call ef ev vals m t ret m'.
+Proof. constructor; eauto. Qed.
+Hint Resolve builtin_from_calls.
 Theorem external_call_spec:
   forall ef,
   extcall_properties (external_call ef) (ef_sig ef).
@@ -2527,6 +2548,33 @@ Definition external_call_mem_inject_gen' ef := ec_mem_inject' (external_call_spe
 Definition external_call_trace_length ef := ec_trace_length (external_call_spec ef).
 Definition external_call_receptive ef := ec_receptive (external_call_spec ef).
 Definition external_call_determ ef := ec_determ (external_call_spec ef).
+
+
+Theorem builtin_call_spec:
+  forall ef, extcall_properties (builtin_call ef) (ef_sig ef).
+Proof.
+  intros.
+  pose proof (external_call_spec ef) as HH.
+  unfold builtin_call, ef_sig; econstructor;
+    intros; repeat split_hyp; 
+      try solve[solve_inside HH];
+      try solve [try hard_split; try eapply HH; eauto].
+  - solve_inside ec_mem_inject'.
+  - solve_inside ec_receptive.
+Qed.
+
+
+Definition builtin_call_well_typed ef := ec_well_typed (builtin_call_spec ef).
+Definition builtin_call_symbols_preserved ef := ec_symbols_preserved (builtin_call_spec ef).
+Definition builtin_call_valid_block ef := ec_valid_block (builtin_call_spec ef).
+Definition builtin_call_max_perm ef := ec_max_perm (builtin_call_spec ef).
+Definition builtin_call_readonly ef := ec_readonly (builtin_call_spec ef).
+Definition builtin_call_mem_extends ef := ec_mem_extends (builtin_call_spec ef).
+Definition builtin_call_mem_inject_gen ef := ec_mem_inject (builtin_call_spec ef).
+Definition builtin_call_mem_inject_gen' ef := ec_mem_inject' (builtin_call_spec ef).
+Definition builtin_call_trace_length ef := ec_trace_length (builtin_call_spec ef).
+Definition builtin_call_receptive ef := ec_receptive (builtin_call_spec ef).
+Definition builtin_call_determ ef := ec_determ (builtin_call_spec ef).
 
 (** Corollary of [external_call_valid_block]. *)
 

@@ -1110,12 +1110,12 @@ Proof.
 - (* Ibuiltin *)
   exploit (@eval_builtin_args_lessdef _ ge (fun r => rs#r) (fun r => rs'#r)); eauto.
   intros (vargs' & A & B).
-  exploit external_call_mem_extends; eauto.
+  exploit builtin_call_mem_extends; eauto.
   intros (v' & m1' & P & Q & R & S).
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
   eapply analysis_correct_1; eauto. simpl; auto.
 * unfold transfer; rewrite H.
@@ -1131,12 +1131,12 @@ Proof.
   + apply CASE1.
   + apply CASE3.
   + apply CASE1.
-  + apply CASE2; inv H1; auto.
+  + apply CASE2; inv H1; inv H3; auto.
   + apply CASE3.
   + apply CASE1.
   + apply CASE1.
   + inv H0; auto. inv H3; auto. inv H4; auto.
-    simpl in H1. inv H1.
+    destruct H1 as [HH H1]; simpl in H1. inv H1.
     exists valu.
     apply set_res_unknown_holds.
     InvSoundState. unfold vanalyze; rewrite AN.
@@ -1148,10 +1148,10 @@ Proof.
     eapply kill_loads_after_storebytes_holds; eauto.
     eapply Mem.loadbytes_length; eauto.
     simpl. apply Ple_refl.
-  + apply CASE2; inv H1; auto.
-  + apply CASE2; inv H1; auto.
+  + apply CASE2; inv H1; inv H3; auto.
+  + apply CASE2; inv H1; inv H3; auto.
   + apply CASE1.
-  + apply CASE2; inv H1; auto.
+  + apply CASE2; inv H1; inv H3; auto.
 * apply set_res_lessdef; auto.
 
 - (* Icond *)

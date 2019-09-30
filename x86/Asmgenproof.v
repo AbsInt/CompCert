@@ -705,14 +705,14 @@ Opaque loadind.
   exploit functions_transl; eauto. intro FN.
   generalize (transf_function_no_overflow _ _ H3); intro NOOV.
   exploit builtin_args_match; eauto. intros [vargs' [P Q]].
-  exploit external_call_mem_extends; eauto.
+  exploit builtin_call_mem_extends; eauto.
   intros [vres' [m2' [A [B [C D]]]]].
   left. econstructor; split. apply plus_one.
   eapply exec_step_builtin. eauto. eauto.
   eapply find_instr_tail; eauto.
   erewrite <- sp_val by eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   eauto.
   econstructor; eauto.
   instantiate (2 := tf); instantiate (1 := x).

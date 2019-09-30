@@ -127,7 +127,7 @@ Remark eval_builtin_1:
   builtin_implements id sg (varg1::nil) vres ->
   eval_expr ge sp e m le (Ebuiltin (EF_builtin id sg) (arg1 ::: Enil)) vres.
 Proof.
-  intros. econstructor. econstructor. eauto. constructor. apply H0.
+  intros. repeat (econstructor; eauto). 
 Qed.
 
 Remark eval_builtin_2:
@@ -137,7 +137,7 @@ Remark eval_builtin_2:
   builtin_implements id sg (varg1::varg2::nil) vres ->
   eval_expr ge sp e m le (Ebuiltin (EF_builtin id sg) (arg1 ::: arg2 ::: Enil)) vres.
 Proof.
-  intros. econstructor. constructor; eauto. constructor; eauto. constructor. apply H1.
+  intros. repeat (econstructor; eauto). 
 Qed.
 
 Definition unary_constructor_sound (cstr: expr -> expr) (sem: val -> val) : Prop :=

@@ -368,13 +368,13 @@ Proof.
   eapply star_step; eauto.
   econstructor.
   constructor. eexact E1. constructor.
-  simpl; constructor.
+  simpl; do 2 (constructor; eauto).
   simpl; auto.
   traceEq.
 - eapply star_step; eauto.
   econstructor.
   constructor.
-  simpl; constructor.
+  simpl; do 2 (constructor; eauto).
   simpl; auto.
   traceEq.
 Qed.
@@ -477,7 +477,7 @@ Proof.
   eapply plus_left.
   econstructor; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   apply eval_add_delta_ranges. traceEq.
   constructor; auto.
 - (* label *)

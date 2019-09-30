@@ -918,10 +918,10 @@ Proof.
     econstructor. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
     econstructor; eauto.
     econstructor; eauto.
-  - exploit external_call_mem_extends; eauto.
+  - exploit builtin_call_mem_extends; eauto. 
     intros [vres' [m2 [A [B [C D]]]]].
     do 2 eexists; split.
-    econstructor. eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+    econstructor. eauto. eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
     econstructor; eauto.
     econstructor; eauto.
 Qed.
@@ -1014,10 +1014,10 @@ Proof.
   eapply call_cont_commut; eauto.
 - (* Sbuiltin *)
   exploit sel_builtin_args_correct; eauto. intros [vargs' [P Q]].
-  exploit external_call_mem_extends; eauto.
+  exploit builtin_call_mem_extends; eauto.
   intros [vres' [m2 [A [B [C D]]]]].
   left; econstructor; split.
-  econstructor. eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  econstructor. eauto. eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto. apply sel_builtin_res_correct; auto.
 - (* Seq *)
   left; econstructor; split.

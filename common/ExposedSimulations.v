@@ -787,8 +787,8 @@ Section Composition.
   exists s3', f', f''; repeat (split; auto).
   subst f.
   eapply compose_inject_incr; eauto.
-  
-  eapply inject_trace_strong_trans; eauto.
+  admit. (*this is in Events.v *)
+  (* eapply inject_trace_strong_compose; eauto. *)
   
 * (* L3 makes no step *)
   exists (i2', i1'); exists s2; exists (compose_meminj f' f''), t'. repeat (split; auto).
@@ -819,7 +819,9 @@ Section Composition.
   exists (i2', i1'); exists s3'; exists (compose_meminj f12' f23'), t3'. repeat (split; auto).
   + exists s2',f12', f23'; auto.
   + subst; eapply compose_inject_incr; auto.
-  + subst; eapply inject_trace_strong_compose ; eauto.
+  + subst.
+  admit. (*this is in Events.v *)
+  (* eapply inject_trace_strong_compose; eauto. *)
   
 - (*match_states preserves at_external *)
   unfold preserves_atx_inj; intros.
@@ -856,7 +858,7 @@ Section Composition.
 - (* symbols *)
   intros. transitivity (Senv.public_symbol (symbolenv L2) id);
             [eapply Injfsim_public_preserved|eapply Injfsim_public_preserved]; eauto.
-  Qed.
+  Admitted.
 
 
    Lemma injection_injection_relaxed_composition:
@@ -951,7 +953,14 @@ Section Composition.
     * econstructor.
       do 2 eexists.
       repeat split; eauto.
-    * eapply inject_trace_strong_compose; eassumption.
+    *
+      Lemma inject_trace_strong_trans:
+        forall f12 f23 t1 t2 t3,
+        inject_trace_strong f12 t1 t2 ->
+        inject_trace_strong f23 t2 t3 ->
+        inject_trace_strong (compose_meminj f12 f23) t1 t3.
+        Admitted.
+      eapply inject_trace_strong_trans; eassumption.
   + intros t' Htrace.
     destruct (inject_trace_strong_interpolation Htrace) as (t2&Htrace12&Htrace23).
     assert (t2 = t2') by (eapply inject_trace_strong_determ; eassumption).

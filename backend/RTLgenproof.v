@@ -705,12 +705,12 @@ Lemma transl_expr_Ebuiltin_correct:
   forall le ef al vl v,
   eval_exprlist ge sp e m le al vl ->
   transl_exprlist_prop le al vl ->
-  external_call ef ge vl m E0 v m ->
+  builtin_call ef ge vl m E0 v m ->
   transl_expr_prop le (Ebuiltin ef al) v.
 Proof.
   intros; red; intros. inv TE.
   exploit H0; eauto. intros [rs1 [tm1 [EX1 [ME1 [RR1 [RO1 EXT1]]]]]].
-  exploit external_call_mem_extends; eauto.
+  exploit builtin_call_mem_extends; eauto.
   intros [v' [tm2 [A [B [C D]]]]].
   exists (rs1#rd <- v'); exists tm2.
 (* Exec *)
@@ -718,7 +718,7 @@ Proof.
   change (rs1#rd <- v') with (regmap_setres (BR rd) v' rs1).
   eapply exec_Ibuiltin; eauto.
   eapply eval_builtin_args_trivial.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   reflexivity.
 (* Match-env *)
   split. eauto with rtlg.
@@ -1438,12 +1438,12 @@ Proof.
   exploit (@eval_builtin_args_lessdef _ ge (fun r => rs'#r) (fun r => rs'#r)); eauto.
   intros (vargs'' & X & Y).
   assert (Z: Val.lessdef_list vl vargs'') by (eapply Val.lessdef_list_trans; eauto).
-  edestruct external_call_mem_extends as [tv [tm'' [A [B [C D]]]]]; eauto.
+  edestruct builtin_call_mem_extends as [tv [tm'' [A [B [C D]]]]]; eauto.
   econstructor; split.
   left. eapply plus_right. eexact E.
   eapply exec_Ibuiltin. eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. apply senv_preserved. eauto.
+  eapply builtin_call_symbols_preserved. apply senv_preserved. eauto.
   traceEq.
   econstructor; eauto. constructor.
   eapply match_env_update_res; eauto.

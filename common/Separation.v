@@ -926,7 +926,25 @@ Proof.
   eapply Mem.valid_block_inject_1; eauto.
 + exploit ISEP; eauto. intros (X & Y). elim Y. eapply m_valid; eauto.
 Qed.
-
+Lemma builtin_call_parallel_rule_strong:
+  forall (F V: Type) ef (ge: Genv.t F V) vargs1 m1 t vres1 m1' m2 j P vargs2,
+    builtin_call ef ge vargs1 m1 t vres1 m1' ->
+    injection_full j m1 ->
+  m2 |= minjection j m1 ** globalenv_inject ge j ** P ->
+  Val.inject_list j vargs1 vargs2 ->
+  exists j' vres2 m2' t',
+     builtin_call ef ge vargs2 m2 t' vres2 m2'
+  /\ Val.inject j' vres1 vres2
+  /\ m2' |= minjection j' m1' ** globalenv_inject ge j' ** P
+  /\ inject_incr j j'
+  /\ inject_separated j j' m1 m2
+  /\ inject_trace_strong j' t t' /\
+  injection_full j' m1' .
+Proof.
+  unfold builtin_call. intros; split_hyp.
+  exploit external_call_parallel_rule_strong; eauto; intros.
+  solve_inside H4.
+Qed.
 Lemma alloc_parallel_rule_2:
   forall (F V: Type) (ge: Genv.t F V) m1 sz1 m1' b1 m2 sz2 m2' b2 P j lo hi delta,
   m2 |= minjection j m1 ** globalenv_inject ge j ** P ->

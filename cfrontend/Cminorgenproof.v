@@ -2098,7 +2098,7 @@ Proof.
   intros [f' [vres' [tm' [t' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR [SEPARATED [INJT FULL']]]]]]]]]]]].
   left; econstructor; exists f', t'; split.
   apply plus_one. econstructor. eauto.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   split. 2: split; auto.
   assert (MCS': match_callstack f' m' tm'
                  (Frame cenv tfn e le te sp lo hi :: cs)

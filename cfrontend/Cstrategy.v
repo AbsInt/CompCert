@@ -375,7 +375,7 @@ Inductive estep: state -> trace -> state -> Prop :=
   | step_builtin: forall f C ef tyargs rargs ty k e m vargs t vres m',
       leftcontext RV RV C ->
       eval_simple_list e m rargs tyargs vargs ->
-      external_call ef ge vargs m t vres m' ->
+      builtin_call ef ge vargs m t vres m' ->
       estep (ExprState f (C (Ebuiltin ef tyargs rargs ty)) k e m)
           t (ExprState f (C (Eval vres ty)) k e m').
 
@@ -574,7 +574,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       exprlist_all_values rargs ->
       exists vargs, exists t, exists vres, exists m',
          cast_arguments m rargs tyargs vargs
-      /\ external_call ef ge vargs m t vres m'
+      /\ builtin_call ef ge vargs m t vres m'
   | _ => True
   end.
 
@@ -1384,7 +1384,7 @@ Proof.
   apply (eval_simple_list_steps f k e m rargs vl E C'); auto.
   simpl. intros X. exploit X. eapply rval_list_all_values.
   intros [vargs [t [vres [m' [U V]]]]].
-  econstructor; econstructor; eapply step_builtin; eauto.
+  econstructor; econstructor; eapply step_builtin; try econstructor; eauto.
   eapply can_eval_simple_list; eauto.
 (* paren *)
   exploit (simple_can_eval_rval f k e m b (fun x => C(Eparen x tycast ty))); eauto.

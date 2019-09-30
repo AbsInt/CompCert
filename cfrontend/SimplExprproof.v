@@ -841,7 +841,7 @@ Proof.
   intros. change (PTree.set id v le) with (set_opttemp (Some id) v le). econstructor.
   econstructor. constructor. eauto.
   simpl. unfold sem_cast. simpl. eauto. constructor.
-  simpl. econstructor; eauto.
+  simpl. repeat econstructor; eauto.
 (* nonvolatile case *)
   intros [A B]. subst t. constructor. eapply eval_Elvalue; eauto.
 Qed.
@@ -863,7 +863,7 @@ Proof.
   econstructor. constructor. eauto.
   simpl. unfold sem_cast. simpl. eauto.
   econstructor; eauto. rewrite H3; eauto. constructor.
-  simpl. econstructor; eauto.
+  simpl. repeat econstructor; eauto.
 (* nonvolatile case *)
   intros [A B]. subst t. econstructor; eauto. congruence.
 Qed.
@@ -1939,7 +1939,7 @@ Proof.
   econstructor; split.
   left. eapply plus_left. constructor.  apply star_one.
   econstructor; eauto.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   traceEq.
   econstructor; eauto.
   change sl2 with (nil ++ sl2). apply S. constructor. simpl; auto. auto.
@@ -1949,7 +1949,7 @@ Proof.
   econstructor; split.
   left. eapply plus_left. constructor. apply star_one.
   econstructor; eauto.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  eapply builtin_call_symbols_preserved; eauto. apply senv_preserved.
   traceEq.
   econstructor; eauto.
   change sl2 with (nil ++ sl2). apply S.

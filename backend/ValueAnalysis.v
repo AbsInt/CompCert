@@ -1344,7 +1344,7 @@ Proof.
   unfold transfer_builtin in TR.
   destruct ef; auto.
 + (* volatile load *)
-  inv H0; auto. inv H3; auto. inv H1.
+  inv H0; auto. inv H3; auto. destruct H1 as [HH H1]; inv H1.
   exploit abuiltin_arg_sound; eauto. intros VM1.
   eapply sound_succ_state; eauto. simpl; auto.
   apply set_builtin_res_sound; auto.
@@ -1360,7 +1360,7 @@ Proof.
     apply vmatch_lub_l. auto.
     eapply vnormalize_cast; eauto. eapply vmatch_top; eauto.
 + (* volatile store *)
-  inv H0; auto. inv H3; auto. inv H4; auto. inv H1.
+  inv H0; auto. inv H3; auto. inv H4; auto. destruct H1 as [HH H1]; inv H1.
   exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H0. intros VM1.
   exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H2. intros VM2.
   inv H9.
@@ -1375,7 +1375,7 @@ Proof.
     eapply romatch_store; eauto.
     eapply sound_stack_storev; eauto. simpl; eauto.
 + (* memcpy *)
-  inv H0; auto. inv H3; auto. inv H4; auto. inv H1.
+  inv H0; auto. inv H3; auto. inv H4; auto. destruct H1 as [HH H1]; inv H1.
   exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H0. intros VM1.
   exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H2. intros VM2.
   eapply sound_succ_state; eauto. simpl; auto.
@@ -1387,13 +1387,13 @@ Proof.
   eapply romatch_storebytes; eauto.
   eapply sound_stack_storebytes; eauto.
 + (* annot *)
-  inv H1. eapply sound_succ_state; eauto. simpl; auto. apply set_builtin_res_sound; auto. constructor.
+  destruct H1 as [HH H1]; inv H1. eapply sound_succ_state; eauto. simpl; auto. apply set_builtin_res_sound; auto. constructor.
 + (* annot val *)
-  inv H0; auto. inv H3; auto. inv H1.
+  inv H0; auto. inv H3; auto. destruct H1 as [HH H1]; inv H1.
   eapply sound_succ_state; eauto. simpl; auto.
   apply set_builtin_res_sound; auto. eapply abuiltin_arg_sound; eauto.
 + (* debug *)
-  inv H1. eapply sound_succ_state; eauto. simpl; auto. apply set_builtin_res_sound; auto. constructor.
+  destruct H1 as [HH H1]; inv H1. eapply sound_succ_state; eauto. simpl; auto. apply set_builtin_res_sound; auto. constructor.
 
 - (* cond *)
   eapply sound_succ_state; eauto.

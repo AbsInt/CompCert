@@ -2366,7 +2366,7 @@ Section PRESERVATION.
       eapply star_trans. eexact A1.
       eapply star_left. econstructor.
       eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-      eapply external_call_symbols_preserved. apply senv_preserved. eauto.
+      eapply builtin_call_symbols_preserved. apply senv_preserved. constructor; eauto.
       instantiate (1 := ls2); auto.
       eapply star_right. eexact A3.
       econstructor.
