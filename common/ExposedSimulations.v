@@ -381,28 +381,24 @@ Section ExposingMemory.
     Lemma Injsimulation_star:
         forall (SIM:fsim_properties_inj),
       forall s1 t s1', Star L1 s1 t s1' ->
-                  forall i f s2,
-                    Injmatch_states SIM i f s1 s2 ->
-                    exists i' f', exists s2' t', Star L2 s2 t' s2' /\ Injmatch_states SIM i' f' s1' s2'
-                                       /\ inject_incr f f' /\ inject_trace f' t t'.
+      forall i f s2,
+        Injmatch_states SIM i f s1 s2 ->
+        exists i' f', exists s2' t', Star L2 s2 t' s2' /\ Injmatch_states SIM i' f' s1' s2'
+                           /\ inject_incr f f' /\ inject_trace_strong f' t t'.
     Proof.
       intros S.
-      induction 1; intros.
-      exists i, f; exists s2 , nil; split; auto. apply star_refl.
-      split; auto; constructor.
-      apply inject_incr_refl. constructor.
-      exploit Injfsim_simulation; eauto.
-      intros [i' [s2' [f'[t' [A [B [C D]]]]]]].
-      exploit IHstar; eauto. intros [i'' [f'' [s2'' [t'' [E [F [G HH]]]]]]].
-      exists i'';exists f''; exists s2'', (t' ** t''); split; auto. eapply star_trans; eauto.
-      intuition auto. apply plus_star; auto.
-      split; auto. subst t.
-      split; auto.
-      eapply inject_incr_trans; eauto.
-      (* apply injtrace_app; auto.
-      apply inject_trace_strong_weak; auto.
-      *)
-      Admitted.
+      induction 1; intros; subst.
+      - repeat (econstructor; eauto).
+      - exploit Injfsim_simulation; eauto. intros [i' [s2' [f'[t' [A [B [C D]]]]]]].
+        exploit IHstar; eauto. intros [i'' [f'' [s2'' [t'' [E [F [G HH]]]]]]].
+        exists i'', f'', s2'', (t' ** t''); split; auto. 
+        eapply star_trans; eauto.
+        intuition auto. apply plus_star; auto.
+        repeat (econstructor; eauto).
+        eapply inject_incr_trans; eauto.
+        apply injtrace_strong_app; auto.
+        eapply inject_incr_trace_strong; eauto.
+    Qed.
     
     (** *Plus version of simulation*)
     Lemma Injsimulation_plus:
@@ -417,31 +413,31 @@ Section ExposingMemory.
       intros S.
       induction 1 using plus_ind2; intros.
       (* base case *)
-      exploit Injfsim_simulation'; eauto.
-      intros [[i' [s2' [f' [t' [A [B [C D]]]]]]] | [i' [f' [t' A]]]].
-      left. exists i', f', s2', t'; auto.
-      right; exists i', f' ; intuition.
+      - exploit Injfsim_simulation'; eauto.
+        intros [[i' [s2' [f' [t' [A [B [C D]]]]]]] | [i' [f' [t' A]]]].
+        + repeat (econstructor; eauto).
+        + right; exists i', f' ; intuition.
       (* inductive case *)
-      exploit Injfsim_simulation'; eauto.
-      intros [[i' [s2' [f' [t' [A [B [C D]]]]]]] | [i' [f' [A [B [C D]]]]]].
-      exploit Injsimulation_star; eauto. apply plus_star; eauto. eauto.
-      intros [i'' [f'' [s2'' [t'' [P [Q [R SS]]]]]]].
-      left; exists i''; exists f''; exists s2'', (t'**t''); split; auto. eapply plus_star_trans; eauto.
-      repeat split; auto.
-      eapply inject_incr_trans; eauto.
-      subst t.
-      admit. (*Some properties about inject_trace_strong*)
- 
-      
-      exploit IHplus; eauto.
-      intros [[i'' [f'' [s2'' [t' [P [Q [R SS]]]]]]] | [i'' [f'' [P [Q R]]]]].
-      subst. simpl. left; exists i''; exists f''; exists s2'', (t'); auto.
-      repeat split; eauto.
-      eapply inject_incr_trans; eauto.
-      subst. simpl. right; exists i''; exists f''; intuition auto.
-      eapply t_trans; eauto. eapply t_step; eauto.
-      eapply inject_incr_trans; eauto.
-    Admitted.
+      - subst; exploit Injfsim_simulation'; eauto.
+        intros [[i' [s2' [f' [t' [A [B [C D]]]]]]] | [i' [f' [A [B [C D]]]]]].
+        + exploit Injsimulation_star; eauto. apply plus_star; eauto. 
+          intros [i'' [f'' [s2'' [t'' [P [Q [R SS]]]]]]].
+          left; exists i''; exists f''; exists s2'', (t'**t''); split; auto.
+          eapply plus_star_trans; eauto.
+          repeat split; auto.
+          eapply inject_incr_trans; eauto.
+          eapply injtrace_strong_app; eauto.
+          eapply inject_incr_trace_strong; eauto.
+        + exploit IHplus; eauto. intros [(?&?&?&?&?&?&?&?)| (?&?&?&?&?&?)]. 
+          * left. repeat (econstructor; eauto).
+            eapply inject_incr_trans; eauto.
+            subst; simpl; auto.
+          * right.
+            exists x, x0. split.
+            eapply t_trans; eauto. econstructor; eauto.
+            subst; repeat (econstructor; eauto).
+            eapply inject_incr_trans; eauto.
+    Qed.
 
     Lemma Injsimulation_plus_relaxed:
       forall (SIM:fsim_properties_inj_relaxed),
@@ -959,7 +955,8 @@ Section Composition.
         inject_trace_strong f12 t1 t2 ->
         inject_trace_strong f23 t2 t3 ->
         inject_trace_strong (compose_meminj f12 f23) t1 t3.
-        Admitted.
+        
+      Admitted.
       eapply inject_trace_strong_trans; eassumption.
   + intros t' Htrace.
     destruct (inject_trace_strong_interpolation Htrace) as (t2&Htrace12&Htrace23).
