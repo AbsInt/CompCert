@@ -1065,7 +1065,7 @@ and elab_struct_or_union_info kind loc env members attrs =
   | fld :: rem ->
       if wrap incomplete_type loc env' fld.fld_typ then
         (* Must be fatal otherwise we get problems constructing the init *)
-        fatal_error loc "member '%a' has incomplete type '%a'" pp_field fld.fld_name (print_typ env) fld.fld_typ;
+        fatal_error loc "member '%a' has incomplete type %a" pp_field fld.fld_name (print_typ env) fld.fld_typ;
       if wrap contains_flex_array_mem loc env' fld.fld_typ && kind = Struct then
         warning loc Flexible_array_extensions "%a may not be used as a struct member due to flexible array member" (print_typ env) fld.fld_typ;
       check_reduced_alignment loc env' fld.fld_typ;
@@ -2678,7 +2678,7 @@ let elab_fundef genv spec name defs body loc =
     if id.C.name = "" then
       fatal_error loc "parameter name omitted";
     if wrap incomplete_type loc env ty then
-      fatal_error loc "parameter '%s' has incomplete type '%a'" id.C.name (print_typ env) ty;
+      fatal_error loc "parameter '%s' has incomplete type %a" id.C.name (print_typ env) ty;
     Env.add_ident env id Storage_default ty
   in
   (* Enter parameters and extra declarations in the local environment.
