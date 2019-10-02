@@ -678,8 +678,6 @@ Proof.
     intros. split. eapply INJ; eauto. xomega. eapply PERM1; eauto. xomega.
     intros. eapply PERM2; eauto. xomega.
 Qed.
-
-
 Lemma match_stack_not_nil:
       forall F m m' stk stk' sp',
         match_stacks F m m' stk stk' sp' ->
@@ -751,7 +749,6 @@ Proof.
    + (*match_stacks_inside_base*)  split. eapply match_stacks_justone; eauto. auto.
    + inv H0. exfalso; eapply match_stack_inside_not_nil1; eauto.
 Qed.
-
 Lemma match_stk_pre_main:
   forall F m m' stk1 stk2 sp,
     match_stacks F m m' stk1 stk2 sp ->
@@ -1045,14 +1042,9 @@ Qed.
 Definition CONCL1 S1' S2 F t:=
   exists S2' F' t', plus (step tge) S1' t' S2' /\ match_states F' S2 S2' /\ 
                      inject_incr F F' /\ inject_trace F' t t'.
-
 Definition CONCL2 S1 S1' S2 f t :=
   t = E0 /\ (measure S2 < measure S1)%nat /\ match_states f S2 S1'.
-
-
-
  
-    
 Theorem step_simulation:
   forall S1 t S2,
   step ge S1 t S2 ->
@@ -1448,48 +1440,6 @@ Proof.
   econstructor; eauto. subst vres. apply agree_set_reg_undef'; auto.
 Qed.
 
-(*Lemma transf_initial_states:
-  forall st1, initial_state prog st1 -> exists j st2, initial_state tprog st2 /\ match_states j st1 st2.
-Proof.
-  intros. inv H.
-  exploit function_ptr_translated; eauto. intros (cu & tf & FIND & TR & LINK).
-  set (j := Mem.flat_inj (Mem.nextblock m0)).
-  exists j, (Callstate nil tf nil m0); split.
-  econstructor; eauto.
-    eapply (Genv.init_mem_match TRANSF); eauto.
-    rewrite symbols_preserved. replace (prog_main tprog) with (prog_main prog). auto.
-    symmetry; eapply match_program_main; eauto.
-    rewrite <- H3. eapply sig_function_translated; eauto.
-  econstructor; eauto.
-  (*instantiate (1 := Mem.flat_inj (Mem.nextblock m0)).*)
-  apply match_stacks_one with (Mem.nextblock m0).
-  constructor; intros; subst j.
-    unfold Mem.flat_inj. apply pred_dec_true; auto.
-    unfold Mem.flat_inj in H. destruct (plt b1 (Mem.nextblock m0)); congruence.
-    eapply Genv.find_symbol_not_fresh; eauto.
-    eapply Genv.find_funct_ptr_not_fresh; eauto.
-    eapply Genv.find_var_info_not_fresh; eauto.
-    apply Ple_refl.
-  eapply Genv.initmem_inject; eauto.
-  (*FULL*)
-  red; intros; subst j. unfold Mem.flat_inj. destruct (plt b0 (Mem.nextblock m0)). congruence. elim n. apply H.
-Qed.*)
-
-(* sounds false: inlining increases stack size!
-Lemma transf_stacksize:
-  forall cu f f', transf_function (funenv_program cu) f = OK f' ->
-  fn_stacksize f' = fn_stacksize f.
-(* This doesn't appear to be true. Maybe we shouldn't bother allocating the block
-   at the right size until later. *)
-Proof.
-  unfold transf_function; intros.
-  destruct (expand_function _ _ _) eqn: EQ.
-  destruct (zlt _ _); inv H; simpl.
-  monadInv EQ.
-Admitted.
- *)
-
-
 (* This lemma probably has a pretty generalization*)      
 Lemma transf_fundef_single_param:
         forall cu f tf,
@@ -1502,47 +1452,18 @@ Proof.
   destruct (expand_function (funenv_program cu) f initstate) eqn:HH.
   destruct (zlt (st_stksize s') Ptrofs.max_unsigned) eqn:HH0.
   2: solve[inv TR].
-  inv TR; simpl.
-  rewrite H. simpl.
-  unfold sreg, shiftpos.
-  
-  (*Lets look at HH and see if that is what we get*)
-      unfold expand_function,initstate  in *.
-      simpl in HH.
-      unfold bind in *.
-      Ltac common_tacs_after_destruct H:=
-        first [ congruence
-              | solve[inversion H]
-              | auto].
-      
-      Ltac match_case_goal:=
-        match goal with
-          |- context[match ?x with _ => _ end] =>
-          destruct x eqn:?; try congruence
-        end.
-      Ltac match_case_hyp H:=
-        match type of H with
-          context[match ?x with _ => _ end] => destruct x eqn:?
-        end; common_tacs_after_destruct H.
-      match_case_hyp HH.
-      match_case_hyp HH.
-      inv HH.
-      match_case_hyp Heqr0.
-      match_case_hyp Heqr0.
-      inv Heqr0.
-      match_case_hyp Heqr2.
-      match_case_hyp Heqr2.
-      inv Heqr2.
-      unfold ret in *.
-      inv Heqr3. simpl.
-      unfold reserve_regs in Heqr1.
-      inv Heqr1.
-
-      unfold reserve_nodes in Heqr.
-      inv Heqr; simpl.
-      reflexivity.
+  inv TR; rewrite H; simpl.
+  unfold sreg, shiftpos, expand_function,initstate  in *.
+  simpl in HH. unfold bind in *.
+  do 2 match_case_hyp HH. inv HH.
+  do 2 match_case_hyp Heqr0. inv Heqr0.
+  do 2 match_case_hyp Heqr2. inv Heqr2.
+  unfold ret in *.
+  inv Heqr3. simpl.
+  unfold reserve_regs in Heqr1. inv Heqr1.
+  unfold reserve_nodes in Heqr.
+  inv Heqr; simpl. reflexivity.
 Qed.
-
 
 Lemma globals_not_fresh_nextb:
   forall {F V} (ge: Genv.t F V) m1 m2,
@@ -1550,12 +1471,6 @@ Lemma globals_not_fresh_nextb:
   Ple (Mem.nextblock m1) (Mem.nextblock m2) -> 
   globals_not_fresh ge m2.
 Proof. unfold globals_not_fresh. intros; xomega. Qed.
-
-
-
-
-
-    
    
 Lemma transf_entry_points:
   forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
@@ -1594,10 +1509,8 @@ Proof.
     + unfold Mem.mem_wd in *.
       exploit Mem.nextblock_alloc; eauto; intros ->.
       unfold Mem.inject_neutral.
-      eapply Mem.alloc_inject_neutral; eauto; swap 1 2.
-      xomega.
-      eapply Mem.inject_neutral_empty_blocks; auto.
-      xomega.
+      eapply Mem.alloc_inject_neutral; eauto; try xomega.
+      eapply Mem.inject_neutral_empty_blocks; auto; try xomega.
     + apply flat_injection_full.
 Qed.
 
@@ -1613,64 +1526,20 @@ Proof.
   - simpl. destruct TRANSF as (P & Q & R).
     rewrite symbols_preserved, Q; auto.
 Qed.
-(*
-Lemma match_stack_not_try:
-      forall F m m' st stk' sp',
-        match_stacks F m m' (st::nil) stk' sp' ->
-        stk' = st::nil
-    with match_stack_inside_not_try:
-        forall F m m' st stk' f' ctx' sp' rs',   
-          match_stacks_inside F m m' (st::nil) stk'
-                              f' ctx' sp' rs' ->
-          stk' = st::nil.
-Proof.
-  - intros. inv H; simpl; auto.
-    apply match_stack_inside_not_nil1 in MS;
-      exfalso; auto.
-    exploit match_stack_inside_not_try; eauto.
-    intros H; subst.
-    apply match_stack_inside_not_nil1 in MS;
-    exfalso; auto.
-    eauto.
-    intros [? ?]; eauto.
-      split; try solve[intros HH; inv HH].
-    exploit match_stack_inside_not_nil; eauto;
-      intros [? ?]; auto.
-  - intros. inv H.
-    + eapply match_stack_not_nil; eauto.
-    + split; try solve[intros HH; inv HH].
-    exploit match_stack_inside_not_nil; eauto;
-      intros [? ?]; auto.
-Qed.*)
-
 Lemma transf_final_states:
   forall st1 st2 r f,
     match_states f st1 st2 ->
-    final_state st1 r ->
-    final_state st2 r.
+    final_state st1 r -> final_state st2 r.
 Proof.
   intros. inv H0. inv H.
   - exploit match_stacks_justone; eauto.
     intros EQ; subst. inv VINJ. constructor.
   - exploit match_stacks_inside_justone; eauto. intros [A B]. congruence.
 Qed.
-
-(*Theorem transf_program_correct:
-  forward_simulation (semantics prog) (semantics tprog).
-Proof.
-  eapply forward_simulation_star.
-  apply senv_preserved.
-  eexact transf_entry_points.
-  eexact transf_initial_states'.
-  eexact transf_final_states.
-  eexact step_simulation.
-Qed.
-*)
-Lemma atx_sim:
-  @simulation_atx_inj _
-    (semantics prog) (semantics tprog)
-    (fun (idx : RTL.state)
-       (f : meminj) s1 s2 => idx = s1 /\ match_states f s1 s2).
+Lemma atx_sim:  @simulation_atx_inj
+                  _ (semantics prog) (semantics tprog)
+                  (fun (idx : RTL.state)
+                     (f : meminj) s1 s2 => idx = s1 /\ match_states f s1 s2).
 Proof.
   atx_sim_start_proof.
   exploit match_stacks_globalenvs; eauto. intros [bound MG].
@@ -1685,21 +1554,17 @@ Proof.
   do 2 econstructor; auto.
   eapply match_stacks_bound with (Mem.nextblock m').
   eapply match_stacks_extcall with (F1 := j) (F2 := F1) (m1 := m) (m1' := m');
-    eauto.
-  intros; eapply external_call_max_perm; eauto.
-  intros; eapply external_call_max_perm; eauto.
-  xomega.
+    eauto; try xomega;
+  try (intros; eapply external_call_max_perm; eauto).
   eapply external_call_nextblock; eauto.
 Qed.  
-Lemma atx_preserved:
-  @preserves_atx_inj _
-    (semantics prog) (semantics tprog)
-    (fun (idx : RTL.state) (f : meminj) (s1 s2 : RTL.state) =>
-     idx = s1 /\ match_states f s1 s2).
+Lemma atx_preserved: @preserves_atx_inj
+                       _ (semantics prog) (semantics tprog)
+                       (fun (idx : RTL.state) (f : meminj) (s1 s2 : RTL.state) =>
+                          idx = s1 /\ match_states f s1 s2).
 Proof. atx_preserved_start_proof. Qed.  
 Theorem transf_program_correct:
-  @fsim_properties_inj (semantics prog) (semantics tprog)
-    get_mem get_mem.
+  @fsim_properties_inj (semantics prog) (semantics tprog) get_mem get_mem.
 Proof.
   eapply Build_fsim_properties_inj with
       (Injorder:=(ltof _ measure))
