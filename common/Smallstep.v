@@ -25,9 +25,7 @@ Require Import Coqlib.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Integers.
-(*NEW*) Require Import AST.
-(*NEW*) Require Import Values.
-(*NEW*) Require Import Memory. (* To specify injections*)
+(*NEW*) Require Import AST Values Memory. (* To specify injections*)
 
 Set Implicit Arguments.
 
