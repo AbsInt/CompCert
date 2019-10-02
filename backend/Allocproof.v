@@ -17,7 +17,7 @@ Require Import FunInd.
 Require Import FSets.
 Require Import Coqlib Ordered Maps Errors Integers Floats.
 Require Import AST Linking Lattice Kildall.
-Require Import Values Memory Globalenvs Events Smallstep.
+Require Import Values Memory Globalenvs Events Smallstep ExposedSimulations.
 Require Archi.
 Require Import Op Registers RTL Locations Conventions RTLtyping LTL.
 Require Import Allocation.
@@ -1847,7 +1847,7 @@ Lemma exec_moves:
   satisf rs ls e' ->
   wt_regset env rs ->
   exists ls',
-    star step tge (Block s f sp (expand_moves mv bb) ls m)
+    star (step tge) (Block s f sp (expand_moves mv bb) ls m)
                E0 (Block s f sp bb ls' m)
   /\ satisf rs ls' e.
 Proof.
@@ -1891,9 +1891,10 @@ Qed.
 (** The simulation relation *)
 
 Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signature -> Prop :=
-  | match_stackframes_nil: forall sg,
+  | match_stackframes_one:  forall targs sg args,
       sg.(sig_res) = Some Tint ->
-      match_stackframes nil nil sg
+      match_stackframes (RTL.pre_main_staklist targs)
+                        (pre_main_staklist targs args) sg
   | match_stackframes_cons:
       forall res f sp pc rs s tf bb ls ts sg an e env
         (STACKS: match_stackframes s ts (fn_sig tf))
@@ -1908,7 +1909,7 @@ Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signa
            Val.has_type v (env res) ->
            agree_callee_save ls ls1 ->
            exists ls2,
-           star LTL.step tge (Block ts tf sp bb ls1 m)
+           star (LTL.step tge) (Block ts tf sp bb ls1 m)
                           E0 (State ts tf sp pc ls2 m)
            /\ satisf (rs#res <- v) ls2 e),
       match_stackframes
@@ -1990,7 +1991,7 @@ Qed.
 Lemma step_simulation:
   forall S1 t S2, RTL.step ge S1 t S2 -> wt_state S1 ->
   forall S1', match_states S1 S1' ->
-  exists S2', plus LTL.step tge S1' t S2' /\ match_states S2 S2'.
+  exists S2', plus (LTL.step tge) S1' t S2' /\ match_states S2 S2'.
 Proof.
   induction 1; intros WT S1' MS; inv MS; try UseShape.
 
@@ -2364,7 +2365,7 @@ Proof.
   eapply star_trans. eexact A1.
   eapply star_left. econstructor.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. apply senv_preserved. eauto.
+  eapply builtin_call_symbols_preserved. apply senv_preserved. eauto.
   instantiate (1 := ls2); auto.
   eapply star_right. eexact A3.
   econstructor.
@@ -2474,15 +2475,15 @@ Proof.
   eapply external_call_well_typed; eauto.
 
 (* return *)
-- inv STACKS.
+- inv STACKS. inv not_empty. (* the impossible case *)
   exploit STEPS; eauto. rewrite WTRES0; auto. intros [ls2 [A B]].
   econstructor; split.
-  eapply plus_left. constructor. eexact A. traceEq.
+  eapply plus_left. constructor. inv STACKS0; constructor. eexact A. traceEq.
   econstructor; eauto.
   apply wt_regset_assign; auto. rewrite WTRES0; auto.
 Qed.
 
-Lemma initial_states_simulation:
+(*Lemma initial_states_simulation:
   forall st1, RTL.initial_state prog st1 ->
   exists st2, LTL.initial_state tprog st2 /\ match_states st1 st2.
 Proof.
@@ -2501,7 +2502,7 @@ Proof.
   red; auto.
   apply Mem.extends_refl.
   rewrite SIG, H3. constructor.
-Qed.
+Qed.*)
 
 Lemma final_states_simulation:
   forall st1 st2 r,
@@ -2509,7 +2510,12 @@ Lemma final_states_simulation:
 Proof.
   intros. inv H0. inv H. inv STACKS.
   econstructor. rewrite <- (loc_result_exten sg). inv RES; auto.
-  rewrite H; auto.
+  simpl.
+  unfold proj_sig_res in *.
+  destruct (sig_res sg); simpl in *.
+  destruct t; try inv WTRES; auto.
+  auto.
+  (*the impossible case*) inv STACKS0.
 Qed.
 
 Lemma wt_prog: wt_program prog.
@@ -2525,21 +2531,274 @@ Proof.
 - constructor.
 Qed.
 
-Theorem transf_program_correct:
-  forward_simulation (RTL.semantics prog) (LTL.semantics tprog).
+Section EntryDiagram.
+  Lemma locmap_gss:
+    forall p v lm,
+      Val.has_type v (loc2typ p) ->
+      twolong_type_diff p ->
+      (twolong p -> Archi.ptr64 = false ) ->
+      Locmap.getpair p (setpair p v lm) = v.
+  Proof.
+    intros. destruct p eqn:HH.
+    - eapply Locmap.gss_typed; auto.
+    - simpl.
+      destruct H0 as (Trlo& Trhi& Hdiff).
+      exploit H1; simpl; auto; intros H32.
+      rewrite <- val_longofwords_eq_1; eauto.
+      f_equal; swap 1 2.
+      + rewrite Locmap.gss_typed; auto.
+        unfold Val.loword; destruct v; simpl; auto.
+        rewrite Trlo; auto.
+      + rewrite Locmap.gso; auto.
+        rewrite Locmap.gss_typed; auto.
+        unfold Val.loword; destruct v; simpl; auto.
+        rewrite Trhi; auto.
+  Qed.
+  Lemma locmap_gso:
+    forall p q v lm,
+      rpair_loc_diff q p ->
+      Locmap.getpair p (setpair q v lm) = Locmap.getpair p lm.
+  Proof.
+    intros. destruct q eqn:Hq;
+              destruct p eqn:Hp.
+    - simpl; rewrite Locmap.gso; auto.
+    - simpl; f_equal.
+      + rewrite Locmap.gso; auto.
+        destruct H; auto.
+      + rewrite Locmap.gso; auto.
+        destruct H; auto.
+    - destruct H.
+      simpl; f_equal.
+      rewrite Locmap.gso; auto.
+      rewrite Locmap.gso; auto.
+    - destruct H as (?&?&?&?).
+      simpl; f_equal;
+        repeat (rewrite Locmap.gso; auto).
+  Qed.
+  Definition loc_has_type_list arg typs:=
+    Forall2 (fun v l =>
+               Val.has_type v l)
+            arg
+            (map loc2typ typs).
+  Lemma loc_arguments_correct:
+    forall LOC arg
+           (Hnon_rep: all_diff_locs LOC)
+           (Hhas_type: loc_has_type_list arg LOC)
+           (Htyps: twolong_type_diff_list LOC)
+           (Honly32: two_only32_list LOC),
+      (map (fun p : rpair loc =>
+              Locmap.getpair p (setlist LOC arg (Locmap.init Vundef)))
+           LOC) = arg.
+  Proof.
+    induction LOC; simpl.
+    - intros; destruct arg; auto. inversion Hhas_type.
+    - intros.
+      inv Hnon_rep. inv Hhas_type.
+      inv Htyps. inv Honly32.
+      f_equal.
+      + eapply locmap_gss; eauto.
+      + erewrite list_map_exten.
+        * eapply IHLOC; eauto.
+        * intros. symmetry.
+          erewrite locmap_gso; eauto.
+  Qed.
+  Lemma loc_has_type_list_less_def:
+    forall arg ls_typ ls_typ',
+      Forall2 (fun v l => Val.has_type v l) arg ls_typ ->
+      Forall2 type_lessdef ls_typ ls_typ' ->
+      Forall2 (fun v l => Val.has_type v l) arg ls_typ'.
+  Proof.
+    induction arg; intros; inv H; inv H0.
+    - constructor.
+    - constructor.
+      + inv H2; auto. 
+        destruct a; simpl; auto.
+      + eapply IHarg; eauto.
+  Qed.
+  Lemma has_type_list_Forall2:
+    forall (arg : list val) (targs : list typ),
+      Val.has_type_list arg targs ->
+      Forall2 (fun (v : val) (l : typ) => Val.has_type v l) arg targs.
+  Proof.
+    induction arg; auto.
+    -- intros. destruct targs; try (inv H).
+       constructor.
+    --intros. destruct targs; inv H.
+      constructor; auto.
+  Qed.
+  Lemma loc_arguments_retrieved:
+    forall sg LOC args,
+      Val.has_type_list args (sig_args sg) ->
+      LOC = loc_arguments sg ->
+      (map (fun p : rpair loc =>
+              Locmap.getpair p
+                             (Premain.make_locset_all LOC args (Locmap.init Vundef)))
+           LOC)= args.
+  Proof.
+    intros; subst.
+    destruct (loc_argumetn_properties sg) as (?&?&?&?).
+    eapply loc_arguments_correct; eauto.
+    eapply loc_has_type_list_less_def.
+    2: eapply loc_arguments_less_type.
+    apply has_type_list_Forall2; auto.
+  Qed.
+  
+  Lemma transl_entry_points:
+    forall (s1 : RTL.state) (f : val) (arg : list val) (m0 : mem),
+      RTL.entry_point prog m0 s1 f arg ->
+      exists s2 : LTL.state, entry_point tprog m0 s2 f arg /\ match_states s1 s2.
+  Proof.
+    intros. inv H. subst ge0. 
+    exploit function_ptr_translated; eauto. intros [tf [FIND TR]].
+    exploit sig_function_translated; eauto. intros SIG.
+    monadInv TR. rename x into f. simpl in SIG.
+    
+    econstructor; split.
+    - destruct (transf_function_inv _ _ EQ).
+      econstructor; simpl; try rewrite SIG; eauto.
+      + eapply globals_not_fresh_preserve; simpl in *; try eassumption.
+        eapply match_program_gen_len_defs in TRANSF; eauto.
+    - econstructor; eauto.
+      + simpl in *. rewrite SIG.
+        eapply match_stackframes_one; auto.
+      + simpl; rewrite EQ; reflexivity.
+      + simpl; subst. rewrite SIG.
+        unfold Premain.pre_main_locset_all, Premain.make_locset_all, Premain.make_locset.
+        erewrite loc_arguments_retrieved; eauto.
+        * clear; induction arg; auto.
+      + intros ??; simpl.
+        unfold callee_save_loc in H.
+        unfold Premain.pre_main_locset_outgoing,
+        Premain.pre_main_locset_all.
+        unfold Premain.make_locset_outgoing,
+        Premain.make_locset_all.
+        eauto.
+      + apply Mem.extends_refl.
+      + simpl in *; rewrite SIG; auto.
+  Qed.
+  Lemma initial_states_simulation':
+    forall s1 : RTL.state,
+      Smallstep.initial_state (RTL.semantics prog) s1 ->
+      exists s2 : LTL.state, Smallstep.initial_state (semantics tprog) s2 /\
+                             match_states s1 s2.
+  Proof.
+    eapply (@init_states_from_entry (RTL.semantics prog) (semantics tprog));
+      try apply transl_entry_points.
+    - apply (Genv.init_mem_match TRANSF); eauto.
+    - simpl. destruct TRANSF as (P & Q & R). auto.
+      rewrite symbols_preserved, Q; auto.
+  Qed.
+End EntryDiagram.
+
+  Theorem transf_program_correct'':
+    forward_simulation (RTL.semantics prog) (LTL.semantics tprog).
+  Proof.
+    set (ms := fun s s' => wt_state s /\ match_states s s').
+    eapply forward_simulation_plus with (match_states := ms).
+    - apply senv_preserved.
+    - intros.
+      exploit transl_entry_points; eauto. intros [st2 [A B]].
+      exists st2; split; auto. split; auto.
+      inv H; subst ge0.
+      econstructor; eauto.
+      + econstructor; simpl.
+        inv A; auto.
+      + exploit Genv.find_funct_ptr_inversion; eauto.
+        intros (?&?).
+        eapply wt_prog; eauto.
+    - intros. exploit initial_states_simulation'; eauto.
+      intros (?&?&?). eexists; repeat (split; eauto).
+      inv H. simpl in *.
+      eapply wt_entry_points; eauto.
+      exact wt_prog.
+    - intros. destruct H. eapply final_states_simulation; eauto.
+    - intros. destruct H0.
+      exploit step_simulation; eauto. intros [s2' [A B]].
+      exists s2'; split. exact A. split.
+      eapply subject_reduction; eauto. eexact wt_prog. eexact H.
+      auto.
+  Qed.
+
+  Theorem transf_program_correct':
+    @fsim_properties  (RTL.semantics prog) (LTL.semantics tprog)
+                      (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
+                      ( fun idx s1 s2 => idx = s1 /\ ( wt_state s1 /\ match_states s1 s2)).
+  Proof.
+    eapply fsim_properties_plus.
+    - apply senv_preserved.
+    - intros.
+      exploit transl_entry_points; eauto. intros [st2 [A B]].
+      exists st2; split; auto. split; auto.
+      inv H; subst ge0.
+      econstructor; eauto.
+      + econstructor; simpl.
+        inv A; auto.
+      + exploit Genv.find_funct_ptr_inversion; eauto.
+        intros (?&?); eapply wt_prog; eauto.
+    - intros.
+      intros. exploit initial_states_simulation'; eauto.
+      intros (?&?&?). eexists; repeat (split; eauto).
+      inv H. simpl in *.
+      eapply wt_entry_points; eauto.
+      exact wt_prog.
+    - intros. destruct H. eapply final_states_simulation; eauto.
+    - intros. destruct H0.
+      exploit step_simulation; eauto. intros [s2' [A B]].
+      exists s2'; split. exact A. split.
+      eapply subject_reduction; eauto. eexact wt_prog. eexact H.
+      auto.
+  Qed.
+
+  
+  
+Lemma atx_sim: simulation_atx
+    (fun (idx s1 : Smallstep.state (RTL.semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) =>
+     idx = s1 /\ wt_state s1 /\ match_states s1 s2).
 Proof.
-  set (ms := fun s s' => wt_state s /\ match_states s s').
-  eapply forward_simulation_plus with (match_states := ms).
-- apply senv_preserved.
-- intros. exploit initial_states_simulation; eauto. intros [st2 [A B]].
-  exists st2; split; auto. split; auto.
-  apply wt_initial_state with (p := prog); auto. exact wt_prog.
-- intros. destruct H. eapply final_states_simulation; eauto.
-- intros. destruct H0.
-  exploit step_simulation; eauto. intros [s2' [A B]].
-  exists s2'; split. exact A. split.
-  eapply subject_reduction; eauto. eexact wt_prog. eexact H.
-  auto.
+  atx_sim_start_proof.
+  exploit external_call_mem_extends; eauto. intros [v' [m'' [F [G [J K]]]]].
+  simpl in FUN; inv FUN.
+  do 2 econstructor; repeat (split; eauto).
+  - (* step *)
+    econstructor; eauto.
+    eapply external_call_symbols_preserved with (ge1 := ge); eauto. apply senv_preserved.
+  - (*wt_state*) eapply subject_reduction; eauto. eexact wt_prog. econstructor; eauto.
+  - (*match_state*) econstructor; eauto.
+    simpl. destruct (loc_result (ef_sig ef)) eqn:RES; simpl.
+    rewrite Locmap.gss; auto.
+    generalize (loc_result_pair (ef_sig ef)); rewrite RES; intros (A & B & C & D & E).
+    exploit external_call_well_typed; eauto. unfold proj_sig_res; rewrite B. intros WTRES'.
+    rewrite Locmap.gss. rewrite Locmap.gso by (red; auto). rewrite Locmap.gss.
+    rewrite val_longofwords_eq_1 by auto. auto.
+    red; intros. rewrite (AG l H0).
+    rewrite locmap_get_set_loc_result_callee_save by auto.
+    unfold undef_caller_save_regs. destruct l; simpl in H0.
+    rewrite H0; auto.
+    destruct sl; auto; congruence.
+    eapply external_call_well_typed; eauto.
+Qed.
+
+Lemma atx_preserved:
+   preserves_atx
+    (fun (idx s1 : Smallstep.state (RTL.semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) =>
+     idx = s1 /\ wt_state s1 /\ match_states s1 s2).
+Proof. atx_preserved_start_proof.
+       do 2 econstructor; eauto; try apply Val.lessdef_list_refl.
+       exploit (sig_function_translated (External f)); eauto; simpl.
+       intros <-; auto.
+Qed.
+Theorem transf_program_correct:
+  @fsim_properties_ext
+    (RTL.semantics prog) (LTL.semantics tprog)
+    RTL.get_mem LTL.get_mem.
+Proof.
+  eapply sim_extSim; try eapply transf_program_correct'.
+  - exact atx_sim. 
+  - exact atx_preserved.
+  - simpl. intros ? ? ? [? ?]; subst.
+    destruct H0 as [? H0]; inversion H0; auto.
 Qed.
 
 End PRESERVATION.

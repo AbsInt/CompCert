@@ -28,13 +28,6 @@ Require Import Integers.
 Require Import Smallstep.
 
 
-(*Require Import compcert.lib.Coqlib.
-Require Import compcert.common.Events.
-Require Import compcert.common.Globalenvs.
-Require Import compcert.lib.Integers.
-Require Import compcert.common.Smallstep.
-*)
-
 Set Nested Proofs Allowed.
 
 Require Import compcert.common.Values. (*for meminj, compose_meminj,...*)
@@ -912,7 +905,7 @@ Section Composition.
   exists s3', f', f''; repeat (split; auto).
   subst f.
   eapply compose_inject_incr; eauto.
-  eapply inject_trace_strong_compose; eauto.
+  eapply inject_trace_compose; eauto.
   
 * (* L3 makes no step *)
   exists (i2', i1'); exists s2; exists (compose_meminj f' f''), t'. repeat (split; auto).

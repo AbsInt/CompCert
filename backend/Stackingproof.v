@@ -2009,7 +2009,7 @@ Proof.
   exploit frame_get_local; eauto. intros (v & A & B).
   econstructor; exists E0, j1; split.
   apply plus_one. apply exec_Mgetstack. exact A.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
   apply agree_locs_set_reg; auto.
@@ -2028,7 +2028,7 @@ Proof.
   apply plus_one. eapply exec_Mgetparam; eauto. 
   rewrite (unfold_transf_function _ _ TRANSL). unfold fn_link_ofs.
   eapply frame_get_parent. eexact SEP.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto with coqlib. econstructor; eauto.
   apply agree_regs_set_reg. apply agree_regs_set_reg. auto. auto.
   erewrite agree_incoming by eauto. exact B.
@@ -2037,7 +2037,7 @@ Proof.
   exploit frame_get_outgoing; eauto. intros (v & A & B).
   econstructor; exists E0, j1; split.
   apply plus_one. apply exec_Mgetstack. exact A.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
   apply agree_locs_set_reg; auto.
@@ -2064,7 +2064,7 @@ Proof.
   apply plus_one. destruct sl; try discriminate.
     econstructor. eexact STORE. eauto.
     econstructor. eexact STORE. eauto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor. eauto. eauto. eauto. 
   apply agree_regs_set_slot. apply agree_regs_undef_regs. auto.
   apply agree_locs_set_slot. apply agree_locs_undef_locs. auto. apply destroyed_by_setstack_caller_save. auto.
@@ -2082,7 +2082,7 @@ Proof.
   apply plus_one. econstructor.
   instantiate (1 := v'). rewrite <- A. apply eval_operation_preserved.
   exact symbols_preserved. eauto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg; auto.
   rewrite transl_destroyed_by_op.  apply agree_regs_undef_regs; auto.
@@ -2105,7 +2105,7 @@ Proof.
   apply plus_one. econstructor.
   instantiate (1 := a'). rewrite <- A. apply eval_addressing_preserved. exact symbols_preserved.
   eexact C. eauto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto with coqlib.
   apply agree_regs_set_reg. rewrite transl_destroyed_by_load. apply agree_regs_undef_regs; auto. auto.
   apply agree_locs_set_reg. apply agree_locs_undef_locs. auto. apply destroyed_by_load_caller_save. auto.
@@ -2126,7 +2126,7 @@ Proof.
   apply plus_one. econstructor.
   instantiate (1 := a'). rewrite <- A. apply eval_addressing_preserved. exact symbols_preserved.
   eexact C. eauto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor. eauto. eauto. eauto. 
   rewrite transl_destroyed_by_store. apply agree_regs_undef_regs; auto.
   apply agree_locs_undef_locs. auto. apply destroyed_by_store_caller_save.
@@ -2144,7 +2144,7 @@ Proof.
   exploit return_address_offset_exists. eexact IST. intros [ra D].
   econstructor; exists E0, j1; split.
   apply plus_one. econstructor; eauto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto.
   econstructor; eauto with coqlib.
   apply Val.Vptr_has_type.
@@ -2163,7 +2163,7 @@ Proof.
   intros [bf [tf' [A [B C]]]].
   econstructor; exists E0, j1; split.
   eapply plus_right. eexact S. econstructor; eauto. traceEq.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto.
   apply match_stacks_change_sig with (Linear.fn_sig f); auto.
   apply zero_size_arguments_tailcall_possible. eapply wt_state_tailcall; eauto.
@@ -2198,14 +2198,14 @@ Proof.
 - (* Llabel *)
   econstructor; exists E0, j1; split.
   apply plus_one; apply exec_Mlabel.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto with coqlib.
 
 - (* Lgoto *)
   econstructor; exists E0, j1; split.
   apply plus_one; eapply exec_Mgoto; eauto.
   apply transl_find_label; eauto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto.
   eapply find_label_tail; eauto.
 
@@ -2214,7 +2214,7 @@ Proof.
   apply plus_one. eapply exec_Mcond_true; eauto.
   eapply eval_condition_inject with (m1 := m). eapply agree_reglist; eauto. apply sep_pick3 in SEP; exact SEP. auto.
   eapply transl_find_label; eauto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor. eauto. eauto. eauto.
   apply agree_regs_undef_regs; auto.
   apply agree_locs_undef_locs. auto. apply destroyed_by_cond_caller_save.
@@ -2227,7 +2227,7 @@ Proof.
   econstructor; exists E0, j1; split.
   apply plus_one. eapply exec_Mcond_false; eauto.
   eapply eval_condition_inject with (m1 := m). eapply agree_reglist; eauto. apply sep_pick3 in SEP; exact SEP. auto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor. eauto. eauto. eauto.
   apply agree_regs_undef_regs; auto.
   apply agree_locs_undef_locs. auto. apply destroyed_by_cond_caller_save.
@@ -2241,7 +2241,7 @@ Proof.
   econstructor; exists E0, j1; split.
   apply plus_one; eapply exec_Mjumptable; eauto.
   apply transl_find_label; eauto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor. eauto. eauto. eauto.
   apply agree_regs_undef_regs; auto.
   apply agree_locs_undef_locs. auto. apply destroyed_by_jumptable_caller_save.
@@ -2255,7 +2255,7 @@ Proof.
   intros (rs' & m1' & A & B & C & D & E & F & G).
   econstructor; exists E0, j1; split.
   eapply plus_right. eexact D. econstructor; eauto. traceEq.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto.
   rewrite sep_swap; exact G.
   apply G.
@@ -2279,7 +2279,7 @@ Proof.
   eapply plus_left. econstructor; eauto.
   rewrite (unfold_transf_function _ _ TRANSL). unfold fn_code. unfold transl_body.
   eexact D. traceEq.
-  split; [| split; [trivial | apply list_rel_nil]].
+  split; [| split; [trivial | apply Forall2_nil]].
   eapply match_states_intro with (j := j'); eauto with coqlib.
   eapply match_stacks_change_meminj; eauto.
   rewrite sep_swap in SEP. rewrite sep_swap. eapply stack_contents_change_meminj; eauto.
@@ -2316,7 +2316,7 @@ Proof.
   simpl in AGCS. simpl in SEP. rewrite sep_assoc in SEP.
   econstructor; exists E0, j1; split.
   apply plus_one. apply exec_return; auto.
-  split; [| split; [apply inject_incr_refl | apply list_rel_nil]].
+  split; [| split; [apply inject_incr_refl | apply Forall2_nil]].
   econstructor; eauto.
   apply agree_locs_return with rs0; auto.
   apply frame_contents_exten with rs0 (parent_locset s); auto.
