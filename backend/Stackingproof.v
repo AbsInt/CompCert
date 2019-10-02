@@ -1745,7 +1745,6 @@ Proof.
       destruct s; auto; simpl.
       destruct rhi; [|destruct sl]; simpl; destruct rlo; auto; destruct sl; auto.
 Qed.
-
 Lemma transl_make_arg:
   forall rs m cs cs' l v P (MS: match_stacks j cs cs' sg) (SEP : m |= stack_contents j cs cs' ** P),
   In l (regs_of_rpairs (loc_arguments sg)) ->
@@ -1801,14 +1800,12 @@ Proof.
   induction ty; auto; simpl; intros.
   rewrite IHty; auto.
 Qed.
-
 Lemma loc_arguments_64_length: forall ty a b c, length (loc_arguments_64 ty a b c) = length ty.
 Proof.
   induction ty; auto; intros.
   unfold loc_arguments_64.
   destruct a; destruct (list_nth_z _ _); simpl; rewrite IHty; auto.
 Qed.
-
 Lemma loc_arguments_length: length (loc_arguments sg) = length (sig_args sg).
 Proof.
   unfold loc_arguments.
@@ -2511,7 +2508,6 @@ Proof.
   intros; eapply build_arguments_stack_rec.
   apply incl_refl.
 Qed.
-Set Nested Proofs Allowed.
 
 Lemma align_twice_multiple:
   forall x w w' k, w > 0 -> w' > 0 ->
@@ -2688,7 +2684,6 @@ Proof.
         try solve[intros HH; inv HH].
       - assumption. 
       - apply Val.Vnullptr_has_type.
-       
       - intros ? ? HH.
         eapply loc_arguments_bounded in HH; eauto.
         simpl.
@@ -2703,17 +2698,14 @@ Proof.
             by xomega
         end.
         assumption.
-      - constructor.
-        unfold tailcall_possible.
-        (*make this a lemma*)
+      - constructor. unfold tailcall_possible.
         assert (empty_locs: (loc_arguments pre_main_sig) = nil).
         pose proof (loc_arguments_length pre_main_sig) as HH;
           simpl in HH. destruct (loc_arguments pre_main_sig); inv HH.
         auto. simpl.
         rewrite empty_locs. intros ? Hin. inv Hin.
   }
-  { simpl.
-    replace (Locmap.init Vundef) with
+  { simpl. replace (Locmap.init Vundef) with
         (LTL.undef_regs destroyed_at_function_entry
                         (call_regs (Locmap.init Vundef))) at 1.
     2:{ eapply Axioms.extensionality; intros.
@@ -2733,12 +2725,8 @@ Proof.
     eauto. }
   intros (rs' & m' & Hmake_args & SEP).
 
-  
-  
-  (* Let 's explore this *)
   do 2 eexists; split.
-  - (*construct the state *)
-    econstructor; try rewrite SIG; eauto.
+  - econstructor; try rewrite SIG; eauto.
     + unfold globals_not_fresh.
       erewrite <- len_defs_genv_next.
       * unfold ge in *. simpl in H1; eapply H1.
@@ -2751,7 +2739,6 @@ Proof.
       subst pre_main_env pre_main. reflexivity.
     + simpl. rewrite SIG. eauto.
     + simpl; rewrite SIG. eauto.
-    
   - (*match_states *)
     econstructor; eauto.
     + unfold Linear.pre_main_staklist, pre_main_staklist.
@@ -2761,10 +2748,8 @@ Proof.
       * intros ? ? HH.
         eapply loc_arguments_bounded in HH; eauto.
         simpl.
-        unfold Linear.pre_main,
-        max_over_slots_of_funct,
-        max_over_instrs,
-        max_over_slots_of_instr,
+        unfold Linear.pre_main, max_over_slots_of_funct,
+        max_over_instrs, max_over_slots_of_instr,
         max_over_list; simpl.
         pose proof (size_arguments_above (Linear.fn_sig f0)).
         match goal with
@@ -2785,15 +2770,7 @@ Proof.
       unfold parent_sp,pre_main_staklist,pre_main_stack in Hmake_args.
       eapply make_arguments_inject in Hmake_args; eauto.
       eapply agree_regs_inject_incr; eauto.
-      
-    +
-      (*
-        frame_contents f j sp' ls (parent_locset cs0) 
-                                  (parent_sp cs'0) 
-                                  (parent_ra cs'0) **
-          
-       *)
-      rewrite update_stackframe_eq in SEP.
+    + rewrite update_stackframe_eq in SEP.
       unfold pre_main in SEP; simpl in SEP.
       rewrite sep_assoc in SEP.
       rewrite (sep_comm (minjection j m2)).
