@@ -56,8 +56,6 @@ Section ExposingMemory.
             @at_external L2 s2 = Some (f,args') /\
             Val.lessdef_list args args'.
   
-
-
   Definition simulation_atx {index:Type} {L1 L2} (match_states: index -> _ -> _ -> Prop)
     :=
         forall s1 f args,
@@ -66,9 +64,6 @@ Section ExposingMemory.
                   forall i s2, match_states i s1 s2 ->
                           exists i', exists s2', Step L2 s2 t s2' /\
                                        match_states i' s1' s2'.
-  
-
-
   
   (** *Equality Phases*)
   Section Equality.
@@ -99,9 +94,6 @@ Section ExposingMemory.
           forall id, Senv.public_symbol (symbolenv L2) id = Senv.public_symbol (symbolenv L1) id
       }.
   
-
-        
-    
     Lemma sim_eqSim':
       forall index order (match_states:index -> state L1 -> state L2 -> Prop),
         (simulation_atx match_states) ->
@@ -448,53 +440,6 @@ Section ExposingMemory.
   End Injection.
 End ExposingMemory.
 
-(*
-Section InductiveDefinitions.
-  
-  
-  Variables L1 L2: semantics.
-  Variable get_mem1: state L1 -> mem.
-  Variable get_mem2: state L2 -> mem.
-  
-Arguments fsim_properties_eq: clear implicits.
-
-Inductive forward_equality: Prop :=
-  Forward_equality (index: Type)
-                   (order: index -> index -> Prop)
-                   (match_states: index -> state L1 -> state L2 -> Prop)
-                   (props: fsim_properties_eq
-                             L1 L2 get_mem1 get_mem2
-                             index order match_states).
-
-Arguments fsim_properties_ext: clear implicits.
-
-Inductive forward_extension: Prop :=
-  Forward_extension (index: Type)
-                   (order: index -> index -> Prop)
-                   (match_states: index -> state L1 -> state L2 -> Prop)
-                   (props: fsim_properties_ext
-                             L1 L2 get_mem1 get_mem2
-                             index order match_states).
-
-Lemma EqEx_sim: forward_equality -> forward_extension.
-Proof.
-  intros H; inv H.
-  apply EqEx_sim' in props; econstructor; eauto.
-Qed.
-
-
-Arguments fsim_properties_inj: clear implicits.
-
-Inductive forward_injection: Prop :=
-  Forward_injection (index: Type)
-                   (order: index -> index -> Prop)
-                   (match_states: index -> meminj -> state L1 -> state L2 -> Prop)
-                   (props: fsim_properties_inj
-                             L1 L2 get_mem1 get_mem2
-                             index order match_states).
-
-End InductiveDefinitions. *)
-
 Section Composition.
     
   Variables L1 L2 L3: semantics.
@@ -590,18 +535,6 @@ Section Composition.
             [eapply Extfsim_public_preserved|eapply Injfsim_public_preserved]; eauto.
   Qed.
 
-  (*
-  Lemma injection_extension_composition:
-    forward_injection L1 L2 get_mem1 get_mem2 ->
-    forward_extension L2 L3 get_mem2 get_mem3 ->
-    forward_injection L1 L3 get_mem1 get_mem3.
-  Proof.
-    intros S12 S23.
-    inv S12; inv S23.
-    econstructor.
-    eapply injection_extension_composition'; eauto.
-  Qed. *)
-  
     Lemma extension_injection_composition:
     @fsim_properties_ext L1 L2 get_mem1 get_mem2 ->
     @fsim_properties_inj L2 L3 get_mem2 get_mem3 ->
@@ -690,18 +623,6 @@ Section Composition.
   intros. transitivity (Senv.public_symbol (symbolenv L2) id);
             [eapply Injfsim_public_preserved|eapply Extfsim_public_preserved]; eauto.
   Qed.
-
- (* Lemma extension_injection_composition:
-    forward_extension L1 L2 get_mem1 get_mem2 ->
-    forward_injection L2 L3 get_mem2 get_mem3 ->
-    forward_injection L1 L3 get_mem1 get_mem3.
-  Proof.
-    intros S12 S23.
-    inv S12; inv S23.
-    econstructor.
-    eapply extension_injection_composition'; eauto.
-  Qed. *)
-
   Lemma compose_inject_incr: forall f1 f2 f1' f2',
       inject_incr f1 f1' ->
       inject_incr f2 f2' ->
