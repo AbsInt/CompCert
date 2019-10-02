@@ -451,31 +451,22 @@ Qed.
 Tactic Notation "if_tac" := 
   match goal with |- context [if ?a then _ else _] =>
                   destruct a as [?H | ?H]; try congruence; auto
+             | [H:context [if ?a then _ else _]|- _] =>
+                  destruct a as [?H | ?H]; try congruence; auto
   end.
-
-Tactic Notation "if_tac" "in" hyp(H0)
-  := match type of H0 with context [if ?a then _ else _] =>
-                           destruct a as [?H | ?H]; try congruence; auto
-     end.
 
 Remark match_globalenvs_not_fresh:
   forall m, globals_not_fresh ge m ->
        match_globalenvs (Mem.flat_inj (Mem.nextblock m)) (Mem.nextblock m).
 Proof.
   intros. unfold Mem.flat_inj.
-  constructor; eauto.
-  - intros; if_tac; auto.
-  - intros. if_tac in H0; auto.
-  - intros.
-    eapply ge in H0.
-    eapply Plt_Ple_trans; eauto.
-  - intros.
-    unfold Genv.find_funct_ptr in H0.
+  constructor; eauto; intros; try if_tac; auto; intros.
+  - eapply ge in H0. eapply Plt_Ple_trans; eauto.
+  - unfold Genv.find_funct_ptr in H0.
     destruct (Genv.find_def ge b) eqn:HH; inv H0.
     eapply ge in HH.
     eapply Plt_Ple_trans; eauto.
-  - intros.
-    unfold Genv.find_var_info in H0.
+  - unfold Genv.find_var_info in H0.
     destruct (Genv.find_def ge b) eqn:HH; inv H0.
     eapply ge in HH.
     eapply Plt_Ple_trans; eauto.
@@ -2376,23 +2367,11 @@ Proof.
   intros. inv H0. inv H. inv MK. inv RESINJ. constructor.
 Qed.
 
-(*
-Theorem transl_program_correct':
-  forward_simulation (Csharpminor.semantics prog) (Cminor.semantics tprog).
+Lemma atx_sim:  @simulation_atx_inj
+                  _ (Csharpminor.semantics prog) (Cminor.semantics tprog)
+                  (fun idx f s1 s2  => idx = s1 /\ match_states f s1 s2).
 Proof.
-  eapply forward_simulation_star; eauto.
-  apply senv_preserved.
-  simpl.
-  eexact transl_entry_point.
-  eexact transl_initial_states'.
-  eexact transl_final_states.
-  eexact transl_step_correct.*)
-Lemma atx_sim:
-  @simulation_atx_inj _ (Csharpminor.semantics prog) (Cminor.semantics tprog)
-                      (fun idx f s1 s2  => idx = s1 /\ match_states f s1 s2).
-Proof.
-  atx_sim_start_proof.
-  monadInv TR.
+  atx_sim_start_proof. monadInv TR.
   exploit match_callstack_match_globalenvs; eauto. intros [hi MG].
   exploit external_call_mem_inject; eauto.
   eapply inj_preserves_globals; eauto.
@@ -2448,35 +2427,5 @@ Proof.
   - exact atx_preserved.
   - apply senv_preserved.
 Qed.
-(*
-Theorem transl_program_correct:
-  @fsim_properties_inj
-    (Csharpminor.semantics prog) (Cminor.semantics tprog)
-    Csharpminor.get_mem Cminor.get_mem
-    (*
-    _ (ltof _ measure)
-    (fun idx f s1 s2 => idx = s1 /\ match_states f s1 s2) *).
-Proof.
-  eapply Build_fsim_properties_inj with
-      (Injorder:=(ltof _ measure))
-      (Injmatch_states:=(fun idx f s1 s2 => idx = s1 /\ match_states s1 s2)).
-  - apply well_founded_ltof.
-  - intros. destruct H as [? H']; inv H'; auto.
-  - intros. destruct H as [? H']; inv H'; auto.
-  - intros.
-    exploit transl_initial_states; eauto.
-    intros (R & f & INIT & MATCH).
-    exists s1, f, R. split; eauto.
-  - intros. destruct H.
-    eapply transl_final_states; eauto.
-  - intros. inv H0.
-    exploit transl_step_correct; eauto.
-    intros [[s2' [f' [t' [STEP [MATCH [INCR TRACEINJ]]]]]]| [f' [A [B [MATCH INCR]]]]].
-    + exists s1', s2', f', t'; intuition.
-    + exists s1', s2, f', E0; intuition.
-      right. split. constructor. auto.
-      subst t; constructor.
-  - apply senv_preserved.
-Qed. *)
 
 End TRANSLATION.
