@@ -743,100 +743,90 @@ Section StrongRelaxedInjections.
 
   (*Monotonicity over injections *)
   Section MONOTONICITY.
-  Lemma inject_strong_mono: inj_monotone inject_strong.
-  Proof. inj_mono_tac. Qed.
-  Hint Resolve inject_strong_mono: inj_mono.
-  Lemma list_inject_strong_mono: inj_monotone list_memval_inject_strong.
-  Proof. inj_mono_tac. Qed.
-  Hint Resolve list_inject_strong_mono: inj_mono.
-  Lemma list_inject_hi_low_mono: inj_monotone list_inject_hi_low.
-  Proof. inj_mono_tac. Qed.
-  Hint Resolve list_inject_hi_low_mono: inj_mono.
-  Lemma inject_mem_effect_strong_incr: inj_monotone inject_mem_effect_strong.
-  Proof. inj_mono_tac. Qed.
-  Lemma list_inject_mem_effect_strong_incr:
-    inj_monotone list_inject_mem_effect_strong.
-  Proof. inj_mono_tac. Qed.
-  Hint Resolve list_inject_mem_effect_strong_incr: inj_mono.
-  Lemma inj_delta_map_mono: inj_monotone inject_delta_map.
-  Proof. inj_mono_tac. econstructor.
-         + intros. exploit DPM_image; eauto.
-           intros (?&?&?&?&?&?).
-           repeat (econstructor; eauto).
-         + intros; exploit DPM_preimage; eauto.
-           intros (?&?&?&?&?&?&?&?).
-           repeat (econstructor; eauto).
-  Qed.
-  Hint Resolve inj_delta_map_mono: inj_mono.
-  Lemma inject_incr_event_strong: inj_monotone inject_event_strong.
-  Proof. inj_mono_tac. Qed.
-  Hint Resolve inject_incr_event_strong: inj_mono.
-  Lemma inject_incr_trace_strong: inj_monotone inject_trace_strong.
-  Proof. inj_mono_tac. Qed.
-  Hint Resolve inject_incr_trace_strong: inj_mono.
+    Lemma inject_strong_mono: inj_monotone inject_strong.
+    Proof. inj_mono_tac. Qed.
+    Hint Resolve inject_strong_mono: inj_mono.
+    Lemma list_inject_strong_mono: inj_monotone list_memval_inject_strong.
+    Proof. inj_mono_tac. Qed.
+    Hint Resolve list_inject_strong_mono: inj_mono.
+    Lemma list_inject_hi_low_mono: inj_monotone list_inject_hi_low.
+    Proof. inj_mono_tac. Qed.
+    Hint Resolve list_inject_hi_low_mono: inj_mono.
+    Lemma inject_mem_effect_strong_incr: inj_monotone inject_mem_effect_strong.
+    Proof. inj_mono_tac. Qed.
+    Lemma list_inject_mem_effect_strong_incr:
+      inj_monotone list_inject_mem_effect_strong.
+    Proof. inj_mono_tac. Qed.
+    Hint Resolve list_inject_mem_effect_strong_incr: inj_mono.
+    Lemma inject_incr_event_strong: inj_monotone inject_event_strong.
+    Proof. inj_mono_tac. Qed.
+    Hint Resolve inject_incr_event_strong: inj_mono.
+    Lemma inject_incr_trace_strong: inj_monotone inject_trace_strong.
+    Proof. inj_mono_tac. Qed.
+    Hint Resolve inject_incr_trace_strong: inj_mono.
   End MONOTONICITY.
 
   (*Composes with injection*)
   Section COMPOSE.
-  Lemma val_inject_compose: composes_inj Val.inject.
-  Proof. composed_injections. Qed.
-  Hint Resolve val_inject_compose: compose_inj.
-  Lemma val_inject_strong_compose: composes_inj inject_strong.
-  Proof. composed_injections. Qed.
-  Hint Resolve val_inject_strong_compose: compose_inj.
-  Lemma memval_inject_compose: composes_inj memval_inject.
-  Proof. composed_injections. Qed.
-  Hint Resolve memval_inject_compose: compose_inj.
-  Lemma memval_inject_strong_compose: composes_inj memval_inject_strong.
-  Proof. composed_injections. Qed.
-  Hint Resolve memval_inject_strong_compose: compose_inj.
-  Lemma list_memval_inject_compose: composes_inj list_memval_inject.
-  Proof. eauto with compose_inj. Qed.
-  Hint Resolve list_memval_inject_compose: compose_inj.
-  Lemma list_memval_inject_strong_compose: composes_inj list_memval_inject_strong.
-  Proof. eauto with compose_inj. Qed.
-  Hint Resolve list_memval_inject_strong_compose: compose_inj.
-  Lemma inject_mem_effect_compose: composes_inj inject_mem_effect.
-  Proof. composed_injections.
-         - rewrite Zplus_assoc_reverse.
-           econstructor; eauto with compose_inj.
-           (unfold compose_meminj; rewrite H; rewrite H6); eauto.
-         - repeat rewrite <- Z.add_assoc. econstructor.
-           unfold compose_meminj; rewrite H, H5; auto.
-  Qed.
-  Hint Resolve inject_mem_effect_compose: compose_inj.
-  Lemma inject_mem_effect_strong_compose: composes_inj inject_mem_effect_strong.
-  Proof. composed_injections.
-         - rewrite Zplus_assoc_reverse.
-           econstructor; eauto with compose_inj.
-           (unfold compose_meminj; rewrite H; rewrite H6); auto.
-         - repeat rewrite <- Z.add_assoc. econstructor.
-           unfold compose_meminj; rewrite H, H5; auto.
-  Qed.
-  Hint Resolve inject_mem_effect_strong_compose: compose_inj.
-  Lemma list_inject_event_compose: composes_inj list_inject_mem_effect.
-  Proof. eauto with compose_inj. Qed.
-  Hint Resolve list_inject_event_compose: compose_inj.
-  Lemma list_inject_event_strong_compose: composes_inj list_inject_mem_effect_strong.
-  Proof. eauto with compose_inj. Qed.
-  Hint Resolve list_inject_event_strong_compose: compose_inj.
-  Lemma inject_event_compose: composes_inj inject_event.
-  Proof. composed_injections. Qed.
-  Hint Resolve inject_event_compose: compose_inj.
-  Lemma inject_event_strong_compose: composes_inj inject_event_strong.
-  Proof. composed_injections. Qed.
-  Hint Resolve inject_event_strong_compose: compose_inj.
-  Lemma inject_trace_compose: composes_inj inject_trace.
-  Proof. eauto with compose_inj. Qed.
-  Lemma inject_trace_strong_compose: composes_inj inject_trace_strong.
-  Proof. eauto with compose_inj. Qed.
-  Lemma inject_trace_strong_compose_strong:
-    forall j12 j23 l1 l2 l3, inject_trace_strong j12 l1 l2 ->
-                        inject_trace j23 l2 l3 ->
-                        inject_trace (compose_meminj j12 j23) l1 l3.
-  Proof. intros; eapply inject_trace_compose; eauto;
-           eapply inject_trace_strong_weak; eauto.
-  Qed.
+    Lemma val_inject_compose: composes_inj Val.inject.
+    Proof. composed_injections. Qed.
+    Hint Resolve val_inject_compose: compose_inj.
+    Lemma val_inject_strong_compose: composes_inj inject_strong.
+    Proof. composed_injections. Qed.
+    Hint Resolve val_inject_strong_compose: compose_inj.
+    Lemma memval_inject_compose: composes_inj memval_inject.
+    Proof. composed_injections. Qed.
+    Hint Resolve memval_inject_compose: compose_inj.
+    Lemma memval_inject_strong_compose: composes_inj memval_inject_strong.
+    Proof. composed_injections. Qed.
+    Hint Resolve memval_inject_strong_compose: compose_inj.
+    Lemma list_memval_inject_compose: composes_inj list_memval_inject.
+    Proof. eauto with compose_inj. Qed.
+    Hint Resolve list_memval_inject_compose: compose_inj.
+    Lemma list_memval_inject_strong_compose: composes_inj list_memval_inject_strong.
+    Proof. eauto with compose_inj. Qed.
+    Hint Resolve list_memval_inject_strong_compose: compose_inj.
+    Lemma inject_mem_effect_compose: composes_inj inject_mem_effect.
+    Proof. composed_injections.
+           - rewrite Zplus_assoc_reverse.
+             econstructor; eauto with compose_inj.
+             (unfold compose_meminj; rewrite H; rewrite H6); eauto.
+           - repeat rewrite <- Z.add_assoc. econstructor.
+             unfold compose_meminj; rewrite H, H5; auto.
+    Qed.
+    Hint Resolve inject_mem_effect_compose: compose_inj.
+    Lemma inject_mem_effect_strong_compose: composes_inj inject_mem_effect_strong.
+    Proof. composed_injections.
+           - rewrite Zplus_assoc_reverse.
+             econstructor; eauto with compose_inj.
+             (unfold compose_meminj; rewrite H; rewrite H6); auto.
+           - repeat rewrite <- Z.add_assoc. econstructor.
+             unfold compose_meminj; rewrite H, H5; auto.
+    Qed.
+    Hint Resolve inject_mem_effect_strong_compose: compose_inj.
+    Lemma list_inject_event_compose: composes_inj list_inject_mem_effect.
+    Proof. eauto with compose_inj. Qed.
+    Hint Resolve list_inject_event_compose: compose_inj.
+    Lemma list_inject_event_strong_compose: composes_inj list_inject_mem_effect_strong.
+    Proof. eauto with compose_inj. Qed.
+    Hint Resolve list_inject_event_strong_compose: compose_inj.
+    Lemma inject_event_compose: composes_inj inject_event.
+    Proof. composed_injections. Qed.
+    Hint Resolve inject_event_compose: compose_inj.
+    Lemma inject_event_strong_compose: composes_inj inject_event_strong.
+    Proof. composed_injections. Qed.
+    Hint Resolve inject_event_strong_compose: compose_inj.
+    Lemma inject_trace_compose: composes_inj inject_trace.
+    Proof. eauto with compose_inj. Qed.
+    Lemma inject_trace_strong_compose: composes_inj inject_trace_strong.
+    Proof. eauto with compose_inj. Qed.
+    Lemma inject_trace_strong_compose_strong:
+      forall j12 j23 l1 l2 l3, inject_trace_strong j12 l1 l2 ->
+                          inject_trace j23 l2 l3 ->
+                          inject_trace (compose_meminj j12 j23) l1 l3.
+    Proof. intros; eapply inject_trace_compose; eauto;
+             eapply inject_trace_strong_weak; eauto.
+    Qed.
   End COMPOSE.
 
   Section INTERPOLATION.
@@ -890,50 +880,42 @@ Section StrongRelaxedInjections.
     Proof. solve_determ. Qed.
     Hint Resolve memval_inject_strong_determ: determ.
     Lemma inject_hi_low_determ:
-    forall f, deterministic (inject_hi_low f).
-  Proof. solve_determ. Qed.
-  Hint Resolve inject_hi_low_determ: determ.
-  Lemma inject_mem_effect_strong_determ:
-    forall (f12 : meminj), deterministic (inject_mem_effect_strong f12).
-  Proof. solve_determ. Qed.
-  Hint Resolve inject_mem_effect_strong_determ: determ.
-  Lemma inject_event_strong_determ:
-    forall (f12 : meminj), deterministic (inject_event_strong f12).
-  Proof. solve_determ. Qed.
-  Hint Resolve inject_event_strong_determ: determ.
-  Lemma inject_trace_strong_determ:
-    forall (f12 : meminj), deterministic (inject_trace_strong f12).
-  Proof. solve_determ. Qed.
-End DETERMINISM.
-
-  
+      forall f, deterministic (inject_hi_low f).
+    Proof. solve_determ. Qed.
+    Hint Resolve inject_hi_low_determ: determ.
+    Lemma inject_mem_effect_strong_determ:
+      forall (f12 : meminj), deterministic (inject_mem_effect_strong f12).
+    Proof. solve_determ. Qed.
+    Hint Resolve inject_mem_effect_strong_determ: determ.
+    Lemma inject_event_strong_determ:
+      forall (f12 : meminj), deterministic (inject_event_strong f12).
+    Proof. solve_determ. Qed.
+    Hint Resolve inject_event_strong_determ: determ.
+    Lemma inject_trace_strong_determ:
+      forall (f12 : meminj), deterministic (inject_trace_strong f12).
+    Proof. solve_determ. Qed.
+  End DETERMINISM.
 End StrongRelaxedInjections.
 
-Definition trivial_inject t:=
-  forall f t',
-    inject_trace f t t' -> t' = t.
+Definition trivial_inject t:= forall f t', inject_trace f t t' -> t' = t.
 Ltac trivial_inject_trace:=
   match goal with
   | [H: inject_trace ?f ?t ?t' |- _  ] =>
-    inversion H; subst; clear H;
-    try trivial_inject_event
+    inversion H; subst; clear H; try trivial_inject_event
   end.
 Ltac solve_trivial_inject:=
   lazymatch goal with
   | [|- trivial_inject ?T] =>
     match goal with
     |[H:context[T] |- _ ] =>
-     intros ???;
-            inversion H; subst;
+     intros ???; inversion H; subst;
      repeat trivial_inject_trace; reflexivity             
     end
   | _ => fail "Not an noninjectable goal."
   end.
 
 Definition injection_full (f:meminj) (m:mem):=
-  forall b ,
-    Mem.valid_block m b ->
-    ~ f b = None.
+  forall b, Mem.valid_block m b -> ~ f b = None.
 
 Lemma flat_injection_full:
   forall m0, injection_full (Mem.flat_inj (Mem.nextblock m0)) m0.
@@ -953,41 +935,35 @@ Proof. intros ? ? ? H ? ? ?; apply H.
          rewrite <- H0; auto.
 Qed.
 Lemma store_full: forall f chunk m b ofs v m',
-    injection_full f m ->
     Mem.store chunk m b ofs v = Some m' ->
-    injection_full f m'.
+    injection_full f m -> injection_full f m'.
 Proof.
   intros. eapply nextblock_full; eauto.
   eapply Mem.nextblock_store; eauto.
 Qed.
 Lemma storebytes_full: forall f m b ofs ls m',
-    injection_full f m ->
     Mem.storebytes m b ofs ls = Some m' ->
-    injection_full f m'.
+    injection_full f m -> injection_full f m'.
 Proof.
   intros. eapply nextblock_full; eauto.
   eapply Mem.nextblock_storebytes; eauto.
 Qed.
 Lemma free_full: forall f m ls lo hi m',
-    injection_full f m ->
     Mem.free m ls lo hi = Some m' ->
-    injection_full f m'.
+    injection_full f m -> injection_full f m'.
 Proof.
   intros. eapply nextblock_full; eauto.
   eapply Mem.nextblock_free; eauto.
 Qed.
 Lemma free_list_full: forall f ls m m',
-    injection_full f m ->
     Mem.free_list m ls = Some m' ->
-    injection_full f m'.
+    injection_full f m -> injection_full f m'.
 Proof.
-  induction ls.
-  - intros; inv H0; auto.
-  - intros. destruct a as [[b lo] hi];
-              simpl in H0. 
-    destruct (Mem.free m b lo hi) eqn:HH; inv H0.
-    eapply IHls in H2; eauto.
-    eapply free_full; eauto.
+  induction ls; intros.
+  - inv H; auto.
+  - destruct a as [[b lo] hi]; simpl in H. 
+    destruct (Mem.free m b lo hi) eqn:HH; inv H.
+    eapply IHls in H2; eauto. eapply free_full; eauto.
 Qed.
 Lemma alloc_full m lo hi m' b (ALLOC: Mem.alloc m lo hi = (m',b))
       j1 (FULL : injection_full j1 m) j' sp' z
@@ -1059,14 +1035,35 @@ Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
     sem ge1 vargs m1 t vres m2 ->
     Mem.inject f m1 m1' ->
     Val.inject_list f vargs vargs' ->
-    exists f', exists vres', exists m2',
-       sem ge2 vargs' m1' t vres' m2'
+    injection_full f m1 ->
+    exists f', exists vres', exists m2', exists t',
+       sem ge2 vargs' m1' t' vres' m2'
     /\ Val.inject f' vres vres'
     /\ Mem.inject f' m2 m2'
     /\ Mem.unchanged_on (loc_unmapped f) m1 m2
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
     /\ inject_incr f f'
-    /\ inject_separated f f' m1 m1';
+    /\ inject_separated f f' m1 m1'
+    /\ inject_trace_strong f' t t'
+    /\ injection_full f' m2;
+
+(** External calls must commute with memory injections,
+  in the following sense. *)
+      ec_mem_inject':
+        forall ge1 ge2 vargs m1 t vres m2 f m1' vargs',
+          symbols_inject f ge1 ge2 ->
+          sem ge1 vargs m1 t vres m2 ->
+          Mem.inject f m1 m1' ->
+          Val.inject_list f vargs vargs' ->
+          exists f', exists vres', exists m2', exists t',
+                  sem ge2 vargs' m1' t' vres' m2'
+                  /\ Val.inject f' vres vres'
+                  /\ Mem.inject f' m2 m2'
+                  /\ Mem.unchanged_on (loc_unmapped f) m1 m2
+                  /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
+                  /\ inject_incr f f'
+                  /\ inject_separated f f' m1 m1'
+                  /\ inject_trace f' t t';
 
 (** External calls produce at most one event. *)
   ec_trace_length:
@@ -1085,28 +1082,6 @@ Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
     sem ge vargs m t1 vres1 m1 -> sem ge vargs m t2 vres2 m2 ->
     match_traces ge t1 t2 /\ (t1 = t2 -> vres1 = vres2 /\ m1 = m2)
 }.
-          injection_full f m1 ->
-          exists f', exists vres', exists m2', exists t',
-                  /\ inject_trace_strong f' t t'
-                  /\ injection_full f' m2;
-      
-      (** External calls must commute with memory injections,
-  in the following sense. *)
-      ec_mem_inject':
-        forall ge1 ge2 vargs m1 t vres m2 f m1' vargs',
-          symbols_inject f ge1 ge2 ->
-          sem ge1 vargs m1 t vres m2 ->
-          Mem.inject f m1 m1' ->
-          Val.inject_list f vargs vargs' ->
-          exists f', exists vres', exists m2', exists t',
-                  sem ge2 vargs' m1' t' vres' m2'
-                  /\ Val.inject f' vres vres'
-                  /\ Mem.inject f' m2 m2'
-                  /\ Mem.unchanged_on (loc_unmapped f) m1 m2
-                  /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'
-                  /\ inject_incr f f'
-                  /\ inject_separated f f' m1 m1'
-                  /\ inject_trace f' t t';
 
 (** ** Semantics of volatile loads *)
 
@@ -1197,7 +1172,7 @@ Proof.
   exploit volatile_load_extends; eauto. intros [v' [A B]].
   exists v'; exists m1'; intuition. constructor; auto.
 (* mem injects *)
-- inv H0. inv H3. inv H8. inversion H6; subst.
+- inv H0. inv H2. inv H8. inversion H6; subst.
   exploit volatile_load_inject; eauto. intros [v' [A B]].
   exists f; (*intros.
   rewrite (volatile_load_trivial_inject A H0). *)
@@ -1365,7 +1340,7 @@ Proof.
   exploit volatile_store_extends; eauto. intros [m2' [A [B C]]].
   exists Vundef; exists m2'; intuition. constructor; auto.
 (* mem inject *)
-- inv H0. inv H3. inv H8. inv H9. inversion H6; subst.
+- inv H0. inv H2. inv H8. inv H9. inversion H6; subst.
   exploit volatile_store_inject; eauto. intros [m2' [A [B [C D]]]].
   exists f; exists Vundef; exists m2'; exists t; intuition. constructor; auto. red; intros; congruence.
   inversion A; repeat constructor.
@@ -1404,8 +1379,7 @@ Lemma alloc_parallel_inject'
        Mem.inject f m1 m2 ->
        Mem.alloc m1 lo1 hi1 = (m1', b1) ->
        injection_full f m1 ->
-       lo2 <= lo1 ->
-       hi1 <= hi2 ->
+       lo2 <= lo1 -> hi1 <= hi2 ->
        exists (f' : meminj) (m2' : Mem.mem') (b2 : block),
          Mem.alloc m2 lo2 hi2 = (m2', b2) /\
          Mem.inject f' m1' m2' /\
@@ -1414,8 +1388,7 @@ Lemma alloc_parallel_inject'
          /\ injection_full f' m1'.
   intros. exploit Mem.alloc_parallel_inject; eauto.
   intros [? [? [? [? [? [? [? ?]]]]]]].
-  repeat (econstructor; eauto).
-  intros b HH.
+  repeat (econstructor; eauto); intros b HH.
   destruct (ident_eq b b1).
   - subst. rewrite H7; discriminate.
   - rewrite H8; auto. eapply H1.
@@ -1448,8 +1421,7 @@ Proof.
   set (f' := fun b => if eq_block b b1 then Some(b2, delta) else f b).
   assert (inject_incr f f').
     red; unfold f'; intros. destruct (eq_block b b1). subst b.
-    assert (f b1 = None). eauto with mem. congruence.
-    auto.
+    assert (f b1 = None). eauto with mem. congruence. auto.
     assert (Mem.mem_inj f' m1 m2).
     inversion mi_inj; constructor; eauto with mem.
     unfold f'; intros. destruct (eq_block b0 b1).
@@ -1459,9 +1431,9 @@ Proof.
     unfold f'; intros. destruct (eq_block b0 b1).
       inversion H9. subst b0 b3 delta0.
       elim (Mem.fresh_block_alloc _ _ _ _ _ H1).
-      eapply Mem.perm_valid_block with (ofs := ofs). apply H10. generalize (size_chunk_pos chunk); omega.
-      eauto.
-    unfold f'; intros. destruct (eq_block b0 b1).
+      eapply Mem.perm_valid_block with (ofs := ofs).
+      apply H10. generalize (size_chunk_pos chunk); omega. eauto.
+      unfold f'; intros. destruct (eq_block b0 b1).
       inversion H9. subst b0 b3 delta0.
       elim (Mem.fresh_block_alloc _ _ _ _ _ H1). eauto with mem.
       apply memval_inject_incr with f; auto.
@@ -1485,11 +1457,9 @@ Proof.
     eapply H7; eauto. omega.
   inversion H12; subst b3 b2' delta2.
     destruct (eq_block b1' b2); auto. subst b1'. right; red; intros.
-    eapply H7; eauto. omega.
-  eauto.
+    eapply H7; eauto. omega. eauto.
 (* representable *)
-  unfold f'; intros.
-  destruct (eq_block b b1).
+  unfold f'; intros. destruct (eq_block b b1).
    subst. injection H10; intros; subst b' delta0. destruct H11.
     exploit Mem.perm_alloc_inv; eauto; rewrite dec_eq_true; intro.
     exploit H4. apply H5 with (k := Max) (p := Nonempty); eauto.
@@ -1514,12 +1484,10 @@ Proof.
 (* image of others *)
   split; intros. unfold f'; apply dec_eq_false; auto.
   (*full*)
-  intros b HH.
-  unfold f'.
+  intros b HH. unfold f'.
   destruct (eq_block b b1).
   - subst; discriminate.
-  - eapply H0.
-    eapply Mem.valid_block_alloc_inv in H1; eauto.
+  - eapply H0. eapply Mem.valid_block_alloc_inv in H1; eauto.
     destruct H1; auto. subst; contradict n; auto.
 Qed.
     
@@ -1566,7 +1534,7 @@ Proof.
   econstructor; eauto.
   eapply UNCHANGED; eauto.
   (* mem injects full *)
-- inv H0. inv H3. inv H7. inv H9.
+- inv H0. inv H2. inv H7. inv H9.
   exploit alloc_parallel_inject'; eauto. apply Z.le_refl. apply Z.le_refl.
   intros [f' [m3' [b' [ALLOC [A [B [C [D E]]]]]]]].
   exploit Mem.store_mapped_inject. eexact A. eauto. eauto.
@@ -1658,7 +1626,7 @@ Proof.
     eapply Mem.free_range_perm. eexact H4. eauto. }
   tauto.
 (* mem inject *)
-- inv H0. inv H3. inv H8. inv H10.
+- inv H0. inv H2. inv H8. inv H10.
   exploit Mem.load_inject; eauto. intros [v' [A B]].
   assert (v' = Vptrofs sz).
   { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
@@ -1680,7 +1648,7 @@ Proof.
   split. auto.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_unmapped. intros; congruence.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_out_of_reach.
-    intros. red; intros. eelim H3; eauto.
+    intros. red; intros. eelim H2; eauto.
     apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
     apply P. omega.
   split. auto.
@@ -1691,8 +1659,7 @@ Proof.
 - inv H0. inv H2. inv H7. inv H9.
   exploit Mem.load_inject; eauto. intros [v' [A B]].
   assert (v' = Vptrofs sz).
-  { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
-  subst v'.
+  { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. } subst v'.  
   assert (P: Mem.range_perm m1 b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) Cur Freeable).
     eapply Mem.free_range_perm; eauto.
   exploit Mem.address_inject; eauto.
@@ -1783,7 +1750,7 @@ Proof.
   erewrite list_forall2_length; eauto.
   tauto.
 - (* injections *)
-  intros. inv H0. inv H3. inv H15. inv H16. inv H12. inv H13.
+  intros. inv H0. inv H2. inv H15. inv H16. inv H12. inv H13.
   destruct (zeq sz 0).
 + (* special case sz = 0 *)
   assert (bytes = nil).
@@ -1837,7 +1804,7 @@ Proof.
   split. eapply Mem.storebytes_unchanged_on; eauto. unfold loc_unmapped; intros.
   congruence.
   split. eapply Mem.storebytes_unchanged_on; eauto. unfold loc_out_of_reach; intros. red; intros.
-  eelim H3; eauto.
+  eelim H2; eauto.
   apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
   eapply Mem.storebytes_range_perm; eauto.
   erewrite list_forall2_length; eauto.
@@ -2004,7 +1971,7 @@ Proof.
   econstructor; eauto.
   eapply eventval_match_lessdef; eauto.
 (* mem inject *)
-- inv H0. inv H3. inv H8.
+- inv H0. inv H2. inv H8.
   exists f; exists v'; exists m1'; exists (Event_annot text (arg :: nil) :: E0); intuition.
   econstructor; eauto.
   eapply eventval_match_inject; eauto.
@@ -2226,8 +2193,8 @@ Lemma external_call_mem_inject:
   meminj_preserves_globals ge f ->
   external_call ef ge vargs m1 t vres m2 ->
   Mem.inject f m1 m1' ->
-  injection_full f m1 ->
   Val.inject_list f vargs vargs' ->
+  injection_full f m1 ->
   exists f', exists vres', exists m2', exists t',
      external_call ef ge vargs' m1' t' vres' m2'
     /\ Val.inject f' vres vres'
@@ -2345,8 +2312,7 @@ Definition eval_builtin_args (al: list (builtin_arg A)) (vl: list val) : Prop :=
 Lemma eval_builtin_arg_determ:
   forall a v, eval_builtin_arg a v -> forall v', eval_builtin_arg a v' -> v' = v.
 Proof.
-  induction 1; intros v' EV; inv EV; try congruence.
-  f_equal; eauto.
+  induction 1; intros v' EV; inv EV; try congruence. f_equal; eauto.
   apply IHeval_builtin_arg1 in H3. apply IHeval_builtin_arg2 in H5. subst; auto. 
 Qed.
 

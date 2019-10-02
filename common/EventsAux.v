@@ -82,13 +82,6 @@ Record inject_delta_map (mu: meminj)(dpm1 dpm2: delta_perm_map): Prop:=
            ofs2 = ofs1 + delt
   }.
 
-
-
-
-
-
-
-
 (** *Relations that are monotonic w.r.t. injections*)
 Definition inj_monotone{A} (R:meminj -> A -> A-> Prop):Prop:=
   forall (a b:A) f f',  R f a b -> inject_incr f f' -> R f' a b.
@@ -110,13 +103,16 @@ Ltac inj_mono_tac:=
     try solve[econstructor; eauto with inj_mono]
   | _ => fail "Expected goal: inj_monotone ?R" 
   end.
-
-
-
-
-
-
-
+Lemma inj_delta_map_mono: inj_monotone inject_delta_map.
+Proof. inj_mono_tac. econstructor.
+       + intros. exploit DPM_image0; eauto.
+         intros (?&?&?&?&?&?).
+         repeat (econstructor; eauto).
+       + intros; exploit DPM_preimage0; eauto.
+         intros (?&?&?&?&?&?&?&?).
+         repeat (econstructor; eauto).
+Qed.
+Hint Resolve inj_delta_map_mono: inj_mono.
 
 (** * Relations that compose with injections *)
 Definition composes_inj {A} (R: meminj -> A -> A ->Prop):=
