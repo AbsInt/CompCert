@@ -63,7 +63,7 @@ VLIB=Axioms.v Coqlib.v Intv.v Maps.v Heaps.v Lattice.v Ordered.v \
 COMMON=Errors.v AST.v Linking.v \
   Events.v Globalenvs.v Memdata.v Memtype.v Memory.v \
   Values.v Smallstep.v Behaviors.v Switch.v Determinism.v Unityping.v \
-  Separation.v ExposedSimulations.v 
+  Separation.v ExposedSimulations.v EventsAux.v DeltaPerm.v  
 
 # Back-end modules (in backend/, $(ARCH)/)
 
