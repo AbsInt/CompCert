@@ -474,7 +474,7 @@ Proof.
     apply Asmgenproof.transf_program_match; auto.
 Qed.
 
-Print Assumptions simpl_clight_semantic_preservation.
+(*Print Assumptions simpl_clight_semantic_preservation.*)
 
 (*
 Theorem simpl_clight_semantic_preservation:
