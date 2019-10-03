@@ -1232,7 +1232,6 @@ Proof.
 Qed.
 *)
 
-
 Ltac common_tacs_after_destruct H:=
   first [ congruence
         | solve[inversion H]
@@ -1285,6 +1284,19 @@ Proof.
     + clear. induction arg; auto.
     + apply Mem.extends_refl.
 Qed.
+
+Lemma transf_initial_states':
+   forall s1 : state,
+  Smallstep.initial_state (semantics prog) s1 ->
+  exists (s2 : state), Smallstep.initial_state (semantics tprog) s2 /\ 
+                    match_states s1 s2.
+Proof.
+  apply (@init_states_from_entry (semantics prog) (semantics tprog));
+    try apply transf_entry_points.
+  - apply (Genv.init_mem_match TRANSF); eauto.
+  - simpl. destruct TRANSF as (P & Q & R).
+    rewrite symbols_preserved, Q; auto. 
+Qed.
 Lemma transf_final_states:
   forall st1 st2 r,
   match_states st1 st2 -> final_state st1 r -> final_state st2 r.
@@ -1324,16 +1336,51 @@ Theorem transl_program_correct':
                   (Smallstep.state (RTL.semantics prog)) (ltof _ (fun _ => 0)%nat)
                   ( fun idx s1 s2 => idx = s1 /\ (sound_state prog s1 /\ match_states s1 s2)).
 Proof.
-(*
-  eapply forward_simulation_step. 
+  constructor.
+- eapply well_founded_ltof.
+- intros; exploit transf_entry_points; eauto.
+  intros (?&?&?).
+  do 5 (econstructor; eauto).
+  eapply sound_entry; eassumption.
+- intros; exploit transf_initial_states'; eauto; intros (?&?&?).
+  do 5 (econstructor; eauto).
+  inv H; eapply sound_entry; eassumption.
+- simpl; intros * (?&?&?) ?. eapply transf_final_states; eauto.
+- simpl; intros * ? * (?&?&?). 
+  assert (sound_state prog s1') by (eapply sound_step; eauto).
+  fold ge; fold tge.
+  exploit transf_step_correct; eauto.
+  intros (?&?&?).
+  repeat (econstructor; eauto).  symmetry; apply E0_right.
 - apply senv_preserved.
-- intros. exploit transf_initial_states; eauto. intros [s2 [A B]].
-  exists s2. split. auto. split. apply sound_initial; auto. auto.
-- intros. destruct H. eapply transf_final_states; eauto.
-- intros. destruct H0. exploit transf_step_correct; eauto.
-  intros [s2' [A B]]. exists s2'; split. auto. split. eapply sound_step; eauto. auto.
-Qed.*)
-Admitted.
+Qed.
+
+
+ Lemma atx_sim:
+ simulation_atx
+    (fun (x s1 : Smallstep.state (semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) => 
+x = s1 /\ sound_state prog s1 /\ match_states s1 s2).
+Proof.
+  intros ? * Hatx t s1' Hstep * (?& SOUND&MATCH).
+  assert (sound_state prog s1') by  (eapply sound_step; eauto).
+  repeat match type of MATCH with
+          | _ /\ _ => destruct MATCH as [? MATCH]; subst
+         end; inv MATCH; try discriminate; inv Hstep; try discriminate.
+  monadInv TFD.
+  exploit external_call_mem_extends; eauto.
+  intros (v' & m1' & P & Q & R & S).
+  do 3 (econstructor; eauto).
+  eapply exec_function_external; eauto.
+  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  repeat (econstructor; eauto).
+Qed.
+Lemma atx_preserved:
+  preserves_atx
+    (fun (x s1 : Smallstep.state (semantics prog))
+       (s2 : Smallstep.state (semantics tprog)) =>
+       x = s1 /\ sound_state prog s1 /\ match_states s1 s2).
+Proof. atx_preserved_start_proof. Qed.
 
 Theorem transf_program_correct:
   @fsim_properties_ext
@@ -1341,10 +1388,9 @@ Theorem transf_program_correct:
     RTL.get_mem RTL.get_mem.
 Proof.
   eapply sim_extSim; try eapply transl_program_correct'.
-  - admit.
-  - admit.
+  - exact atx_sim.
+  - exact atx_preserved.
   - simpl; intros ? ? ? [? ?]; subst.
-  destruct H0 as [? H0]; inversion H0; auto.
-Admitted.
-
+    destruct H0 as [? H0]; inversion H0; auto.
+Qed.
 End PRESERVATION.

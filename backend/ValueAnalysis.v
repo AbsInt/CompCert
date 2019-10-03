@@ -1885,6 +1885,7 @@ Proof.
   unfold Genv.perm_globvar in V. rewrite RO, NVOL in V. inv V.
 Qed.
 
+(* Important Theorem to prove sound_entry. *)
 Theorem entry_mem_matches:
   forall m, Ple (Genv.genv_next ge) (Mem.nextblock m) ->
   exists bc,
@@ -1907,11 +1908,13 @@ Proof.
   subst b1.
   split. subst ab. apply store_init_data_list_summary. constructor.
   split. subst ab.
-  - admit.
+  - admit. (* loading RO globals, returns what you expect.
+              This might need to be added to entry_point *)
   - intros.
     intros; red; intros .
     clear - RO FD H3.
-    admit. (* add that readonly globals are not writable! *)
+    admit. (* readonly globals are not writable! 
+              This might need to be added to entry_point *)
 Admitted.    
     
 End INITIAL.
@@ -1938,6 +1941,13 @@ Proof.
 - exact NOSTACK.
 Qed.
 
+
+(* sound_entry: 
+   This lemma still requires some work, but we expect that 
+   it can be proven as is or with a small modification to
+   entry_point (such as tighter controll of the genv).   
+   See entry_mem_matches above. 
+*)
 Theorem sound_entry:
   forall prog m st fptr args, entry_point prog m st fptr args ->
                          sound_state prog st.
@@ -1945,10 +1955,10 @@ Proof.
   destruct 1.
   exploit entry_mem_matches; eauto. intros (bc & GE & BELOW & NOSTACK & RM & VALID).
   constructor; intros. apply sound_call_state with bc.
-- admit. (* generalize sound_stack to admit the pre-stack as "other"?*)
-- admit. (* should follow from H6  *)
-- admit. (* Follows from RM + allocation rules *)
-- admit. (* don't know *)
+- admit. (* generalize sound_stack to allow the pre-stack as "other"?*)
+- admit. (* should follow from H6: Mem.arg_well_formed args m0  *)
+- admit. (* Follows from RM:romatch bc m0 (romem_for cunit) + allocation rules *)
+- admit. (* Should follow from H1 : Mem.mem_wd m0 *)
 - exact GE.
 - exact NOSTACK.
 Admitted.

@@ -647,8 +647,8 @@ d_initial; eauto.*)
 Admitted.
  *)
 
-  (*
-Lemma sound_entry:
+
+(*Lemma sound_entry:
     forall prog (st: Smallstep.state (semantics prog)) m0 f arg,
       Smallstep.entry_point (semantics prog) m0 st f arg ->
       sound_state prog st.
@@ -664,7 +664,8 @@ Proof.
     + admit. (*yes. every glob is Gl or Glo.*)
     + constructor.
       * constructor.
-        -- intros.*)
+        -- intros.
+Admitted.*)
            
 Theorem transf_program_correct':
   fsim_properties  (RTL.semantics prog) (RTL.semantics tprog)
@@ -676,11 +677,10 @@ Proof.
 - intros; exploit transf_entry_points; eauto.
   intros (?&?&?&?).
   do 3 econstructor; try split; simpl; eauto.
-  
-  admit. (* sound state*)
+  eapply sound_entry; eassumption.
 - intros; exploit transf_initial_states'; eauto; intros (?&?&?&?).
-  repeat(econstructor; eauto).
-  admit. (* sound state*)
+  do 4 (econstructor; eauto).
+  inv H; eapply sound_entry; eassumption.
 - simpl; intros. destruct H. eapply transf_final_states; eauto.
 - simpl; intros. destruct H0.
   assert (sound_state prog s1') by (eapply sound_step; eauto).
@@ -690,7 +690,7 @@ Proof.
   exists n2; exists s2'; split; auto. left; apply plus_one; auto.
   exists n2; exists s2; split; auto. right; split; auto. subst t; apply star_refl.
 - apply senv_preserved.
-Admitted.
+Qed.
 
 
 Lemma atx_sim:
