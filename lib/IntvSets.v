@@ -102,7 +102,7 @@ Proof.
   simpl. rewrite IHok. tauto.
   destruct (zlt h0 l).
   simpl. tauto.
-  rewrite IHok. intuition.
+  rewrite IHok. intuition idtac.
   assert (l0 <= x < h0 \/ l <= x < h) by xomega. tauto.
   left; xomega.
   left; xomega.
