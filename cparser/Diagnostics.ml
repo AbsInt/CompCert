@@ -131,6 +131,7 @@ let all_warnings =
     (Unused_variable, false);
     (Unused_parameter, false);
     (Wrong_ais_parameter, true);
+    (Unused_ais_parameter, true);
     (Ignored_attributes, true);
     (Extern_after_definition, true);
     (Static_in_inline, true);
