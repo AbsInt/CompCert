@@ -408,13 +408,28 @@ let expand_instruction instr =
   | _ ->
      emit instr
 
-let int_reg_to_dwarf r = 0              (* TODO *)
+let int_reg_to_dwarf = function
+  | X0 -> 0 | X1 -> 1 | X2 -> 2 | X3 -> 3 | X4 -> 4
+  | X5 -> 5 | X6 -> 6 | X7 -> 7 | X8 -> 8 | X9 -> 9
+  | X10 -> 10 | X11 -> 11 | X12 -> 12 | X13 -> 13 | X14 -> 14
+  | X15 -> 15 | X16 -> 16 | X17 -> 17 | X18 -> 18 | X19 -> 19
+  | X20 -> 20 | X21 -> 21 | X22 -> 22 | X23 -> 23 | X24 -> 24
+  | X25 -> 25 | X26 -> 26 | X27 -> 27 | X28 -> 28 | X29 -> 29
+  | X30 -> 30
 
-let float_reg_to_dwarf r = 0            (* TODO *)
+let float_reg_to_dwarf = function
+  | D0 -> 64 | D1 -> 65 | D2 -> 66 | D3 -> 67 | D4 -> 68
+  | D5 -> 69 | D6 -> 70 | D7 -> 71 | D8 -> 72 | D9 -> 73
+  | D10 -> 74 | D11 -> 75 | D12 -> 76 | D13 -> 77 | D14 -> 78
+  | D15 -> 79 | D16 -> 80 | D17 -> 81 | D18 -> 82 | D19 -> 83
+  | D20 -> 84 | D21 -> 85 | D22 -> 86 | D23 -> 87 | D24 -> 88
+  | D25 -> 89 | D26 -> 90 | D27 -> 91 | D28 -> 92 | D29 -> 93
+  | D30 -> 94 | D31 -> 95
 
 let preg_to_dwarf = function
    | IR r -> int_reg_to_dwarf r
    | FR r -> float_reg_to_dwarf r
+   | SP -> 31
    | _ -> assert false
 
 let expand_function id fn =
