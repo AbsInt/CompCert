@@ -20,6 +20,11 @@ Local Open Scope string_scope.
 Local Open Scope list_scope.
 Local Open Scope error_monad_scope.
 
+(** Alignment check for symbols *)
+
+Parameter symbol_is_aligned : ident -> Z -> bool.
+(** [symbol_is_aligned id sz] checks whether the symbol [id] is [sz] aligned *)
+
 (** Extracting integer or float registers. *)
 
 Definition ireg_of (r: mreg) : res ireg :=
@@ -942,7 +947,7 @@ Definition transl_addressing (sz: Z) (addr: Op.addressing) (args: list mreg)
                            (insn (ADimm X16 Int64.zero) :: k))
   | Aglobal id ofs, nil =>
       assertion (negb (Archi.pic_code tt));
-      if Ptrofs.eq (Ptrofs.modu ofs (Ptrofs.repr sz)) Ptrofs.zero
+      if Ptrofs.eq (Ptrofs.modu ofs (Ptrofs.repr sz)) Ptrofs.zero && symbol_is_aligned id sz
       then OK (Padrp X16 id ofs :: insn (ADadr X16 id ofs) :: k)
       else OK (loadsymbol X16 id ofs (insn (ADimm X16 Int64.zero) :: k))
   | Ainstack ofs, nil =>
