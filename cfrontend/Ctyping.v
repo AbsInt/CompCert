@@ -457,6 +457,8 @@ Variable rt: type.
 Inductive wt_stmt: statement -> Prop :=
   | wt_Sskip:
       wt_stmt Sskip
+  | wt_Scomment: forall cmt,
+      wt_stmt (Scomment cmt)
   | wt_Sdo: forall r,
       wt_rvalue r -> wt_stmt (Sdo r)
   | wt_Ssequence: forall s1 s2,
@@ -856,6 +858,8 @@ Fixpoint retype_stmt (ce: composite_env) (e: typenv) (rt: type) (s: statement) :
   match s with
   | Sskip =>
       OK Sskip
+  | Scomment cmt =>
+      OK (Scomment cmt)
   | Sdo a =>
       do a' <- retype_expr ce e a; sdo a'
   | Ssequence s1 s2 =>
@@ -1346,6 +1350,7 @@ with retype_lblstmts_sound:
   forall sl sl', retype_lblstmts ce e rt sl = OK sl' -> wt_lblstmts ce e rt sl'.
 Proof.
 - destruct s; simpl; intros s' RT; try (monadInv RT).
++ constructor.
 + constructor.
 + eapply sdo_sound; eauto using retype_expr_sound.
 + constructor; eauto.

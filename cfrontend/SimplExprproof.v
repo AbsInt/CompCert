@@ -1261,6 +1261,7 @@ with tr_find_label_ls:
 Proof.
   induction s; intros; inversion TR; subst; clear TR; simpl.
   auto.
+  auto.
   eapply tr_find_label_expr_stmt; eauto.
 (* seq *)
   exploit (IHs1 (Csem.Kseq s2 k)); eauto. constructor; eauto.

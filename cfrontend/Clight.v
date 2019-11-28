@@ -30,6 +30,7 @@ Require Import Globalenvs.
 Require Import Smallstep.
 Require Import Ctypes.
 Require Import Cop.
+Require Import Comment.
 
 (** * Abstract syntax *)
 
@@ -94,6 +95,7 @@ Definition label := ident.
 
 Inductive statement : Type :=
   | Sskip : statement                   (**r do nothing *)
+  | Scomment : comment -> statement
   | Sassign : expr -> expr -> statement (**r assignment [lvalue = rvalue] *)
   | Sset : ident -> expr -> statement   (**r assignment [tempvar = rvalue] *)
   | Scall: option ident -> expr -> list expr -> statement (**r function call *)

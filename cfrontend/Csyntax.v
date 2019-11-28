@@ -18,6 +18,7 @@
 Require Import Coqlib Maps Integers Floats Errors.
 Require Import AST Linking Values.
 Require Import Ctypes Cop.
+Require Import Comment.
 
 (** ** Expressions *)
 
@@ -160,6 +161,7 @@ Definition label := ident.
 
 Inductive statement : Type :=
   | Sskip : statement                   (**r do nothing *)
+  | Scomment : comment -> statement
   | Sdo : expr -> statement            (**r evaluate expression for side effects *)
   | Ssequence : statement -> statement -> statement  (**r sequence *)
   | Sifthenelse : expr  -> statement -> statement -> statement (**r conditional *)

@@ -1436,6 +1436,8 @@ Proof.
 * intro s; case s; intros; try (monadInv TR); simpl.
 - (* skip *)
   auto.
+- (* comment *)
+  auto.
 - (* assign *)
   unfold make_store, make_memcpy in EQ3.
   destruct (access_mode (typeof e)); monadInv EQ3; auto.

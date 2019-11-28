@@ -1915,6 +1915,8 @@ Proof.
   induction s; simpl; intros until tk; intros TS MC COMPAT; auto.
   (* skip *)
   monadInv TS; auto.
+  (* comment *)
+  monadInv TS; auto.
   (* var *)
   destruct (is_liftable_var cenv e); monadInv TS; auto.
   unfold Sset_debug. destruct (Compopts.debug tt); auto.

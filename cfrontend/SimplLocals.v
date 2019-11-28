@@ -106,6 +106,7 @@ Definition check_opttemp (cenv: compilenv) (optid: option ident) : res unit :=
 Fixpoint simpl_stmt (cenv: compilenv) (s: statement) : res statement :=
   match s with
   | Sskip => OK Sskip
+  | Scomment cmt => OK (Scomment cmt)
   | Sassign a1 a2 =>
       match is_liftable_var cenv a1 with
       | Some id =>
@@ -200,6 +201,7 @@ Fixpoint addr_taken_exprlist (l: list expr) : VSet.t :=
 Fixpoint addr_taken_stmt (s: statement) : VSet.t :=
   match s with
   | Sskip => VSet.empty
+  | Scomment _ => VSet.empty
   | Sassign a b => VSet.union (addr_taken_expr a) (addr_taken_expr b)
   | Sset id a => addr_taken_expr a
   | Scall optid a bl => VSet.union (addr_taken_expr a) (addr_taken_exprlist bl)

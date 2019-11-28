@@ -15,6 +15,7 @@
 Require Import Coqlib Maps Errors Integers Floats.
 Require Import AST Linking Memory.
 Require Import Ctypes Cop Csyntax Clight SimplExpr.
+Require Import Comment.
 
 Section SPEC.
 
@@ -405,6 +406,8 @@ Inductive tr_if: Csyntax.expr -> statement -> statement -> statement -> Prop :=
 Inductive tr_stmt: Csyntax.statement -> statement -> Prop :=
   | tr_skip:
       tr_stmt Csyntax.Sskip Sskip
+  | tr_comment: forall cmt,
+      tr_stmt (Csyntax.Scomment cmt) (Scomment cmt)
   | tr_do: forall r s,
       tr_expr_stmt r s ->
       tr_stmt (Csyntax.Sdo r) s

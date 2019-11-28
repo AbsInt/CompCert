@@ -1067,6 +1067,7 @@ let rec groupSwitch = function
 let rec contains_case s =
   match s.sdesc with
   | C.Sskip
+  | C.Scomment _
   | C.Sdo _
   | C.Sbreak
   | C.Scontinue
@@ -1099,6 +1100,8 @@ let rec convertStmt env s =
   match s.sdesc with
   | C.Sskip ->
       Csyntax.Sskip
+  | C.Scomment cmt ->
+      Csyntax.Scomment cmt
   | C.Sdo e ->
       swrap (Ctyping.sdo (convertExpr env e))
   | C.Sseq(s1, s2) ->

@@ -442,6 +442,7 @@ Defined.
 Fixpoint transl_stmt (s: Csyntax.statement) : mon statement :=
   match s with
   | Csyntax.Sskip => ret Sskip
+  | Csyntax.Scomment cmt => ret (Scomment cmt)
   | Csyntax.Sdo e => transl_expr_stmt e
   | Csyntax.Ssequence s1 s2 =>
       do ts1 <- transl_stmt s1;
