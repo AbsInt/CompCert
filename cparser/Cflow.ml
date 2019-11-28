@@ -67,7 +67,7 @@ let join o1 o2 =
     ogoto = StringSet.union o1.ogoto o2.ogoto }
 
 (* Some elementary flows *)
-  
+
 let normal : flow = fun i ->
   { onormal = i.inormal;
     obreak = false; ocontinue = false; oreturn = false;
@@ -95,7 +95,7 @@ let goto lbl : flow = fun i ->
 let noflow : flow = fun i ->
   { onormal = false; obreak = false; ocontinue = false; oreturn = false;
     ogoto = StringSet.empty }
-  
+
 (* Some flow transformers *)
 
 (* Sequential composition *)
@@ -110,7 +110,7 @@ let seq (s1: flow) (s2: flow) : flow = fun i ->
     ogoto = StringSet.union o1.ogoto o2.ogoto }
 
 (* Nondeterministic choice *)
-  
+
 let either (s1: flow) (s2: flow) : flow = fun i ->
   join (s1 i) (s2 i)
 
@@ -149,14 +149,14 @@ let label lbl (s: flow) : flow = fun i ->
 (* For "case" and "default" labeled statements, we assume they can be
    entered normally as soon as the nearest enclosing "switch" can be
    entered normally. *)
-   
+
 let case (s: flow) : flow = fun i ->
   s { i with inormal = i.inormal || i.iswitch }
 
 let switch (s: flow) : flow = fun i ->
   s { i with inormal = false; iswitch = i.inormal }
-  
-(* This is the flow for an infinite loop with body [s].  
+
+(* This is the flow for an infinite loop with body [s].
    There is no fallthrough exit, but all other exits from [s] are preserved. *)
 
 let loop (s: flow) : flow = fun i ->
@@ -179,6 +179,7 @@ let loop (s: flow) : flow = fun i ->
 let rec contains_default s =
   match s.sdesc with
   | Sskip -> false
+  | Scomment _ -> false
   | Sdo _ -> false
   | Sseq(s1, s2) -> contains_default s1 || contains_default s2
   | Sif(e, s1, s2) -> contains_default s1 || contains_default s2
@@ -205,7 +206,8 @@ let rec contains_default s =
 
 let rec outcomes env s : flow =
   match s.sdesc with
-  | Sskip ->
+  | Sskip
+  | Scomment _ ->
       normal
   | Sdo {edesc = ECall(fn, args)} ->
     let returns = find_custom_attributes ["noreturn"; "__noreturn__"]

@@ -16,6 +16,7 @@
 %{
 
 Require Import List.
+Require Import Comment.
 Require Cabs.
 
 %}
@@ -23,6 +24,7 @@ Require Cabs.
 %token<Cabs.string * Cabs.loc> VAR_NAME TYPEDEF_NAME OTHER_NAME
 %token<Cabs.string * Cabs.loc> PRAGMA
 %token<bool * list Cabs.char_code * Cabs.loc> STRING_LITERAL
+%token<comment * Cabs.loc> COMMENT
 %token<Cabs.constant * Cabs.loc> CONSTANT
 %token<Cabs.loc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
   ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
@@ -799,6 +801,8 @@ block_item:
     { Cabs.DEFINITION decl }
 | stmt = statement_dangerous
     { stmt }
+| cmt = COMMENT
+    { Cabs.COMMENT (fst cmt) (snd cmt) }
 (* Non-standard *)
 | p = PRAGMA
     { Cabs.DEFINITION (Cabs.PRAGMA (fst p) (snd p)) }
@@ -839,7 +843,7 @@ iteration_statement(last_statement):
 | loc = FOR LPAREN decl1 = declaration expr2 = expression SEMICOLON
   expr3 = expression RPAREN stmt = last_statement
     { Cabs.FOR (Some (Cabs.FC_DECL decl1)) (Some (fst expr2)) (Some (fst expr3)) stmt loc }
-| loc = FOR LPAREN SEMICOLON expr2 = expression SEMICOLON expr3 = expression RPAREN 
+| loc = FOR LPAREN SEMICOLON expr2 = expression SEMICOLON expr3 = expression RPAREN
   stmt = last_statement
     { Cabs.FOR None (Some (fst expr2)) (Some (fst expr3)) stmt loc }
 | loc = FOR LPAREN expr1 = expression SEMICOLON SEMICOLON expr3 = expression RPAREN

@@ -29,7 +29,7 @@ let reserved_keyword loc id =
 
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
-    [ 
+    [
       ("_Alignas", fun loc -> ALIGNAS loc);
       ("_Alignof", fun loc -> ALIGNOF loc);
       ("_Bool", fun loc -> UNDERSCORE_BOOL loc);
@@ -156,6 +156,19 @@ let convert_escape = function
   | 't' -> 9L  (* horizontal tab *)
   | 'v' -> 11L (* vertical tab *)
   | c   -> Int64.of_int (Char.code c)
+
+let charlist_to_string chars =
+  let res = Bytes.create (List.length chars) in
+  List.iteri
+    (fun i c -> Bytes.set res i c)
+    chars;
+  Bytes.to_string res
+
+let filter_comment s =
+  if String.get s 0 = '@' then
+    Some (String.sub s 1 (String.length s - 1))
+  else
+    None
 }
 
 (* Identifiers *)
@@ -254,8 +267,17 @@ let escape_sequence =
 rule initial = parse
   | '\n'                          { new_line lexbuf; initial_linebegin lexbuf }
   | whitespace_char_no_newline +  { initial lexbuf }
-  | "/*"                          { multiline_comment lexbuf; initial lexbuf }
-  | "//"                          { singleline_comment lexbuf; initial lexbuf }
+  | "/*"                          { let l = multiline_comment lexbuf.lex_start_p [] lexbuf in
+                                    match l with
+                                    | Some l -> COMMENT(l, currentLoc lexbuf)
+                                    | None -> initial lexbuf
+                                  }
+  | "//" ([^ '\n']* as s) '\n'    { new_line lexbuf;
+                                    let l = filter_comment s in
+                                    match l with
+                                    | Some l -> COMMENT(l, currentLoc lexbuf)
+                                    | None -> initial lexbuf
+                                  }
   | integer_constant as s         { CONSTANT (Cabs.CONST_INT s, currentLoc lexbuf) }
   | decimal_floating_constant     { CONSTANT (Cabs.CONST_FLOAT
                                       {Cabs.isHex_FI = false;
@@ -421,17 +443,12 @@ and hash = parse
       { fatal_error lexbuf "invalid symbol %C" c }
 
 (* Multi-line comment terminated by "*/" *)
-and multiline_comment = parse
-  | "*/"   { () }
-  | eof    { error lexbuf "unterminated comment" }
-  | '\n'   { new_line lexbuf; multiline_comment lexbuf }
-  | _      { multiline_comment lexbuf }
-
-(* Single-line comment terminated by a newline *)
-and singleline_comment = parse
-  | '\n'   { new_line lexbuf }
-  | eof    { () }
-  | _      { singleline_comment lexbuf }
+and multiline_comment startp accu = parse
+  | "*/"   { lexbuf.lex_start_p <- startp;
+             filter_comment @@ charlist_to_string (List.rev accu) }
+  | eof    { fatal_error lexbuf "unterminated comment" }
+  | '\n' as c  { new_line lexbuf; multiline_comment startp (c :: accu) lexbuf}
+  | _ as c     { multiline_comment startp (c :: accu) lexbuf }
 
 {
   open Parser.MenhirLibParser.Inter
@@ -516,6 +533,7 @@ and singleline_comment = parse
       | Pre_parser.CASE loc -> loop (Parser.CASE loc)
       | Pre_parser.CHAR loc -> loop (Parser.CHAR loc)
       | Pre_parser.COLON loc -> loop (Parser.COLON loc)
+      | Pre_parser.COMMENT (s, loc) -> loop (Parser.COMMENT (s, loc))
       | Pre_parser.COMMA loc -> loop (Parser.COMMA loc)
       | Pre_parser.CONST loc -> loop (Parser.CONST loc)
       | Pre_parser.CONSTANT (cst, loc) -> loop (Parser.CONSTANT (cst, loc))

@@ -678,7 +678,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
      - A use of an already-defined struct/union/enum.  In this case
        the name-related attributes should go to the name being declared.
        Sending them to the struct/union/enum would cause them to be ignored,
-       with a warning.  The struct-related attributes go to the 
+       with a warning.  The struct-related attributes go to the
        struct/union/enum, are ignored, and cause a warning.
      - An incomplete declaration of a struct/union.  In this case
        the name- and struct-related attributes are just ignored,
@@ -1959,7 +1959,7 @@ let elab_expr ctx loc env a =
       | _ -> fatal_error "request for member '%s' in something not a structure or union" mem in
     let rec offset_of_list acc env ty = function
       | [] -> acc,ty
-      | fld::rest -> 
+      | fld::rest ->
         if fld.fld_bitfield <> None then
           fatal_error "cannot compute offset of bit-field '%s'" fld.fld_name;
         let off = offsetof env ty fld in
@@ -3065,6 +3065,9 @@ let rec elab_stmt env ctx s =
 (* 6.8.3 Null statements *)
   | NOP loc ->
       { sdesc = Sskip; sloc = elab_loc loc },env
+
+  | COMMENT (cmt, loc) ->
+      { sdesc = Scomment cmt; sloc = elab_loc loc },env
 
 (* Traditional extensions *)
   | ASM(cv_specs, wide, chars, outputs, inputs, flags, loc) ->

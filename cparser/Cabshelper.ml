@@ -49,6 +49,7 @@ let get_statementloc (s : statement) : loc =
 begin
   match s with
   | NOP(loc) -> loc
+  | COMMENT(_,loc) -> loc
   | COMPUTATION(_,loc) -> loc
   | BLOCK(_,loc) -> loc
   | If(_,_,_,loc) -> loc

@@ -445,6 +445,7 @@ let transf_asm_operand (lbl, cstr, e) = (lbl, cstr, transf_expr Val e) in
 let rec transf_stmt s =
   match s.sdesc with
   | Sskip -> s
+  | Scomment _ -> s
   | Sdo e ->
       {s with sdesc = Sdo(transf_expr Effects e)}
   | Sseq(s1, s2) ->

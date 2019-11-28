@@ -202,6 +202,7 @@ type stmt = { sdesc: stmt_desc; sloc: location }
 
 and stmt_desc =
   | Sskip
+  | Scomment of Comment.comment
   | Sdo of exp
   | Sseq of stmt * stmt
   | Sif of exp * stmt * stmt

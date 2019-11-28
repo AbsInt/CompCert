@@ -14,6 +14,7 @@
 (* *********************************************************************)
 
 Require Import BinPos.
+Require Import Comment.
 
 (* OCaml's string type. *)
 Parameter string : Type.
@@ -204,6 +205,7 @@ Inductive definition :=
 
 with statement :=
  | NOP : loc -> statement
+ | COMMENT : comment -> loc -> statement
  | COMPUTATION : expression -> loc -> statement
  | BLOCK : list statement -> loc -> statement
  | If : expression -> statement -> option statement -> loc -> statement

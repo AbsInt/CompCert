@@ -158,6 +158,7 @@ let rec stmt env s =
 
 and stmt_desc env = function
   | Sskip -> Sskip
+  | Scomment cmt -> Scomment cmt
   | Sdo a -> Sdo (exp env a)
   | Sseq(s1, s2) -> Sseq(stmt env s1, stmt env s2)
   | Sif(a, s1, s2) -> Sif(exp env a, stmt env s1, stmt env s2)

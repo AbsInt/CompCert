@@ -136,6 +136,9 @@ Extract Constant Cabs.loc =>
 Extract Inlined Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
+(* Comment *)
+Extract Inlined Constant Comment.string => "string".
+
 (* Processor-specific extraction directives *)
 
 Load extractionMachdep.

@@ -103,7 +103,7 @@ type attribute_class =
   | Attr_struct         (* Attribute applies to struct, union and enum *)
   | Attr_function       (* Attribute applies to function types and decls *)
   | Attr_unknown        (* Unknown attribute *)
-      
+
 let attr_class : (string, attribute_class) Hashtbl.t = Hashtbl.create 32
 
 let declare_attribute name cls =
@@ -1317,6 +1317,7 @@ let rec subst_stmt phi s =
   { s with sdesc =
       match s.sdesc with
       | Sskip
+      | Scomment _
       | Sbreak
       | Scontinue
       | Sgoto _ -> s.sdesc

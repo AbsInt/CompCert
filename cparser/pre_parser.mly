@@ -47,6 +47,7 @@
   VAR_NAME TYPEDEF_NAME
 %token<Cabs.constant * Cabs.loc> CONSTANT
 %token<bool * int64 list * Cabs.loc> STRING_LITERAL
+%token<Comment.comment * Cabs.loc> COMMENT
 %token<string * Cabs.loc> PRAGMA
 
 %token<Cabs.loc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
@@ -795,6 +796,7 @@ block_item_list:
 block_item:
 | declaration(block_item)
 | statement
+| COMMENT
 | PRAGMA
     {}
 
