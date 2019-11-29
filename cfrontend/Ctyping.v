@@ -2132,6 +2132,7 @@ Proof.
   induction 1; intros WT; inv WT.
 - inv WTS; eauto with ty.
 - inv WTK; eauto with ty.
+- eauto with ty.
 - inv WTS; eauto with ty.
 - inv WTK; eauto with ty.
 - inv WTK; eauto with ty.

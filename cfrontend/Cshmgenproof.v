@@ -1573,6 +1573,12 @@ Proof.
   eapply external_call_symbols_preserved with (ge1 := ge). apply senv_preserved. eauto.
   eapply match_states_skip; eauto.
 
+- (* comment -> skip *)
+  monadInv TR. inv MTR. (* inv MK. *)
+  econstructor; split.
+  eapply plus_two. constructor. constructor. auto.
+  econstructor; eauto. constructor. constructor.
+
 - (* seq *)
   monadInv TR. inv MTR.
   econstructor; split.

@@ -589,7 +589,7 @@ Fixpoint transl_statement (ce: composite_env) (tyret: type) (nbrk ncnt: nat)
   | Clight.Sskip =>
       OK Sskip
   | Clight.Scomment _ =>
-      OK Sskip
+      OK (Sseq Sskip Sskip)
   | Clight.Sassign b c =>
       do tb <- transl_lvalue ce b;
       do tc <- transl_expr ce c;

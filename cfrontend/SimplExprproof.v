@@ -2017,6 +2017,11 @@ Proof.
   right; split. apply star_refl. simpl. omega.
   econstructor; eauto. constructor.
 
+(* comment -> skip *)
+  inv H6. econstructor; split.
+  left. apply plus_one; constructor.
+  econstructor; eauto.
+  econstructor; eauto.
 (* seq *)
   inv H6. econstructor; split. left. apply plus_one. constructor.
   econstructor; eauto. constructor; auto.

@@ -2074,6 +2074,9 @@ Proof.
   eapply Ple_trans; eauto. eapply external_call_nextblock; eauto.
   eapply Ple_trans; eauto. eapply external_call_nextblock; eauto.
 
+(* comment -> skip *)
+  econstructor; split. apply plus_one. econstructor. econstructor; eauto.
+
 (* sequence *)
   econstructor; split. apply plus_one. econstructor.
   econstructor; eauto with compat. econstructor; eauto with compat.

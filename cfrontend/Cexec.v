@@ -1984,6 +1984,8 @@ Definition do_step (w: world) (s: state) : list transition :=
 
   | State f (Sdo x) k e m =>
       ret "step_do_1" (ExprState f x (Kdo k) e m)
+  | State f (Scomment cmt) k e m =>
+      ret "step_comment_skip" (State f Sskip k e m)
   | State f (Ssequence s1 s2) k e m =>
       ret "step_seq" (State f s1 (Kseq s2 k) e m)
   | State f Sskip (Kseq s k) e m =>

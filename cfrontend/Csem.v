@@ -656,6 +656,10 @@ Inductive sstep: state -> trace -> state -> Prop :=
       sstep (ExprState f (Eval v ty) (Kdo k) e m)
          E0 (State f Sskip k e m)
 
+  | step_comment_skip: forall f cmt k e m,
+      sstep (State f (Scomment cmt) k e m)
+         E0 (State f Sskip k e m)
+
   | step_seq:  forall f s1 s2 k e m,
       sstep (State f (Ssequence s1 s2) k e m)
          E0 (State f s1 (Kseq s2 k) e m)

@@ -576,6 +576,10 @@ Inductive step: state -> trace -> state -> Prop :=
       step (State f (Sbuiltin optid ef tyargs al) k e le m)
          t (State f Sskip k e (set_opttemp optid vres le) m')
 
+  | step_comment_skip: forall f cmt k e le m,
+      step (State f (Scomment cmt) k e le m)
+        E0 (State f Sskip k e le m)
+
   | step_seq:  forall f s1 s2 k e le m,
       step (State f (Ssequence s1 s2) k e le m)
         E0 (State f s1 (Kseq s2 k) e le m)
