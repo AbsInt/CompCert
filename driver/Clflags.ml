@@ -53,6 +53,7 @@ let option_g = ref false
 let option_gdwarf = ref (if Configuration.system = "diab" then 2 else 3)
 let option_gdepth = ref 3
 let option_o = ref (None: string option)
+let option_C = ref false
 let option_E = ref false
 let option_S = ref false
 let option_c = ref false

@@ -34,11 +34,11 @@ let v_number =
 (* Predefined macros: version numbers, C11 features *)
 
 let predefined_macros =
-  let macros = [  
+  let macros = [
     "-D__COMPCERT__";
-    sprintf "-D__COMPCERT_MAJOR__=%d" v_major;    
-    sprintf "-D__COMPCERT_MINOR__=%d" v_minor;    
-    sprintf "-D__COMPCERT_VERSION__=%d" v_number;    
+    sprintf "-D__COMPCERT_MAJOR__=%d" v_major;
+    sprintf "-D__COMPCERT_MINOR__=%d" v_minor;
+    sprintf "-D__COMPCERT_VERSION__=%d" v_number;
     "-U__STDC_IEC_559_COMPLEX__";
     "-D__STDC_NO_ATOMICS__";
     "-D__STDC_NO_COMPLEX__";
@@ -57,6 +57,7 @@ let preprocess ifile ofile =
     if ofile = "-" then None else Some ofile in
   let cmd = List.concat [
     Configuration.prepro;
+    (if !option_C then ["-C"] else []);
     predefined_macros;
     (if !Clflags.use_standard_headers
      then ["-I" ^ Filename.concat !Clflags.stdlib_path "include" ]

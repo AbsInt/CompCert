@@ -129,6 +129,8 @@ let rec print_stmt p s =
   match s with
   | Sskip ->
       fprintf p "/*skip*/;"
+  | Scomment cmt ->
+      fprintf p "/*@ %s*/" cmt
   | Sassign(e1, e2) ->
       fprintf p "@[<hv 2>%a =@ %a;@]" print_expr e1 print_expr e2
   | Sset(id, e2) ->
@@ -325,4 +327,3 @@ let print_if prog = print_if_gen Clight1 prog
 (* print_if_2 is called from clightgen/Clightgen.ml, after the
    SimplLocals pass.  It receives Clight2 syntax. *)
 let print_if_2 prog = print_if_gen Clight2 prog
-

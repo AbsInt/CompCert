@@ -318,6 +318,8 @@ let rec print_stmt p s =
   match s with
   | Sskip ->
       fprintf p "/*skip*/;"
+  | Scomment cmt ->
+      fprintf p "/*@ %s*/" cmt
   | Sdo e ->
       fprintf p "%a;" print_expr e
   | Ssequence(s1, s2) ->

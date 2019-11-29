@@ -98,6 +98,7 @@ Recognized source files:
   .i or .p       C source file that should not be preprocessed
 Processing options:
   -normalize     Normalize the generated Clight code w.r.t. loads in expressions
+  -C             Preserve comments leading by '@'
   -E             Preprocess only, send result to standard output
   -o <file>      Generate output in <file>
 |} ^
@@ -140,7 +141,8 @@ let cmdline_actions =
   (* Getting version info *)
  @ version_options tool_name @
 (* Processing options *)
- [ Exact "-E", Set option_E;
+ [ Exact "-C", Set option_C;
+  Exact "-E", Set option_E;
   Exact "-normalize", Set option_normalize;
   Exact "-o", String(fun s -> option_o := Some s);
   Prefix "-o", Self (fun s -> let s = String.sub s 2 ((String.length s) - 2) in

@@ -106,6 +106,7 @@ let rec add_sequence sl s =
 let rec norm_stmt s =
   match s with
   | Sskip -> s
+  | Scomment _ -> s
   | Sassign(e1, e2) ->
       let (sl1, e1') = norm_expr_lvalue e1 in
       let (sl2, e2') = norm_expr e2 in
@@ -116,7 +117,7 @@ let rec norm_stmt s =
   | Scall(optid, e, el) ->
       let (sl1, e') = norm_expr e in
       let (sl2, el') = norm_expr_list el in
-      add_sequence (sl1 @ sl2) (Scall(optid, e', el'))  
+      add_sequence (sl1 @ sl2) (Scall(optid, e', el'))
   | Sbuiltin(optid, ef, tyl, el) ->
       let (sl, el') = norm_expr_list el in
       add_sequence sl (Sbuiltin(optid, ef, tyl, el'))

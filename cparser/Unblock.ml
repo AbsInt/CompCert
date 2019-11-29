@@ -259,6 +259,7 @@ let process_decl loc env ctx (sto, id, ty, optinit) k =
 let rec unblock_stmt env ctx ploc s =
   match s.sdesc with
   | Sskip -> s
+  | Scomment _ -> s
   | Sdo e ->
       add_lineno ctx ploc s.sloc
         {s with sdesc = Sdo(expand_expr true env e)}

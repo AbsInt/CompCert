@@ -333,6 +333,8 @@ let rec expr p = function
 let rec stmt p = function
   | Sskip ->
       fprintf p "Sskip"
+  | Scomment cmt ->
+      fprintf p "(* %s *)" cmt
   | Sassign(e1, e2) ->
       fprintf p "@[<hov 2>(Sassign@ %a@ %a)@]" expr e1 expr e2
   | Sset(id, e2) ->
@@ -509,6 +511,7 @@ let rec name_expr = function
 
 let rec name_stmt = function
   | Sskip -> ()
+  | Scomment _ -> ()
   | Sassign(e1, e2) -> name_expr e1; name_expr e2
   | Sset(id, e2) -> name_temporary id; name_expr e2
   | Scall(optid, e1, el) ->
@@ -556,8 +559,8 @@ let print_clightgen_info p sourcefile normalized =
   fprintf p "@ Definition big_endian := %B." Archi.big_endian;
   fprintf p "@ Definition source_file := %S%%string." sourcefile;
   fprintf p "@ Definition normalized := %B." normalized;
-  fprintf p "@]@ End Info.@ @ "  
-  
+  fprintf p "@]@ End Info.@ @ "
+
 (* All together *)
 
 let print_program p prog sourcefile normalized =

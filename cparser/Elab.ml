@@ -2869,6 +2869,7 @@ let check_switch_cases switch_body =
   let rec check s =
     match s.sdesc with
     | Sskip -> ()
+    | Scomment _ -> ()
     | Sdo _ -> ()
     | Sseq(s1, s2) -> check s1; check s2
     | Sif(_, s1, s2) -> check s1; check s2
