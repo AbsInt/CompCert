@@ -530,7 +530,7 @@ missingtools=false
 echo "Testing Coq... " | tr -d '\n'
 coq_ver=$(${COQBIN}coqc -v 2>/dev/null | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p')
 case "$coq_ver" in
-  8.8.0|8.8.1|8.8.2|8.9.0|8.9.1|8.10.0|8.10.1)
+  8.8.0|8.8.1|8.8.2|8.9.0|8.9.1|8.10.0|8.10.1|8.10.2)
         echo "version $coq_ver -- good!";;
   ?*)
         echo "version $coq_ver -- UNSUPPORTED"
