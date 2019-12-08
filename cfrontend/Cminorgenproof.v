@@ -1934,6 +1934,7 @@ Qed.
 Fixpoint seq_left_depth (s: Csharpminor.stmt) : nat :=
   match s with
   | Csharpminor.Sseq s1 s2 => S (seq_left_depth s1)
+  | Csharpminor.Scomment _ => S O
   | _ => O
   end.
 
@@ -2047,6 +2048,11 @@ Opaque PTree.set.
   unfold set_optvar. destruct optid; simpl.
   eapply match_callstack_set_temp; eauto.
   auto.
+
+(* comment -> skip *)
+  monadInv TR.
+  right; repeat split; auto.
+  econstructor; eauto.
 
 (* seq *)
   monadInv TR.

@@ -153,6 +153,8 @@ Fixpoint transl_stmt (cenv: compilenv) (xenv: exit_env) (s: Csharpminor.stmt)
   match s with
   | Csharpminor.Sskip =>
       OK Sskip
+  | Csharpminor.Scomment _ =>
+      OK Sskip
   | Csharpminor.Sset id e =>
       do te <- transl_expr cenv e;
       OK (Sassign id te)

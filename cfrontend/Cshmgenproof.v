@@ -1576,7 +1576,7 @@ Proof.
 - (* comment -> skip *)
   monadInv TR. inv MTR. (* inv MK. *)
   econstructor; split.
-  eapply plus_two. constructor. constructor. auto.
+  apply plus_one. constructor.
   econstructor; eauto. constructor. constructor.
 
 - (* seq *)

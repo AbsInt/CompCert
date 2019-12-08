@@ -24,6 +24,7 @@ Require Import Globalenvs.
 Require Import Switch.
 Require Cminor.
 Require Import Smallstep.
+Require Import Comment.
 
 (** Abstract syntax *)
 
@@ -59,6 +60,7 @@ Definition label := ident.
 
 Inductive stmt : Type :=
   | Sskip: stmt
+  | Scomment : comment -> stmt
   | Sset : ident -> expr -> stmt
   | Sstore : memory_chunk -> expr -> expr -> stmt
   | Scall : option ident -> signature -> expr -> list expr -> stmt
@@ -395,6 +397,10 @@ Inductive step: state -> trace -> state -> Prop :=
       external_call ef ge vargs m t vres m' ->
       step (State f (Sbuiltin optid ef bl) k e le m)
          t (State f Sskip k e (Cminor.set_optvar optid vres le) m')
+
+  | step_comment_skip: forall f cmt k e le m,
+      step (State f (Scomment cmt) k e le m)
+        E0 (State f Sskip k e le m)
 
   | step_seq: forall f s1 s2 k e le m,
       step (State f (Sseq s1 s2) k e le m)
