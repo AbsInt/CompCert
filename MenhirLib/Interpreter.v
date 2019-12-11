@@ -286,7 +286,7 @@ Definition reduce_step stk prod (buffer : buffer)
         (Hi : thunkP (stack_invariant stk))
   : step_result.
 refine
-  ((let '(stk', sem) as ss := pop (prod_rhs_rev prod) stk _ (prod_action prod)
+  ((let '(stk', sem) as ss := pop (prod_rhs_rev prod) stk ?[X1] (prod_action prod)
       return thunkP (state_valid_after_pop (state_of_stack (fst ss)) _
                                (head_states_of_state (state_of_stack stk))) -> _
     in fun Hval' =>
@@ -301,18 +301,18 @@ refine
       let sem := eq_rect _ _ sem _ e in
       Progress_sr (existT noninitstate_type state_new sem::stk') buffer
     | None => fun Hval =>
-      let sem := cast symbol_semantic_type _ sem in
+      let sem := cast symbol_semantic_type ?[X2] sem in
       Accept_sr sem buffer
-    end (fun _ => _))
-   (fun _ => pop_state_valid _ _ _ _ _ _ _)).
+    end (fun _ => ?[X3]))
+   (fun _ => pop_state_valid _ _ _ _ _ _ ?[X4])).
 Proof.
-  - clear -Hi Hval.
+  [X1]: clear -Hi Hval;
     abstract (intros _; destruct Hi=>//; eapply prefix_trans; [by apply Hval|eassumption]).
-  - clear -Hval.
+  [X2]: clear -Hval;
     abstract (intros _; f_equal; specialize (Hval I eq_refl); destruct stk' as [|[]]=>//).
-  - simpl in Hval'. clear -Hval Hval'.
+  [X3]: simpl in Hval'; clear -Hval Hval';
     abstract (move : Hval => /(_ I) [_ /(_ _ (Hval' I))] Hval2 Hgoto; by rewrite Hgoto in Hval2).
-  - clear -Hi. abstract by destruct Hi.
+  [X4]: clear -Hi; abstract by destruct Hi.
 Defined.
 
 Lemma reduce_step_stack_invariant_preserved stk prod buffer Hv Hi stk' buffer':
