@@ -435,7 +435,7 @@ let preg_to_dwarf = function
 let expand_function id fn =
   try
     set_current_function fn;
-    expand id (* sp= *) 2 preg_to_dwarf expand_instruction fn.fn_code;
+    expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
     Errors.Error (Errors.msg (coqstring_of_camlstring s))
