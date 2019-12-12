@@ -104,30 +104,46 @@ type warning_type =
   | Reduced_alignment
   | Non_linear_cond_expr
 
+(* List of all warnings with default status.
+   "true" means the warning is active by default.
+   "false" means the warning is off by default. *)
+let all_warnings =
+  [ (Unnamed, true);
+    (Unknown_attribute, true);
+    (Zero_length_array, false);
+    (Celeven_extension, false);
+    (Gnu_empty_struct, true);
+    (Missing_declarations, true);
+    (Constant_conversion, true);
+    (Int_conversion, true);
+    (Varargs, true);
+    (Implicit_function_declaration, true);
+    (Pointer_type_mismatch, true);
+    (Compare_distinct_pointer_types, true);
+    (Implicit_int, true);
+    (Main_return_type, true);
+    (Invalid_noreturn, true);
+    (Return_type, true);
+    (Literal_range, true);
+    (Unknown_pragmas, false);
+    (CompCert_conformance, false);
+    (Inline_asm_sdump, true);
+    (Unused_variable, false);
+    (Unused_parameter, false);
+    (Wrong_ais_parameter, true);
+    (Unused_ais_parameter, true);
+    (Ignored_attributes, true);
+    (Extern_after_definition, true);
+    (Static_in_inline, true);
+    (Flexible_array_extensions, false);
+    (Tentative_incomplete_static, false);
+    (Reduced_alignment, false);
+    (Non_linear_cond_expr, false);
+  ]
+
 (* List of active warnings *)
-let active_warnings: warning_type list ref = ref [
-  Unnamed;
-  Unknown_attribute;
-  Gnu_empty_struct;
-  Missing_declarations;
-  Constant_conversion;
-  Int_conversion;
-  Varargs;
-  Implicit_function_declaration;
-  Pointer_type_mismatch;
-  Compare_distinct_pointer_types;
-  Implicit_int;
-  Main_return_type;
-  Invalid_noreturn;
-  Return_type;
-  Literal_range;
-  Inline_asm_sdump;
-  Wrong_ais_parameter;
-  Unused_ais_parameter;
-  Ignored_attributes;
-  Extern_after_definition;
-  Static_in_inline;
-]
+let active_warnings: warning_type list ref =
+  ref (List.map fst (List.filter snd all_warnings))
 
 (* List of errors treated as warning *)
 let error_warnings: warning_type list ref = ref []
@@ -188,76 +204,14 @@ let warning_not_as_error w () =
 
 (* Activate all warnings *)
 let wall () =
-  active_warnings:=[
-    Unnamed;
-    Unknown_attribute;
-    Zero_length_array;
-    Celeven_extension;
-    Gnu_empty_struct;
-    Missing_declarations;
-    Constant_conversion;
-    Int_conversion;
-    Varargs;
-    Implicit_function_declaration;
-    Pointer_type_mismatch;
-    Compare_distinct_pointer_types;
-    Implicit_int;
-    Main_return_type;
-    Invalid_noreturn;
-    Return_type;
-    Literal_range;
-    Unknown_pragmas;
-    CompCert_conformance;
-    Inline_asm_sdump;
-    Unused_variable;
-    Unused_parameter;
-    Wrong_ais_parameter;
-    Ignored_attributes;
-    Extern_after_definition;
-    Static_in_inline;
-    Flexible_array_extensions;
-    Tentative_incomplete_static;
-    Reduced_alignment;
-    Non_linear_cond_expr;
-  ]
+  active_warnings:= List.map fst all_warnings
 
 let wnothing () =
   active_warnings :=[]
 
 (* Make all warnings an error *)
 let werror () =
-  error_warnings:=[
-    Unnamed;
-    Unknown_attribute;
-    Zero_length_array;
-    Celeven_extension;
-    Gnu_empty_struct;
-    Missing_declarations;
-    Constant_conversion;
-    Int_conversion;
-    Varargs;
-    Implicit_function_declaration;
-    Pointer_type_mismatch;
-    Compare_distinct_pointer_types;
-    Implicit_int;
-    Main_return_type;
-    Invalid_noreturn;
-    Return_type;
-    Literal_range;
-    Unknown_pragmas;
-    CompCert_conformance;
-    Inline_asm_sdump;
-    Unused_variable;
-    Wrong_ais_parameter;
-    Unused_ais_parameter;
-    Ignored_attributes;
-    Extern_after_definition;
-    Static_in_inline;
-    Flexible_array_extensions;
-    Tentative_incomplete_static;
-    Reduced_alignment;
-    Non_linear_cond_expr;
-  ]
+  error_warnings:= List.map fst all_warnings
 
 (* Generate the warning key for the message *)
 let key_of_warning w =
@@ -411,37 +365,7 @@ let error_option w =
    Exact ("-Wno-error="^key), Unit ( warning_not_as_error w)]
 
 let warning_options =
-  error_option Unnamed @
-  error_option Unknown_attribute @
-  error_option Zero_length_array @
-  error_option Celeven_extension @
-  error_option Gnu_empty_struct @
-  error_option Missing_declarations @
-  error_option Constant_conversion @
-  error_option Int_conversion @
-  error_option Varargs @
-  error_option Implicit_function_declaration @
-  error_option Pointer_type_mismatch @
-  error_option Compare_distinct_pointer_types @
-  error_option Implicit_int @
-  error_option Main_return_type @
-  error_option Invalid_noreturn @
-  error_option Return_type @
-  error_option Literal_range @
-  error_option Unknown_pragmas @
-  error_option CompCert_conformance @
-  error_option Inline_asm_sdump @
-  error_option Unused_variable @
-  error_option Unused_parameter @
-  error_option Wrong_ais_parameter @
-  error_option Unused_ais_parameter @
-  error_option Ignored_attributes @
-  error_option Extern_after_definition @
-  error_option Static_in_inline @
-  error_option Flexible_array_extensions @
-  error_option Tentative_incomplete_static @
-  error_option Reduced_alignment @
-  error_option Non_linear_cond_expr @
+  List.concat (List.map (fun (w, active) -> error_option w) all_warnings) @
   [Exact ("-Wfatal-errors"), Set error_fatal;
    Exact ("-fdiagnostics-color"), Ignore; (* Either output supports it or no color *)
    Exact ("-fno-diagnostics-color"), Unset color_diagnostics;

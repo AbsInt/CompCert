@@ -21,3 +21,4 @@ Extract Constant Archi.pic_code => "fun () -> false".  (* for the time being *)
 (* Asm *)
 Extract Constant Asm.symbol_low => "fun _ _ _ -> assert false".
 Extract Constant Asm.symbol_high => "fun _ _ _ -> assert false".
+Extract Constant Asmgen.symbol_is_aligned => "C2C.atom_is_aligned".

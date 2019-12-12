@@ -61,6 +61,11 @@ let atom_alignof a =
   with Not_found ->
     None
 
+let atom_is_aligned a sz =
+  match atom_alignof a with
+  | None -> false
+  | Some align -> align mod (Z.to_int sz) = 0
+
 let atom_sections a =
   try
     (Hashtbl.find decl_atom a).a_sections

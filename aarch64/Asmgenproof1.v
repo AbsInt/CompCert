@@ -1592,7 +1592,7 @@ Proof.
   simpl; rewrite Int64.add_zero; auto.
   intros. apply C; eauto with asmgen.
 - (* Aglobal *)
-  destruct (Ptrofs.eq (Ptrofs.modu ofs (Ptrofs.repr sz)) Ptrofs.zero); inv TR.
+  destruct (Ptrofs.eq (Ptrofs.modu ofs (Ptrofs.repr sz)) Ptrofs.zero && symbol_is_aligned id sz); inv TR.
 + econstructor; econstructor; split.
   apply exec_straight_opt_intro. apply exec_straight_one. simpl; eauto. auto.
   split. simpl. Simpl. rewrite symbol_high_low. simpl in EV. congruence.

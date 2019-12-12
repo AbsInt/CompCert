@@ -3322,10 +3322,11 @@ Proof.
   assert (0 <= Z.min (size a) (size b)).
     generalize (size_range a) (size_range b). zify; omega.
   apply bits_size_3. auto. intros.
-  rewrite bits_and. zify. subst z z0. destruct H1.
-  rewrite (bits_size_2 a). auto. omega.
-  rewrite (bits_size_2 b). apply andb_false_r. omega.
-  omega.
+  rewrite bits_and by omega.
+  rewrite andb_false_iff.
+  generalize (bits_size_2 a i).
+  generalize (bits_size_2 b i).
+  zify; intuition.
 Qed.
 
 Corollary and_interval:
