@@ -468,8 +468,6 @@ let expand_builtin_inline name args res =
                         (fun rl ->
                           emit (Pmulw (rl, X a, X b));
                           emit (Pmulhuw (rh, X a, X b)))
-  | "__builtin_nop", [], _ ->
-     emit Pnop
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))

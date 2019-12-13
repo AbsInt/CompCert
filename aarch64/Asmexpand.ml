@@ -327,8 +327,6 @@ let expand_builtin_inline name args res =
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
      ()
-  | "__builtin_nop", [], _ ->
-     emit Pnop
   (* Byte swap *)
   | ("__builtin_bswap" | "__builtin_bswap32"), [BA(IR a1)], BR(IR res) ->
      emit (Prev(W, res, a1))

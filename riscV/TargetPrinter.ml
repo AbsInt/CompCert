@@ -564,8 +564,6 @@ module Target : TARGET =
          fprintf oc "	jr	x5\n";
          jumptables := (lbl, tbl) :: !jumptables;
          fprintf oc "%s end pseudoinstr btbl\n" comment
-      | Pnop ->
-        fprintf oc "	nop\n"
       | Pbuiltin(ef, args, res) ->
          begin match ef with
            | EF_annot(kind,txt, targs) ->

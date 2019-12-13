@@ -473,9 +473,6 @@ module Target : TARGET =
     (* Floating-point conditional select *)
     | Pfsel(rd, r1, r2, c) ->
         fprintf oc "	fcsel	%a, %a, %a, %s\n" dreg rd dreg r1 dreg r2 (condition_name c)
-    (* No-op *)
-    | Pnop ->
-        fprintf oc "	nop\n"
     (* Pseudo-instructions expanded in Asmexpand *)
     | Pallocframe(sz, linkofs) -> assert false
     | Pfreeframe(sz, linkofs) -> assert false

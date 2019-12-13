@@ -344,8 +344,7 @@ Inductive instruction : Type :=
   | Ploadsi (rd: freg) (f: float32)                 (**r load an immediate single *)
   | Pbtbl   (r: ireg)  (tbl: list label)            (**r N-way branch through a jump table *)
   | Pbuiltin: external_function -> list (builtin_arg preg)
-              -> builtin_res preg -> instruction    (**r built-in function (pseudo) *)
-  | Pnop : instruction.                             (**r nop instruction *)
+              -> builtin_res preg -> instruction.   (**r built-in function (pseudo) *)
 
 
 (** The pseudo-instructions are the following:
@@ -986,7 +985,6 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfmsubd _ _ _ _
   | Pfnmaddd _ _ _ _
   | Pfnmsubd _ _ _ _
-  | Pnop
     => Stuck
   end.
 

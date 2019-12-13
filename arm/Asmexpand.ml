@@ -409,8 +409,6 @@ let expand_builtin_inline name args res =
   (* Vararg stuff *)
   | "__builtin_va_start", [BA(IR a)], _ ->
      expand_builtin_va_start a
-  | "__builtin_nop", [], _ ->
-     emit Pnop
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))

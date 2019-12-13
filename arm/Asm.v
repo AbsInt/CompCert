@@ -232,7 +232,6 @@ Inductive instruction : Type :=
   | Prev16: ireg -> ireg -> instruction               (**r reverse bytes and reverse bits. *)
   | Prsc: ireg -> ireg -> shift_op -> instruction     (**r reverse subtract without carry. *)
   | Psbc: ireg -> ireg -> shift_op -> instruction     (**r add with carry *)
-  | Pnop : instruction                                (**r nop instruction *)
   (* Add, sub, rsb versions with s suffix *)
   | Padds: ireg -> ireg -> shift_op -> instruction    (**r integer addition with update of condition flags *)
   | Psubs: ireg -> ireg -> shift_op -> instruction    (**r integer subtraction with update of condition flags *)
@@ -815,7 +814,6 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfsqrt _ _
   | Prsc _ _ _
   | Psbc _ _ _
-  | Pnop
   | Padds _ _ _
   | Psubs _ _ _
   | Prsbs _ _ _
