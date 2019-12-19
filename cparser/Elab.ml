@@ -1853,7 +1853,12 @@ let elab_expr ctx loc env a =
            having declared it *)
         match a1 with
         | VARIABLE n when not (Env.ident_is_bound env n) ->
-            warning Implicit_function_declaration "implicit declaration of function '%s' is invalid in C99" n;
+            let is_builtin = String.length n > 10
+                           && String.sub n 0 10 = "__builtin_" in
+            if is_builtin then
+              error "use of unknown builtin '%s'" n
+            else
+              warning Implicit_function_declaration "implicit declaration of function '%s' is invalid in C99" n;
             let ty = TFun(TInt(IInt, []), None, false, []) in
             (* Check against other definitions and enter in env *)
             let (id, sto, env, ty, linkage) =
