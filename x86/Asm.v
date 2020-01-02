@@ -284,6 +284,7 @@ Inductive instruction: Type :=
   | Pmovsb
   | Pmovsw
   | Pmovw_rm (rd: ireg) (ad: addrmode)
+  | Pnop
   | Prep_movsl
   | Psbbl_rr (rd: ireg) (r2: ireg)
   | Psqrtsd (rd: freg) (r1: freg)
@@ -1002,6 +1003,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmovsb
   | Pmovsw
   | Pmovw_rm _ _
+  | Pnop
   | Prep_movsl
   | Psbbl_rr _ _
   | Psqrtsd _ _

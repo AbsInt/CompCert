@@ -306,6 +306,8 @@ struct
       fprintf oc "	vsqrt.f64 %a, %a\n" freg f1 freg f2
     | Psbc (r1,r2,sa) ->
       fprintf oc "	sbc	%a, %a, %a\n" ireg r1 ireg r2 shift_op sa
+    | Pnop ->
+      fprintf oc "	nop\n"
     | Pstr(r1, r2, sa) | Pstr_a(r1, r2, sa) ->
       fprintf oc "	str	%a, [%a, %a]\n" ireg r1 ireg r2 shift_op sa
     | Pstrb(r1, r2, sa) ->

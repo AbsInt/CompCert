@@ -298,6 +298,7 @@ Inductive instruction: Type :=
   | Pbtbl (r1: ireg) (tbl: list label)                                (**r N-way branch through a jump table *)
   | Pbuiltin (ef: external_function)
              (args: list (builtin_arg preg)) (res: builtin_res preg)  (**r built-in function (pseudo) *)
+  | Pnop                                                              (**r no operation *)
   | Pcfi_adjust (ofs: int)                                            (**r .cfi_adjust debug directive *)
   | Pcfi_rel_offset (ofs: int)                                        (**r .cfi_rel_offset debug directive *)
 .
@@ -1111,7 +1112,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfmsub _ _ _ _ _
   | Pfnmadd _ _ _ _ _
   | Pfnmsub _ _ _ _ _
-  | Pcfi_adjust _
+  | Pnop
+  | Pcfi_adjust _ 
   | Pcfi_rel_offset _ =>
       Stuck
   end.

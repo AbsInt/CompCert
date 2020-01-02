@@ -473,6 +473,9 @@ let expand_builtin_inline name args res =
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
      ()
+  (* no operation *)
+  | "__builtin_nop", [], _ ->
+     emit Pnop
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))

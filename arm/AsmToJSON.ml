@@ -34,7 +34,7 @@ let mnemonic_names = StringSet.of_list
       "Pfuitos"; "Pinlineasm"; "Pisb"; "Plabel"; "Pldr"; "Ploadsymbol_lbl";
       "Pldr_p"; "Pldrb"; "Pldrb_p"; "Pldrh"; "Pldrh_p"; "Pldrsb"; "Pldrsh";
       "Plsl"; "Plsr"; "Pmla"; "Pmov"; "Pmovite"; "Pfmovite"; "Pmovt"; "Pmovw";
-      "Pmul"; "Pmvn";  "Ploadsymbol_imm"; "Porr"; "Ppush"; "Prev";
+      "Pmul"; "Pmvn";  "Ploadsymbol_imm"; "Pnop"; "Porr"; "Ppush"; "Prev";
       "Prev16"; "Prsb"; "Prsbs"; "Prsc"; "Psbc"; "Psbfx"; "Psdiv"; "Psmull";
       "Pstr"; "Pstr_p"; "Pstrb"; "Pstrb_p"; "Pstrh"; "Pstrh_p"; "Psub"; "Psubs";
       "Pudiv";"Pumull" ]
@@ -268,6 +268,7 @@ let pp_instructions pp ic =
     | Pmovw(r1, n) -> instruction pp "Pmovw" [Ireg r1; Long n]
     | Pmul(r1, r2, r3) -> instruction pp "Pmul" [Ireg r1; Ireg r2; Ireg r3]
     | Pmvn(r1, so) -> instruction pp "Pmvn" [Ireg r1; Shift so]
+    | Pnop -> instruction pp "Pnop" []
     | Porr(r1, r2, so) -> instruction pp "Porr" [Ireg r1; Ireg r2; Shift so]
     | Ppush(rl) -> instruction pp "Ppush" (List.map (fun r -> Ireg r) rl)
     | Prev(r1, r2) -> instruction pp "Prev" [Ireg r1; Ireg r2]
