@@ -285,7 +285,7 @@ Opaque Int.eq.
 - apply opimm32_label; intros; exact I.
 - apply opimm32_label; intros; exact I.
 - apply opimm32_label; intros; exact I.
-- destruct (Int.eq n Int.zero); TailNoLabel.
+- destruct (Int.eq n Int.zero); try destruct (Int.eq n Int.one); TailNoLabel.
 - apply opimm64_label; intros; exact I.
 - apply opimm64_label; intros; exact I.
 - apply opimm64_label; intros; exact I.
