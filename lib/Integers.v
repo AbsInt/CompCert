@@ -2422,6 +2422,57 @@ Proof.
   bit_solve. destruct (zlt (i + unsigned (sub iwordsize y)) zwordsize); auto.
 Qed.
 
+Theorem shrx1_shr:
+  forall x,
+  ltu one (repr (zwordsize - 1)) = true ->
+  shrx x (repr 1) = shr (add x (shru x (repr (zwordsize - 1)))) (repr 1).
+Proof.
+  intros.
+  rewrite shrx_shr by assumption.
+  rewrite shl_mul_two_p.
+  rewrite mul_commut. rewrite mul_one.
+  change (repr 1) with one.
+  rewrite unsigned_one.
+  change (two_p 1) with 2.
+  unfold sub.
+  rewrite unsigned_one.
+  assert (0 <= 2 <= max_unsigned).
+  {
+    unfold max_unsigned, modulus.
+    unfold zwordsize in *.
+    unfold ltu in *.
+    rewrite unsigned_one in H.
+    rewrite unsigned_repr in H.
+    {
+      destruct (zlt 1 (Z.of_nat wordsize - 1)) as [ LT | NONE].
+      2: discriminate.
+      clear H.
+      rewrite two_power_nat_two_p.
+      split.
+      omega.
+      set (w := (Z.of_nat wordsize)) in *.
+      assert ((two_p 2) <= (two_p w)) as MONO.
+      {
+        apply two_p_monotone.
+        omega.
+      }
+      change (two_p 2) with 4 in MONO.
+      omega.
+    }
+    generalize wordsize_max_unsigned.
+    fold zwordsize.
+    generalize wordsize_pos.
+    omega.
+  }
+  rewrite unsigned_repr by assumption.
+  simpl.
+  rewrite shru_lt_zero.
+  destruct (lt x zero).
+  reflexivity.
+  rewrite add_zero.
+  reflexivity.
+Qed.
+
 Theorem shrx_carry:
   forall x y,
   ltu y (repr (zwordsize - 1)) = true ->
