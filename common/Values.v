@@ -1439,6 +1439,60 @@ Proof.
   assert (32 < Int.max_unsigned) by reflexivity. omega.
 Qed.
 
+Theorem shrx1_shr:
+  forall x z,
+  shrx x (Vint (Int.repr 1)) = Some z ->
+  z = shr (add x (shru x (Vint (Int.repr 31)))) (Vint (Int.repr 1)).
+Proof.
+  intros. destruct x; simpl in H; try discriminate.
+  change (Int.ltu (Int.repr 1) (Int.repr 31)) with true in H; simpl in H.
+  inversion_clear H.
+  simpl.
+  change (Int.ltu (Int.repr 31) Int.iwordsize) with true; simpl.
+  change (Int.ltu (Int.repr 1) Int.iwordsize) with true; simpl.
+  f_equal.
+  rewrite Int.shrx1_shr by reflexivity.
+  reflexivity.
+Qed.
+
+Theorem shrx_shr_3:
+  forall n x z,
+  shrx x (Vint n) = Some z ->
+  z = (if Int.eq n Int.zero then x else
+         if Int.eq n Int.one
+         then shr (add x (shru x (Vint (Int.repr 31)))) (Vint Int.one)
+         else shr (add x (shru (shr x (Vint (Int.repr 31)))
+                    (Vint (Int.sub (Int.repr 32) n))))
+             (Vint n)).
+Proof.
+  intros. destruct x; simpl in H; try discriminate.
+  destruct (Int.ltu n (Int.repr 31)) eqn:LT; inv H.
+  exploit Int.ltu_inv; eauto. change (Int.unsigned (Int.repr 31)) with 31; intros LT'.
+  predSpec Int.eq Int.eq_spec n Int.zero.
+- subst n. unfold Int.shrx. rewrite Int.shl_zero. unfold Int.divs. change (Int.signed Int.one) with 1.
+  rewrite Z.quot_1_r. rewrite Int.repr_signed; auto.
+- predSpec Int.eq Int.eq_spec n Int.one.
+  * subst n. simpl.
+    change (Int.ltu (Int.repr 31) Int.iwordsize) with true. simpl.
+    change (Int.ltu Int.one Int.iwordsize) with true. simpl.
+    f_equal.
+    apply Int.shrx1_shr.
+    reflexivity.
+  * clear H0.
+    simpl. change (Int.ltu (Int.repr 31) Int.iwordsize) with true. simpl.
+    replace (Int.ltu (Int.sub (Int.repr 32) n) Int.iwordsize) with true. simpl.
+    replace (Int.ltu n Int.iwordsize) with true.
+    f_equal; apply Int.shrx_shr_2; assumption.
+    symmetry; apply zlt_true. change (Int.unsigned n < 32); omega.
+    symmetry; apply zlt_true. unfold Int.sub. change (Int.unsigned (Int.repr 32)) with 32.
+    assert (Int.unsigned n <> 0).
+    { red; intros; elim H.
+      rewrite <- (Int.repr_unsigned n), H0. auto. }
+    rewrite Int.unsigned_repr.
+    change (Int.unsigned Int.iwordsize) with 32; omega.
+    assert (32 < Int.max_unsigned) by reflexivity. omega.
+Qed.
+
 Theorem or_rolm:
   forall x n m1 m2,
   or (rolm x n m1) (rolm x n m2) = rolm x n (Int.or m1 m2).
