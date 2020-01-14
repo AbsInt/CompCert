@@ -481,6 +481,9 @@ Definition transl_op
       do r <- ireg_of res; do r1 <- ireg_of a1;
       if Int.eq n Int.zero then
         OK (Pmov r (SOreg r1) :: k)
+      else if Int.eq n Int.one then
+        OK (Padd IR14 r1 (SOlsr r1 (Int.repr 31)) ::
+            Pmov r (SOasr IR14 n) :: k)
       else
         OK (Pmov IR14 (SOasr r1 (Int.repr 31)) ::
             Padd IR14 r1 (SOlsr IR14 (Int.sub Int.iwordsize n)) ::
