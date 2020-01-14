@@ -1076,17 +1076,24 @@ Opaque Int.eq.
   intros (rs' & A & B & C).
   exists rs'; split; eauto. rewrite B; auto with asmgen.
 - (* shrxlimm *)
-  clear H. exploit Val.shrxl_shrl_2; eauto. intros E; subst v; clear EV.
+  clear H. exploit Val.shrxl_shrl_3; eauto. intros E; subst v; clear EV.
   destruct (Int.eq n Int.zero).
 + econstructor; split. apply exec_straight_one. simpl; eauto. auto.
   split; intros; Simpl. 
-+ change (Int.repr 64) with Int64.iwordsize'. set (n' := Int.sub Int64.iwordsize' n).
-  econstructor; split.
-  eapply exec_straight_step. simpl; reflexivity. auto. 
-  eapply exec_straight_step. simpl; reflexivity. auto. 
-  eapply exec_straight_step. simpl; reflexivity. auto. 
-  apply exec_straight_one. simpl; reflexivity. auto. 
-  split; intros; Simpl.
++ destruct (Int.eq n Int.one).
+  * econstructor; split.
+    eapply exec_straight_step. simpl; reflexivity. auto.
+    eapply exec_straight_step. simpl; reflexivity. auto.
+    apply exec_straight_one. simpl; reflexivity. auto.
+    split; intros; Simpl.
+
+  * change (Int.repr 64) with Int64.iwordsize'. set (n' := Int.sub Int64.iwordsize' n).
+    econstructor; split.
+    eapply exec_straight_step. simpl; reflexivity. auto. 
+    eapply exec_straight_step. simpl; reflexivity. auto. 
+    eapply exec_straight_step. simpl; reflexivity. auto. 
+    apply exec_straight_one. simpl; reflexivity. auto. 
+    split; intros; Simpl.
 - (* cond *)
   exploit transl_cond_op_correct; eauto. intros (rs' & A & B & C).
   exists rs'; split. eexact A. eauto with asmgen.
