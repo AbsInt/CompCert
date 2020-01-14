@@ -1752,6 +1752,58 @@ Proof.
   assert (64 < Int.max_unsigned) by reflexivity. omega.
 Qed.
 
+Theorem shrxl1_shrl:
+  forall x z,
+  shrxl x (Vint (Int.repr 1)) = Some z ->
+  z = shrl (addl x (shrlu x (Vint (Int.repr 63)))) (Vint (Int.repr 1)).
+Proof.
+  intros. destruct x; simpl in H; try discriminate.
+  change (Int.ltu (Int.repr 1) (Int.repr 63)) with true in H; simpl in H.
+  inversion_clear H.
+  simpl.
+  change (Int.ltu (Int.repr 63) Int64.iwordsize') with true; simpl.
+  change (Int.ltu (Int.repr 1) Int64.iwordsize') with true; simpl.
+  f_equal.
+  rewrite Int64.shrx'1_shr' by reflexivity.
+  reflexivity.
+Qed.
+
+Theorem shrxl_shrl_3:
+  forall n x z,
+  shrxl x (Vint n) = Some z ->
+  z = (if Int.eq n Int.zero then x else
+         if Int.eq n Int.one
+         then shrl (addl x (shrlu x (Vint (Int.repr 63)))) (Vint Int.one)
+         else shrl (addl x (shrlu (shrl x (Vint (Int.repr 63)))
+                    (Vint (Int.sub (Int.repr 64) n))))
+             (Vint n)).
+Proof.
+  intros. destruct x; simpl in H; try discriminate.
+  destruct (Int.ltu n (Int.repr 63)) eqn:LT; inv H.
+  exploit Int.ltu_inv; eauto. change (Int.unsigned (Int.repr 63)) with 63; intros LT'.
+  predSpec Int.eq Int.eq_spec n Int.zero.
+- subst n. unfold Int64.shrx'. rewrite Int64.shl'_zero. unfold Int64.divs. change (Int64.signed Int64.one) with 1.
+  rewrite Z.quot_1_r. rewrite Int64.repr_signed; auto.
+- predSpec Int.eq Int.eq_spec n Int.one.
+  * subst n. simpl.
+    change (Int.ltu (Int.repr 63) Int64.iwordsize') with true. simpl.
+    change (Int.ltu Int.one Int64.iwordsize') with true. simpl.
+    f_equal.
+    apply Int64.shrx'1_shr'.
+    reflexivity.
+  * clear H0.
+simpl. change (Int.ltu (Int.repr 63) Int64.iwordsize') with true. simpl.
+  replace (Int.ltu (Int.sub (Int.repr 64) n) Int64.iwordsize') with true. simpl.
+  replace (Int.ltu n Int64.iwordsize') with true.
+  f_equal; apply Int64.shrx'_shr_2; assumption.
+  symmetry; apply zlt_true. change (Int.unsigned n < 64); omega.
+  symmetry; apply zlt_true. unfold Int.sub. change (Int.unsigned (Int.repr 64)) with 64.
+  assert (Int.unsigned n <> 0). { red; intros; elim H. rewrite <- (Int.repr_unsigned n), H0. auto. }
+  rewrite Int.unsigned_repr.
+  change (Int.unsigned Int64.iwordsize') with 64; omega.
+  assert (64 < Int.max_unsigned) by reflexivity. omega.
+Qed.
+
 Theorem negate_cmp_bool:
   forall c x y, cmp_bool (negate_comparison c) x y = option_map negb (cmp_bool c x y).
 Proof.
