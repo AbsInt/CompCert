@@ -268,18 +268,24 @@ Definition arith_extended
 Definition shrx32 (rd r1: ireg) (n: int) (k: code) : code :=
   if Int.eq n Int.zero then
     Pmov rd r1 :: k
-  else
-    Porr W X16 XZR r1 (SOasr (Int.repr 31)) ::
-    Padd W X16 r1 X16 (SOlsr (Int.sub Int.iwordsize n)) ::
-    Porr W rd XZR X16 (SOasr n) :: k.
+  else if Int.eq n Int.one then
+         Padd W X16 r1 r1 (SOlsr (Int.repr 31)) ::
+         Porr W rd XZR X16 (SOasr n) :: k
+       else
+         Porr W X16 XZR r1 (SOasr (Int.repr 31)) ::
+         Padd W X16 r1 X16 (SOlsr (Int.sub Int.iwordsize n)) ::
+         Porr W rd XZR X16 (SOasr n) :: k.
 
 Definition shrx64 (rd r1: ireg) (n: int) (k: code) : code :=
   if Int.eq n Int.zero then
     Pmov rd r1 :: k
-  else
-    Porr X X16 XZR r1 (SOasr (Int.repr 63)) ::
-    Padd X X16 r1 X16 (SOlsr (Int.sub Int64.iwordsize' n)) ::
-    Porr X rd XZR X16 (SOasr n) :: k.
+  else if Int.eq n Int.one then
+         Padd X X16 r1 r1 (SOlsr (Int.repr 63)) ::
+         Porr X rd XZR X16 (SOasr n) :: k
+       else
+         Porr X X16 XZR r1 (SOasr (Int.repr 63)) ::
+         Padd X X16 r1 X16 (SOlsr (Int.sub Int64.iwordsize' n)) ::
+         Porr X rd XZR X16 (SOasr n) :: k.
 
 (** Load the address [id + ofs] in [rd] *)
 

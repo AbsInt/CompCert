@@ -259,13 +259,13 @@ Proof.
 - apply logicalimm32_label; unfold nolabel; auto.
 - apply logicalimm32_label; unfold nolabel; auto.
 - apply logicalimm32_label; unfold nolabel; auto.
-- unfold shrx32. destruct Int.eq; TailNoLabel.
+- unfold shrx32. destruct (Int.eq _ _); try destruct (Int.eq _ _); TailNoLabel.
 - apply arith_extended_label; unfold nolabel; auto.
 - apply arith_extended_label; unfold nolabel; auto.
 - apply logicalimm64_label; unfold nolabel; auto.
 - apply logicalimm64_label; unfold nolabel; auto.
 - apply logicalimm64_label; unfold nolabel; auto.
-- unfold shrx64. destruct Int.eq; TailNoLabel.
+- unfold shrx64. destruct (Int.eq _ _); try destruct (Int.eq _ _); TailNoLabel.
 - eapply tail_nolabel_trans. eapply transl_cond_label; eauto. TailNoLabel.
 - destruct (preg_of r); try discriminate; TailNoLabel;
   (eapply tail_nolabel_trans; [eapply transl_cond_label; eauto | TailNoLabel]).

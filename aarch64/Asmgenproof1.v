@@ -754,16 +754,28 @@ Lemma exec_shrx32: forall (rd r1: ireg) (n: int) k v (rs: regset) m,
   /\ rs'#rd = v
   /\ forall r, data_preg r = true -> r <> rd -> rs'#r = rs#r.
 Proof.
-  unfold shrx32; intros. apply Val.shrx_shr_2 in H.
+  unfold shrx32; intros. apply Val.shrx_shr_3 in H.
   destruct (Int.eq n Int.zero) eqn:E.
 - econstructor; split. apply exec_straight_one; [simpl;eauto|auto]. 
   split. Simpl. subst v; auto. intros; Simpl.
-- econstructor; split. eapply exec_straight_three.
-  unfold exec_instr. rewrite or_zero_eval_shift_op_int by congruence. eauto.
-  simpl; eauto.
-  unfold exec_instr. rewrite or_zero_eval_shift_op_int by congruence. eauto.
-  auto. auto. auto.
-  split. subst v; Simpl. intros; Simpl.
+- generalize (Int.eq_spec n Int.one).
+  destruct (Int.eq n Int.one); intro ONE.
+  * subst n.
+    econstructor; split. eapply exec_straight_two.
+    all: simpl; auto.
+    split.
+    ** subst v; Simpl.
+       destruct (Val.add _ _); simpl; trivial.
+       change (Int.ltu Int.one Int.iwordsize) with true; simpl.
+       rewrite Int.or_zero_l.
+       reflexivity.
+    ** intros; Simpl.
+  * econstructor; split. eapply exec_straight_three.
+    unfold exec_instr. rewrite or_zero_eval_shift_op_int by congruence. eauto.
+    simpl; eauto.
+    unfold exec_instr. rewrite or_zero_eval_shift_op_int by congruence. eauto.
+    auto. auto. auto.
+    split. subst v; Simpl. intros; Simpl.
 Qed.
  
 Lemma exec_shrx64: forall (rd r1: ireg) (n: int) k v (rs: regset) m,
@@ -774,16 +786,28 @@ Lemma exec_shrx64: forall (rd r1: ireg) (n: int) k v (rs: regset) m,
   /\ rs'#rd = v
   /\ forall r, data_preg r = true -> r <> rd -> rs'#r = rs#r.
 Proof.
-  unfold shrx64; intros. apply Val.shrxl_shrl_2 in H.
+  unfold shrx64; intros. apply Val.shrxl_shrl_3 in H.
   destruct (Int.eq n Int.zero) eqn:E.
 - econstructor; split. apply exec_straight_one; [simpl;eauto|auto]. 
   split. Simpl. subst v; auto. intros; Simpl.
-- econstructor; split. eapply exec_straight_three.
-  unfold exec_instr. rewrite or_zero_eval_shift_op_long by congruence. eauto.
-  simpl; eauto.
-  unfold exec_instr. rewrite or_zero_eval_shift_op_long by congruence. eauto.
-  auto. auto. auto.
-  split. subst v; Simpl. intros; Simpl.
+- generalize (Int.eq_spec n Int.one).
+  destruct (Int.eq n Int.one); intro ONE.
+  * subst n.
+    econstructor; split. eapply exec_straight_two.
+    all: simpl; auto.
+    split.
+    ** subst v; Simpl.
+       destruct (Val.addl _ _); simpl; trivial.
+       change (Int.ltu Int.one Int64.iwordsize') with true; simpl.
+       rewrite Int64.or_zero_l.
+       reflexivity.
+    ** intros; Simpl.
+  * econstructor; split. eapply exec_straight_three.
+    unfold exec_instr. rewrite or_zero_eval_shift_op_long by congruence. eauto.
+    simpl; eauto.
+    unfold exec_instr. rewrite or_zero_eval_shift_op_long by congruence. eauto.
+    auto. auto. auto.
+    split. subst v; Simpl. intros; Simpl.
 Qed.
 
 (** Condition bits *)
