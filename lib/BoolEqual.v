@@ -106,8 +106,8 @@ Ltac bool_eq_refl_case :=
   end.
 
 Ltac bool_eq_refl :=
-  let H := fresh "Hrec" in let x := fresh "x" in
-  fix H 1; intros x; destruct x; simpl; bool_eq_refl_case.
+  let Hrec := fresh "Hrec" in let x := fresh "x" in
+  fix Hrec 1; intros x; destruct x; simpl; bool_eq_refl_case.
 
 Lemma false_not_true:
   forall (P: Prop), false = true -> P.
@@ -124,7 +124,6 @@ Qed.
 
 Ltac bool_eq_sound_case :=
   match goal with
-  | [ H: false = true |- _ ] => exact (false_not_true _ H)
   | [ H: _ && _ = true |- _ ] => apply andb_prop in H; destruct H; bool_eq_sound_case
   | [ H: proj_sumbool ?a = true |- _ ] => apply proj_sumbool_true in H; bool_eq_sound_case
   | [ |- ?C ?x1 ?x2 ?x3 ?x4 = ?C ?y1 ?y2 ?y3 ?y4 ] => apply f_equal4; auto
@@ -137,7 +136,9 @@ Ltac bool_eq_sound_case :=
 
 Ltac bool_eq_sound :=
   let Hrec := fresh "Hrec" in let x := fresh "x" in let y := fresh "y" in
-  fix Hrec 1; intros x y; destruct x, y; simpl; intro; bool_eq_sound_case.
+  let H := fresh "EQ" in
+  fix Hrec 1; intros x y; destruct x, y; intro H;
+  try (apply (false_not_true _ H)); simpl in H; bool_eq_sound_case.
 
 Lemma dec_eq_from_bool_eq:
   forall (A: Type) (f: A -> A -> bool)
