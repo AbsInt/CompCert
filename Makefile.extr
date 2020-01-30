@@ -55,7 +55,7 @@ extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45-60
 cparser/pre_parser.cmx: WARNINGS += -w -41
 cparser/pre_parser.cmo: WARNINGS += -w -41
 
-COMPFLAGS+=-g $(INCLUDES) $(MENHIR_INCLUDES) $(WARNINGS)
+COMPFLAGS+=-g $(INCLUDES) -I "$(MENHIR_DIR)" $(WARNINGS)
 
 # Using .opt compilers if available
 
