@@ -1,5 +1,7 @@
 # Object files, in general
 *.vo
+*.vok
+*.vos
 *.glob
 *.o
 *.a
