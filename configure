@@ -582,8 +582,8 @@ case "$menhir_ver" in
   20[0-9][0-9][0-9][0-9][0-9][0-9])
       if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
           echo "version $menhir_ver -- good!"
-          menhir_include_dir=$(menhir --suggest-menhirLib | tr -d '\r' | tr '\\' '/')
-          if test -z "$menhir_include_dir"; then
+          menhir_dir=$(menhir --suggest-menhirLib | tr -d '\r' | tr '\\' '/')
+          if test -z "$menhir_dir"; then
               echo "Error: cannot determine the location of the Menhir API library."
               echo "This can be due to an incorrect Menhir package."
               echo "Consider using the OPAM package for Menhir."
@@ -677,7 +677,7 @@ MANDIR=$sharedir/man
 SHAREDIR=$sharedir
 COQDEVDIR=$coqdevdir
 OCAML_OPT_COMP=$ocaml_opt_comp
-MENHIR_INCLUDES=-I "$menhir_include_dir"
+MENHIR_DIR=$menhir_dir
 COMPFLAGS=-bin-annot
 EOF
 
