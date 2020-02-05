@@ -483,7 +483,7 @@ let expand_instruction instr =
       emit (Pmv (X30, X2));
       if sg.sig_cc.cc_vararg then begin
         let n = arguments_size sg in
-        let extra_sz = if n >= 8 then 0 else align 16 ((8 - n) * wordsize) in
+        let extra_sz = if n >= 8 then 0 else align ((8 - n) * wordsize) 16 in
         let full_sz = Z.add sz (Z.of_uint extra_sz) in
         expand_addptrofs X2 X2 (Ptrofs.repr (Z.neg full_sz));
         expand_storeind_ptr X30 X2 ofs;
@@ -501,7 +501,7 @@ let expand_instruction instr =
      let extra_sz =
       if sg.sig_cc.cc_vararg then begin
         let n = arguments_size sg in
-        if n >= 8 then 0 else align 16 ((8 - n) * wordsize)
+        if n >= 8 then 0 else align ((8 - n) * wordsize) 16
       end else 0 in
      expand_addptrofs X2 X2 (Ptrofs.repr (Z.add sz (Z.of_uint extra_sz)))
 
