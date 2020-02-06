@@ -50,8 +50,8 @@ INCLUDES=$(patsubst %,-I %, $(DIRS))
 # Control of warnings:
 
 WARNINGS=-w +a-4-9-27 -strict-sequence -safe-string -warn-error +a #Deprication returns with ocaml 4.03
-extraction/%.cmx: WARNINGS +=-w -20-27-32..34-39-41-44..45-60
-extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45-60
+extraction/%.cmx: WARNINGS +=-w -20-27-32..34-39-41-44..45-60-67
+extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45-60-67
 cparser/pre_parser.cmx: WARNINGS += -w -41
 cparser/pre_parser.cmo: WARNINGS += -w -41
 

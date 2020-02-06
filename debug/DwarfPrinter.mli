@@ -12,7 +12,7 @@
 
 open DwarfTypes
 
-module DwarfPrinter: functor (Target: DWARF_TARGET) ->
+module DwarfPrinter: DWARF_TARGET ->
   sig
     val print_debug: out_channel -> debug_entries -> unit
   end

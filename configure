@@ -537,7 +537,7 @@ case "$coq_ver" in
         if $ignore_coq_version; then
             echo "Warning: this version of Coq is unsupported, proceed at your own risks."
         else
-            echo "Error: CompCert requires one of the following Coq versions: 8.10.1, 8.10.0, 8.9.1, 8.9.0, 8.8.2, 8.8.1, 8.8.0"
+            echo "Error: CompCert requires one of the following Coq versions: 8.11.0, 8.10.2, 8.10.1, 8.10.0, 8.9.1, 8.9.0, 8.8.2, 8.8.1, 8.8.0"
             missingtools=true
         fi;;
   "")
@@ -553,15 +553,15 @@ case "$ocaml_ver" in
         echo "version $ocaml_ver -- UNSUPPORTED"
         echo "Error: CompCert requires OCaml version 4.05 or later."
         missingtools=true;;
-  4.0*)
+  4.*)
         echo "version $ocaml_ver -- good!";;
   ?.*)
         echo "version $ocaml_ver -- UNSUPPORTED"
-        echo "Error: CompCert requires OCaml version 4.02 or later."
+        echo "Error: CompCert requires OCaml version 4.05 or later."
         missingtools=true;;
   *)
         echo "NOT FOUND"
-        echo "Error: make sure OCaml version 4.02 or later is installed."
+        echo "Error: make sure OCaml version 4.05 or later is installed."
         missingtools=true;;
 esac
 
