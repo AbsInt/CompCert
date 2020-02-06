@@ -408,7 +408,7 @@ module Dwarfgenaux (Target: TARGET) =
                   and lo = translate_label f_id lo in
                   hi,lo,range_entry_loc i.var_loc) l in
                 let id = next_id () in
-                Some (LocRef id),[{loc = l;loc_id = id;}]
+                Some (LocRef id),[{loc_sec_begin = !current_section_start; loc = l;loc_id = id;}]
           end
         with Not_found -> None,[]
       else
@@ -574,8 +574,8 @@ let diab_gen_compilation_section sec_name s defs acc =
     section_name = s;
     start_label = debug_start;
     line_label = line_start;
-    entry = cp;
-    dlocs = Some low_pc,accu.locs;
+    diab_entry = cp;
+    diab_locs = accu.locs;
   }::acc
 
 let gen_diab_debug_info sec_name var_section : debug_entries =
@@ -643,6 +643,12 @@ let gen_gnu_debug_info sec_name var_section : debug_entries =
   } in
   let cp = new_entry (next_id ()) (DW_TAG_compile_unit cp) in
   let cp = add_children cp (types@defs) in
-  let loc_pc = if StringSet.cardinal sec > 1 then None else low_pc in
   let string_table = Hashtbl.fold (fun s i acc -> (i,s)::acc) string_table [] in
-  Gnu (cp,(loc_pc,accu.locs),string_table,snd accu.ranges)
+  let cp = {
+    string_table = string_table;
+    range_table = snd accu.ranges;
+    gnu_locs = accu.locs;
+    gnu_entry = cp;
+    several_secs = StringSet.cardinal sec > 1}
+  in
+  Gnu cp

@@ -266,11 +266,13 @@ type dw_entry =
 
 (* The type for the location list. *)
 type location_entry =
-    {
-     loc:     (address * address * location_value) list;
-     loc_id:  reference;
-   }
-type dw_locations = constant option * location_entry list
+  {
+    loc:     (address * address * location_value) list;
+    loc_id:  reference;
+    loc_sec_begin :  address option;
+  }
+
+type dw_locations = location_entry list
 
 type range_entry =
   | AddressRange  of (address * address) list
@@ -285,13 +287,20 @@ type diab_entry =
      section_name: string;
      start_label:  int;
      line_label:   int;
-     entry:        dw_entry;
-     dlocs:        dw_locations;
+     diab_entry:   dw_entry;
+     diab_locs:    dw_locations;
    }
 
 type diab_entries =  diab_entry list
 
-type gnu_entries = dw_entry * dw_locations * dw_string * dw_ranges
+type gnu_entries =
+  {
+    string_table: dw_string;
+    range_table:  dw_ranges;
+    gnu_locs:     dw_locations;
+    gnu_entry:    dw_entry;
+    several_secs: bool;
+  }
 
 type debug_entries =
   | Diab of diab_entries
