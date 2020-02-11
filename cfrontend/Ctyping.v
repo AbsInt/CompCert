@@ -987,6 +987,7 @@ Proof.
           classify_cast (Tint i s a) t2 <> cast_case_default).
   {
     unfold classify_cast. destruct t2; try congruence. destruct f; congruence.
+    destruct Archi.ptr64; congruence.
   }
   destruct i; auto.
 Qed.
