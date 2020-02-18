@@ -177,7 +177,7 @@ let identifier_nondigit =
 let identifier = identifier_nondigit (identifier_nondigit|digit)*
 
 (* Whitespaces *)
-let whitespace_char_no_newline = [' ' '\t' '\012' '\r']
+let whitespace_char_no_newline = [' ' '\t'  '\011' '\012' '\r']
 
 (* Integer constants *)
 let nonzero_digit = ['1'-'9']
