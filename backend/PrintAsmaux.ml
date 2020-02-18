@@ -99,7 +99,7 @@ let exists_constants () =
 
 let current_function_stacksize = ref 0l
 let current_function_sig =
-  ref { sig_args = []; sig_res = None; sig_cc = cc_default }
+  ref { sig_args = []; sig_res = Tvoid; sig_cc = cc_default }
 
 (* Functions for printing of symbol names *)
 let elf_symbol oc symb =
@@ -268,8 +268,8 @@ let re_asm_param_2 = Str.regexp "%\\([QR]?\\)\\([0-9]+\\)"
 let print_inline_asm print_preg oc txt sg args res =
   let (operands, ty_operands) =
     match sg.sig_res with
-    | None -> (args, sg.sig_args)
-    | Some tres -> (builtin_arg_of_res res :: args, tres :: sg.sig_args) in
+    | Tvoid -> (args, sg.sig_args)
+    | tres -> (builtin_arg_of_res res :: args, proj_rettype tres :: sg.sig_args) in
   let print_fragment = function
   | Str.Text s ->
       output_string oc s

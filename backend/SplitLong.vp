@@ -43,13 +43,13 @@ Class helper_functions := mk_helper_functions {
   i64_smulh: ident;                     (**r signed multiply high *)
 }.
 
-Definition sig_l_l := mksignature (Tlong :: nil) (Some Tlong) cc_default.
-Definition sig_l_f := mksignature (Tlong :: nil) (Some Tfloat) cc_default.
-Definition sig_l_s := mksignature (Tlong :: nil) (Some Tsingle) cc_default.
-Definition sig_f_l := mksignature (Tfloat :: nil) (Some Tlong) cc_default.
-Definition sig_ll_l := mksignature (Tlong :: Tlong :: nil) (Some Tlong) cc_default.
-Definition sig_li_l := mksignature (Tlong :: Tint :: nil) (Some Tlong) cc_default.
-Definition sig_ii_l := mksignature (Tint :: Tint :: nil) (Some Tlong) cc_default.
+Definition sig_l_l := mksignature (Tlong :: nil) Tlong cc_default.
+Definition sig_l_f := mksignature (Tlong :: nil) Tfloat cc_default.
+Definition sig_l_s := mksignature (Tlong :: nil) Tsingle cc_default.
+Definition sig_f_l := mksignature (Tfloat :: nil) Tlong cc_default.
+Definition sig_ll_l := mksignature (Tlong :: Tlong :: nil) Tlong cc_default.
+Definition sig_li_l := mksignature (Tlong :: Tint :: nil) Tlong cc_default.
+Definition sig_ii_l := mksignature (Tint :: Tint :: nil) Tlong cc_default.
 
 Section SELECT.
 

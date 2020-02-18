@@ -99,22 +99,20 @@ Definition is_float_reg (r: mreg) :=
   function with one integer result. *)
 
 Definition loc_result_32 (s: signature) : rpair mreg :=
-  match s.(sig_res) with
-  | None => One AX
-  | Some (Tint | Tany32) => One AX
-  | Some (Tfloat | Tsingle) => One FP0
-  | Some Tany64 => One X0
-  | Some Tlong => Twolong DX AX
+  match proj_sig_res s with
+  | Tint | Tany32 => One AX
+  | Tfloat | Tsingle => One FP0
+  | Tany64 => One X0
+  | Tlong => Twolong DX AX
   end.
 
 (** In 64 bit mode, he result value of a function is passed back to
   the caller in registers [AX] or [X0]. *)
 
 Definition loc_result_64 (s: signature) : rpair mreg :=
-  match s.(sig_res) with
-  | None => One AX
-  | Some (Tint | Tlong | Tany32 | Tany64) => One AX
-  | Some (Tfloat | Tsingle) => One X0
+  match proj_sig_res s with
+  | Tint | Tlong | Tany32 | Tany64 => One AX
+  | Tfloat | Tsingle => One X0
   end.
 
 Definition loc_result :=
@@ -126,8 +124,8 @@ Lemma loc_result_type:
   forall sig,
   subtype (proj_sig_res sig) (typ_rpair mreg_type (loc_result sig)) = true.
 Proof.
-  intros. unfold proj_sig_res, loc_result, loc_result_32, loc_result_64, mreg_type;
-  destruct Archi.ptr64; destruct (sig_res sig) as [[]|]; auto.
+  intros. unfold loc_result, loc_result_32, loc_result_64, mreg_type;
+  destruct Archi.ptr64; destruct (proj_sig_res sig); auto.
 Qed.
 
 (** The result locations are caller-save registers *)
@@ -137,7 +135,7 @@ Lemma loc_result_caller_save:
   forall_rpair (fun r => is_callee_save r = false) (loc_result s).
 Proof.
   intros. unfold loc_result, loc_result_32, loc_result_64, is_callee_save;
-  destruct Archi.ptr64; destruct (sig_res s) as [[]|]; simpl; auto.
+  destruct Archi.ptr64; destruct (proj_sig_res s); simpl; auto.
 Qed.
 
 (** If the result is in a pair of registers, those registers are distinct and have type [Tint] at least. *)
@@ -147,14 +145,14 @@ Lemma loc_result_pair:
   match loc_result sg with
   | One _ => True
   | Twolong r1 r2 =>
-       r1 <> r2 /\ sg.(sig_res) = Some Tlong
+       r1 <> r2 /\ proj_sig_res sg = Tlong
     /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true
     /\ Archi.ptr64 = false
   end.
 Proof.
   intros. 
   unfold loc_result, loc_result_32, loc_result_64, mreg_type;
-  destruct Archi.ptr64; destruct (sig_res sg) as [[]|]; auto.
+  destruct Archi.ptr64; destruct (proj_sig_res sg); auto.
   split; auto. congruence.
 Qed.
 
@@ -163,7 +161,7 @@ Qed.
 Lemma loc_result_exten:
   forall s1 s2, s1.(sig_res) = s2.(sig_res) -> loc_result s1 = loc_result s2.
 Proof.
-  intros. unfold loc_result, loc_result_32, loc_result_64.
+  intros. unfold loc_result, loc_result_32, loc_result_64, proj_sig_res.
   destruct Archi.ptr64; rewrite H; auto.
 Qed.
 

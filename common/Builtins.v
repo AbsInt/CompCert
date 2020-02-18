@@ -29,7 +29,7 @@ Definition builtin_function_sig (b: builtin_function) : signature :=
   | BI_platform b => platform_builtin_sig b
   end.
 
-Definition builtin_function_sem (b: builtin_function) : builtin_sem (proj_sig_res (builtin_function_sig b)) :=
+Definition builtin_function_sem (b: builtin_function) : builtin_sem (sig_res (builtin_function_sig b)) :=
   match b with
   | BI_standard b => standard_builtin_sem b
   | BI_platform b => platform_builtin_sem b

@@ -12,4 +12,4 @@ make -q ${1}o || {
    done)
 }
 
-"${COQBIN}coqide" $INCLUDES $1 && make ${1}o
+"${COQBIN}coqide" -async-proofs off $INCLUDES $1 && make ${1}o

@@ -639,8 +639,8 @@ Lemma new_reg_return_ok:
   map_valid map s1 ->
   return_reg_ok s2 map (ret_reg sig r).
 Proof.
-  intros. unfold ret_reg. destruct (sig_res sig); constructor.
-  eauto with rtlg. eauto with rtlg.
+  intros. unfold ret_reg.
+  destruct (rettype_eq (sig_res sig) Tvoid); constructor; eauto with rtlg.
 Qed.
 
 (** * Relational specification of the translation *)
@@ -1224,9 +1224,9 @@ Lemma convert_builtin_res_charact:
 Proof.
   destruct res; simpl; intros.
 - monadInv TR. constructor.  unfold find_var in EQ. destruct (map_vars map)!x; inv EQ; auto.
-- destruct oty; monadInv TR.
-+ constructor. eauto with rtlg.
+- destruct (rettype_eq oty Tvoid); monadInv TR.
 + constructor.
++ constructor. eauto with rtlg.
 - monadInv TR.
 Qed.
 
@@ -1350,7 +1350,7 @@ Proof.
   intros [C D].
   eapply tr_function_intro; eauto with rtlg.
   eapply transl_stmt_charact; eauto with rtlg.
-  unfold ret_reg. destruct (sig_res (CminorSel.fn_sig f)).
-  constructor. eauto with rtlg. eauto with rtlg.
+  unfold ret_reg. destruct (rettype_eq (sig_res (CminorSel.fn_sig f)) Tvoid).
   constructor.
+  constructor; eauto with rtlg.
 Qed.

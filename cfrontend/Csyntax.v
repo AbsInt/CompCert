@@ -106,7 +106,7 @@ Definition Epreincr (id: incr_or_decr) (l: expr) (ty: type) :=
 
 Definition Eselection (r1 r2 r3: expr) (ty: type) :=
   let t := typ_of_type ty in
-  let sg := mksignature (AST.Tint :: t :: t :: nil) (Some t) cc_default in
+  let sg := mksignature (AST.Tint :: t :: t :: nil) t cc_default in
   Ebuiltin (EF_builtin "__builtin_sel"%string sg)
            (Tcons type_bool (Tcons ty (Tcons ty Tnil)))
            (Econs r1 (Econs r2 (Econs r3 Enil)))

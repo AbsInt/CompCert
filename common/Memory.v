@@ -682,6 +682,15 @@ Proof.
   apply decode_val_type.
 Qed.
 
+Theorem load_rettype:
+  forall m chunk b ofs v,
+  load chunk m b ofs = Some v ->
+  Val.has_rettype v (rettype_of_chunk chunk).
+Proof.
+  intros. exploit load_result; eauto; intros. rewrite H0.
+  apply decode_val_rettype.
+Qed.
+
 Theorem load_cast:
   forall m chunk b ofs v,
   load chunk m b ofs = Some v ->

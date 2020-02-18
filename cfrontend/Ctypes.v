@@ -732,8 +732,21 @@ Definition typ_of_type (t: type) : AST.typ :=
   | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tptr
   end.
 
-Definition opttyp_of_type (t: type) : option AST.typ :=
-  if type_eq t Tvoid then None else Some (typ_of_type t).
+Definition rettype_of_type (t: type) : AST.rettype :=
+  match t with
+  | Tvoid => AST.Tvoid
+  | Tint I32 _ _ => AST.Tint
+  | Tint I8 Signed _ => AST.Tint8signed
+  | Tint I8 Unsigned _ => AST.Tint8unsigned
+  | Tint I16 Signed _ => AST.Tint16signed
+  | Tint I16 Unsigned _ => AST.Tint16unsigned
+  | Tint IBool _ _ => AST.Tint8unsigned
+  | Tlong _ _ => AST.Tlong
+  | Tfloat F32 _ => AST.Tsingle
+  | Tfloat F64 _ => AST.Tfloat
+  | Tpointer _ _ => AST.Tptr
+  | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tvoid
+  end.
 
 Fixpoint typlist_of_typelist (tl: typelist) : list AST.typ :=
   match tl with
@@ -742,7 +755,7 @@ Fixpoint typlist_of_typelist (tl: typelist) : list AST.typ :=
   end.
 
 Definition signature_of_type (args: typelist) (res: type) (cc: calling_convention): signature :=
-  mksignature (typlist_of_typelist args) (opttyp_of_type res) cc.
+  mksignature (typlist_of_typelist args) (rettype_of_type res) cc.
 
 (** * Construction of the composite environment *)
 

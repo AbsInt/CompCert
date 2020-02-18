@@ -20,7 +20,7 @@ open Values
 open Memory
 open Globalenvs
 open Events
-open Ctypes
+open !Ctypes
 open Csyntax
 open Csem
 

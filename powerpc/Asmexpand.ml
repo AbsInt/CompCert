@@ -852,7 +852,7 @@ let expand_instruction instr =
       if variadic then begin
         emit (Pmflr GPR0);
         emit (Pbl(intern_string "__compcert_va_saveregs",
-                  {sig_args = []; sig_res = None; sig_cc = cc_default}));
+                  {sig_args = []; sig_res = Tvoid; sig_cc = cc_default}));
         emit (Pmtlr GPR0)
       end;
       current_function_stacksize := sz;

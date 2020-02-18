@@ -623,7 +623,7 @@ Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
   ec_well_typed:
     forall ge vargs m1 t vres m2,
     sem ge vargs m1 t vres m2 ->
-    Val.has_type vres (proj_sig_res sg);
+    Val.has_rettype vres sg.(sig_res);
 
 (** The semantics is invariant under change of global environment that preserves symbols. *)
   ec_symbols_preserved:
@@ -771,12 +771,12 @@ Qed.
 Lemma volatile_load_ok:
   forall chunk,
   extcall_properties (volatile_load_sem chunk)
-                     (mksignature (Tptr :: nil) (Some (type_of_chunk chunk)) cc_default).
+                     (mksignature (Tptr :: nil) (rettype_of_chunk chunk) cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
-- unfold proj_sig_res; simpl. inv H. inv H0. apply Val.load_result_type.
-  eapply Mem.load_type; eauto.
+- inv H. inv H0. apply Val.load_result_rettype.
+  eapply Mem.load_rettype; eauto.
 (* symbols *)
 - inv H0. constructor. eapply volatile_load_preserved; eauto.
 (* valid blocks *)
@@ -922,7 +922,7 @@ Qed.
 Lemma volatile_store_ok:
   forall chunk,
   extcall_properties (volatile_store_sem chunk)
-                     (mksignature (Tptr :: type_of_chunk chunk :: nil) None cc_default).
+                     (mksignature (Tptr :: type_of_chunk chunk :: nil) Tvoid cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -967,7 +967,7 @@ Inductive extcall_malloc_sem (ge: Senv.t):
 
 Lemma extcall_malloc_ok:
   extcall_properties extcall_malloc_sem
-                     (mksignature (Tptr :: nil) (Some Tptr) cc_default).
+                     (mksignature (Tptr :: nil) Tptr cc_default).
 Proof.
   assert (UNCHANGED:
     forall (P: block -> Z -> Prop) m lo hi v m' b m'',
@@ -984,7 +984,7 @@ Proof.
   }
   constructor; intros.
 (* well typed *)
-- inv H. unfold proj_sig_res, Tptr; simpl. destruct Archi.ptr64; auto.
+- inv H. simpl. unfold Tptr; destruct Archi.ptr64; auto.
 (* symbols preserved *)
 - inv H0; econstructor; eauto.
 (* valid block *)
@@ -1053,11 +1053,11 @@ Inductive extcall_free_sem (ge: Senv.t):
 
 Lemma extcall_free_ok:
   extcall_properties extcall_free_sem
-                     (mksignature (Tptr :: nil) None cc_default).
+                     (mksignature (Tptr :: nil) Tvoid cc_default).
 Proof.
   constructor; intros.
 (* well typed *)
-- inv H. unfold proj_sig_res. simpl. auto.
+- inv H. simpl. auto.
 (* symbols preserved *)
 - inv H0; econstructor; eauto.
 (* valid block *)
@@ -1147,11 +1147,11 @@ Inductive extcall_memcpy_sem (sz al: Z) (ge: Senv.t):
 Lemma extcall_memcpy_ok:
   forall sz al,
   extcall_properties (extcall_memcpy_sem sz al)
-                     (mksignature (Tptr :: Tptr :: nil) None cc_default).
+                     (mksignature (Tptr :: Tptr :: nil) Tvoid cc_default).
 Proof.
   intros. constructor.
 - (* return type *)
-  intros. inv H. constructor.
+  intros. inv H. exact I.
 - (* change of globalenv *)
   intros. inv H0. econstructor; eauto.
 - (* valid blocks *)
@@ -1258,7 +1258,7 @@ Inductive extcall_annot_sem (text: string) (targs: list typ) (ge: Senv.t):
 Lemma extcall_annot_ok:
   forall text targs,
   extcall_properties (extcall_annot_sem text targs)
-                     (mksignature targs None cc_default).
+                     (mksignature targs Tvoid cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -1303,11 +1303,11 @@ Inductive extcall_annot_val_sem (text: string) (targ: typ) (ge: Senv.t):
 Lemma extcall_annot_val_ok:
   forall text targ,
   extcall_properties (extcall_annot_val_sem text targ)
-                     (mksignature (targ :: nil) (Some targ) cc_default).
+                     (mksignature (targ :: nil) targ cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
-- inv H. unfold proj_sig_res; simpl. eapply eventval_match_type; eauto.
+- inv H. eapply eventval_match_type; eauto.
 (* symbols *)
 - destruct H as (A & B & C). inv H0. econstructor; eauto.
   eapply eventval_match_preserved; eauto.
@@ -1347,7 +1347,7 @@ Inductive extcall_debug_sem (ge: Senv.t):
 Lemma extcall_debug_ok:
   forall targs,
   extcall_properties extcall_debug_sem
-                     (mksignature targs None cc_default).
+                     (mksignature targs Tvoid cc_default).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -1396,7 +1396,8 @@ Proof.
   intros. set (bsem := builtin_function_sem bf). constructor; intros.
 (* well typed *)
 - inv H.
-  specialize (bs_well_typed  _ bsem vargs). unfold val_opt_has_type, bsem; rewrite H0.
+  specialize (bs_well_typed  _ bsem vargs).
+  unfold val_opt_has_rettype, bsem; rewrite H0.
   auto.
 (* symbols *)
 - inv H0. econstructor; eauto.
@@ -1516,7 +1517,7 @@ Proof.
   apply extcall_debug_ok.
 Qed.
 
-Definition external_call_well_typed ef := ec_well_typed (external_call_spec ef).
+Definition external_call_well_typed_gen ef := ec_well_typed (external_call_spec ef).
 Definition external_call_symbols_preserved ef := ec_symbols_preserved (external_call_spec ef).
 Definition external_call_valid_block ef := ec_valid_block (external_call_spec ef).
 Definition external_call_max_perm ef := ec_max_perm (external_call_spec ef).
@@ -1526,6 +1527,16 @@ Definition external_call_mem_inject_gen ef := ec_mem_inject (external_call_spec 
 Definition external_call_trace_length ef := ec_trace_length (external_call_spec ef).
 Definition external_call_receptive ef := ec_receptive (external_call_spec ef).
 Definition external_call_determ ef := ec_determ (external_call_spec ef).
+
+(** Corollary of [external_call_well_typed_gen]. *)
+
+Lemma external_call_well_typed:
+  forall ef ge vargs m1 t vres m2,
+  external_call ef ge vargs m1 t vres m2 ->
+  Val.has_type vres (proj_sig_res (ef_sig ef)).
+Proof.
+  intros. apply Val.has_proj_rettype. eapply external_call_well_typed_gen; eauto.
+Qed.
 
 (** Corollary of [external_call_valid_block]. *)
 

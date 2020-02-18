@@ -157,12 +157,10 @@ Lemma transf_instr_charact:
   transf_instr_spec f instr (transf_instr f pc instr).
 Proof.
   intros. unfold transf_instr. destruct instr; try constructor.
-  caseEq (is_return niter f n r && tailcall_is_possible s &&
-          opt_typ_eq (sig_res s) (sig_res (fn_sig f))); intros.
-  destruct (andb_prop _ _ H0). destruct (andb_prop _ _ H1).
-  eapply transf_instr_tailcall; eauto.
-  eapply is_return_charact; eauto.
-  constructor.
+  destruct (is_return niter f n r && tailcall_is_possible s &&
+            rettype_eq (sig_res s) (sig_res (fn_sig f))) eqn:B.
+- InvBooleans. eapply transf_instr_tailcall; eauto. eapply is_return_charact; eauto.
+- constructor.
 Qed.
 
 Lemma transf_instr_lookup:

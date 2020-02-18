@@ -193,9 +193,7 @@ let print_sig p sg =
   List.iter
     (fun t -> fprintf p "%s ->@ " (name_of_type t))
     sg.sig_args;
-  match sg.sig_res with
-  | None -> fprintf p "void"
-  | Some ty -> fprintf p "%s" (name_of_type ty)
+  fprintf p "%s" (name_of_rettype sg.sig_res)
 
 let rec just_skips s =
   match s with

@@ -19,7 +19,7 @@ open Format
 open Camlcoq
 open Values
 open AST
-open Ctypes
+open! Ctypes
 open Cop
 open Csyntax
 
@@ -85,7 +85,7 @@ let name_optid id =
 
 let rec name_cdecl id ty =
   match ty with
-  | Tvoid ->
+  | Ctypes.Tvoid ->
       "void" ^ name_optid id
   | Ctypes.Tint(sz, sg, a) ->
       name_inttype sz sg ^ attributes a ^ name_optid id

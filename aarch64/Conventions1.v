@@ -102,10 +102,9 @@ Definition is_float_reg (r: mreg): bool :=
   with one integer result. *)
 
 Definition loc_result (s: signature) : rpair mreg :=
-  match s.(sig_res) with
-  | None => One R0
-  | Some (Tint | Tlong | Tany32 | Tany64) => One R0
-  | Some (Tfloat | Tsingle) => One F0
+  match proj_sig_res s with
+  | Tint | Tlong | Tany32 | Tany64 => One R0
+  | Tfloat | Tsingle => One F0
   end.
 
 (** The result registers have types compatible with that given in the signature. *)
@@ -114,7 +113,7 @@ Lemma loc_result_type:
   forall sig,
   subtype (proj_sig_res sig) (typ_rpair mreg_type (loc_result sig)) = true.
 Proof.
-  intros. unfold proj_sig_res, loc_result. destruct (sig_res sig) as [[]|]; auto.
+  intros. unfold loc_result. destruct (proj_sig_res sig); auto.
 Qed.
 
 (** The result locations are caller-save registers *)
@@ -124,7 +123,7 @@ Lemma loc_result_caller_save:
   forall_rpair (fun r => is_callee_save r = false) (loc_result s).
 Proof.
   intros.
-  unfold loc_result. destruct (sig_res s) as [[]|]; simpl; auto.
+  unfold loc_result. destruct (proj_sig_res s); simpl; auto.
 Qed.
 
 (** If the result is in a pair of registers, those registers are distinct and have type [Tint] at least. *)
@@ -134,12 +133,12 @@ Lemma loc_result_pair:
   match loc_result sg with
   | One _ => True
   | Twolong r1 r2 =>
-        r1 <> r2 /\ sg.(sig_res) = Some Tlong
+        r1 <> r2 /\ proj_sig_res sg = Tlong
      /\ subtype Tint (mreg_type r1) = true /\ subtype Tint (mreg_type r2) = true
      /\ Archi.ptr64 = false
   end.
 Proof.
-  intros; unfold loc_result; destruct (sig_res sg) as [[]|]; exact I.
+  intros; unfold loc_result; destruct (proj_sig_res sg); exact I.
 Qed.
 
 (** The location of the result depends only on the result part of the signature *)
@@ -147,7 +146,7 @@ Qed.
 Lemma loc_result_exten:
   forall s1 s2, s1.(sig_res) = s2.(sig_res) -> loc_result s1 = loc_result s2.
 Proof.
-  intros. unfold loc_result. rewrite H; auto.
+  intros. unfold loc_result, proj_sig_res. rewrite H; auto.
 Qed.
 
 (** ** Location of function arguments *)

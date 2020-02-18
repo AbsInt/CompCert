@@ -1301,10 +1301,10 @@ Proof.
 Qed.
 
 Lemma add_equations_res_lessdef:
-  forall r oty l e e' rs ls,
-  add_equations_res r oty l e = Some e' ->
+  forall r ty l e e' rs ls,
+  add_equations_res r ty l e = Some e' ->
   satisf rs ls e' ->
-  Val.has_type rs#r (match oty with Some ty => ty | None => Tint end) ->
+  Val.has_type rs#r ty ->
   Val.lessdef rs#r (Locmap.getpair (map_rpair R l) ls).
 Proof.
   intros. functional inversion H; simpl.
@@ -1892,7 +1892,7 @@ Qed.
 
 Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signature -> Prop :=
   | match_stackframes_nil: forall sg,
-      sg.(sig_res) = Some Tint ->
+      sg.(sig_res) = Tint ->
       match_stackframes nil nil sg
   | match_stackframes_cons:
       forall res f sp pc rs s tf bb ls ts sg an e env
@@ -2425,13 +2425,13 @@ Proof.
                           (return_regs (parent_locset ts) ls1))
   with (Locmap.getpair (map_rpair R (loc_result (RTL.fn_sig f))) ls1).
   eapply add_equations_res_lessdef; eauto.
-  rewrite H13. apply WTRS.
+  rewrite <- H14. apply WTRS.
   generalize (loc_result_caller_save (RTL.fn_sig f)).
   destruct (loc_result (RTL.fn_sig f)); simpl.
   intros A; rewrite A; auto.
   intros [A B]; rewrite A, B; auto.
   apply return_regs_agree_callee_save.
-  unfold proj_sig_res. rewrite <- H11; rewrite H13. apply WTRS.
+  rewrite <- H11, <- H14. apply WTRS.
 
 (* internal function *)
 - monadInv FUN. simpl in *.
@@ -2463,7 +2463,8 @@ Proof.
   simpl. destruct (loc_result (ef_sig ef)) eqn:RES; simpl.
   rewrite Locmap.gss; auto.
   generalize (loc_result_pair (ef_sig ef)); rewrite RES; intros (A & B & C & D & E).
-  exploit external_call_well_typed; eauto. unfold proj_sig_res; rewrite B. intros WTRES'.
+  assert (WTRES': Val.has_type v' Tlong).
+  { rewrite <- B. eapply external_call_well_typed; eauto. }
   rewrite Locmap.gss. rewrite Locmap.gso by (red; auto). rewrite Locmap.gss.
   rewrite val_longofwords_eq_1 by auto. auto.
   red; intros. rewrite (AG l H0).

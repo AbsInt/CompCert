@@ -45,9 +45,6 @@ Lemma typ_eq: forall (t1 t2: typ), {t1=t2} + {t1<>t2}.
 Proof. decide equality. Defined.
 Global Opaque typ_eq.
 
-Definition opt_typ_eq: forall (t1 t2: option typ), {t1=t2} + {t1<>t2}
-                     := option_eq typ_eq.
-
 Definition list_typ_eq: forall (l1 l2: list typ), {l1=l2} + {l1<>l2}
                      := list_eq_dec typ_eq.
 
@@ -91,10 +88,34 @@ Fixpoint subtype_list (tyl1 tyl2: list typ) : bool :=
   | _, _ => false
   end.
 
+(** To describe the values returned by functions, we use the more precise
+    types below. *)
+
+Inductive rettype : Type :=
+  | Tret (t: typ)                       (**r like type [t] *)
+  | Tint8signed                         (**r 8-bit signed integer *)
+  | Tint8unsigned                       (**r 8-bit unsigned integer *)
+  | Tint16signed                        (**r 16-bit signed integer *)
+  | Tint16unsigned                      (**r 16-bit unsigned integer *)
+  | Tvoid.                              (**r no value returned *)
+
+Coercion Tret: typ >-> rettype.
+
+Lemma rettype_eq: forall (t1 t2: rettype), {t1=t2} + {t1<>t2}.
+Proof. generalize typ_eq; decide equality. Defined.
+Global Opaque rettype_eq.
+
+Fixpoint proj_rettype (r: rettype) : typ :=
+  match r with
+  | Tret t => t
+  | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => Tint
+  | Tvoid => Tint
+  end.
+
 (** Additionally, function definitions and function calls are annotated
   by function signatures indicating:
 - the number and types of arguments;
-- the type of the returned value, if any;
+- the type of the returned value;
 - additional information on which calling convention to use.
 
 These signatures are used in particular to determine appropriate
@@ -117,24 +138,20 @@ Global Opaque calling_convention_eq.
 
 Record signature : Type := mksignature {
   sig_args: list typ;
-  sig_res: option typ;
+  sig_res: rettype;
   sig_cc: calling_convention
 }.
 
-Definition proj_sig_res (s: signature) : typ :=
-  match s.(sig_res) with
-  | None => Tint
-  | Some t => t
-  end.
+Definition proj_sig_res (s: signature) : typ := proj_rettype s.(sig_res).
 
 Definition signature_eq: forall (s1 s2: signature), {s1=s2} + {s1<>s2}.
 Proof.
-  generalize opt_typ_eq, list_typ_eq, calling_convention_eq; decide equality.
+  generalize rettype_eq, list_typ_eq, calling_convention_eq; decide equality.
 Defined.
 Global Opaque signature_eq.
 
 Definition signature_main :=
-  {| sig_args := nil; sig_res := Some Tint; sig_cc := cc_default |}.
+  {| sig_args := nil; sig_res := Tint; sig_cc := cc_default |}.
 
 (** Memory accesses (load and store instructions) are annotated by
   a ``memory chunk'' indicating the type, size and signedness of the
@@ -176,6 +193,28 @@ Definition type_of_chunk (c: memory_chunk) : typ :=
 
 Lemma type_of_Mptr: type_of_chunk Mptr = Tptr.
 Proof. unfold Mptr, Tptr; destruct Archi.ptr64; auto. Qed.
+
+(** Same, as a return type. *)
+
+Definition rettype_of_chunk (c: memory_chunk) : rettype :=
+  match c with
+  | Mint8signed => Tint8signed
+  | Mint8unsigned => Tint8unsigned
+  | Mint16signed => Tint16signed
+  | Mint16unsigned => Tint16unsigned
+  | Mint32 => Tint
+  | Mint64 => Tlong
+  | Mfloat32 => Tsingle
+  | Mfloat64 => Tfloat
+  | Many32 => Tany32
+  | Many64 => Tany64
+  end.
+
+Lemma proj_rettype_of_chunk:
+  forall chunk, proj_rettype (rettype_of_chunk chunk) = type_of_chunk chunk.
+Proof.
+  destruct chunk; auto.
+Qed.
 
 (** The chunk that is appropriate to store and reload a value of
   the given type, without losing information. *)
@@ -477,15 +516,15 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_external name sg => sg
   | EF_builtin name sg => sg
   | EF_runtime name sg => sg
-  | EF_vload chunk => mksignature (Tptr :: nil) (Some (type_of_chunk chunk)) cc_default
-  | EF_vstore chunk => mksignature (Tptr :: type_of_chunk chunk :: nil) None cc_default
-  | EF_malloc => mksignature (Tptr :: nil) (Some Tptr) cc_default
-  | EF_free => mksignature (Tptr :: nil) None cc_default
-  | EF_memcpy sz al => mksignature (Tptr :: Tptr :: nil) None cc_default
-  | EF_annot kind text targs => mksignature targs None cc_default
-  | EF_annot_val kind text targ => mksignature (targ :: nil) (Some targ) cc_default
+  | EF_vload chunk => mksignature (Tptr :: nil) (rettype_of_chunk chunk) cc_default
+  | EF_vstore chunk => mksignature (Tptr :: type_of_chunk chunk :: nil) Tvoid cc_default
+  | EF_malloc => mksignature (Tptr :: nil) Tptr cc_default
+  | EF_free => mksignature (Tptr :: nil) Tvoid cc_default
+  | EF_memcpy sz al => mksignature (Tptr :: Tptr :: nil) Tvoid cc_default
+  | EF_annot kind text targs => mksignature targs Tvoid cc_default
+  | EF_annot_val kind text targ => mksignature (targ :: nil) targ cc_default
   | EF_inline_asm text sg clob => sg
-  | EF_debug kind text targs => mksignature targs None cc_default
+  | EF_debug kind text targs => mksignature targs Tvoid cc_default
   end.
 
 (** Whether an external function should be inlined by the compiler. *)

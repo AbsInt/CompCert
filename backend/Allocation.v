@@ -734,11 +734,11 @@ Function add_equations_args (rl: list reg) (tyl: list typ) (ll: list (rpair loc)
 (** [add_equations_res] is similar but is specialized to the case where
   there is only one pseudo-register. *)
 
-Function add_equations_res (r: reg) (oty: option typ) (p: rpair mreg) (e: eqs) : option eqs :=
-  match p, oty with
+Function add_equations_res (r: reg) (ty: typ) (p: rpair mreg) (e: eqs) : option eqs :=
+  match p, ty with
   | One mr, _ =>
       Some (add_equation (Eq Full r (R mr)) e)
-  | Twolong mr1 mr2, Some Tlong =>
+  | Twolong mr1 mr2, Tlong =>
       if Archi.ptr64 then None else
       Some (add_equation (Eq Low r (R mr2)) (add_equation (Eq High r (R mr1)) e))
   | _, _ =>
@@ -1084,7 +1084,7 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
   | BStailcall sg ros args mv1 ros' =>
       let args' := loc_arguments sg in
       assertion (tailcall_is_possible sg);
-      assertion (opt_typ_eq sg.(sig_res) f.(RTL.fn_sig).(sig_res));
+      assertion (rettype_eq sg.(sig_res) f.(RTL.fn_sig).(sig_res));
       assertion (ros_compatible_tailcall ros');
       do e1 <- add_equation_ros ros ros' empty_eqs;
       do e2 <- add_equations_args args (sig_args sg) args' e1;
@@ -1114,7 +1114,7 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
       track_moves env mv empty_eqs
   | BSreturn (Some arg) mv =>
       let arg' := loc_result (RTL.fn_sig f) in
-      do e1 <- add_equations_res arg (sig_res (RTL.fn_sig f)) arg' empty_eqs;
+      do e1 <- add_equations_res arg (proj_sig_res (RTL.fn_sig f)) arg' empty_eqs;
       track_moves env mv e1
   end.
 

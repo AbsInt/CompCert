@@ -397,10 +397,10 @@ Inductive wt_rvalue : expr -> Prop :=
       wt_arguments rargs tyargs ->
       (* This typing rule is specialized to the builtin invocations generated
          by C2C, which are either __builtin_sel or builtins returning void. *)
-         (ty = Tvoid /\ sig_res (ef_sig ef) = None)
+         (ty = Tvoid /\ sig_res (ef_sig ef) = AST.Tvoid)
       \/ (tyargs = Tcons type_bool (Tcons ty (Tcons ty Tnil))
           /\ let t := typ_of_type ty in
-             let sg := mksignature (AST.Tint :: t :: t :: nil) (Some t) cc_default in
+             let sg := mksignature (AST.Tint :: t :: t :: nil) t cc_default in
              ef = EF_builtin "__builtin_sel"%string sg) ->
       wt_rvalue (Ebuiltin ef tyargs rargs ty)
   | wt_Eparen: forall r tycast ty,
@@ -521,11 +521,20 @@ Fixpoint bind_globdef (e: typenv) (l: list (ident * globdef fundef type)) : type
   | (id, Gvar v) :: l => bind_globdef (PTree.set id v.(gvar_info) e) l
   end.
 
+Inductive wt_fundef (ce: composite_env) (e: typenv) : fundef -> Prop :=
+  | wt_fundef_internal: forall f,
+      wt_function ce e f ->
+      wt_fundef ce e (Internal f)
+  | wt_fundef_external: forall ef targs tres cc,
+      (ef_sig ef).(sig_res) = rettype_of_type tres ->
+      wt_fundef ce e (External ef targs tres cc).
+
 Inductive wt_program : program -> Prop :=
   | wt_program_intro: forall p,
       let e := bind_globdef (PTree.empty _) p.(prog_defs) in
-      (forall id f, In (id, Gfun (Internal f)) p.(prog_defs) ->
-         wt_function p.(prog_comp_env) e f) ->
+      (forall id fd,
+         In (id, Gfun fd) p.(prog_defs) ->
+         wt_fundef p.(prog_comp_env) e fd) ->
       wt_program p.
 
 Hint Constructors wt_val wt_rvalue wt_lvalue wt_stmt wt_lblstmts: ty.
@@ -745,7 +754,7 @@ Definition ebuiltin (ef: external_function) (tyargs: typelist) (args: exprlist) 
   do x1 <- check_rvals args;
   do x2 <- check_arguments args tyargs;
   if type_eq tyres Tvoid
-  && opt_typ_eq (sig_res (ef_sig ef)) None
+  && AST.rettype_eq (sig_res (ef_sig ef)) AST.Tvoid
   then OK (Ebuiltin ef tyargs args tyres)
   else Error (msg "builtin: wrong type decoration").
 
@@ -915,7 +924,8 @@ Definition retype_function (ce: composite_env) (e: typenv) (f: function) : res f
 Definition retype_fundef (ce: composite_env) (e: typenv) (fd: fundef) : res fundef :=
   match fd with
   | Internal f => do f' <- retype_function ce e f; OK (Internal f')
-  | External id args res cc => OK fd
+  | External ef args res cc =>
+      assertion (rettype_eq (ef_sig ef).(sig_res) (rettype_of_type res)); OK fd
   end.
 
 Definition typecheck_program (p: program) : res program :=
@@ -1241,7 +1251,7 @@ Lemma ebuiltin_sound:
 Proof.
   intros. monadInv H.
   destruct (type_eq tyres Tvoid); simpl in EQ2; try discriminate.
-  destruct (opt_typ_eq (sig_res (ef_sig ef)) None); inv EQ2.
+  destruct (rettype_eq (sig_res (ef_sig ef)) AST.Tvoid); inv EQ2.
   econstructor; eauto. eapply check_arguments_sound; eauto.
 Qed.
 
@@ -1373,6 +1383,14 @@ Proof.
   intros. monadInv H. constructor; simpl. eapply retype_stmt_sound; eauto.
 Qed.
 
+Lemma retype_fundef_sound:
+  forall ce e fd fd', retype_fundef ce e fd = OK fd' -> wt_fundef ce e fd'.
+Proof.
+  intros. destruct fd; monadInv H.
+- constructor; eapply retype_function_sound; eauto.
+- constructor; auto.
+Qed.
+
 Theorem typecheck_program_sound:
   forall p p', typecheck_program p = OK p' -> wt_program p'.
 Proof.
@@ -1395,11 +1413,11 @@ Proof.
     inv H1. simpl. auto.
   }
   rewrite ENVS.
-  intros id f. revert MATCH; generalize (prog_defs p) (AST.prog_defs tp).
+  intros id fd. revert MATCH; generalize (prog_defs p) (AST.prog_defs tp).
   induction 1; simpl; intros.
   contradiction.
   destruct H0; auto. subst b1; inv H. simpl in H1. inv H1. 
-  destruct f1; monadInv H4. eapply retype_function_sound; eauto.
+  eapply retype_fundef_sound; eauto.
 Qed.
 
 (** * Subject reduction *)
@@ -1711,6 +1729,26 @@ Proof.
   inv H; auto.
 Qed.
 
+Lemma has_rettype_wt_val:
+  forall v ty,
+  Val.has_rettype v (rettype_of_type ty) -> wt_val v ty.
+Proof.
+  unfold rettype_of_type, Val.has_rettype, Val.has_type; destruct ty; intros.
+- destruct v; contradiction || constructor.
+- destruct i.
+  + destruct s; destruct v; try contradiction; constructor; red; auto.
+  + destruct s; destruct v; try contradiction; constructor; red; auto.
+  + destruct v; try contradiction; constructor; auto.
+  + destruct v; try contradiction; constructor; red; auto.
+- destruct v; try contradiction; constructor; auto.
+- destruct f; destruct v; try contradiction; constructor.
+- unfold Tptr in *; destruct v; destruct Archi.ptr64 eqn:P64; try contradiction; constructor; auto.
+- destruct v; contradiction || constructor.
+- destruct v; contradiction || constructor.
+- destruct v; contradiction || constructor.
+- destruct v; contradiction || constructor.
+Qed.
+
 Lemma wt_rred:
   forall ge tenv a m t a' m',
   rred ge a m t a' m' -> wt_rvalue ge tenv a -> wt_rvalue ge tenv a'.
@@ -1750,7 +1788,7 @@ Proof.
 - (* builtin *) subst. destruct H7 as [(A & B) | (A & B)].
 + subst ty. auto with ty.
 + simpl in B. set (T := typ_of_type ty) in *. 
-  set (sg := mksignature (AST.Tint :: T :: T :: nil) (Some T) cc_default) in *.
+  set (sg := mksignature (AST.Tint :: T :: T :: nil) T cc_default) in *.
   assert (LK: lookup_builtin_function "__builtin_sel"%string sg = Some (BI_standard (BI_select T))).
   { unfold sg, T; destruct ty as   [ | ? ? ? | ? | [] ? | ? ? | ? ? ? | ? ? ? | ? ? | ? ? ];
     simpl; unfold Tptr; destruct Archi.ptr64; reflexivity. }
@@ -1896,12 +1934,6 @@ Hypothesis WTPROG: wt_program prog.
 Let ge := globalenv prog.
 Let gtenv := bind_globdef (PTree.empty _) prog.(prog_defs).
 
-Hypothesis WT_EXTERNAL:
-  forall id ef args res cc vargs m t vres m',
-  In (id, Gfun (External ef args res cc)) prog.(prog_defs) ->
-  external_call ef ge vargs m t vres m' ->
-  wt_val vres res.
-
 Inductive wt_expr_cont: typenv -> function -> cont -> Prop :=
   | wt_Kdo: forall te f k,
       wt_stmt_cont te f k ->
@@ -2000,12 +2032,6 @@ Proof.
   induction 1; simpl; auto; econstructor; eauto.
 Qed.
 
-Definition wt_fundef (fd: fundef) :=
-  match fd with
-  | Internal f => wt_function ge gtenv f
-  | External ef targs tres cc => True
-  end.
-
 Definition fundef_return (fd: fundef) : type :=
   match fd with
   | Internal f => f.(fn_return)
@@ -2013,10 +2039,10 @@ Definition fundef_return (fd: fundef) : type :=
   end.
 
 Lemma wt_find_funct:
-  forall v fd, Genv.find_funct ge v = Some fd -> wt_fundef fd.
+  forall v fd, Genv.find_funct ge v = Some fd -> wt_fundef ge gtenv fd.
 Proof.
   intros. apply Genv.find_funct_prop with (p := prog) (v := v); auto.
-  intros. inv WTPROG. destruct f; simpl; auto. apply H1 with id; auto.
+  intros. inv WTPROG. apply H1 with id; auto.
 Qed.
 
 Inductive wt_state: state -> Prop :=
@@ -2032,7 +2058,7 @@ Inductive wt_state: state -> Prop :=
       wt_state (ExprState f r k e m)
   | wt_call_state: forall b fd vargs k m
         (WTK: wt_call_cont k (fundef_return fd))
-        (WTFD: wt_fundef fd)
+        (WTFD: wt_fundef ge gtenv fd)
         (FIND: Genv.find_funct ge b = Some fd),
       wt_state (Callstate fd vargs k m)
   | wt_return_state: forall v k m ty
@@ -2088,7 +2114,6 @@ Proof.
 Qed.
 
 End WT_FIND_LABEL.
-
 
 Lemma preservation_estep:
   forall S t S', estep ge S t S' -> wt_state S -> wt_state S'.
@@ -2164,9 +2189,10 @@ Proof.
 - inv WTS; eauto with ty.
 - exploit wt_find_label. eexact WTB. eauto. eapply call_cont_wt'; eauto.
   intros [A B]. eauto with ty.
-- simpl in WTFD; inv WTFD. econstructor; eauto. apply wt_call_cont_stmt_cont; auto.
-- exploit (Genv.find_funct_inversion prog); eauto. intros (id & A).
-  econstructor; eauto.
+- inv WTFD. inv H3. econstructor; eauto. apply wt_call_cont_stmt_cont; auto.
+- inv WTFD. econstructor; eauto.
+  apply has_rettype_wt_val. simpl; rewrite <- H1.
+  eapply external_call_well_typed_gen; eauto.
 - inv WTK. eauto with ty.
 Qed.
 
@@ -2181,7 +2207,7 @@ Theorem wt_initial_state:
 Proof.
   intros. inv H. econstructor. constructor.
   apply Genv.find_funct_ptr_prop with (p := prog) (b := b); auto.
-  intros. inv WTPROG. destruct f0; simpl; auto. apply H4 with id; auto.
+  intros. inv WTPROG. apply H4 with id; auto.
   instantiate (1 := (Vptr b Ptrofs.zero)). rewrite Genv.find_funct_find_funct_ptr. auto.
 Qed.
 

@@ -547,16 +547,24 @@ Proof.
   destruct v1; auto.
 Qed.
 
+Lemma decode_val_rettype:
+  forall chunk cl,
+  Val.has_rettype (decode_val chunk cl) (rettype_of_chunk chunk).
+Proof.
+  intros. unfold decode_val.
+  destruct (proj_bytes cl).
+- destruct chunk; simpl; rewrite ? Int.sign_ext_idem, ? Int.zero_ext_idem by omega; auto.
+- Local Opaque Val.load_result.
+  destruct chunk; simpl;
+  (exact I || apply Val.load_result_type || destruct Archi.ptr64; (exact I || apply Val.load_result_type)).
+Qed.
+
 Lemma decode_val_type:
   forall chunk cl,
   Val.has_type (decode_val chunk cl) (type_of_chunk chunk).
 Proof.
-  intros. unfold decode_val.
-  destruct (proj_bytes cl).
-  destruct chunk; simpl; auto.
-Local Opaque Val.load_result.
-  destruct chunk; simpl;
-  (exact I || apply Val.load_result_type || destruct Archi.ptr64; (exact I || apply Val.load_result_type)).
+  intros. rewrite <- proj_rettype_of_chunk.
+  apply Val.has_proj_rettype. apply decode_val_rettype.
 Qed.
 
 Lemma encode_val_int8_signed_unsigned:
@@ -607,11 +615,9 @@ Lemma decode_val_cast:
   | _ => True
   end.
 Proof.
-  unfold decode_val; intros; destruct chunk; auto; destruct (proj_bytes l); auto.
-  unfold Val.sign_ext. rewrite Int.sign_ext_idem; auto. omega.
-  unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. omega.
-  unfold Val.sign_ext. rewrite Int.sign_ext_idem; auto. omega.
-  unfold Val.zero_ext. rewrite Int.zero_ext_idem; auto. omega.
+  intros. 
+  assert (A: Val.has_rettype v (rettype_of_chunk chunk)) by apply decode_val_rettype.
+  destruct chunk; auto; simpl in A; destruct v; try contradiction; simpl; congruence.
 Qed.
 
 (** Pointers cannot be forged. *)

@@ -33,10 +33,10 @@ Definition platform_builtin_table : list (string * platform_builtin) :=
 Definition platform_builtin_sig (b: platform_builtin) : signature :=
   match b with
   | BI_fmin | BI_fmax =>
-      mksignature (Tfloat :: Tfloat :: nil) (Some Tfloat) cc_default
+      mksignature (Tfloat :: Tfloat :: nil) Tfloat cc_default
   end.
 
-Definition platform_builtin_sem (b: platform_builtin) : builtin_sem (proj_sig_res (platform_builtin_sig b)) :=
+Definition platform_builtin_sem (b: platform_builtin) : builtin_sem (sig_res (platform_builtin_sig b)) :=
   match b with
   | BI_fmin =>
       mkbuiltin_n2t Tfloat Tfloat Tfloat

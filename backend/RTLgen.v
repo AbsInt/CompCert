@@ -410,12 +410,11 @@ Fixpoint convert_builtin_args {A: Type} (al: list (builtin_arg expr)) (rl: list 
       a1' :: convert_builtin_args al rl1
   end.
 
-Definition convert_builtin_res (map: mapping) (oty: option typ) (r: builtin_res ident) : mon (builtin_res reg) :=
-  match r, oty with
-  | BR id, _ => do r <- find_var map id; ret (BR r)
-  | BR_none, None => ret BR_none
-  | BR_none, Some _ => do r <- new_reg; ret (BR r)
-  | _, _ => error (Errors.msg "RTLgen: bad builtin_res")
+Definition convert_builtin_res (map: mapping) (ty: rettype) (r: builtin_res ident) : mon (builtin_res reg) :=
+  match r with
+  | BR id => do r <- find_var map id; ret (BR r)
+  | BR_none => if rettype_eq ty Tvoid then ret BR_none else (do r <- new_reg; ret (BR r))
+  | _ => error (Errors.msg "RTLgen: bad builtin_res")
   end.
 
 (** Translation of an expression.  [transl_expr map a rd nd]
@@ -667,10 +666,7 @@ Fixpoint reserve_labels (s: stmt) (ms: labelmap * state)
 (** Translation of a CminorSel function. *)
 
 Definition ret_reg (sig: signature) (rd: reg) : option reg :=
-  match sig.(sig_res) with
-  | None => None
-  | Some ty => Some rd
-  end.
+  if rettype_eq sig.(sig_res) Tvoid then None else Some rd.
 
 Definition transl_fun (f: CminorSel.function) (ngoto: labelmap): mon (node * list reg) :=
   do (rparams, map1) <- add_vars init_mapping f.(CminorSel.fn_params);

@@ -149,6 +149,23 @@ Proof.
   auto.
 Defined.
 
+Definition has_rettype (v: val) (r: rettype) : Prop :=
+  match r, v with
+  | Tret t, _ => has_type v t
+  | Tint8signed, Vint n => n = Int.sign_ext 8 n
+  | Tint8unsigned, Vint n => n = Int.zero_ext 8 n
+  | Tint16signed, Vint n => n = Int.sign_ext 16 n
+  | Tint16unsigned, Vint n => n = Int.zero_ext 16 n
+  | _, Vundef => True
+  | _, _ => False
+  end.
+
+Lemma has_proj_rettype: forall v r,
+  has_rettype v r -> has_type v (proj_rettype r).
+Proof.
+  destruct r; simpl; intros; auto; destruct v; try contradiction; exact I.
+Qed.
+
 (** Truth values.  Non-zero integers are treated as [True].
   The integer 0 (also used to represent the null pointer) is [False].
   Other values are neither true nor false. *)
@@ -1003,10 +1020,24 @@ Definition load_result (chunk: memory_chunk) (v: val) :=
   | _, _ => Vundef
   end.
 
+Lemma load_result_rettype:
+  forall chunk v, has_rettype (load_result chunk v) (rettype_of_chunk chunk).
+Proof.
+  intros. unfold has_rettype; destruct chunk; destruct v; simpl; auto.
+- rewrite Int.sign_ext_idem by omega; auto.
+- rewrite Int.zero_ext_idem by omega; auto.
+- rewrite Int.sign_ext_idem by omega; auto.
+- rewrite Int.zero_ext_idem by omega; auto.
+- destruct Archi.ptr64 eqn:SF; simpl; auto.
+- destruct Archi.ptr64 eqn:SF; simpl; auto.
+- destruct Archi.ptr64 eqn:SF; simpl; auto.
+Qed.
+
 Lemma load_result_type:
   forall chunk v, has_type (load_result chunk v) (type_of_chunk chunk).
 Proof.
-  intros. unfold has_type; destruct chunk; destruct v; simpl; auto; destruct Archi.ptr64 eqn:SF; simpl; auto.
+  intros. rewrite <- proj_rettype_of_chunk. apply has_proj_rettype.
+  apply load_result_rettype.
 Qed.
 
 Lemma load_result_same:
