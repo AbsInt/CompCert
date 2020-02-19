@@ -377,3 +377,8 @@ Proof.
   unfold loc_arguments; reflexivity.
 Qed.
 
+(** ** Normalization of function results *)
+
+(** No normalization needed. *)
+
+Definition return_value_needs_normalization (t: rettype) := false.

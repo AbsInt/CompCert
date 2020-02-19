@@ -641,3 +641,9 @@ Proof.
   unfold loc_arguments.
   destruct Archi.abi; reflexivity.
 Qed.
+
+(** ** Normalization of function results *)
+
+(** No normalization needed. *)
+
+Definition return_value_needs_normalization (t: rettype) := false.

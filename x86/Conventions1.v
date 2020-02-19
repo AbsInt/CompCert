@@ -471,3 +471,17 @@ Lemma loc_arguments_main:
 Proof.
   unfold loc_arguments; destruct Archi.ptr64; reflexivity.
 Qed.
+
+(** ** Normalization of function results *)
+
+(** In the x86 ABI, a return value of type "char" is returned in
+    register AL, leaving the top 24 bits of EAX unspecified.
+    Likewise, a return value of type "short" is returned in register
+    AH, leaving the top 16 bits of EAX unspecified.  Hence, return
+    values of small integer types need re-normalization after calls. *)
+
+Definition return_value_needs_normalization (t: rettype) : bool :=
+  match t with
+  | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => true
+  | _ => false
+  end.

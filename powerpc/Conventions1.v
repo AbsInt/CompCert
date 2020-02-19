@@ -463,3 +463,9 @@ Lemma loc_arguments_main:
 Proof.
   reflexivity.
 Qed.
+
+(** ** Normalization of function results *)
+
+(** No normalization needed. *)
+
+Definition return_value_needs_normalization (t: rettype) := false.

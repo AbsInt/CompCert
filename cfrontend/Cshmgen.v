@@ -23,6 +23,7 @@
 Require Import Coqlib Maps Errors Integers Floats.
 Require Import AST Linking.
 Require Import Ctypes Cop Clight Cminor Csharpminor.
+Require Import Conventions1.
 
 Local Open Scope string_scope.
 Local Open Scope error_monad_scope.
@@ -558,6 +559,34 @@ Fixpoint typlist_of_arglist (al: list Clight.expr) (tyl: typelist)
       typ_of_type (default_argument_conversion (typeof a1)) :: typlist_of_arglist a2 Tnil
   end.
 
+(** Translate a function call.
+    Depending on the ABI, it may be necessary to normalize the value
+    returned by casting it to the return type of the function.
+    For example, in the x86 ABI, a return value of type "char" is
+    returned in register AL, leaving the top 24 bits of EAX
+    unspecified.  Hence, a cast to type "char" is needed to sign- or
+    zero-extend the returned integer before using it. *)
+
+Definition make_normalization (t: type) (a: expr) :=
+  match t with
+  | Tint IBool _ _ => Eunop Ocast8unsigned a
+  | Tint I8 Signed _ => Eunop Ocast8signed a
+  | Tint I8 Unsigned _ => Eunop Ocast8unsigned a
+  | Tint I16 Signed _ => Eunop Ocast16signed a
+  | Tint I16 Unsigned _ => Eunop Ocast16unsigned a
+  | _ => a
+  end.
+
+Definition make_funcall (x: option ident) (tres: type) (sg: signature)
+                      (fn: expr) (args: list expr): stmt :=
+  match x, return_value_needs_normalization sg.(sig_res) with
+  | Some id, true =>
+      Sseq (Scall x sg fn args)
+           (Sset id (make_normalization tres (Evar id)))
+  | _, _ =>
+      Scall x sg fn args
+  end.
+
 (** * Translation of statements *)
 
 (** [transl_statement nbrk ncnt s] returns a Csharpminor statement
@@ -601,10 +630,10 @@ Fixpoint transl_statement (ce: composite_env) (tyret: type) (nbrk ncnt: nat)
       | fun_case_f args res cconv =>
           do tb <- transl_expr ce b;
           do tcl <- transl_arglist ce cl args;
-          OK(Scall x {| sig_args := typlist_of_arglist cl args;
-                        sig_res  := rettype_of_type res;
-                        sig_cc   := cconv |}
-                   tb tcl)
+          let sg := {| sig_args := typlist_of_arglist cl args;
+                       sig_res  := rettype_of_type res;
+                       sig_cc   := cconv |} in
+          OK (make_funcall x res sg tb tcl)
       | _ => Error(msg "Cshmgen.transl_stmt(call)")
       end
   | Clight.Sbuiltin x ef tyargs bl =>
