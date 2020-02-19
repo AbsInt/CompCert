@@ -195,6 +195,17 @@ RETURN(ru6,U6,init_U6)
 RETURN(ru7,U7,init_U7)
 RETURN(ru8,U8,init_U8)
 
+/* Returning small integers */
+
+#define SMALLINT(name,ty) \
+extern ty THEM(name)(int); \
+ty US(name)(int x) { return x * x; }
+
+SMALLINT(si8u, unsigned char)
+SMALLINT(si8s, signed char)
+SMALLINT(si16u, unsigned short)
+SMALLINT(si16s, signed short)
+
 /* Test function, calling the functions compiled by the other compiler */
 
 #define CALLPRINT(name,ty,init) \
@@ -207,6 +218,10 @@ RETURN(ru8,U8,init_U8)
 extern void THEM(test) (void);
 void US(test) (void)
 {
+  printf("si8u: %d\n", THEM(si8u)(12345));
+  printf("si8s: %d\n", THEM(si8s)(12345));
+  printf("si16u: %d\n", THEM(si16u)(1234567));
+  printf("si16s: %d\n", THEM(si16s)(1234567));
   CALLPRINT(s1,S1,init_S1)
   CALLPRINT(s2,S2,init_S2)
   CALLPRINT(s3,S3,init_S3)

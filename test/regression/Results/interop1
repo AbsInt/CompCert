@@ -1,4 +1,8 @@
 --- CompCert calling native:
+si8u: 177
+si8s: -79
+si16u: 64305
+si16s: -1231
 s1: { a = 'a' }
 s2: { a = 'a', b = 'b' }
 s3: { a = 'a', b = 'b', c = ' c' }
@@ -44,6 +48,10 @@ ru6: { a = 55555, b = 666 }
 ru7: { a = -10001, b = -789, c = 'z' }
 ru8: { a = 'x', b = 12345 }
 --- native calling CompCert:
+si8u: 177
+si8s: -79
+si16u: 64305
+si16s: -1231
 s1: { a = 'a' }
 s2: { a = 'a', b = 'b' }
 s3: { a = 'a', b = 'b', c = ' c' }
