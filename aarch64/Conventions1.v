@@ -379,6 +379,14 @@ Qed.
 
 (** ** Normalization of function results *)
 
-(** No normalization needed. *)
+(** According to the AAPCS64 ABI specification, "padding bits" in the return
+    value of a function have unpredictable values and must be ignored.
+    Consequently, we force normalization of return values of small integer
+    types (8- and 16-bit integers), so that the top bits (the "padding bits")
+    are proper sign- or zero-extensions of the small integer value. *)
 
-Definition return_value_needs_normalization (t: rettype) := false.
+Definition return_value_needs_normalization (t: rettype) : bool :=
+  match t with
+  | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => true
+  | _ => false
+  end.
