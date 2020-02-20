@@ -21,7 +21,7 @@ open Machine
 open Cabs
 open C
 open Diagnostics
-open !Cutil
+open! Cutil
 
 (** * Utility functions *)
 

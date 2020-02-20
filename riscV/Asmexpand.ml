@@ -23,7 +23,7 @@ open Asm
 open Asmexpandaux
 open AST
 open Camlcoq
-open !Integers
+open! Integers
 
 exception Error of string
 

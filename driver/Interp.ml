@@ -15,12 +15,12 @@
 open Format
 open Camlcoq
 open AST
-open !Integers
+open! Integers
 open Values
 open Memory
 open Globalenvs
 open Events
-open !Ctypes
+open! Ctypes
 open Csyntax
 open Csem
 

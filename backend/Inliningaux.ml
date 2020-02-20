@@ -16,7 +16,7 @@ open FSetAVL
 open Maps
 open Op
 open Ordered
-open !RTL
+open! RTL
 
 module PSet = Make(OrderedPositive)
 
