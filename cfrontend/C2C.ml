@@ -33,6 +33,7 @@ type inline_status =
 
 type atom_info =
   { a_storage: C.storage;              (* storage class *)
+    a_size: int64 option;              (* size in bytes *)
     a_alignment: int option;           (* alignment *)
     a_sections: Sections.section_name list; (* in which section to put it *)
       (* 1 section for data, 3 sections (code/lit/jumptbl) for functions *)
@@ -72,9 +73,14 @@ let atom_sections a =
   with Not_found ->
     []
 
-let atom_is_small_data a ofs =
+let atom_is_small_data a ofs  =
   try
-    (Hashtbl.find decl_atom a).a_access = Sections.Access_near
+    let info = Hashtbl.find decl_atom a in
+    info.a_access = Sections.Access_near
+    && (match info.a_size with
+        | None -> false
+        | Some sz ->
+            let ofs = camlint64_of_ptrofs ofs in 0L <= ofs && ofs < sz)
   with Not_found ->
     false
 
@@ -352,6 +358,7 @@ let name_for_string_literal s =
     Hashtbl.add decl_atom id
       { a_storage = C.Storage_static;
         a_alignment = Some 1;
+        a_size = Some (Int64.of_int (String.length s + 1));
         a_sections = [Sections.for_stringlit()];
         a_access = Sections.Access_default;
         a_inline = No_specifier;
@@ -379,9 +386,12 @@ let name_for_wide_string_literal s =
     incr stringNum;
     let name = Printf.sprintf "__stringlit_%d" !stringNum in
     let id = intern_string name in
+    let wchar_size = Machine.((!config).sizeof_wchar) in
     Hashtbl.add decl_atom id
       { a_storage = C.Storage_static;
-        a_alignment = Some Machine.((!config).sizeof_wchar);
+        a_alignment = Some wchar_size;
+        a_size = Some (Int64.(mul (of_int (List.length s + 1))
+                                  (of_int wchar_size)));
         a_sections = [Sections.for_stringlit()];
         a_access = Sections.Access_default;
         a_inline = No_specifier;
@@ -1223,6 +1233,7 @@ let convertFundef loc env fd =
   Hashtbl.add decl_atom id'
     { a_storage = fd.fd_storage;
       a_alignment = None;
+      a_size = None;
       a_sections = Sections.for_function env id' fd.fd_attrib;
       a_access = Sections.Access_default;
       a_inline = inline;
@@ -1309,6 +1320,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
   Hashtbl.add decl_atom id'
     { a_storage = sto;
       a_alignment = Some (Z.to_int al);
+      a_size = Some (Z.to_int64 sz);
       a_sections = [section];
       a_access = access;
       a_inline = No_specifier;
