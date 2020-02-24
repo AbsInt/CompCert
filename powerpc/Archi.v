@@ -30,6 +30,9 @@ Definition align_float64 := 8%Z.
 (** Can we use the 64-bit extensions to the PowerPC architecture? *)
 Parameter ppc64 : bool.
 
+(** Should singles be passed as single or double *)
+Parameter single_passed_as_single : bool.
+
 Definition splitlong := negb ppc64.
 
 Lemma splitlong_ptr32: splitlong = true -> ptr64 = false.

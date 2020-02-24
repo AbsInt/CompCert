@@ -208,7 +208,16 @@ Fixpoint loc_arguments_rec
       | Some ireg =>
           One (R ireg) :: loc_arguments_rec tys (ir + 1) fr ofs
       end
-  | (Tfloat | Tsingle | Tany64) as ty :: tys =>
+  | Tsingle as ty :: tys =>
+      match list_nth_z float_param_regs fr with
+      | None =>
+          let ty := if Archi.single_passed_as_single then Tsingle else Tfloat in
+          let ofs := align ofs (typesize ty) in
+          One (S Outgoing ofs Tsingle) :: loc_arguments_rec tys ir fr (ofs + (typesize ty))
+      | Some freg =>
+          One (R freg) :: loc_arguments_rec tys ir (fr + 1) ofs
+      end
+  | (Tfloat | Tany64) as ty :: tys =>
       match list_nth_z float_param_regs fr with
       | None =>
           let ofs := align ofs 2 in
@@ -295,12 +304,14 @@ Opaque list_nth_z.
   apply align_divides; omega. apply Z.divide_1_l. apply Z.divide_1_l.
   eapply Y; eauto. omega.
 - (* single *)
+  assert (ofs <= align ofs 1) by (apply align_le; omega).
   assert (ofs <= align ofs 2) by (apply align_le; omega).
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. omega. apply Z.divide_1_l.
-  eapply Y; eauto. omega.
+  subst. split. destruct Archi.single_passed_as_single; simpl; omega.
+  destruct Archi.single_passed_as_single; simpl; apply Z.divide_1_l.
+  eapply Y; eauto. destruct Archi.single_passed_as_single; simpl; omega.
 - (* any32 *)
   destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H.
   subst. left. eapply list_nth_z_in; eauto.

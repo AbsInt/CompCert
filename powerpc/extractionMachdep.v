@@ -34,3 +34,6 @@ Extract Constant Archi.ppc64 =>
    | ""e5500"" -> true
    | _ -> false
    end".
+
+(* Choice of passing of single *)
+Extract Constant Archi.single_passed_as_single => "Configuration.gnu_toolchain".
