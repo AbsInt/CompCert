@@ -452,7 +452,8 @@ let elab_constant loc = function
       let (v, fk) = elab_float_constant f in
       CFloat(v, fk)
   | CONST_CHAR(wide, s) ->
-      CInt(elab_char_constant loc wide s, IInt, "")
+      let ikind = if wide then wchar_ikind () else IInt in
+      CInt(elab_char_constant loc wide s, ikind, "")
   | CONST_STRING(wide, s) ->
       elab_string_literal loc wide s
 
