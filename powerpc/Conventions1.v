@@ -236,33 +236,6 @@ Fixpoint loc_arguments_rec
 Definition loc_arguments (s: signature) : list (rpair loc) :=
   loc_arguments_rec s.(sig_args) 0 0 0.
 
-(** [size_arguments s] returns the number of [Outgoing] slots used
-  to call a function with signature [s]. *)
-
-Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
-  match tyl with
-  | nil => ofs
-  | (Tint | Tany32) :: tys =>
-      match list_nth_z int_param_regs ir with
-      | None => size_arguments_rec tys ir fr (ofs + 1)
-      | Some ireg => size_arguments_rec tys (ir + 1) fr ofs
-      end
-  | (Tfloat | Tsingle | Tany64) :: tys =>
-      match list_nth_z float_param_regs fr with
-      | None => size_arguments_rec tys ir fr (align ofs 2 + 2)
-      | Some freg => size_arguments_rec tys ir (fr + 1) ofs
-      end
-  | Tlong :: tys =>
-      let ir := align ir 2 in
-      match list_nth_z int_param_regs ir, list_nth_z int_param_regs (ir + 1) with
-      | Some r1, Some r2 => size_arguments_rec tys (ir + 2) fr ofs
-      | _, _ => size_arguments_rec tys ir fr (align ofs 2 + 2)
-      end
-  end.
-
-Definition size_arguments (s: signature) : Z :=
-  size_arguments_rec s.(sig_args) 0 0 0.
-
 (** Argument locations are either caller-save registers or [Outgoing]
   stack slots at nonnegative offsets. *)
 
@@ -358,105 +331,6 @@ Proof.
 Qed.
 
 Hint Resolve loc_arguments_acceptable: locs.
-
-(** The offsets of [Outgoing] arguments are below [size_arguments s]. *)
-
-Remark size_arguments_rec_above:
-  forall tyl ir fr ofs0,
-  ofs0 <= size_arguments_rec tyl ir fr ofs0.
-Proof.
-  induction tyl; simpl; intros.
-  omega.
-  destruct a.
-  destruct (list_nth_z int_param_regs ir); eauto. apply Z.le_trans with (ofs0 + 1); auto; omega.
-  destruct (list_nth_z float_param_regs fr); eauto.
-  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
-  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
-  set (ir' := align ir 2).
-  destruct (list_nth_z int_param_regs ir'); eauto.
-  destruct (list_nth_z int_param_regs (ir' + 1)); eauto.
-  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
-  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
-  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
-  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
-  destruct (list_nth_z float_param_regs fr); eauto.
-  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
-  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
-  destruct (list_nth_z int_param_regs ir); eauto. apply Z.le_trans with (ofs0 + 1); auto; omega.
-  destruct (list_nth_z float_param_regs fr); eauto.
-  apply Z.le_trans with (align ofs0 2). apply align_le; omega.
-  apply Z.le_trans with (align ofs0 2 + 2); auto; omega.
-Qed.
-
-Lemma size_arguments_above:
-  forall s, size_arguments s >= 0.
-Proof.
-  intros; unfold size_arguments. apply Z.le_ge.
-  apply size_arguments_rec_above.
-Qed.
-
-Lemma loc_arguments_bounded:
-  forall (s: signature) (ofs: Z) (ty: typ),
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments s)) ->
-  ofs + typesize ty <= size_arguments s.
-Proof.
-  intros.
-  assert (forall tyl ir fr ofs0,
-    In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_rec tyl ir fr ofs0)) ->
-    ofs + typesize ty <= size_arguments_rec tyl ir fr ofs0).
-{
-  induction tyl; simpl; intros.
-  elim H0.
-  destruct a.
-- (* int *)
-  destruct (list_nth_z int_param_regs ir); destruct H0.
-  congruence.
-  eauto.
-  inv H0. apply size_arguments_rec_above.
-  eauto.
-- (* float *)
-  destruct (list_nth_z float_param_regs fr); destruct H0.
-  congruence.
-  eauto.
-  inv H0. apply size_arguments_rec_above. eauto.
-- (* long *)
-  set (ir' := align ir 2) in *.
-  assert (DFL:
-    In (S Outgoing ofs ty) (regs_of_rpairs
-                             ((if Archi.ptr64
-                               then One (S Outgoing (align ofs0 2) Tlong)
-                               else Twolong (S Outgoing (align ofs0 2) Tint)
-                                            (S Outgoing (align ofs0 2 + 1) Tint))
-                          :: loc_arguments_rec tyl ir' fr (align ofs0 2 + 2))) ->
-    ofs + typesize ty <= size_arguments_rec tyl ir' fr (align ofs0 2 + 2)).
-  { destruct Archi.ptr64; intros IN.
-  - destruct IN. inv H1. apply size_arguments_rec_above. auto.
-  - destruct IN. inv H1. transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above.
-    destruct H1. inv H1. transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above.
-    auto. }
-  destruct (list_nth_z int_param_regs ir'); auto.
-  destruct (list_nth_z int_param_regs (ir' + 1)); auto.
-  destruct H0. congruence. destruct H0. congruence. eauto.
-- (* single *)
-  destruct (list_nth_z float_param_regs fr); destruct H0.
-  congruence.
-  eauto.
-  inv H0. transitivity (align ofs0 2 + 2). simpl; omega. apply size_arguments_rec_above.
-  eauto.
-- (* any32 *)
-  destruct (list_nth_z int_param_regs ir); destruct H0.
-  congruence.
-  eauto.
-  inv H0. apply size_arguments_rec_above.
-  eauto.
-- (* any64 *)
-  destruct (list_nth_z float_param_regs fr); destruct H0.
-  congruence.
-  eauto.
-  inv H0. apply size_arguments_rec_above. eauto.
-  }
-  eauto.
-Qed.
 
 Lemma loc_arguments_main:
   loc_arguments signature_main = nil.

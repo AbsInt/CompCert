@@ -190,27 +190,6 @@ Fixpoint loc_arguments_rec
 Definition loc_arguments (s: signature) : list (rpair loc) :=
   loc_arguments_rec s.(sig_args) 0 0 0.
 
-(** [size_arguments s] returns the number of [Outgoing] slots used
-  to call a function with signature [s]. *)
-
-Fixpoint size_arguments_rec (tyl: list typ) (ir fr ofs: Z) {struct tyl} : Z :=
-  match tyl with
-  | nil => ofs
-  | (Tint | Tlong | Tany32 | Tany64) :: tys =>
-      match list_nth_z int_param_regs ir with
-      | None => size_arguments_rec tys ir fr (ofs + 2)
-      | Some ireg => size_arguments_rec tys (ir + 1) fr ofs
-      end
-  | (Tfloat | Tsingle) :: tys =>
-      match list_nth_z float_param_regs fr with
-      | None => size_arguments_rec tys ir fr (ofs + 2)
-      | Some freg => size_arguments_rec tys ir (fr + 1) ofs
-      end
-  end.
-
-Definition size_arguments (s: signature) : Z :=
-  size_arguments_rec s.(sig_args) 0 0 0.
-
 (** Argument locations are either caller-save registers or [Outgoing]
   stack slots at nonnegative offsets. *)
 
@@ -284,92 +263,6 @@ Proof.
 Qed.
 
 Hint Resolve loc_arguments_acceptable: locs.
-
-(** The offsets of [Outgoing] arguments are below [size_arguments s]. *)
-
-Remark size_arguments_rec_above:
-  forall tyl ir fr ofs0,
-  ofs0 <= size_arguments_rec tyl ir fr ofs0.
-Proof.
-  induction tyl; simpl; intros.
-  omega.
-  assert (A: ofs0 <=
-    match list_nth_z int_param_regs ir with
-    | Some _ => size_arguments_rec tyl (ir + 1) fr ofs0
-    | None => size_arguments_rec tyl ir fr (ofs0 + 2)
-    end).
-  { destruct (list_nth_z int_param_regs ir); eauto.
-    apply Z.le_trans with (ofs0 + 2); auto. omega. }
-  assert (B: ofs0 <=
-    match list_nth_z float_param_regs fr with
-    | Some _ => size_arguments_rec tyl ir (fr + 1) ofs0
-    | None => size_arguments_rec tyl ir fr (ofs0 + 2)
-    end).
-  { destruct (list_nth_z float_param_regs fr); eauto.
-    apply Z.le_trans with (ofs0 + 2); auto. omega. }
-  destruct a; auto.
-Qed.
-
-Lemma size_arguments_above:
-  forall s, size_arguments s >= 0.
-Proof.
-  intros; unfold size_arguments. apply Z.le_ge. apply size_arguments_rec_above.
-Qed.
-
-Lemma loc_arguments_rec_bounded:
-  forall ofs ty tyl ir fr ofs0,
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments_rec tyl ir fr ofs0)) ->
-  ofs + typesize ty <= size_arguments_rec tyl ir fr ofs0.
-Proof.
-  induction tyl; simpl; intros.
-- contradiction.
-- assert (T: forall ty0, typesize ty0 <= 2).
-  { destruct ty0; simpl; omega. }
-  assert (A: forall ty0,
-             In (S Outgoing ofs ty) (regs_of_rpairs
-              match list_nth_z int_param_regs ir with
-              | Some ireg =>
-                  One (R ireg) :: loc_arguments_rec tyl (ir + 1) fr ofs0
-              | None => One (S Outgoing ofs0 ty0) :: loc_arguments_rec tyl ir fr (ofs0 + 2)
-              end) ->
-             ofs + typesize ty <=
-             match list_nth_z int_param_regs ir with
-             | Some _ => size_arguments_rec tyl (ir + 1) fr ofs0
-             | None => size_arguments_rec tyl ir fr (ofs0 + 2)
-             end).
-  { intros. destruct (list_nth_z int_param_regs ir); simpl in H0; destruct H0.
-  - discriminate.
-  - eapply IHtyl; eauto.
-  - inv H0. apply Z.le_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_rec_above.
-  - eapply IHtyl; eauto. }
-  assert (B: forall ty0,
-             In (S Outgoing ofs ty) (regs_of_rpairs
-              match list_nth_z float_param_regs fr with
-              | Some ireg =>
-                  One (R ireg) :: loc_arguments_rec tyl ir (fr + 1) ofs0
-              | None => One (S Outgoing ofs0 ty0) :: loc_arguments_rec tyl ir fr (ofs0 + 2)
-              end) ->
-             ofs + typesize ty <=
-             match list_nth_z float_param_regs fr with
-             | Some _ => size_arguments_rec tyl ir (fr + 1) ofs0
-             | None => size_arguments_rec tyl ir fr (ofs0 + 2)
-             end).
-  { intros. destruct (list_nth_z float_param_regs fr); simpl in H0; destruct H0.
-  - discriminate.
-  - eapply IHtyl; eauto.
-  - inv H0. apply Z.le_trans with (ofs + 2). specialize (T ty). omega. apply size_arguments_rec_above.
-  - eapply IHtyl; eauto. }
-  destruct a; eauto.
-Qed.
-
-Lemma loc_arguments_bounded:
-  forall (s: signature) (ofs: Z) (ty: typ),
-  In (S Outgoing ofs ty) (regs_of_rpairs (loc_arguments s)) ->
-  ofs + typesize ty <= size_arguments s.
-Proof.
-  unfold loc_arguments, size_arguments; intros.
-  eauto using loc_arguments_rec_bounded.
-Qed.
 
 Lemma loc_arguments_main:
   loc_arguments signature_main = nil.
