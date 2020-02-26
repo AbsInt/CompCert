@@ -63,44 +63,44 @@ let expand_storeind_ptr src base ofs =
 let int_param_regs   = [| X10; X11; X12; X13; X14; X15; X16; X17 |]
 let float_param_regs = [| F10; F11; F12; F13; F14; F15; F16; F17 |]
 
-let rec fixup_variadic_call pos tyl =
-  if pos < 8 then
+let rec fixup_variadic_call ri rf tyl =
+  if ri < 8 then
     match tyl with
     | [] ->
         ()
     | (Tint | Tany32) :: tyl ->
-        fixup_variadic_call (pos + 1) tyl
+        fixup_variadic_call (ri + 1) rf tyl
     | Tsingle :: tyl ->
-        let rs =float_param_regs.(pos)
-        and rd = int_param_regs.(pos) in
+        let rs = float_param_regs.(rf)
+        and rd = int_param_regs.(ri) in
         emit (Pfmvxs(rd, rs));
-        fixup_variadic_call (pos + 1) tyl
+        fixup_variadic_call (ri + 1) (rf + 1) tyl
     | Tlong :: tyl ->
-        let pos' = if Archi.ptr64 then pos + 1 else align pos 2 + 2 in
-        fixup_variadic_call pos' tyl
+        let ri' = if Archi.ptr64 then ri + 1 else align ri 2 + 2 in
+        fixup_variadic_call ri' rf tyl
     | (Tfloat | Tany64) :: tyl ->
         if Archi.ptr64 then begin
-          let rs = float_param_regs.(pos)
-          and rd = int_param_regs.(pos) in
+          let rs = float_param_regs.(rf)
+          and rd = int_param_regs.(ri) in
           emit (Pfmvxd(rd, rs));
-          fixup_variadic_call (pos + 1) tyl
+          fixup_variadic_call (ri + 1) (rf + 1) tyl
         end else begin
-          let pos = align pos 2 in
-          if pos < 8 then begin
-            let rs = float_param_regs.(pos)
-            and rd1 = int_param_regs.(pos)
-            and rd2 = int_param_regs.(pos + 1) in
+          let ri = align ri 2 in
+          if ri < 8 then begin
+            let rs = float_param_regs.(rf)
+            and rd1 = int_param_regs.(ri)
+            and rd2 = int_param_regs.(ri + 1) in
             emit (Paddiw(X2, X X2, Integers.Int.neg _16));
             emit (Pfsd(rs, X2, Ofsimm _0));
             emit (Plw(rd1, X2, Ofsimm _0));
             emit (Plw(rd2, X2, Ofsimm _4));
             emit (Paddiw(X2, X X2, _16));
-            fixup_variadic_call (pos + 2) tyl
+            fixup_variadic_call (ri + 2) (rf + 1) tyl
           end
         end
         
 let fixup_call sg =
-  if sg.sig_cc.cc_vararg then fixup_variadic_call 0 sg.sig_args
+  if sg.sig_cc.cc_vararg then fixup_variadic_call 0 0 sg.sig_args
 
 (* Handling of annotations *)
 
