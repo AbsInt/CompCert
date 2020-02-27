@@ -30,7 +30,8 @@ Definition align_float64 := 8%Z.
 (** Can we use the 64-bit extensions to the PowerPC architecture? *)
 Parameter ppc64 : bool.
 
-(** Should singles be passed as single or double *)
+(** Should single-precision FP arguments passed on stack be passed 
+    as singles or use double FP format. *)
 Parameter single_passed_as_single : bool.
 
 Definition splitlong := negb ppc64.
