@@ -211,9 +211,9 @@ Fixpoint loc_arguments_rec
   | Tsingle as ty :: tys =>
       match list_nth_z float_param_regs fr with
       | None =>
-          let ty := if Archi.single_passed_as_single then Tsingle else Tfloat in
+          let ty := if Archi.single_passed_as_single then Tsingle else Tany64 in
           let ofs := align ofs (typesize ty) in
-          One (S Outgoing ofs Tsingle) :: loc_arguments_rec tys ir fr (ofs + (typesize ty))
+          One (S Outgoing ofs ty) :: loc_arguments_rec tys ir fr (ofs + (typesize ty))
       | Some freg =>
           One (R freg) :: loc_arguments_rec tys ir (fr + 1) ofs
       end
