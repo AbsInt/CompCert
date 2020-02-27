@@ -240,7 +240,8 @@ type graph = {
 let class_of_type = function
   | Tint | Tlong -> 0
   | Tfloat | Tsingle -> 1
-  | Tany32 | Tany64 -> assert false
+  | Tany32 -> 0
+  | Tany64 -> if Archi.ptr64 then 0 else 1
 
 let class_of_reg r =
   if Conventions1.is_float_reg r then 1 else 0
