@@ -1150,7 +1150,7 @@ Proof.
 - assert (t1 = t2) by (inv H; inv H0; auto). subst t2.
   exists vres1; exists m1; auto.
 (* determ *)
-- inv H; inv H0; try (unfold Vnullptr in *; discriminate).
+- inv H; inv H0; try (unfold Vnullptr in *; destruct Archi.ptr64; discriminate).
 + assert (EQ1: Vptrofs sz0 = Vptrofs sz) by congruence.
   assert (EQ2: sz0 = sz).
   { unfold Vptrofs in EQ1; destruct Archi.ptr64 eqn:SF.
