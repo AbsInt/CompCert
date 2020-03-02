@@ -1039,9 +1039,8 @@ Proof.
   red; simpl; intros. destruct (plt b (Mem.nextblock m)).
   exploit RO; eauto. intros (R & P & Q).
   split; auto.
-  split. apply bmatch_incr with bc; auto. apply bmatch_inv with m; auto.
-  intros. eapply Mem.loadbytes_unchanged_on_1. eapply external_call_readonly; eauto.
-  auto. intros; red. apply Q.
+  split. apply bmatch_incr with bc; auto. apply bmatch_ext with m; auto.
+  intros. eapply external_call_readonly with (m2 := m'); eauto.
   intros; red; intros; elim (Q ofs).
   eapply external_call_max_perm with (m2 := m'); eauto.
   destruct (j' b); congruence.

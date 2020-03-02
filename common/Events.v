@@ -649,9 +649,12 @@ Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
 (** External call cannot modify memory unless they have [Max, Writable]
    permissions. *)
   ec_readonly:
-    forall ge vargs m1 t vres m2,
+    forall ge vargs m1 t vres m2 b ofs n bytes,
     sem ge vargs m1 t vres m2 ->
-    Mem.unchanged_on (loc_not_writable m1) m1 m2;
+    Mem.valid_block m1 b ->
+    Mem.loadbytes m2 b ofs n = Some bytes ->
+    (forall i, ofs <= i < ofs + n -> ~Mem.perm m1 b i Max Writable) ->
+    Mem.loadbytes m1 b ofs n = Some bytes;
 
 (** External calls must commute with memory extensions, in the
   following sense. *)
@@ -784,7 +787,7 @@ Proof.
 (* max perms *)
 - inv H; auto.
 (* readonly *)
-- inv H. apply Mem.unchanged_on_refl.
+- inv H; auto.
 (* mem extends *)
 - inv H. inv H1. inv H6. inv H4.
   exploit volatile_load_extends; eauto. intros [v' [A B]].
@@ -833,14 +836,27 @@ Proof.
   rewrite C; auto.
 Qed.
 
+Lemma unchanged_on_readonly:
+  forall m1 m2 b ofs n bytes,
+  Mem.unchanged_on (loc_not_writable m1) m1 m2 ->
+  Mem.valid_block m1 b ->
+  Mem.loadbytes m2 b ofs n = Some bytes ->
+  (forall i, ofs <= i < ofs + n -> ~Mem.perm m1 b i Max Writable) ->
+  Mem.loadbytes m1 b ofs n = Some bytes.
+Proof.
+  intros.
+  rewrite <- H1. symmetry.
+  apply Mem.loadbytes_unchanged_on_1 with (P := loc_not_writable m1); auto.
+Qed.
+
 Lemma volatile_store_readonly:
   forall ge chunk1 m1 b1 ofs1 v t m2,
   volatile_store ge chunk1 m1 b1 ofs1 v t m2 ->
   Mem.unchanged_on (loc_not_writable m1) m1 m2.
 Proof.
   intros. inv H.
-  apply Mem.unchanged_on_refl.
-  eapply Mem.store_unchanged_on; eauto.
+- apply Mem.unchanged_on_refl.
+- eapply Mem.store_unchanged_on; eauto.
   exploit Mem.store_valid_access_3; eauto. intros [P Q].
   intros. unfold loc_not_writable. red; intros. elim H2.
   apply Mem.perm_cur_max. apply P. auto.
@@ -934,7 +950,7 @@ Proof.
 (* perms *)
 - inv H. inv H2. auto. eauto with mem.
 (* readonly *)
-- inv H. eapply volatile_store_readonly; eauto.
+- inv H. eapply unchanged_on_readonly; eauto. eapply volatile_store_readonly; eauto.
 (* mem extends*)
 - inv H. inv H1. inv H6. inv H7. inv H4.
   exploit volatile_store_extends; eauto. intros [m2' [A [B C]]].
@@ -994,7 +1010,7 @@ Proof.
   rewrite dec_eq_false. auto.
   apply Mem.valid_not_valid_diff with m1; eauto with mem.
 (* readonly *)
-- inv H. eapply UNCHANGED; eauto.
+- inv H. eapply unchanged_on_readonly; eauto. 
 (* mem extends *)
 - inv H. inv H1. inv H7.
   assert (SZ: v2 = Vptrofs sz).
@@ -1065,8 +1081,9 @@ Proof.
 (* perms *)
 - inv H. eapply Mem.perm_free_3; eauto.
 (* readonly *)
-- inv H. eapply Mem.free_unchanged_on; eauto.
-  intros. red; intros. elim H3.
+- inv H. eapply unchanged_on_readonly; eauto. 
+  eapply Mem.free_unchanged_on; eauto.
+  intros. red; intros. elim H6.
   apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
   eapply Mem.free_range_perm; eauto.
 (* mem extends *)
@@ -1159,8 +1176,9 @@ Proof.
 - (* perms *)
   intros. inv H. eapply Mem.perm_storebytes_2; eauto.
 - (* readonly *)
-  intros. inv H. eapply Mem.storebytes_unchanged_on; eauto.
-  intros; red; intros. elim H8.
+  intros. inv H. eapply unchanged_on_readonly; eauto. 
+  eapply Mem.storebytes_unchanged_on; eauto.
+  intros; red; intros. elim H11.
   apply Mem.perm_cur_max. eapply Mem.storebytes_range_perm; eauto.
 - (* extensions *)
   intros. inv H.
@@ -1271,7 +1289,7 @@ Proof.
 (* perms *)
 - inv H; auto.
 (* readonly *)
-- inv H. apply Mem.unchanged_on_refl.
+- inv H; auto.
 (* mem extends *)
 - inv H.
   exists Vundef; exists m1'; intuition.
@@ -1316,7 +1334,7 @@ Proof.
 (* perms *)
 - inv H; auto.
 (* readonly *)
-- inv H. apply Mem.unchanged_on_refl.
+- inv H; auto.
 (* mem extends *)
 - inv H. inv H1. inv H6.
   exists v2; exists m1'; intuition.
@@ -1359,7 +1377,7 @@ Proof.
 (* perms *)
 - inv H; auto.
 (* readonly *)
-- inv H. apply Mem.unchanged_on_refl.
+- inv H; auto.
 (* mem extends *)
 - inv H.
   exists Vundef; exists m1'; intuition.
@@ -1406,7 +1424,7 @@ Proof.
 (* perms *)
 - inv H; auto.
 (* readonly *)
-- inv H. apply Mem.unchanged_on_refl.
+- inv H; auto.
 (* mem extends *)
 - inv H. fold bsem in H2. apply val_inject_list_lessdef in H1.
   specialize (bs_inject _ bsem _ _ _ H1).
