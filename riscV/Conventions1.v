@@ -210,7 +210,7 @@ Definition int_arg (ri rf ofs: Z) (ty: typ)
   | Some r =>
       One(R r) :: rec (ri + 1) rf ofs
   | None   =>
-      let ofs := align ofs (typealign ty) in
+      let ofs := align ofs (typesize ty) in
       One(S Outgoing ofs ty)
       :: rec ri rf (ofs + (if Archi.ptr64 then 2 else typesize ty))
   end.
@@ -228,13 +228,13 @@ Definition float_arg (va: bool) (ri rf ofs: Z) (ty: typ)
             One (R r) :: rec ri' (rf + 1) ofs
         else
             (* we are out of integer registers, pass argument on stack *)
-            let ofs := align ofs (typealign ty) in
+            let ofs := align ofs (typesize ty) in
             One(S Outgoing ofs ty)
             :: rec ri' rf (ofs + (if Archi.ptr64 then 2 else typesize ty)))
       else
         One (R r) :: rec ri (rf + 1) ofs
   | None   =>
-      let ofs := align ofs (typealign ty) in
+      let ofs := align ofs (typesize ty) in
       One(S Outgoing ofs ty)
       :: rec ri rf (ofs + (if Archi.ptr64 then 2 else typesize ty))
   end.
@@ -306,10 +306,13 @@ Proof.
   { decide_goal. }
   assert (CSF: forall r, In r float_param_regs -> is_callee_save r = false).
   { decide_goal. }
-  assert (AL: forall ofs ty, ofs >= 0 -> align ofs (typealign ty) >= 0).
+  assert (AL: forall ofs ty, ofs >= 0 -> align ofs (typesize ty) >= 0).
   { intros. 
-    assert (ofs <= align ofs (typealign ty)) by (apply align_le; apply typealign_pos).
+    assert (ofs <= align ofs (typesize ty)) by (apply align_le; apply typesize_pos).
     omega. }
+  assert (ALD: forall ofs ty, ofs >= 0 -> (typealign ty | align ofs (typesize ty))).
+  { intros. eapply Z.divide_trans. apply typealign_typesize.
+    apply align_divides. apply typesize_pos. }
   assert (SK: (if Archi.ptr64 then 2 else 1) > 0).
   { destruct Archi.ptr64; omega. }
   assert (SKK: forall ty, (if Archi.ptr64 then 2 else typesize ty) > 0).
@@ -332,12 +335,12 @@ Proof.
     destruct va; [destruct (zle ri' 8)|idtac]; destruct H.
     + subst p; simpl. apply CSF. eapply list_nth_z_in; eauto.
     + eapply OF; eauto.
-    + subst p; repeat split; auto using align_divides, typealign_pos.
+    + subst p; repeat split; auto.
     + eapply OF; [idtac|eauto]. generalize (AL ofs ty OO) (SKK ty); omega.
     + subst p; simpl. apply CSF. eapply list_nth_z_in; eauto.
     + eapply OF; eauto.
   - destruct H.
-    + subst p; repeat split; auto using align_divides, typealign_pos.
+    + subst p; repeat split; auto.
     + eapply OF; [idtac|eauto]. generalize (AL ofs ty OO) (SKK ty); omega.
   }
   assert (C: forall va ri rf ofs f,
