@@ -1061,11 +1061,13 @@ Qed.
 
 Inductive extcall_free_sem (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_free_sem_intro: forall b lo sz m m',
+  | extcall_free_sem_ptr: forall b lo sz m m',
       Mem.load Mptr m b (Ptrofs.unsigned lo - size_chunk Mptr) = Some (Vptrofs sz) ->
       Ptrofs.unsigned sz > 0 ->
       Mem.free m b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) = Some m' ->
-      extcall_free_sem ge (Vptr b lo :: nil) m E0 Vundef m'.
+      extcall_free_sem ge (Vptr b lo :: nil) m E0 Vundef m'
+  | extcall_free_sem_null: forall m,
+      extcall_free_sem ge (Vnullptr :: nil) m E0 Vundef m.
 
 Lemma extcall_free_ok:
   extcall_properties extcall_free_sem
@@ -1073,27 +1075,29 @@ Lemma extcall_free_ok:
 Proof.
   constructor; intros.
 (* well typed *)
-- inv H. simpl. auto.
+- inv H; simpl; auto.
 (* symbols preserved *)
 - inv H0; econstructor; eauto.
 (* valid block *)
-- inv H. eauto with mem.
+- inv H; eauto with mem.
 (* perms *)
-- inv H. eapply Mem.perm_free_3; eauto.
+- inv H; eauto using Mem.perm_free_3.
 (* readonly *)
-- inv H. eapply unchanged_on_readonly; eauto. 
-  eapply Mem.free_unchanged_on; eauto.
+- eapply unchanged_on_readonly; eauto. inv H.
++ eapply Mem.free_unchanged_on; eauto.
   intros. red; intros. elim H6.
   apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
   eapply Mem.free_range_perm; eauto.
++ apply Mem.unchanged_on_refl.
 (* mem extends *)
-- inv H. inv H1. inv H8. inv H6.
+- inv H.
++ inv H1. inv H8. inv H6.
   exploit Mem.load_extends; eauto. intros [v' [A B]].
   assert (v' = Vptrofs sz).
   { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
   subst v'.
   exploit Mem.free_parallel_extends; eauto. intros [m2' [C D]].
-  exists Vundef; exists m2'; intuition.
+  exists Vundef; exists m2'; intuition auto.
   econstructor; eauto.
   eapply Mem.free_unchanged_on; eauto.
   unfold loc_out_of_bounds; intros.
@@ -1101,8 +1105,14 @@ Proof.
   { apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
     eapply Mem.free_range_perm. eexact H4. eauto. }
   tauto.
++ inv H1. inv H5. replace v2 with Vnullptr.
+  exists Vundef; exists m1'; intuition auto.
+  constructor.
+  apply Mem.unchanged_on_refl.
+  unfold Vnullptr in *; destruct Archi.ptr64; inv H3; auto.
 (* mem inject *)
-- inv H0. inv H2. inv H7. inv H9.
+- inv H0.
++ inv H2. inv H7. inv H9.
   exploit Mem.load_inject; eauto. intros [v' [A B]].
   assert (v' = Vptrofs sz).
   { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
@@ -1116,7 +1126,7 @@ Proof.
   intro EQ.
   exploit Mem.free_parallel_inject; eauto. intros (m2' & C & D).
   exists f, Vundef, m2'; split.
-  apply extcall_free_sem_intro with (sz := sz) (m' := m2').
+  apply extcall_free_sem_ptr with (sz := sz) (m' := m2').
     rewrite EQ. rewrite <- A. f_equal. omega.
     auto. auto.
     rewrite ! EQ. rewrite <- C. f_equal; omega.
@@ -1129,14 +1139,19 @@ Proof.
     apply P. omega.
   split. auto.
   red; intros. congruence.
++ inv H2. inv H6. replace v' with Vnullptr.
+  exists f, Vundef, m1'; intuition auto using Mem.unchanged_on_refl.
+  constructor.
+  red; intros; congruence.
+  unfold Vnullptr in *; destruct Archi.ptr64; inv H4; auto.
 (* trace length *)
 - inv H; simpl; omega.
 (* receptive *)
-- assert (t1 = t2). inv H; inv H0; auto. subst t2.
+- assert (t1 = t2) by (inv H; inv H0; auto). subst t2.
   exists vres1; exists m1; auto.
 (* determ *)
-- inv H; inv H0.
-  assert (EQ1: Vptrofs sz0 = Vptrofs sz) by congruence.
+- inv H; inv H0; try (unfold Vnullptr in *; discriminate).
++ assert (EQ1: Vptrofs sz0 = Vptrofs sz) by congruence.
   assert (EQ2: sz0 = sz).
   { unfold Vptrofs in EQ1; destruct Archi.ptr64 eqn:SF.
     rewrite <- (Ptrofs.of_int64_to_int64 SF sz0), <- (Ptrofs.of_int64_to_int64 SF sz). congruence.
@@ -1144,6 +1159,7 @@ Proof.
   }
   subst sz0.
   split. constructor. intuition congruence.
++ split. constructor. intuition auto.
 Qed.
 
 (** ** Semantics of [memcpy] operations. *)

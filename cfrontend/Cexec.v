@@ -460,6 +460,14 @@ Definition do_ef_free
       check (zlt 0 (Ptrofs.unsigned sz));
       do m' <- Mem.free m b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz);
       Some(w, E0, Vundef, m')
+  | Vint n :: nil =>
+      if Int.eq_dec n Int.zero && negb Archi.ptr64
+      then Some(w, E0, Vundef, m)
+      else None
+  | Vlong n :: nil =>
+      if Int64.eq_dec n Int64.zero && Archi.ptr64
+      then Some(w, E0, Vundef, m)
+      else None
   | _ => None
   end.
 
@@ -544,45 +552,51 @@ Proof with try congruence.
   - eapply do_external_function_sound; eauto.
   }
   destruct ef; simpl.
-(* EF_external *)
+- (* EF_external *)
   eapply do_external_function_sound; eauto.
-(* EF_builtin *)
+- (* EF_builtin *)
   eapply BF_EX; eauto.
-(* EF_runtime *)
+- (* EF_runtime *)
   eapply BF_EX; eauto.
-(* EF_vload *)
+- (* EF_vload *)
   unfold do_ef_volatile_load. destruct vargs... destruct v... destruct vargs...
   mydestr. destruct p as [[w'' t''] v]; mydestr.
   exploit do_volatile_load_sound; eauto. intuition. econstructor; eauto.
-  auto.
-(* EF_vstore *)
+- (* EF_vstore *)
   unfold do_ef_volatile_store. destruct vargs... destruct v... destruct vargs... destruct vargs...
   mydestr. destruct p as [[w'' t''] m'']. mydestr.
   exploit do_volatile_store_sound; eauto. intuition. econstructor; eauto.
-  auto.
-(* EF_malloc *)
+- (* EF_malloc *)
   unfold do_ef_malloc. destruct vargs... destruct vargs... mydestr.
   destruct (Mem.alloc m (- size_chunk Mptr) (Ptrofs.unsigned i)) as [m1 b] eqn:?. mydestr.
   split. apply SIZE in Heqo. subst v. econstructor; eauto. constructor.
-(* EF_free *)
-  unfold do_ef_free. destruct vargs... destruct v... destruct vargs...
-  mydestr. split. apply SIZE in Heqo0. econstructor; eauto. congruence. omega. constructor.
-(* EF_memcpy *)
+- (* EF_free *)
+  unfold do_ef_free. destruct vargs... destruct v... 
++ destruct vargs... mydestr; InvBooleans; subst i.
+  replace (Vint Int.zero) with Vnullptr. split; constructor.
+  apply negb_true_iff in H0. unfold Vnullptr; rewrite H0; auto.
++ destruct vargs... mydestr; InvBooleans; subst i.
+  replace (Vlong Int64.zero) with Vnullptr. split; constructor.
+  unfold Vnullptr; rewrite H0; auto.
++ destruct vargs... mydestr.
+  split. apply SIZE in Heqo0. econstructor; eauto. congruence. omega.
+  constructor.
+- (* EF_memcpy *)
   unfold do_ef_memcpy. destruct vargs... destruct v... destruct vargs...
   destruct v... destruct vargs... mydestr. 
   apply Decidable_sound in Heqb1. red in Heqb1.
   split. econstructor; eauto; tauto. constructor.
-(* EF_annot *)
+- (* EF_annot *)
   unfold do_ef_annot. mydestr.
   split. constructor. apply list_eventval_of_val_sound; auto.
   econstructor. constructor; eauto. constructor.
-(* EF_annot_val *)
+- (* EF_annot_val *)
   unfold do_ef_annot_val. destruct vargs... destruct vargs... mydestr.
   split. constructor. apply eventval_of_val_sound; auto.
   econstructor. constructor; eauto. constructor.
-(* EF_inline_asm *)
+- (* EF_inline_asm *)
   eapply do_inline_assembly_sound; eauto.
-(* EF_debug *)
+- (* EF_debug *)
   unfold do_ef_debug. mydestr. split; constructor.
 Qed.
 
@@ -605,37 +619,38 @@ Proof.
   - eapply do_external_function_complete; eauto.
   }
   destruct ef; simpl in *.
-(* EF_external *)
+- (* EF_external *)
   eapply do_external_function_complete; eauto.
-(* EF_builtin *)
+- (* EF_builtin *)
   eapply BF_EX; eauto.
-(* EF_runtime *)
+- (* EF_runtime *)
   eapply BF_EX; eauto.
-(* EF_vload *)
+- (* EF_vload *)
   inv H; unfold do_ef_volatile_load.
   exploit do_volatile_load_complete; eauto. intros EQ; rewrite EQ; auto.
-(* EF_vstore *)
+- (* EF_vstore *)
   inv H; unfold do_ef_volatile_store.
   exploit do_volatile_store_complete; eauto. intros EQ; rewrite EQ; auto.
-(* EF_malloc *)
+- (* EF_malloc *)
   inv H; unfold do_ef_malloc.
   inv H0. erewrite SIZE by eauto. rewrite H1, H2. auto.
-(* EF_free *)
+- (* EF_free *)
   inv H; unfold do_ef_free.
-  inv H0. rewrite H1. erewrite SIZE by eauto. rewrite zlt_true. rewrite H3. auto. omega.
-(* EF_memcpy *)
++ inv H0. rewrite H1. erewrite SIZE by eauto. rewrite zlt_true. rewrite H3. auto. omega.
++ inv H0. unfold Vnullptr; destruct Archi.ptr64; auto.
+- (* EF_memcpy *)
   inv H; unfold do_ef_memcpy.
   inv H0. rewrite Decidable_complete. rewrite H7; rewrite H8; auto.
   red. tauto.
-(* EF_annot *)
+- (* EF_annot *)
   inv H; unfold do_ef_annot. inv H0. inv H6. inv H4.
   rewrite (list_eventval_of_val_complete _ _ _ H1). auto.
-(* EF_annot_val *)
+- (* EF_annot_val *)
   inv H; unfold do_ef_annot_val. inv H0. inv H6. inv H4.
   rewrite (eventval_of_val_complete _ _ _ H1). auto.
-(* EF_inline_asm *)
+- (* EF_inline_asm *)
   eapply do_inline_assembly_complete; eauto.
-(* EF_debug *)
+- (* EF_debug *)
   inv H. inv H0. reflexivity.
 Qed.
 
