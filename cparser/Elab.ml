@@ -2428,8 +2428,8 @@ let enter_typedef loc env sto (s, ty, init) =
       env
     end
     else begin
-      error loc "typedef redefinition with different types (%a vs %a)"
-        (print_typ env) ty (print_typ env) ty';
+      error loc "redefinition of typedef '%s' with different type (%a vs %a)"
+        s (print_typ env) ty (print_typ env) ty';
       env
     end
   | _ ->
