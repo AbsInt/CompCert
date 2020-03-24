@@ -1784,7 +1784,7 @@ Proof.
   destruct (offset_representable sz ofs); inv EQ0.
 + econstructor; econstructor; split. apply exec_straight_opt_refl.
   auto.
-+ exploit (exec_loadimm64 X16 ofs). intros (rs' & A & B & C).
++ exploit (exec_loadimm64 X16 ofs). congruence. intros (rs' & A & B & C).
   econstructor; exists rs'; split. apply exec_straight_opt_intro; eexact A.
   split. simpl. rewrite B, C by eauto with asmgen. auto.
   eauto with asmgen.
@@ -1810,7 +1810,8 @@ Proof.
   split; auto. destruct x; auto.
 + exploit (exec_arith_extended Val.addl Paddext (Padd X)); auto.
   instantiate (1 := x0). eauto with asmgen.
-  intros (rs' & A & B & C).
+  instantiate (1 := X16). simpl. congruence.
+  intros (rs' & A & B & C & D).
   econstructor; exists rs'; split.
   apply exec_straight_opt_intro. eexact A. 
   split. simpl. rewrite B. rewrite Val.addl_assoc. f_equal.
@@ -1823,7 +1824,9 @@ Proof.
   apply exec_straight_opt_intro. apply exec_straight_one. simpl; eauto. auto.
   split. simpl. Simpl. rewrite symbol_high_low. simpl in EV. congruence.
   intros; Simpl.
-+ exploit (exec_loadsymbol X16 id ofs). auto. intros (rs' & A & B & C).
++ exploit (exec_loadsymbol X16 id ofs). auto.
+  simpl. congruence.
+  intros (rs' & A & B & C & D).
   econstructor; exists rs'; split.
   apply exec_straight_opt_intro. eexact A.
   split. simpl. 
@@ -1837,7 +1840,9 @@ Proof.
   destruct (offset_representable sz (Ptrofs.to_int64 ofs)); inv TR.
 + econstructor; econstructor; split. apply exec_straight_opt_refl.
   auto.
-+ exploit (exec_loadimm64 X16 (Ptrofs.to_int64 ofs)). intros (rs' & A & B & C).
++ exploit (exec_loadimm64 X16 (Ptrofs.to_int64 ofs)).
+  simpl. congruence.
+  intros (rs' & A & B & C).
   econstructor; exists rs'; split.
   apply exec_straight_opt_intro. eexact A.
   split. simpl. rewrite B, C by eauto with asmgen. auto.
