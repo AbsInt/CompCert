@@ -472,7 +472,8 @@ Inductive match_states: Mach.state -> Asm.state -> Prop :=
         (MEXT: Mem.extends m m')
         (AT: transl_code_at_pc ge (rs PC) fb f c ep tf tc)
         (AG: agree ms sp rs)
-        (DXP: ep = true -> rs#X29 = parent_sp s),
+        (DXP: ep = true -> rs#X29 = parent_sp s)
+        (LEAF: is_leaf_function f = true -> rs#X30 = parent_ra s),
       match_states (Mach.State s fb sp c ms m)
                    (Asm.State rs m')
   | match_states_call:
@@ -503,16 +504,17 @@ Lemma exec_straight_steps:
    exists rs2,
        exec_straight tge tf c rs1 m1' k rs2 m2'
     /\ agree ms2 sp rs2
-    /\ (it1_is_parent ep i = true -> rs2#X29 = parent_sp s)) ->
+    /\ (it1_is_parent ep i = true -> rs2#X29 = parent_sp s)
+    /\ (is_leaf_function f = true -> rs2#X30 = parent_ra s)) ->
   exists st',
   plus step tge (State rs1 m1') E0 st' /\
   match_states (Mach.State s fb sp c ms2 m2) st'.
 Proof.
   intros. inversion H2. subst. monadInv H7.
-  exploit H3; eauto. intros [rs2 [A [B C]]].
+  exploit H3; eauto. intros [rs2 [A [B [C D]]]].
   exists (State rs2 m2'); split.
-  eapply exec_straight_exec; eauto.
-  econstructor; eauto. eapply exec_straight_at; eauto.
+  - eapply exec_straight_exec; eauto.
+  - econstructor; eauto. eapply exec_straight_at; eauto.
 Qed.
 
 Lemma exec_straight_steps_goto:
