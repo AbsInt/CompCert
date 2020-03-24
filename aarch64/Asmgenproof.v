@@ -337,7 +337,12 @@ Qed.
 Remark make_epilogue_label:
   forall f k, tail_nolabel k (make_epilogue f k).
 Proof.
-  unfold make_epilogue; intros. eapply tail_nolabel_trans. apply loadptr_label. TailNoLabel.
+  unfold make_epilogue; intros.
+  destruct is_leaf_function.
+  { TailNoLabel. }
+  eapply tail_nolabel_trans.
+  apply loadptr_label.
+  TailNoLabel.
 Qed.
 
 Lemma transl_instr_label:

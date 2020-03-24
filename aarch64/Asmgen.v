@@ -1050,8 +1050,10 @@ Definition storeptr (src: ireg) (base: iregsp) (ofs: ptrofs) (k: code) :=
 (** Function epilogue *)
 
 Definition make_epilogue (f: Mach.function) (k: code) :=
-  loadptr XSP f.(fn_retaddr_ofs) RA
-    (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: k).
+  if is_leaf_function f
+  then Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: k
+  else loadptr XSP f.(fn_retaddr_ofs) RA
+         (Pfreeframe f.(fn_stacksize) f.(fn_link_ofs) :: k).
   
 (** Translation of a Mach instruction. *)
 
