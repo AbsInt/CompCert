@@ -1005,7 +1005,10 @@ Local Transparent destroyed_at_function_entry. simpl.
   simpl; intros; Simpl.
   unfold sp; congruence.
   intros. rewrite V by auto with asmgen. reflexivity.
-  intro IS_LEAF.
+
+  rewrite W.
+  unfold rs2.
+  Simpl.
   
 - (* external function *)
   exploit functions_translated; eauto.
