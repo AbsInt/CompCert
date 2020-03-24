@@ -1776,7 +1776,8 @@ Lemma transl_addressing_correct:
   exists ad rs',
      exec_straight_opt ge fn c rs m (insn ad :: k) rs' m
   /\ Asm.eval_addressing ge ad rs' = Vptr b o
-  /\ forall r, data_preg r = true -> rs' r = rs r.
+  /\ (forall r, data_preg r = true -> rs' r = rs r)
+  /\ rs' # RA = rs # RA.
 Proof.
   intros until o; intros TR EV.
   unfold transl_addressing in TR; destruct addr; ArgsInv; SimplEval EV.
@@ -1787,7 +1788,7 @@ Proof.
 + exploit (exec_loadimm64 X16 ofs). congruence. intros (rs' & A & B & C).
   econstructor; exists rs'; split. apply exec_straight_opt_intro; eexact A.
   split. simpl. rewrite B, C by eauto with asmgen. auto.
-  eauto with asmgen.
+  split; eauto with asmgen.
 - (* Aindexed2 *)
   econstructor; econstructor; split. apply exec_straight_opt_refl.
   auto.
@@ -1803,7 +1804,7 @@ Proof.
 + econstructor; econstructor; split.
   apply exec_straight_opt_intro. apply exec_straight_one. simpl; eauto. auto.
   split. simpl. Simpl. rewrite H0. simpl. rewrite Ptrofs.add_zero. auto.
-  intros; Simpl.
+  split; intros; Simpl.
 - (* Aindexed2ext *)
   destruct (Int.eq a Int.zero || Int.eq (Int.shl Int.one a) (Int.repr sz)); inv EQ2.
 + econstructor; econstructor; split. apply exec_straight_opt_refl.
@@ -1817,13 +1818,15 @@ Proof.
   split. simpl. rewrite B. rewrite Val.addl_assoc. f_equal.
   unfold Op.eval_extend; destruct x, (rs x1); simpl; auto; rewrite ! a64_range;
   simpl; rewrite Int64.add_zero; auto.
-  intros. apply C; eauto with asmgen.
+  split; intros.
+  apply C; eauto with asmgen.
+  trivial.
 - (* Aglobal *)
   destruct (Ptrofs.eq (Ptrofs.modu ofs (Ptrofs.repr sz)) Ptrofs.zero && symbol_is_aligned id sz); inv TR.
 + econstructor; econstructor; split.
   apply exec_straight_opt_intro. apply exec_straight_one. simpl; eauto. auto.
   split. simpl. Simpl. rewrite symbol_high_low. simpl in EV. congruence.
-  intros; Simpl.
+  split; intros; Simpl.
 + exploit (exec_loadsymbol X16 id ofs). auto.
   simpl. congruence.
   intros (rs' & A & B & C & D).
@@ -1832,7 +1835,7 @@ Proof.
   split. simpl. 
   rewrite B. rewrite <- Genv.shift_symbol_address_64, Ptrofs.add_zero by auto. 
   simpl in EV. congruence. 
-  auto with asmgen.
+  split; auto with asmgen.
 - (* Ainstrack *)
   assert (E: Val.addl (rs SP) (Vlong (Ptrofs.to_int64 ofs)) = Vptr b o).
   { simpl in EV. inv EV. destruct (rs SP); simpl in H1; inv H1. simpl. 
@@ -1857,7 +1860,8 @@ Lemma transl_load_correct:
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of dst) = v
-  /\ forall r, data_preg r = true -> r <> preg_of dst -> rs' r = rs r.
+  /\ (forall r, data_preg r = true -> r <> preg_of dst -> rs' r = rs r)
+  /\ rs' # RA = rs # RA.
 Proof.
   intros. destruct vaddr; try discriminate. 
   assert (A: exists sz insn,
@@ -1870,14 +1874,17 @@ Proof.
     do 2 econstructor; (split; [eassumption|auto]).
   }
   destruct A as (sz & insn & B & C).
-  exploit transl_addressing_correct. eexact B. eexact H0. intros (ad & rs' & P & Q & R).
+  exploit transl_addressing_correct. eexact B. eexact H0. intros (ad & rs' & P & Q & R & S).
   assert (X: exec_load ge chunk (fun v => v) ad (preg_of dst) rs' m =
              Next (nextinstr (rs'#(preg_of dst) <- v)) m).
   { unfold exec_load. rewrite Q, H1. auto. }
   econstructor; split.
   eapply exec_straight_opt_right. eexact P.
   apply exec_straight_one. rewrite C, X; eauto. Simpl. 
-  split. Simpl. intros; Simpl.
+  split. Simpl.
+  split; intros; Simpl.
+  rewrite <- S.
+  apply RA_not_written.
 Qed.
 
 Lemma transl_store_correct:
@@ -1887,7 +1894,8 @@ Lemma transl_store_correct:
   Mem.storev chunk m vaddr rs#(preg_of src) = Some m' ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
-  /\ forall r, data_preg r = true -> rs' r = rs r.
+     /\ (forall r, data_preg r = true -> rs' r = rs r)
+     /\ rs' # RA = rs # RA.
 Proof.
   intros. destruct vaddr; try discriminate. 
   set (chunk' := match chunk with Mint8signed => Mint8unsigned
@@ -1903,7 +1911,7 @@ Proof.
     do 2 econstructor; (split; [eassumption|auto]).
   }
   destruct A as (sz & insn & B & C).
-  exploit transl_addressing_correct. eexact B. eexact H0. intros (ad & rs' & P & Q & R).
+  exploit transl_addressing_correct. eexact B. eexact H0. intros (ad & rs' & P & Q & R & S).                                                  
   assert (X: Mem.storev chunk' m (Vptr b i) rs#(preg_of src) = Some m').
   { rewrite <- H1. unfold chunk'. destruct chunk; auto; simpl; symmetry.
     apply Mem.store_signed_unsigned_8.
@@ -1914,7 +1922,7 @@ Proof.
   econstructor; split.
   eapply exec_straight_opt_right. eexact P.
   apply exec_straight_one. rewrite C, Y; eauto. Simpl. 
-  intros; Simpl.
+  split; intros; Simpl.
 Qed.
 
 (** Translation of indexed memory accesses *)

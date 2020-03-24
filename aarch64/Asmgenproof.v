@@ -636,7 +636,7 @@ Qed.
 
 Theorem step_simulation:
   forall S1 t S2, Mach.step return_address_offset ge S1 t S2 ->
-  forall S1' (MS: match_states S1 S1'),
+  forall S1' (MS: match_states S1 S1')  (WF: wf_state ge S1),
   (exists S2', plus step tge S1' t S2' /\ match_states S2 S2')
   \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 S1')%nat.
 Proof.
@@ -1029,6 +1029,10 @@ Local Transparent destroyed_at_function_entry. simpl.
   right. split. omega. split. auto.
   rewrite <- ATPC in H5.
   econstructor; eauto. congruence.
+  inv WF.
+  inv STACK.
+  inv H1.
+  congruence.
 Qed.
 
 Lemma transf_initial_states:
@@ -1064,11 +1068,17 @@ Qed.
 Theorem transf_program_correct:
   forward_simulation (Mach.semantics return_address_offset prog) (Asm.semantics tprog).
 Proof.
-  eapply forward_simulation_star with (measure := measure).
-  apply senv_preserved.
-  eexact transf_initial_states.
-  eexact transf_final_states.
-  exact step_simulation.
+  eapply forward_simulation_star with (measure := measure)
+         (match_states := fun S1 S2 => match_states S1 S2 /\ wf_state ge S1).
+  - apply senv_preserved.
+  - simpl; intros. exploit transf_initial_states; eauto.
+    intros (s2 & A & B).
+    exists s2; intuition auto. apply wf_initial; auto.
+  - simpl; intros. destruct H as [MS WF]. eapply transf_final_states; eauto.
+  - simpl; intros. destruct H0 as [MS WF]. 
+    exploit step_simulation; eauto. intros [ (s2' & A & B) | (A & B & C) ].
+    + left; exists s2'; intuition auto. eapply wf_step; eauto. 
+    + right; intuition auto. eapply wf_step; eauto.
 Qed.
 
 End PRESERVATION.
