@@ -1429,7 +1429,8 @@ Lemma transl_cond_branch_correct:
      exec_straight_opt ge fn c rs m (insn :: k) rs' m
   /\ exec_instr ge fn insn rs' m =
          (if b then goto_label fn lbl rs' m else Next (nextinstr rs') m)
-  /\ forall r, data_preg r = true -> rs'#r = rs#r.
+  /\ (forall r, data_preg r = true -> rs'#r = rs#r)
+  /\ rs' # RA = rs # RA.
 Proof.
   intros until b; intros TR EV.
   assert (DFL:
@@ -1438,13 +1439,14 @@ Proof.
        exec_straight_opt ge fn c rs m (insn :: k) rs' m
     /\ exec_instr ge fn insn rs' m =
          (if b then goto_label fn lbl rs' m else Next (nextinstr rs') m)
-    /\ forall r, data_preg r = true -> rs'#r = rs#r).
+    /\ (forall r, data_preg r = true -> rs'#r = rs#r)
+     /\ rs' # RA = rs # RA ).
   {
     unfold transl_cond_branch_default; intros.
-    exploit transl_cond_correct; eauto. intros (rs' & A & B & C).
+    exploit transl_cond_correct; eauto. intros (rs' & A & B & C & D).
     exists rs', (Pbc (cond_for_cond cond) lbl); split.
     apply exec_straight_opt_intro. eexact A.
-    split; auto. simpl. rewrite (B b) by auto. auto. 
+    repeat split; auto. simpl. rewrite (B b) by auto. auto.
   }
 Local Opaque transl_cond transl_cond_branch_default.
   destruct args as [ | a1 args]; simpl in TR; auto.
@@ -1732,35 +1734,37 @@ Local Transparent Val.add.
   TranslOpBase.
   destruct (rs x0); simpl; auto. rewrite ! a64_range; simpl. rewrite <- Int64.sign_ext_shr'_min; auto using a64_range.
 - (* condition *)
-  exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C).
+  exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C & D).
   econstructor; split.
   eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
   split. Simpl. destruct (eval_condition cond (map rs (map preg_of args)) m) as [b|]; simpl in *.
   rewrite (B b) by auto. auto. 
   auto.
-  intros; Simpl.
+  split; intros; Simpl.
 - (* select *)
   destruct (preg_of res) eqn:RES; monadInv TR.
   + (* integer *)
     generalize (ireg_of_eq _ _ EQ) (ireg_of_eq _ _ EQ1); intros E1 E2; rewrite E1, E2.
-    exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C).
+    exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C & D).
     econstructor; split.
     eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
     split. Simpl. destruct (eval_condition cond (map rs (map preg_of args)) m) as [b|]; simpl in *.
     rewrite (B b) by auto. rewrite !C. apply Val.lessdef_normalize.
     rewrite <- E2; auto with asmgen. rewrite <- E1; auto with asmgen.
     auto.
-    intros; Simpl.
+    split; intros; Simpl.
+    rewrite <- D.
+    eapply RA_not_written2; eassumption.
   + (* FP *)
     generalize (freg_of_eq _ _ EQ) (freg_of_eq _ _ EQ1); intros E1 E2; rewrite E1, E2.
-    exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C).
+    exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C & D).
     econstructor; split.
     eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
     split. Simpl. destruct (eval_condition cond (map rs (map preg_of args)) m) as [b|]; simpl in *.
     rewrite (B b) by auto. rewrite !C. apply Val.lessdef_normalize.
     rewrite <- E2; auto with asmgen. rewrite <- E1; auto with asmgen.
     auto.
-    intros; Simpl.
+    split; intros; Simpl.
 Qed.
 
 (** Translation of addressing modes, loads, stores *)
