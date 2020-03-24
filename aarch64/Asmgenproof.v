@@ -716,7 +716,7 @@ Opaque loadind.
   exploit eval_operation_lessdef. eapply preg_vals; eauto. eauto. eexact H0.
   intros [v' [A B]]. rewrite (sp_val _ _ _ AG) in A.
   left; eapply exec_straight_steps; eauto; intros. simpl in TR.
-  exploit transl_op_correct; eauto. intros [rs2 [P [Q R]]].
+  exploit transl_op_correct; eauto. intros [rs2 [P [Q [R S]]]].
   exists rs2; split. eauto. split.
   apply agree_set_undef_mreg with rs0; auto. 
   apply Val.lessdef_trans with v'; auto.
@@ -724,7 +724,8 @@ Opaque loadind.
   rewrite R; auto. apply preg_of_not_X29; auto.
 Local Transparent destroyed_by_op.
   destruct op; try exact I; simpl; congruence.
-  
+  rewrite S.
+  auto.
 - (* Mload *)
   assert (Op.eval_addressing tge sp addr (map rs args) = Some a).
   { rewrite <- H. apply eval_addressing_preserved. exact symbols_preserved. }
@@ -732,10 +733,11 @@ Local Transparent destroyed_by_op.
   intros [a' [A B]]. rewrite (sp_val _ _ _ AG) in A.
   exploit Mem.loadv_extends; eauto. intros [v' [C D]].
   left; eapply exec_straight_steps; eauto; intros. simpl in TR.
-  exploit transl_load_correct; eauto. intros [rs2 [P [Q R]]].
+  exploit transl_load_correct; eauto. intros [rs2 [P [Q [R S]]]].
   exists rs2; split. eauto.
   split. eapply agree_set_undef_mreg; eauto. congruence.
-  simpl; congruence.
+  split. simpl; congruence.
+  rewrite S. assumption.
 
 - (* Mstore *)
   assert (Op.eval_addressing tge sp addr (map rs args) = Some a).
@@ -745,10 +747,11 @@ Local Transparent destroyed_by_op.
   assert (Val.lessdef (rs src) (rs0 (preg_of src))) by (eapply preg_val; eauto).
   exploit Mem.storev_extends; eauto. intros [m2' [C D]].
   left; eapply exec_straight_steps; eauto.
-  intros. simpl in TR. exploit transl_store_correct; eauto. intros [rs2 [P Q]].
+  intros. simpl in TR. exploit transl_store_correct; eauto. intros [rs2 [P [Q R]]].
   exists rs2; split. eauto.
   split. eapply agree_undef_regs; eauto with asmgen.
-  simpl; congruence.
+  split. simpl; congruence.
+  rewrite R. assumption.
 
 - (* Mcall *)
   assert (f0 = f) by congruence.  subst f0.
@@ -857,6 +860,18 @@ Local Transparent destroyed_by_op.
   eapply agree_undef_regs; eauto. intros. rewrite undef_regs_other_2; auto.
   congruence.
 
+  Simpl.
+  rewrite set_res_other by trivial.
+  rewrite undef_regs_other.
+  assumption.
+  intro.
+  rewrite in_map_iff.
+  intros (x0 & PREG & IN).
+  subst r'.
+  intro.
+  apply (preg_of_not_RA x0).
+  congruence.
+  
 - (* Mgoto *)
   assert (f0 = f) by congruence. subst f0.
   inv AT. monadInv H4.
@@ -870,6 +885,9 @@ Local Transparent destroyed_by_op.
   eapply agree_exten; eauto with asmgen.
   congruence.
 
+  rewrite INV by congruence.
+  assumption.
+  
 - (* Mcond true *)
   assert (f0 = f) by congruence. subst f0.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
