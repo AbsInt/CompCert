@@ -1932,7 +1932,9 @@ Proof.
   { destruct (rs base); try discriminate. simpl in *. rewrite Ptrofs.of_int64_to_int64 by auto. auto. }
   destruct offset_representable.
 - econstructor; econstructor; split. apply exec_straight_opt_refl. auto. 
-- exploit (exec_loadimm64 X16); eauto. intros (rs' & A & B & C).
+- exploit (exec_loadimm64 X16); eauto.
+  simpl. congruence.
+  intros (rs' & A & B & C).
   econstructor; econstructor; split. apply exec_straight_opt_intro; eexact A.
   split. simpl. rewrite B, C by eauto with asmgen. auto. auto.
 Qed.
