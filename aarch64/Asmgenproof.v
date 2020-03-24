@@ -893,20 +893,25 @@ Local Transparent destroyed_by_op.
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
   left; eapply exec_straight_opt_steps_goto; eauto.
   intros. simpl in TR.
-  exploit transl_cond_branch_correct; eauto. intros (rs' & jmp & A & B & C).
+  exploit transl_cond_branch_correct; eauto. intros (rs' & jmp & A & B & C & D).
   exists jmp; exists k; exists rs'.
   split. eexact A. 
   split. apply agree_exten with rs0; auto with asmgen.
-  exact B. 
+  split.
+  exact B.
+  rewrite D. exact LEAF.
 
 - (* Mcond false *)
   exploit eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto. intros EC.
   left; eapply exec_straight_steps; eauto. intros. simpl in TR.
-  exploit transl_cond_branch_correct; eauto. intros (rs' & jmp & A & B & C).
+  exploit transl_cond_branch_correct; eauto. intros (rs' & jmp & A & B & C & D).
   econstructor; split.
   eapply exec_straight_opt_right. eexact A. apply exec_straight_one. eexact B. auto.
   split. apply agree_exten with rs0; auto. intros. Simpl.
+  split.
   simpl; congruence.
+  Simpl. rewrite D.
+  exact LEAF.
 
 - (* Mjumptable *)
   assert (f0 = f) by congruence. subst f0.
@@ -928,6 +933,10 @@ Local Transparent destroyed_by_op.
   simpl. intros. rewrite C; auto with asmgen. Simpl.
   congruence.
 
+  rewrite C by congruence.
+  repeat rewrite Pregmap.gso by congruence.
+  assumption.
+  
 - (* Mreturn *)
   assert (f0 = f) by congruence. subst f0.
   inversion AT; subst. simpl in H6; monadInv H6.
@@ -970,7 +979,7 @@ Local Transparent destroyed_by_op.
     simpl preg_of_iregsp. change (rs2 X30) with (rs0 X30). rewrite ATLR. 
     change (rs2 X2) with sp. eexact P. 
     simpl; congruence. congruence.
-  intros (rs3 & U & V).
+  intros (rs3 & U & V & W).
   assert (EXEC_PROLOGUE:
             exec_straight tge tf
               tf.(fn_code) rs0 m'
@@ -996,7 +1005,8 @@ Local Transparent destroyed_at_function_entry. simpl.
   simpl; intros; Simpl.
   unfold sp; congruence.
   intros. rewrite V by auto with asmgen. reflexivity.
-
+  intro IS_LEAF.
+  
 - (* external function *)
   exploit functions_translated; eauto.
   intros [tf [A B]]. simpl in B. inv B.
