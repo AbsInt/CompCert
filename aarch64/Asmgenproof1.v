@@ -22,6 +22,37 @@ Local Transparent Archi.ptr64.
 
 (** Properties of registers *)
 
+Lemma preg_of_not_RA:
+  forall r, (preg_of r) <> RA.
+Proof.
+  destruct r; discriminate.
+Qed.
+
+Lemma RA_not_written:
+  forall (rs : regset) dst v,
+    rs # (preg_of dst) <- v RA = rs RA.
+Proof.
+  intros.
+  apply Pregmap.gso.
+  intro.
+  symmetry in H.
+  exact (preg_of_not_RA dst H).
+Qed.
+
+Hint Resolve RA_not_written : asmgen.
+
+Lemma RA_not_written2:
+  forall (rs : regset) dst v i,
+    preg_of dst = i ->
+    rs # i <- v RA = rs RA.
+Proof.
+  intros.
+  subst i.
+  apply RA_not_written.
+Qed.
+
+Hint Resolve RA_not_written2 : asmgen.
+
 Lemma preg_of_iregsp_not_PC: forall r, preg_of_iregsp r <> PC.
 Proof.
   destruct r; simpl; congruence.
@@ -1347,13 +1378,15 @@ Ltac TranslOpSimpl :=
   [ apply exec_straight_one; [simpl; eauto | reflexivity]
   | split; [ rewrite ? transl_eval_shift, ? transl_eval_shiftl;
              apply Val.lessdef_same; Simpl; fail
-           | intros; Simpl; fail ] ].
+           | split; [ intros; Simpl; fail
+                    | intros; Simpl; eapply RA_not_written2; eauto] ]].
 
 Ltac TranslOpBase :=
   econstructor; split;
   [ apply exec_straight_one; [simpl; eauto | reflexivity]
   | split; [ rewrite ? transl_eval_shift, ? transl_eval_shiftl; Simpl
-           | intros; Simpl; fail ] ].
+           | split; [ intros; Simpl; fail
+                    | intros; Simpl; eapply RA_not_written2; eauto] ]].
 
 Lemma transl_op_correct:
   forall op args res k (rs: regset) m v c,
@@ -1362,15 +1395,15 @@ Lemma transl_op_correct:
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ Val.lessdef v rs'#(preg_of res)
-  /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
+  /\ (forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r)
+  /\ rs' RA = rs RA.
 Proof.
 Local Opaque Int.eq Int64.eq Val.add Val.addl Int.zwordsize Int64.zwordsize.
   intros until c; intros TR EV.
   unfold transl_op in TR; destruct op; ArgsInv; simpl in EV; SimplEval EV; try TranslOpSimpl.
 - (* move *)
   destruct (preg_of res) eqn:RR; try discriminate; destruct (preg_of m0) eqn:R1; inv TR.
-+ TranslOpSimpl.
-+ TranslOpSimpl.
+  all: TranslOpSimpl.
 - (* intconst *)
   exploit exec_loadimm32. intros (rs' & A & B & C).
   exists rs'; split. eexact A. split. rewrite B; auto. intros; auto with asmgen.
@@ -1712,7 +1745,7 @@ Lemma loadptr_correct: forall (base: iregsp) ofs dst k m v (rs: regset),
   exists rs',
      exec_straight ge fn (loadptr base ofs dst k) rs m k rs' m
   /\ rs'#dst = v
-  /\ forall r, r <> PC -> r <> X16 -> r <> dst -> rs' r = rs r.
+  /\ (forall r, r <> PC -> r <> X16 -> r <> dst -> rs' r = rs r).
 Proof.
   intros. 
   destruct (Val.offset_ptr rs#base ofs) eqn:V; try discriminate.
@@ -1720,7 +1753,8 @@ Proof.
   econstructor; split.
   eapply exec_straight_opt_right. eexact A.
   apply exec_straight_one. simpl. unfold exec_load. rewrite B, H. eauto. auto.
-  split. Simpl. intros; Simpl.
+  split. Simpl.
+  intros; Simpl.
 Qed.
 
 Lemma storeptr_correct: forall (base: iregsp) ofs (src: ireg) k m m' (rs: regset),
@@ -1729,7 +1763,8 @@ Lemma storeptr_correct: forall (base: iregsp) ofs (src: ireg) k m m' (rs: regset
   src <> X16 ->
   exists rs',
      exec_straight ge fn (storeptr src base ofs k) rs m k rs' m'
-  /\ forall r, r <> PC -> r <> X16 -> rs' r = rs r.
+  /\ (forall r, r <> PC -> r <> X16 -> rs' r = rs r)
+  /\ rs' RA = rs RA.
 Proof.
   intros. 
   destruct (Val.offset_ptr rs#base ofs) eqn:V; try discriminate.
@@ -1737,7 +1772,7 @@ Proof.
   econstructor; split.
   eapply exec_straight_opt_right. eexact A.
   apply exec_straight_one. simpl. unfold exec_store. rewrite B, C, H by eauto with asmgen. eauto. auto.
-  intros; Simpl.
+  split; intros; Simpl.
 Qed.
 
 Lemma loadind_correct: forall (base: iregsp) ofs ty dst k c (rs: regset) m v,
@@ -1747,7 +1782,8 @@ Lemma loadind_correct: forall (base: iregsp) ofs ty dst k c (rs: regset) m v,
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of dst) = v
-  /\ forall r, data_preg r = true -> r <> preg_of dst -> rs' r = rs r.
+  /\ (forall r, data_preg r = true -> r <> preg_of dst -> rs' r = rs r)
+  /\ rs' RA = rs RA.
 Proof.
   intros. 
   destruct (Val.offset_ptr rs#base ofs) eqn:V; try discriminate.
@@ -1763,7 +1799,10 @@ Proof.
   econstructor; split.
   eapply exec_straight_opt_right. eexact A.
   apply exec_straight_one. rewrite SEM. unfold exec_load. rewrite B, H0. eauto. Simpl.
-  split. Simpl. intros; Simpl.
+  split. Simpl.
+  split. intros; Simpl.
+  Simpl. rewrite RA_not_written.
+  apply C; congruence.
 Qed.
 
 Lemma storeind_correct: forall (base: iregsp) ofs ty src k c (rs: regset) m m',
@@ -1772,7 +1811,8 @@ Lemma storeind_correct: forall (base: iregsp) ofs ty src k c (rs: regset) m m',
   preg_of_iregsp base <> IR X16 ->
   exists rs',
      exec_straight ge fn c rs m k rs' m'
-  /\ forall r, data_preg r = true -> rs' r = rs r.
+     /\ (forall r, data_preg r = true -> rs' r = rs r)
+     /\ rs' RA = rs RA.
 Proof.
   intros. 
   destruct (Val.offset_ptr rs#base ofs) eqn:V; try discriminate.
@@ -1790,7 +1830,8 @@ Proof.
   apply exec_straight_one. rewrite SEM.
   unfold exec_store. rewrite B, C, H0 by eauto with asmgen. eauto.
   Simpl.
-  intros; Simpl.
+  split. intros; Simpl.
+  Simpl. 
 Qed.
 
 Lemma make_epilogue_correct:
@@ -1807,7 +1848,7 @@ Lemma make_epilogue_correct:
   /\ Mem.extends m' tm'
   /\ rs'#RA = parent_ra cs
   /\ rs'#SP = parent_sp cs
-  /\ (forall r, r <> PC -> r <> SP -> r <> X30 -> r <> X16 -> rs'#r = rs#r).
+  /\ (forall r, r <> PC -> r <> SP -> r <> RA -> r <> X16 -> rs'#r = rs#r).
 Proof.
   intros until tm; intros LP LRA FREE AG MEXT MCS.
   exploit Mem.loadv_extends. eauto. eexact LP. auto. simpl. intros (parent' & LP' & LDP').
@@ -1815,7 +1856,7 @@ Proof.
   exploit lessdef_parent_sp; eauto. intros EQ; subst parent'; clear LDP'.
   exploit lessdef_parent_ra; eauto. intros EQ; subst ra'; clear LDRA'.
   exploit Mem.free_parallel_extends; eauto. intros (tm' & FREE' & MEXT').
-  unfold make_epilogue. 
+  unfold make_epilogue.
   exploit (loadptr_correct XSP (fn_retaddr_ofs f)).
     instantiate (2 := rs). simpl. rewrite <- (sp_val _ _ _ AG). simpl. eexact LRA'. simpl; congruence.
   intros (rs1 & A1 & B1 & C1).
