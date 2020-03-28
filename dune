@@ -1,0 +1,17 @@
+(coq.theory
+ (name compcert)
+ (package compcert)
+ (modules :standard \ common.Subtyping x86.extractionMachdep extraction.extraction)
+ (flags
+   -w -unused-pattern-matching-variable
+   -w -deprecated-ident-entry
+   -w -deprecated-hint-rewrite-without-locality
+   -w -undeclared-scope))
+
+(include_subdirs qualified)
+
+(dirs :standard \ arm powerpc riscV aarch64 x86_64 flocq)
+
+(env
+ (_ (binaries tools/ndfun.exe)))
+

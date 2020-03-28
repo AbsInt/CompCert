@@ -16,6 +16,8 @@
 
 (* Additional extraction directives specific to the x86-64 port *)
 
+(* This was in original dune PR *)
+(* From compcert Require SelectOp ConstpropOp. *)
 Require Archi SelectOp.
 
 (* Archi *)
