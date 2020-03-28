@@ -424,7 +424,7 @@ and transf_init env = function
 
 (* Declarations *)
 
-let transf_decl env (sto, id, ty, init) =
+let transf_decl env loc (sto, id, ty, init) =
   (sto, id, transf_type env ty,
    match init with None -> None | Some i -> Some (transf_init env i))
 
@@ -494,7 +494,7 @@ let rec transf_stmt s =
   | Sblock sl ->
       {s with sdesc = Sblock(List.map transf_stmt sl)}
   | Sdecl d ->
-      {s with sdesc = Sdecl(transf_decl env d)}
+      {s with sdesc = Sdecl(transf_decl env s.sloc d)}
   | Sasm(attr, template, outputs, inputs, clob) ->
       {s with sdesc = Sasm(attr, template,
                            List.map transf_asm_operand outputs,
@@ -540,13 +540,13 @@ let rec transf_funparams loc env params =
                             actions,
            IdentMap.add x (ereinterpret tx' y) subst)
 
-let transf_fundef env f =
+let transf_fundef env loc f =
   reset_temps();
   let ret = transf_type env f.fd_ret in
   let (params, actions, subst) =
     transf_funparams f.fd_body.sloc env f.fd_params in
   let locals =
-    List.map (fun d -> transf_decl env (subst_decl subst d)) f.fd_locals in
+    List.map (fun d -> transf_decl env loc (subst_decl subst d)) f.fd_locals in
   let (attr1, ret1, params1, body1) =
     match classify_return env f.fd_ret with
     | Ret_scalar ->
@@ -577,7 +577,7 @@ let transf_fundef env f =
 
 (* Composites *)
 
-let transf_composite env su id attr fl =
+let transf_composite env loc su id attr fl =
   (attr, List.map (fun f -> {f with fld_typ = transf_type env f.fld_typ}) fl)
 
 (* Entry point *)
@@ -595,5 +595,5 @@ let program p =
     ~decl:transf_decl
     ~fundef:transf_fundef
     ~composite:transf_composite
-    ~typedef:(fun env id ty -> transf_type env ty)
+    ~typedef:(fun env loc id ty -> transf_type env ty)
     p

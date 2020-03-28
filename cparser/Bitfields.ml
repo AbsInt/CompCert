@@ -189,7 +189,7 @@ let rec transf_union_members env id count = function
           { fld_name = carrier; fld_typ = carrier_typ; fld_bitfield = None; fld_anonymous = false;}
           :: transf_union_members env id (count + 1) ms)
 
-let transf_composite env su id attr ml =
+let transf_composite env loc su id attr ml =
   if List.for_all (fun f -> f.fld_bitfield = None) ml then
     (attr, ml)
   else begin
@@ -550,7 +550,7 @@ and transf_init env i =
 
 (* Declarations *)
 
-let transf_decl env (sto, id, ty, init_opt) =
+let transf_decl env loc (sto, id, ty, init_opt) =
   (sto, id, ty,
    match init_opt with None -> None | Some i -> Some(transf_init env i))
 
@@ -559,12 +559,12 @@ let transf_decl env (sto, id, ty, init_opt) =
 let transf_stmt env s =
   Transform.stmt
      ~expr:(fun loc env ctx e -> transf_exp env ctx e)
-     ~decl:transf_decl
+     ~decl:(fun env (sto, id, ty, init_opt) -> transf_decl env s.sloc (sto, id, ty, init_opt))
      env s
 
 (* Functions *)
 
-let transf_fundef env f =
+let transf_fundef env loc f =
   Transform.fundef transf_stmt env f
 
 (* Programs *)
