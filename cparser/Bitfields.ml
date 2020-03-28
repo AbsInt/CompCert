@@ -193,6 +193,8 @@ let transf_composite env loc su id attr ml =
   if List.for_all (fun f -> f.fld_bitfield = None) ml then
     (attr, ml)
   else begin
+    if find_custom_attributes ["packed";"__packed__"] attr <> [] then
+      Diagnostics.error loc "bitfields in packed structs not allowed";
     let ml' =
       match su with
       | Struct -> transf_struct_members env id 1 ml
