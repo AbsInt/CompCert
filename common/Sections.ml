@@ -160,9 +160,22 @@ let gcc_section name readonly exec =
     sec_writable = not readonly; sec_executable = exec;
     sec_access = Access_default }
 
+(* Check and extract whether a section was given as attribute *)
+
+let get_attr_section loc attr =
+  match Cutil.find_custom_attributes ["section"; "__section__"] attr with
+  | [] -> None
+  | [[C.AString name]] -> Some name
+  | [[_]] ->
+    Diagnostics.error loc "'section' attribute requires a string";
+    None
+  | _ ->
+    Diagnostics.error loc "ambiguous 'section' attribute";
+    None
+
 (* Determine section for a variable definition *)
 
-let for_variable env id ty init =
+let for_variable env loc id ty init =
   let attr = Cutil.attributes_of_type env ty in
   let readonly = List.mem C.AConst attr && not(List.mem C.AVolatile attr) in
   let si =
@@ -170,11 +183,11 @@ let for_variable env id ty init =
       (* 1- Section explicitly associated with #use_section *)
       Hashtbl.find use_section_table id
     with Not_found ->
-      match Cutil.find_custom_attributes ["section"; "__section__"] attr with
-      | [[C.AString name]] ->
+      match get_attr_section loc attr with
+      | Some name ->
         (* 2- Section given as an attribute, gcc-style *)
         gcc_section name readonly false
-      | _ ->
+      | None ->
         (* 3- Default section appropriate for size and const-ness *)
         let size =
           match Cutil.sizeof env ty with Some sz -> sz | None -> max_int in
@@ -190,17 +203,17 @@ let for_variable env id ty init =
 
 (* Determine sections for a function definition *)
 
-let for_function env id attr =
+let for_function env loc id attr =
   let si_code =
     try
       (* 1- Section explicitly associated with #use_section *)
       Hashtbl.find use_section_table id
     with Not_found ->
-      match Cutil.find_custom_attributes ["section"; "__section__"] attr with
-      | [[C.AString name]] ->
+      match get_attr_section loc attr with
+      | Some name ->
           (* 2- Section given as an attribute, gcc-style *)
           gcc_section name true true
-      | _ ->
+      | None ->
           (* 3- Default section *)
           try
             Hashtbl.find current_section_table "CODE"
