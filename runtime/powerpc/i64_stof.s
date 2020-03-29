@@ -43,20 +43,19 @@
 __compcert_i64_stof:
 	mflr r9
    # Check whether -2^53 <= X < 2^53	
-        srawi r5, r3, 31
-        srawi r6, r3, 21        # (r5,r6) = X >> 53
-        addic r6, r6, 1
-        addze r5, r5            # (r5,r6) = (X >> 53) + 1
+        srawi r5, r3, 21        # r5 = high 32 bits of X >> 53
+   # -2^53 <= X < 2^53 iff r5 is -1 or 0, that is, iff r5 + 1 is 0 or 1
+        addi r5, r5, 1
         cmplwi r5, 2
         blt 1f
    # X is large enough that double rounding can occur.
    # Avoid it by nudging X away from the points where double rounding
    # occurs (the "round to odd" technique)
-        rlwinm r0, r4, 0, 21, 31 # extract bits 0 to 11 of X
-        addi r0, r0, 0x7FF      # r0 = (X & 0x7FF) + 0x7FF
-   # bit 12 of r0 is 0 if all low 12 bits of X are 0, 1 otherwise
-   # bits 13-31 of r0 are 0
-        or r4, r4, r0           # correct bit number 12 of X
+        rlwinm r5, r4, 0, 21, 31 # extract bits 0 to 11 of X
+        addi r5, r5, 0x7FF      # r5 = (X & 0x7FF) + 0x7FF
+   # bit 12 of r5 is 0 if all low 12 bits of X are 0, 1 otherwise
+   # bits 13-31 of r5 are 0
+        or r4, r4, r5           # correct bit number 12 of X
         rlwinm r4, r4, 0, 0, 20 # set to 0 bits 0 to 11 of X
    # Convert to double, then round to single	
 1:      bl __compcert_i64_stod

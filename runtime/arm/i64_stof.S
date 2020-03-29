@@ -39,12 +39,11 @@
 @@@ Conversion from signed 64-bit integer to single float
 
 FUNCTION(__compcert_i64_stof)
-    @ Check whether -2^53 <= X < 2^53
-        ASR r2, Reg0HI, #21
-        ASR r3, Reg0HI, #31     @ (r2,r3) = X >> 53
+   @ Check whether -2^53 <= X < 2^53
+        ASR r2, Reg0HI, #21     @ r2 = high 32 bits of X >> 53
+   @ -2^53 <= X < 2^53 iff r2 is -1 or 0, that is, iff r2 + 1 is 0 or 1
         adds r2, r2, #1
-        adc r3, r3, #0          @ (r2,r3) = X >> 53 + 1
-        cmp r3, #2
+        cmp r2, #2
         blo 1f
    @ X is large enough that double rounding can occur.
    @ Avoid it by nudging X away from the points where double rounding
