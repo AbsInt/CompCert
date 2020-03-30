@@ -18,7 +18,14 @@
 module CharSet = Set.Make(struct type t = char let compare = compare end)
 
 let transform_program t p name =
-  let run_pass pass flag p = if CharSet.mem flag t then pass p else p in
+  let run_pass pass flag p =
+    if CharSet.mem flag t then begin
+      let p = pass p in
+      Diagnostics.check_errors ();
+      p
+    end else
+      p
+  in
   let p1 = (run_pass StructPassing.program 's'
   (run_pass PackedStructs.program 'p'
   (run_pass Unblock.program 'b'
