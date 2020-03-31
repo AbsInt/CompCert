@@ -1,3 +1,6 @@
+Release 3.7, 2020-03-31
+=======================
+
 ISO C conformance:
 - Functions declared `extern` then implemented `inline` remain `extern`
 - The type of a wide char constant is `wchar_t`, not `int`
