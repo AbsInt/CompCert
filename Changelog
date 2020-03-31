@@ -1,7 +1,38 @@
-Coq development:
-- Compatibility with Coq version 8.11.0 (#316)
+ISO C conformance:
+- Functions declared `extern` then implemented `inline` remain `extern`
+- The type of a wide char constant is `wchar_t`, not `int`
+- Support vertical tabs and treat them as whitespace
+- Define the semantics of `free(NULL)`
 
-	
+Bug fixing:
+- Take sign into account for conversions from 32-bit integers to 64-bit pointers
+- PowerPC: more precise determination of small data accesses
+- AArch64: when addressing global variables, check for correct alignment
+- PowerPC, ARM: double rounding error in int64->float32 conversions
+
+ABI conformance:
+- x86, AArch64: re-normalize values of small integer types returned by
+  function calls
+- PowerPC: `float` arguments passed on stack are passed in 64-bit format
+- RISC-V: use the new ELF psABI instead of the old ABI from ISA 2.1
+
+Usability and diagnostics:
+- Unknown builtin functions trigger a specific error message
+- Improved error messages
+
+Coq formalization:
+- Revised modeling of the PowerPC/EREF `isel` instruction
+- Weaker `ec_readonly` condition over external calls
+  (permissions can be dropped on read-only locations)
+
+Coq and OCaml development:
+- Compatibility with Coq version 8.10.1, 8.10.2, 8.11.0
+- Compatibility with OCaml 4.10 and up
+- Compatibility with Menhir 20200123 and up
+- Coq versions prior to 8.8.0 are no longer supported
+- OCaml versions prior to 4.05.0 are no longer supported
+
+
 Release 3.6, 2019-09-17
 =======================
 
