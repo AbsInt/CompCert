@@ -252,12 +252,10 @@ let class_of_loc = function
 
 let no_spill_class = 2
 
-let reserved_registers = ref ([]: mreg list)
-
 let rec remove_reserved = function
   | [] -> []
   | hd :: tl ->
-      if List.mem hd !reserved_registers
+      if List.mem hd !CPragmas.reserved_registers
       then remove_reserved tl
       else hd :: remove_reserved tl
 

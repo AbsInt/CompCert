@@ -75,6 +75,7 @@ let preprocess ifile ofile =
 let parse_c_file sourcename ifile =
   Debug.init_compile_unit sourcename;
   Sections.initialize();
+  CPragmas.reset();
   (* Simplification options *)
   let simplifs =
     "b" (* blocks: mandatory *)
