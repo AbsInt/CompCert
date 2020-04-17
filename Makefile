@@ -14,6 +14,11 @@
 #######################################################################
 
 include Makefile.config
+include VERSION
+
+BUILDVERSION ?= $(version)
+BUILDNR ?= $(buildnr)
+TAG ?= $(tag)
 
 ifeq ($(wildcard $(ARCH)_$(BITSIZE)),)
 ARCHDIRS=$(ARCH)
@@ -220,9 +225,9 @@ compcert.ini: Makefile.config
         > compcert.ini
 
 driver/Version.ml: VERSION
-	cat VERSION \
-	| sed -e 's|\(.*\)=\(.*\)|let \1 = \"\2\"|g' \
-	>driver/Version.ml
+	(echo 'let version = "$(BUILDVERSION)"'; \
+         echo 'let buildnr = "$(BUILDNR)"'; \
+         echo 'let tag = "$(TAG)"';) > driver/Version.ml
 
 cparser/Parser.v: cparser/Parser.vy
 	@rm -f $@
