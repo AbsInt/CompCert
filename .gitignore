@@ -26,6 +26,7 @@
 /Makefile.config
 /.merlin
 /_CoqProject
+/compile.pl
 # Generated files
 /.depend
 /.depend.extr
