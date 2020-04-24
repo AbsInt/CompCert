@@ -20,7 +20,7 @@
 let key_val_tbl : (string, string list) Hashtbl.t = Hashtbl.create 17
 
 let key_val key =
-  try Some(Hashtbl.find key_val_tbl key) with Not_found -> None
+  Hashtbl.find_opt key_val_tbl key
 
 (* Auxiliaries for parsing *)
 

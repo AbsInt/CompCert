@@ -50,8 +50,7 @@ let bitfield_table =
       (Hashtbl.create 57: (ident * string, bitfield_info) Hashtbl.t)
 
 let is_bitfield structid fieldname =
-  try Some (Hashtbl.find bitfield_table (structid, fieldname))
-  with Not_found -> None
+  Hashtbl.find_opt bitfield_table (structid, fieldname)
 
 (* Mapping struct/union identifier -> list of members after transformation,
    including the carrier fields, but without the bit fields.

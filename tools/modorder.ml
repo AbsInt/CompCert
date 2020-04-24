@@ -84,7 +84,7 @@ let filename_suffix s =
 let emit_dependencies deps targets =
 
   let rec dsort target suff =
-    match (try Some(Hashtbl.find deps target) with Not_found -> None) with
+    match Hashtbl.find_opt deps target with
     | None -> ()
     | Some node ->
         match node.status with

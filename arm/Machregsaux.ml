@@ -25,7 +25,7 @@ let _ =
 let is_scratch_register s =  s = "R14"  || s = "r14"
 
 let name_of_register r =
-  try Some (Hashtbl.find register_names r) with Not_found -> None
+  Hashtbl.find_opt register_names r
 
 let register_by_name s =
   Machregs.register_by_name (coqstring_uppercase_ascii_of_camlstring s)
