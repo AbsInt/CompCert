@@ -329,10 +329,7 @@ let integer_representable v ik =
     v >= 0L && v < Int64.shift_left 1L (bitsize - 1)
 
 let elab_int_constant loc s0 =
-  let s = String.map (fun d -> match d with
-  | '0'..'9' | 'A'..'F' | 'L' | 'U' | 'X' -> d
-  | 'a'..'f' | 'l' | 'u' | 'x' -> Char.chr (Char.code d - 32)
-  | _ -> error loc "bad digit '%c' in integer literal '%s'" d s0; d) s0 in
+  let s = String.uppercase_ascii s0 in
   (* Determine possible types and chop type suffix *)
   let (s, dec_kinds, hex_kinds) =
     if has_suffix s "ULL" || has_suffix s "LLU" then
