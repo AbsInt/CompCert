@@ -56,7 +56,7 @@ let process_reserve_register_pragma name =
   | None ->
       C2C.error "unknown register in `reserve_register' pragma"
   | Some r ->
-      if Machregsaux.can_reserve_register r then
+      if Conventions1.is_callee_save r then
         reserved_registers := r :: !reserved_registers
       else
         C2C.error "cannot reserve this register (not a callee-save)"

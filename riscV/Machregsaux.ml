@@ -29,5 +29,3 @@ let name_of_register r =
 
 let register_by_name s =
   Machregs.register_by_name (coqstring_uppercase_ascii_of_camlstring s)
-
-let can_reserve_register r = Conventions1.is_callee_save r
