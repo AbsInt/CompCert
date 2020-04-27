@@ -143,7 +143,7 @@ ifeq ($(CLIGHTGEN),true)
 	$(MAKE) clightgen
 endif
 
-proof: $(FILES:.v=.vo)
+proof: $(FILES:.v=.vo) compcert_conf.mk
 
 # Turn off some warnings for compiling Flocq
 flocq/%.vo: COQCOPTS+=-w -compatibility-notation
@@ -219,6 +219,16 @@ compcert.ini: Makefile.config
 	 echo "response_file_style=$(RESPONSEFILE)";) \
         > compcert.ini
 
+compcert_conf.mk: Makefile.config
+	(	echo "# CompCert configuration parameters for Coq makefiles"; \
+		echo "ARCH ?= $(ARCH)"; \
+		echo "BITSIZE ?= $(BITSIZE)"; \
+		echo "MODEL ?= $(MODEL)"; \
+		echo "ABI ?= $(ABI)"; \
+		echo "ENDIANNESS ?= $(ENDIANNESS)"; \
+		echo "SYSTEM ?= $(SYSTEM)"; \
+	) > compcert_conf.mk
+
 driver/Version.ml: VERSION
 	cat VERSION \
 	| sed -e 's|\(.*\)=\(.*\)|let \1 = \"\2\"|g' \
@@ -253,6 +263,7 @@ ifeq ($(INSTALL_COQDEV),true)
           install -m 0644 $$d/*.vo $(DESTDIR)$(COQDEVDIR)/$$d/; \
 	done
 	install -m 0644 ./VERSION $(DESTDIR)$(COQDEVDIR)
+	install -m 0644 ./compcert_conf.mk $(DESTDIR)$(COQDEVDIR)
 	@(echo "To use, pass the following to coq_makefile or add the following to _CoqProject:"; echo "-R $(COQDEVDIR) compcert") > $(DESTDIR)$(COQDEVDIR)/README
 endif
 
@@ -263,6 +274,7 @@ clean:
 	rm -rf doc/html doc/*.glob
 	rm -f driver/Version.ml
 	rm -f compcert.ini
+	rm -f compcert_conf.mk
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
 	rm -f $(GENERATED) .depend
