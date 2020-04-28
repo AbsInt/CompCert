@@ -15,6 +15,7 @@ From Coq Require Import List Syntax.
 From Coq.ssr Require Import ssreflect.
 Require Automaton.
 Require Import Alphabet Grammar Validator_safe.
+Import ListNotations.
 
 Module Make(Import A:Automaton.T).
 Module Import ValidSafe := Validator_safe.Make A.

@@ -11,10 +11,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
-From Coq Require Import List Syntax Arith.
+From Coq Require Import List Arith.
 From Coq.ssr Require Import ssreflect.
 Require Import Alphabet Grammar.
 Require Automaton Interpreter Validator_complete.
+Import ListNotations.
 
 Module Make(Import A:Automaton.T) (Import Inter:Interpreter.T A).
 Module Import Valid := Validator_complete.Make A.

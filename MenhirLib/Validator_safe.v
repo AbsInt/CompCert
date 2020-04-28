@@ -15,6 +15,7 @@ From Coq Require Import List Syntax Derive.
 From Coq.ssr Require Import ssreflect.
 Require Automaton.
 Require Import Alphabet Validator_classes.
+Import ListNotations.
 
 Module Make(Import A:Automaton.T).
 

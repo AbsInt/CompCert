@@ -11,10 +11,11 @@
 (*                                                                          *)
 (****************************************************************************)
 
-From Coq Require Import List Syntax.
+From Coq Require Import List.
 Require Import Alphabet.
 Require Grammar Automaton Interpreter.
 From Coq.ssr Require Import ssreflect.
+Import ListNotations.
 
 Module Make(Import A:Automaton.T) (Import Inter:Interpreter.T A).
 

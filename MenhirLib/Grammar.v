@@ -11,8 +11,9 @@
 (*                                                                          *)
 (****************************************************************************)
 
-From Coq Require Import List Syntax Orders.
+From Coq Require Import List Orders.
 Require Import Alphabet.
+Import ListNotations.
 
 (** The terminal non-terminal alphabets of the grammar. **)
 Module Type Alphs.

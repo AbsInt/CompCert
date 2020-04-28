@@ -23,6 +23,7 @@ Require Import IEEE754_extra.
 Require Import Program.
 Require Archi.
 
+Import ListNotations.
 Close Scope R_scope.
 Open Scope Z_scope.
 
