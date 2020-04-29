@@ -12,6 +12,4 @@
 
 (** Auxiliary functions on machine registers *)
 
-val name_of_register: Machregs.mreg -> string option
-val register_by_name: string -> Machregs.mreg option
 val is_scratch_register: string -> bool

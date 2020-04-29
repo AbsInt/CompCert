@@ -22,7 +22,7 @@ open PrintAST
 open PrintOp
 
 let mreg pp r =
-  match Machregsaux.name_of_register r with
+  match Machregsnames.name_of_register r with
   | Some s -> fprintf pp "%s" s
   | None -> fprintf pp "<unknown machreg>"
 

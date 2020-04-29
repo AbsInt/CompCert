@@ -52,7 +52,7 @@ let process_use_section_pragma classname id =
 let reserved_registers = ref ([]: Machregs.mreg list)
 
 let process_reserve_register_pragma name =
-  match Machregsaux.register_by_name name with
+  match Machregsnames.register_by_name name with
   | None ->
       C2C.error "unknown register in `reserve_register' pragma"
   | Some r ->

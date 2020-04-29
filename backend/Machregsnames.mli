@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*         Xavier Leroy, Collège de France and INRIA Paris             *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -12,5 +12,5 @@
 
 (** Auxiliary functions on machine registers *)
 
-let is_scratch_register s =
-  s = "X16" || s = "x16" || s = "X30" || s = "x30"
+val name_of_register: Machregs.mreg -> string option
+val register_by_name: string -> Machregs.mreg option

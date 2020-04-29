@@ -101,7 +101,7 @@ after IRC elimination, when assigning a stack slot to a spilled variable. *)
 
 let name_of_loc = function
   | R r ->
-      begin match Machregsaux.name_of_register r with
+      begin match Machregsnames.name_of_register r with
                 | None -> "fixed-reg"
                 | Some s -> s
       end

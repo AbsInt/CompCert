@@ -12,20 +12,4 @@
 
 (** Auxiliary functions on machine registers *)
 
-open Camlcoq
-open Machregs
-
-let register_names : (mreg, string) Hashtbl.t = Hashtbl.create 31
-
-let _ =
-  List.iter
-    (fun (s, r) -> Hashtbl.add register_names r (camlstring_of_coqstring s))
-    Machregs.register_names
-
 let is_scratch_register s = s = "R0" || s = "r0"
-
-let name_of_register r =
-  Hashtbl.find_opt register_names r
-
-let register_by_name s =
-  Machregs.register_by_name (coqstring_uppercase_ascii_of_camlstring s)

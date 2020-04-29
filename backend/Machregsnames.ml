@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*         Xavier Leroy, Collège de France and INRIA Paris             *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -10,7 +10,15 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Auxiliary functions on machine registers *)
+let register_names : (Machregs.mreg, string) Hashtbl.t = Hashtbl.create 31
 
-let is_scratch_register s =
-  s = "X16" || s = "x16" || s = "X30" || s = "x30"
+let _ =
+  List.iter
+    (fun (s, r) -> Hashtbl.add register_names r (Camlcoq.camlstring_of_coqstring s))
+    Machregs.register_names
+
+let name_of_register r =
+  Hashtbl.find_opt register_names r
+
+let register_by_name s =
+  Machregs.register_by_name (Camlcoq.coqstring_uppercase_ascii_of_camlstring s)

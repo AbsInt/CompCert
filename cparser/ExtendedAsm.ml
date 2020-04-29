@@ -156,7 +156,7 @@ let transf_outputs loc env = function
 let check_clobbers loc clob =
   List.iter
     (fun c ->
-      if Machregsaux.register_by_name c <> None
+      if Machregsnames.register_by_name c <> None
       || Machregsaux.is_scratch_register c
       || c = "memory" || c = "cc" (* GCC does not accept MEMORY or CC *)
       then ()

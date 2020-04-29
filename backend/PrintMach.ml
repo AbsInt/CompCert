@@ -16,12 +16,11 @@ open Printf
 open Camlcoq
 open Datatypes
 open AST
-open Machregsaux
 open Mach
 open PrintAST
 
 let reg pp r =
-  match name_of_register r with
+  match Machregsnames.name_of_register r with
   | Some s -> fprintf pp "%s" s
   | None -> fprintf pp "<unknown reg>"
 
