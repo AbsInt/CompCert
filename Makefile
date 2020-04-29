@@ -147,6 +147,9 @@ endif
 ifeq ($(CLIGHTGEN),true)
 	$(MAKE) clightgen
 endif
+ifeq ($(INSTALL_COQDEV),true)
+	$(MAKE) compcert.config
+endif
 
 proof: $(FILES:.v=.vo)
 
@@ -224,6 +227,19 @@ compcert.ini: Makefile.config
 	 echo "response_file_style=$(RESPONSEFILE)";) \
         > compcert.ini
 
+compcert.config: Makefile.config
+	(echo "# CompCert configuration parameters"; \
+        echo "COMPCERT_ARCH=$(ARCH)"; \
+        echo "COMPCERT_MODEL=$(MODEL)"; \
+        echo "COMPCERT_ABI=$(ABI)"; \
+        echo "COMPCERT_ENDIANNESS=$(ENDIANNESS)"; \
+        echo "COMPCERT_BITSIZE=$(BITSIZE)"; \
+        echo "COMPCERT_SYSTEM=$(SYSTEM)"; \
+        echo "COMPCERT_VERSION=$(BUILDVERSION)"; \
+        echo "COMPCERT_BUILDNR=$(BUILDNR)"; \
+        echo "COMPCERT_TAG=$(TAG)" \
+        ) > compcert.config
+
 driver/Version.ml: VERSION
 	(echo 'let version = "$(BUILDVERSION)"'; \
          echo 'let buildnr = "$(BUILDNR)"'; \
@@ -258,6 +274,7 @@ ifeq ($(INSTALL_COQDEV),true)
           install -m 0644 $$d/*.vo $(DESTDIR)$(COQDEVDIR)/$$d/; \
 	done
 	install -m 0644 ./VERSION $(DESTDIR)$(COQDEVDIR)
+	install -m 0644 ./compcert.config $(DESTDIR)$(COQDEVDIR)
 	@(echo "To use, pass the following to coq_makefile or add the following to _CoqProject:"; echo "-R $(COQDEVDIR) compcert") > $(DESTDIR)$(COQDEVDIR)/README
 endif
 
@@ -267,7 +284,7 @@ clean:
 	rm -f $(patsubst %, %/.*.aux, $(DIRS))
 	rm -rf doc/html doc/*.glob
 	rm -f driver/Version.ml
-	rm -f compcert.ini
+	rm -f compcert.ini compcert.config
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
 	rm -f $(GENERATED) .depend

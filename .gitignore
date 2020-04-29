@@ -31,6 +31,7 @@
 /.depend
 /.depend.extr
 /compcert.ini
+/compcert.config
 /x86/ConstpropOp.v
 /x86/SelectOp.v
 /x86/SelectLong.v
