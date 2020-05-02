@@ -98,6 +98,8 @@ Recognized source files:
   .i or .p       C source file that should not be preprocessed
 Processing options:
   -normalize     Normalize the generated Clight code w.r.t. loads in expressions
+  -canonical-idents  Use canonical numbers to represent identifiers  (default)
+  -short-idents  Use canonical numbers to represent identifiers
   -E             Preprocess only, send result to standard output
   -o <file>      Generate output in <file>
 |} ^
@@ -142,6 +144,8 @@ let cmdline_actions =
 (* Processing options *)
  [ Exact "-E", Set option_E;
   Exact "-normalize", Set option_normalize;
+  Exact "-canonical-idents", Set Camlcoq.use_canonical_atoms;
+  Exact "-short-idents", Unset Camlcoq.use_canonical_atoms;
   Exact "-o", String(fun s -> option_o := Some s);
   Prefix "-o", Self (fun s -> let s = String.sub s 2 ((String.length s) - 2) in
                               option_o := Some s);]
@@ -175,12 +179,13 @@ let cmdline_actions =
   ]
 
 let _ =
-  try
+try
   Gc.set { (Gc.get()) with
               Gc.minor_heap_size = 524288; (* 512k *)
               Gc.major_heap_increment = 4194304 (* 4M *)
          };
   Printexc.record_backtrace true;
+  Camlcoq.use_canonical_atoms := true;
   Frontend.init ();
   parse_cmdline cmdline_actions;
   if !option_o <> None && !num_input_files >= 2 then
@@ -188,7 +193,7 @@ let _ =
   if !num_input_files = 0 then
     fatal_error no_loc "no input file";
   perform_actions ()
-      with
+with
   | Sys_error msg
   | CmdError msg -> error no_loc "%s" msg; exit 2
   | Abort -> exit 2
