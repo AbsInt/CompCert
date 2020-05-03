@@ -11,7 +11,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-From Coq Require Import List Syntax Arith.
+From Coq Require Import List Arith.
+Import ListNotations.
 From Coq.ssr Require Import ssreflect.
 Require Import Alphabet Grammar.
 Require Automaton Interpreter Validator_complete.

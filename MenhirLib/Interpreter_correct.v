@@ -11,7 +11,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-From Coq Require Import List Syntax.
+From Coq Require Import List.
+Import ListNotations.
 Require Import Alphabet.
 Require Grammar Automaton Interpreter.
 From Coq.ssr Require Import ssreflect.
