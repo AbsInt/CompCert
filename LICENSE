@@ -46,8 +46,8 @@ option) any later version:
 
   all files in the exportclight/ directory
 
-  the Archi.v, CBuiltins.ml, and extractionMachdep.v files
-  in directories arm, powerpc, riscV, x86, x86_32, x86_64
+  the Archi.v, Builtins1.v, CBuiltins.ml, and extractionMachdep.v files
+  in directories aarch64, arm, powerpc, riscV, x86, x86_32, x86_64
 
   extraction/extraction.v
 
