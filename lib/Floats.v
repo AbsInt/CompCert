@@ -223,10 +223,10 @@ Definition cons_pl (x: float) (l: list (bool * positive)) :=
   match x with B754_nan s p _ => (s, p) :: l | _ => l end.
 
 Definition unop_nan (x: float) : {x : float | is_nan _ _ x = true} :=
-  quiet_nan_64 (Archi.choose_nan_64 (cons_pl x nil)).
+  quiet_nan_64 (Archi.choose_nan_64 (cons_pl x [])).
 
 Definition binop_nan (x y: float) : {x : float | is_nan _ _ x = true} :=
-  quiet_nan_64 (Archi.choose_nan_64 (cons_pl x (cons_pl y nil))).
+  quiet_nan_64 (Archi.choose_nan_64 (cons_pl x (cons_pl y []))).
 
 (** For fused multiply-add, the order in which arguments are examined
   to select a NaN payload varies across platforms.  E.g. in [fma x y z],
@@ -236,7 +236,7 @@ Definition binop_nan (x y: float) : {x : float | is_nan _ _ x = true} :=
 
 Definition fma_nan_1 (x y z: float) : {x : float | is_nan _ _ x = true} :=
   let '(a, b, c) := Archi.fma_order x y z in
-  quiet_nan_64 (Archi.choose_nan_64 (cons_pl a (cons_pl b (cons_pl c nil)))).
+  quiet_nan_64 (Archi.choose_nan_64 (cons_pl a (cons_pl b (cons_pl c [])))).
 
 (** One last wrinkle for fused multiply-add: [fma zero infinity nan]
   can return either the quiesced [nan], or the default NaN arising out
@@ -248,7 +248,7 @@ Definition fma_nan (x y z: float) : {x : float | is_nan _ _ x = true} :=
   match x, y with
   | B754_infinity _, B754_zero _ | B754_zero _, B754_infinity _ =>
       if Archi.fma_invalid_mul_is_nan
-      then quiet_nan_64 (Archi.choose_nan_64 (Archi.default_nan_64 :: cons_pl z nil))
+      then quiet_nan_64 (Archi.choose_nan_64 (Archi.default_nan_64 :: cons_pl z []))
       else fma_nan_1 x y z
   | _, _ =>
       fma_nan_1 x y z
@@ -1011,20 +1011,20 @@ Definition cons_pl (x: float32) (l: list (bool * positive)) :=
   match x with B754_nan s p _ => (s, p) :: l | _ => l end.
 
 Definition unop_nan (x: float32) : {x : float32 | is_nan _ _ x = true} :=
-  quiet_nan_32 (Archi.choose_nan_32 (cons_pl x nil)).
+  quiet_nan_32 (Archi.choose_nan_32 (cons_pl x [])).
 
 Definition binop_nan (x y: float32) : {x : float32 | is_nan _ _ x = true} :=
-  quiet_nan_32 (Archi.choose_nan_32 (cons_pl x (cons_pl y nil))).
+  quiet_nan_32 (Archi.choose_nan_32 (cons_pl x (cons_pl y []))).
 
 Definition fma_nan_1 (x y z: float32) : {x : float32 | is_nan _ _ x = true} :=
   let '(a, b, c) := Archi.fma_order x y z in
-  quiet_nan_32 (Archi.choose_nan_32 (cons_pl a (cons_pl b (cons_pl c nil)))).
+  quiet_nan_32 (Archi.choose_nan_32 (cons_pl a (cons_pl b (cons_pl c [])))).
 
 Definition fma_nan (x y z: float32) : {x : float32 | is_nan _ _ x = true} :=
   match x, y with
   | B754_infinity _, B754_zero _ | B754_zero _, B754_infinity _ =>
       if Archi.fma_invalid_mul_is_nan
-      then quiet_nan_32 (Archi.choose_nan_32 (Archi.default_nan_32 :: cons_pl z nil))
+      then quiet_nan_32 (Archi.choose_nan_32 (Archi.default_nan_32 :: cons_pl z []))
       else fma_nan_1 x y z
   | _, _ =>
       fma_nan_1 x y z
