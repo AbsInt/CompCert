@@ -83,7 +83,6 @@ Proof. by rewrite /cast -Eqdep_dec.eq_rect_eq_dec. Qed.
 CoInductive buffer : Type :=
   Buf_cons { buf_head : token; buf_tail : buffer }.
 
-Declare Scope buffer_scope.
 Delimit Scope buffer_scope with buf.
 Bind Scope buffer_scope with buffer.
 
