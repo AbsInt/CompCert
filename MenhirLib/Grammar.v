@@ -11,7 +11,8 @@
 (*                                                                          *)
 (****************************************************************************)
 
-From Coq Require Import List Syntax Orders.
+From Coq Require Import List Orders.
+Import ListNotations.
 Require Import Alphabet.
 
 (** The terminal non-terminal alphabets of the grammar. **)

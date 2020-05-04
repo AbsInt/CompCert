@@ -13,6 +13,7 @@
 
 From Coq Require Import List Syntax Derive.
 From Coq.ssr Require Import ssreflect.
+Import ListNotations.
 Require Automaton.
 Require Import Alphabet Validator_classes.
 

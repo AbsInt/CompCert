@@ -12,6 +12,7 @@
 (****************************************************************************)
 
 From Coq Require Import List Syntax.
+Import ListNotations.
 From Coq.ssr Require Import ssreflect.
 Require Automaton.
 Require Import Alphabet Grammar Validator_safe.
@@ -82,6 +83,7 @@ Proof. by rewrite /cast -Eqdep_dec.eq_rect_eq_dec. Qed.
 CoInductive buffer : Type :=
   Buf_cons { buf_head : token; buf_tail : buffer }.
 
+Declare Scope buffer_scope.
 Delimit Scope buffer_scope with buf.
 Bind Scope buffer_scope with buffer.
 
