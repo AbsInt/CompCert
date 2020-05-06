@@ -41,9 +41,6 @@ Record magree (m1 m2: mem) (P: locset) : Prop := mk_magree {
   ma_perm:
     forall b ofs k p,
     Mem.perm m1 b ofs k p -> Mem.perm m2 b ofs k p;
-  ma_perm_inv:
-    forall b ofs k p,
-    Mem.perm m2 b ofs k p -> Mem.perm m1 b ofs k p \/ ~Mem.perm m1 b ofs Max Nonempty;
   ma_memval:
     forall b ofs,
     Mem.perm m1 b ofs Cur Readable ->
@@ -68,7 +65,6 @@ Lemma mextends_agree:
 Proof.
   intros. destruct H. destruct mext_inj. constructor; intros.
 - replace ofs with (ofs + 0) by omega. eapply mi_perm; eauto. auto.
-- eauto.
 - exploit mi_memval; eauto. unfold inject_id; eauto.
   rewrite Z.add_0_r. auto.
 - auto.
@@ -161,8 +157,6 @@ Proof.
   constructor; intros.
 - eapply Mem.perm_storebytes_1; eauto. eapply ma_perm; eauto.
   eapply Mem.perm_storebytes_2; eauto.
-- exploit ma_perm_inv; eauto using Mem.perm_storebytes_2.
-  intuition eauto using Mem.perm_storebytes_1, Mem.perm_storebytes_2.
 - rewrite (Mem.storebytes_mem_contents _ _ _ _ _ H0).
   rewrite (Mem.storebytes_mem_contents _ _ _ _ _ ST2).
   rewrite ! PMap.gsspec. destruct (peq b0 b).
@@ -206,8 +200,6 @@ Lemma magree_storebytes_left:
 Proof.
   intros. constructor; intros.
 - eapply ma_perm; eauto. eapply Mem.perm_storebytes_2; eauto.
-- exploit ma_perm_inv; eauto.
-  intuition eauto using Mem.perm_storebytes_1, Mem.perm_storebytes_2.
 - rewrite (Mem.storebytes_mem_contents _ _ _ _ _ H0).
   rewrite PMap.gsspec. destruct (peq b0 b).
 + subst b0. rewrite Mem.setN_outside. eapply ma_memval; eauto. eapply Mem.perm_storebytes_2; eauto.
@@ -249,11 +241,6 @@ Proof.
   assert (Mem.perm m2 b0 ofs k p). { eapply ma_perm; eauto. eapply Mem.perm_free_3; eauto. }
   exploit Mem.perm_free_inv; eauto. intros [[A B] | A]; auto.
   subst b0. eelim Mem.perm_free_2. eexact H0. eauto. eauto.
-- (* inverse permissions *)
-  exploit ma_perm_inv; eauto using Mem.perm_free_3. intros [A|A].
-  eapply Mem.perm_free_inv in A; eauto. destruct A as [[A B] | A]; auto.
-  subst b0; right; eapply Mem.perm_free_2; eauto.
-  right; intuition eauto using Mem.perm_free_3.
 - (* contents *)
   rewrite (Mem.free_result _ _ _ _ _ H0).
   rewrite (Mem.free_result _ _ _ _ _ FREE).

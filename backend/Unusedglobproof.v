@@ -1187,12 +1187,12 @@ Proof.
   exploit (Genv.init_mem_characterization_gen tp); eauto.
   destruct gd as [f|v].
 + intros (P2 & Q2) (P1 & Q1).
-  apply Q2 in H0. destruct H0. subst. replace ofs with 0 by omega.
-  left; apply Mem.perm_cur; auto.
+  apply Q1 in H0. destruct H0. subst. simpl.
+  apply Mem.perm_cur; auto.
 + intros (P2 & Q2 & R2 & S2) (P1 & Q1 & R1 & S1).
-  apply Q2 in H0. destruct H0. subst.
-  left. apply Mem.perm_cur. eapply Mem.perm_implies; eauto.
-  apply P1. omega.
+  apply Q1 in H0. destruct H0. subst. simpl.
+  apply Mem.perm_cur. eapply Mem.perm_implies; eauto.
+  apply P2. omega.
 Qed.
 
 End INIT_MEM.

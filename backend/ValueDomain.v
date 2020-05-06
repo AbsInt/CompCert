@@ -4443,7 +4443,7 @@ Proof.
   rewrite Z.add_0_r. split. omega. apply Ptrofs.unsigned_range_2.
 - (* perm inv *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
-  rewrite Z.add_0_r in H2. auto.
+  rewrite Z.add_0_r. auto.
 Qed.
 
 Lemma inj_of_bc_preserves_globals:
