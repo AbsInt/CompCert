@@ -282,23 +282,96 @@ type atom = positive
 let atom_of_string = (Hashtbl.create 17 : (string, atom) Hashtbl.t)
 let string_of_atom = (Hashtbl.create 17 : (atom, string) Hashtbl.t)
 let next_atom = ref Coq_xH
+let use_canonical_atoms = ref false
+
+(* If [use_canonical_atoms] is false, strings are numbered from 1 up
+   in the order in which they are encountered.  This produces small
+   numbers, and is therefore efficient, but the number for a given
+   string may differ between the compilation of different units.
+
+   If [use_canonical_atoms] is true, strings are Huffman-encoded as bit
+   sequences, which are then encoded as positive numbers.  The same
+   string is always represented by the same number in all compilation
+   units.  However, the numbers are bigger than in the first
+   implementation.  Also, this places a hard limit on the number of
+   fresh identifiers that can be generated starting with
+   [first_unused_ident]. *)
+
+let rec append_bits_pos nbits n p =
+  if nbits <= 0 then p else
+  if n land 1 = 0
+  then Coq_xO (append_bits_pos (nbits - 1) (n lsr 1) p)
+  else Coq_xI (append_bits_pos (nbits - 1) (n lsr 1) p)
+
+(* The encoding of strings as bit sequences is optimized for C identifiers:
+   - numbers are encoded as a 6-bit integer between 0 and 9
+   - lowercase letters are encoded as a 6-bit integer between 10 and 35
+   - uppercase letters are encoded as a 6-bit integer between 36 and 61
+   - the underscore character is encoded as the 6-bit integer 62
+   - all other characters are encoded as 6 "one" bits followed by
+     the 8-bit encoding of the character. *)
+
+let append_char_pos c p =
+  match c with
+  | '0'..'9' -> append_bits_pos 6 (Char.code c - Char.code '0') p
+  | 'a'..'z' -> append_bits_pos 6 (Char.code c - Char.code 'a' + 10) p
+  | 'A'..'Z' -> append_bits_pos 6 (Char.code c - Char.code 'A' + 36) p
+  | '_'      -> append_bits_pos 6 62 p
+  | _        -> append_bits_pos 6 63 (append_bits_pos 8 (Char.code c) p)
+
+(* The empty string is represented as the positive "1", that is, [xH]. *)
+
+let pos_of_string s =
+  let rec encode i accu =
+    if i < 0 then accu else encode (i - 1) (append_char_pos s.[i] accu)
+  in encode (String.length s - 1) Coq_xH
+
+let fresh_atom () =
+  let a = !next_atom in
+  next_atom := Pos.succ !next_atom;
+  a
 
 let intern_string s =
   try
     Hashtbl.find atom_of_string s
   with Not_found ->
-    let a = !next_atom in
-    next_atom := Pos.succ !next_atom;
+    let a =
+      if !use_canonical_atoms then pos_of_string s else fresh_atom () in
     Hashtbl.add atom_of_string s a;
     Hashtbl.add string_of_atom a s;
     a
+
 let extern_atom a =
   try
     Hashtbl.find string_of_atom a
   with Not_found ->
     Printf.sprintf "$%d" (P.to_int a)
 
-let first_unused_ident () = !next_atom
+(* Ignoring the terminating "1" bit, canonical encodings of strings can
+   be viewed as lists of bits, formed by concatenation of 6-bit fragments
+   (for letters, numbers, and underscore) and 14-bit fragments (for other
+   characters).  Hence, not all positive numbers are canonical encodings:
+   only those whose log2 is of the form [6n + 14m].
+
+   Here are the first intervals of positive numbers corresponding to strings:
+   - [1, 1] for the empty string
+   - [2^6, 2^7-1] for one "compact" character
+   - [2^12, 2^13-1] for two "compact" characters
+   - [2^14, 2^14-1] for one "escaped" character
+
+   Hence, between 2^7 and 2^12 - 1, we have 3968 consecutive positive
+   numbers that cannot be the encoding of a string.  These are the positive
+   numbers we'll use as temporaries in the SimplExpr pass if canonical
+   atoms are in use.
+
+   If short atoms are used, we just number the temporaries consecutively
+   starting one above the last generated atom.
+*)
+
+let first_unused_ident () =
+  if !use_canonical_atoms
+  then P.of_int 128
+  else !next_atom
 
 (* Strings *)
 
