@@ -815,6 +815,8 @@ module Target(System: SYSTEM):TARGET =
       | Pallocframe(sz, ofs_ra, ofs_link)
       | Pfreeframe(sz, ofs_ra, ofs_link) ->
 	 assert false
+      | Ptrap ->
+          fprintf oc "ud2\n"
       | Pbuiltin(ef, args, res) ->
           begin match ef with
             | EF_annot(kind,txt, targs) ->
