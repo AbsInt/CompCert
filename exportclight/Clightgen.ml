@@ -91,7 +91,7 @@ let process_i_file sourcename =
   compile_c_file sourcename sourcename ofile
 
 let usage_string =
-  version_string tool_name^
+  version_string tool_name ^
 {|Usage: clightgen [options] <source files>
 Recognized source files:
   .c             C source file
@@ -99,7 +99,7 @@ Recognized source files:
 Processing options:
   -normalize     Normalize the generated Clight code w.r.t. loads in expressions
   -canonical-idents  Use canonical numbers to represent identifiers  (default)
-  -short-idents  Use canonical numbers to represent identifiers
+  -short-idents  Use small, non-canonical numbers to represent identifiers
   -E             Preprocess only, send result to standard output
   -o <file>      Generate output in <file>
 |} ^
