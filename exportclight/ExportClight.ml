@@ -81,7 +81,7 @@ let define_idents p =
     string_of_atom
     (fun (id, name) ->
       try
-        if id = pos_of_string name then
+        if !use_canonical_atoms && id = pos_of_string name then
           fprintf p "Definition _%s : ident := $\"%s\".@ "
                     (sanitize name) name
         else
