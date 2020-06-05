@@ -22,6 +22,8 @@ SRC+=aes.c almabench.c binarytrees.c bisect.c chomp.c fannkuch.c fft.c \
 SRC+=arrays.c eval.c gmllexer.c gmlparser.c intersect.c light.c main.c \
   matrix.c memory.c object.c render.c simplify.c surface.c vector.c
 
+CFLAGS=-DSYSTEM_$(SYSTEM)
+
 all: $(SRC:.c=.vo)
 
 test:
