@@ -226,8 +226,6 @@ Definition sd_seqbool_val (tmp: ident) (ty: type) :=
   SDbase type_bool ty tmp.
 Definition sd_seqbool_set (ty: type) (sd: set_destination) :=
   let tmp :=  sd_temp sd in SDcons type_bool ty tmp sd.
-Definition sd_cast_set (ty: type) (sd: set_destination) :=
-  let tmp :=  sd_temp sd in SDcons ty ty tmp sd.
 
 Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement * expr) :=
   match a with
