@@ -226,6 +226,8 @@ Definition sd_seqbool_val (tmp: ident) (ty: type) :=
   SDbase type_bool ty tmp.
 Definition sd_seqbool_set (ty: type) (sd: set_destination) :=
   let tmp :=  sd_temp sd in SDcons type_bool ty tmp sd.
+Definition sd_cast_set (ty: type) (sd: set_destination) :=
+  let tmp :=  sd_temp sd in SDcons ty ty tmp sd.
 
 Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement * expr) :=
   match a with
@@ -268,8 +270,13 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       do (sl2, a2) <- transl_expr For_val r2;
       ret (finish dst (sl1 ++ sl2) (Ebinop op a1 a2 ty))
   | Csyntax.Ecast r1 ty =>
-      do (sl1, a1) <- transl_expr For_val r1;
-      ret (finish dst sl1 (Ecast a1 ty))
+      match dst with
+      | For_val | For_set _ =>
+          do (sl1, a1) <- transl_expr For_val r1;
+          ret (finish dst sl1 (Ecast a1 ty))
+      | For_effects =>
+          transl_expr For_effects r1
+      end
   | Csyntax.Eseqand r1 r2 ty =>
       do (sl1, a1) <- transl_expr For_val r1;
       match dst with

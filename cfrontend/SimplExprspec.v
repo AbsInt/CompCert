@@ -108,7 +108,12 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       tr_expr le dst (Csyntax.Ebinop op e1 e2 ty)
                    (sl1 ++ sl2 ++ final dst (Ebinop op a1 a2 ty))
                    (Ebinop op a1 a2 ty) tmp
-  | tr_cast: forall le dst e1 ty sl1 a1 tmp,
+  | tr_cast_effects: forall le e1 ty sl1 a1 any tmp,
+      tr_expr le For_effects e1 sl1 a1 tmp ->
+      tr_expr le For_effects (Csyntax.Ecast e1 ty)
+                   sl1
+                   any tmp
+  | tr_cast_val: forall le dst e1 ty sl1 a1 tmp,
       tr_expr le For_val e1 sl1 a1 tmp ->
       tr_expr le dst (Csyntax.Ecast e1 ty)
                    (sl1 ++ final dst (Ecast a1 ty))
@@ -767,58 +772,69 @@ Lemma transl_meets_spec:
     exists tmps, (forall le, tr_exprlist le rl sl al tmps) /\ contained tmps g g').
 Proof.
   apply expr_exprlist_ind; simpl add_dest; intros.
-(* val *)
+- (* val *)
   simpl in H. destruct v; monadInv H; exists (@nil ident); split; auto with gensym.
 Opaque makeif.
-  intros. destruct dst; simpl in *; inv H2.
++ intros. destruct dst; simpl in *; inv H2.
     constructor. auto. intros; constructor.
     constructor.
     constructor. auto. intros; constructor.
-  intros. destruct dst; simpl in *; inv H2.
++ intros. destruct dst; simpl in *; inv H2.
     constructor. auto. intros; constructor.
     constructor.
     constructor. auto. intros; constructor.
-  intros. destruct dst; simpl in *; inv H2.
++ intros. destruct dst; simpl in *; inv H2.
     constructor. auto. intros; constructor.
     constructor.
     constructor. auto. intros; constructor.
-  intros. destruct dst; simpl in *; inv H2.
++ intros. destruct dst; simpl in *; inv H2.
     constructor. auto. intros; constructor.
     constructor.
     constructor. auto. intros; constructor.
-(* var *)
+- (* var *)
   monadInv H; econstructor; split; auto with gensym. UseFinish. constructor.
-(* field *)
+- (* field *)
   monadInv H0. exploit H; eauto. auto. intros [tmp [A B]]. UseFinish.
   econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
-(* valof *)
+- (* valof *)
   monadInv H0. exploit H; eauto. intros [tmp1 [A B]].
   exploit transl_valof_meets_spec; eauto. intros [tmp2 [Csyntax D]]. UseFinish.
   exists (tmp1 ++ tmp2); split.
   intros; apply tr_expr_add_dest. econstructor; eauto with gensym.
   eauto with gensym.
-(* deref *)
+- (* deref *)
   monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish.
   econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
-(* addrof *)
+- (* addrof *)
   monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish.
   econstructor; split; eauto. intros; apply tr_expr_add_dest. econstructor; eauto.
-(* unop *)
+- (* unop *)
   monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish.
   econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
-(* binop *)
+- (* binop *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [Csyntax D]]. UseFinish.
   exists (tmp1 ++ tmp2); split.
   intros; apply tr_expr_add_dest. econstructor; eauto with gensym.
   eauto with gensym.
-(* cast *)
-  monadInv H0. exploit H; eauto. intros [tmp [A B]]. UseFinish.
-  econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
-(* seqand *)
+- (* cast *)
+  destruct dst.
++ (* for value *)
+  monadInv H0. exploit H; eauto. intros [tmp [A B]].
+  econstructor; split; eauto. intros; apply tr_expr_add_dest.
+  rewrite (app_nil_end sl).
+  apply tr_cast_val with (dst := For_val); auto.
++ (* for effects *)
+  exploit H; eauto. intros [tmp [A B]].
+  econstructor; split; eauto. intros; eapply tr_cast_effects; eauto.
++ (* for set *)
+  monadInv H0. exploit H; eauto. intros [tmp [A B]].
+  econstructor; split; eauto. intros; apply tr_expr_add_dest.
+  apply tr_cast_val with (dst := For_set sd); auto.
+- (* seqand *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   destruct dst; monadInv EQ0.
-  (* for value *)
++ (* for value *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
   simpl add_dest in *.
   exists (x0 :: tmp1 ++ tmp2); split.
@@ -826,23 +842,23 @@ Opaque makeif.
   apply list_disjoint_cons_r; eauto with gensym.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto with gensym. intros [tmp2 [Csyntax D]].
   simpl add_dest in *.
   exists (tmp1 ++ tmp2); split.
   intros; eapply tr_seqand_effects; eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for set *)
++ (* for set *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
   simpl add_dest in *.
   exists (tmp1 ++ tmp2); split.
   intros; eapply tr_seqand_set; eauto with gensym.
   apply list_disjoint_cons_r; eauto with gensym.
   apply contained_app; eauto with gensym.
-(* seqor *)
+- (* seqor *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   destruct dst; monadInv EQ0.
-  (* for value *)
++ (* for value *)
   exploit H0; eauto with gensym. intros [tmp2 [Csyntax D]].
   simpl add_dest in *.
   exists (x0 :: tmp1 ++ tmp2); split.
@@ -850,23 +866,23 @@ Opaque makeif.
   apply list_disjoint_cons_r; eauto with gensym.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
   simpl add_dest in *.
   exists (tmp1 ++ tmp2); split.
   intros; eapply tr_seqor_effects; eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for set *)
++ (* for set *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
   simpl add_dest in *.
   exists (tmp1 ++ tmp2); split.
   intros; eapply tr_seqor_set; eauto with gensym.
   apply list_disjoint_cons_r; eauto with gensym.
   apply contained_app; eauto with gensym.
-(* condition *)
+- (* condition *)
   monadInv H2. exploit H; eauto. intros [tmp1 [A B]].
   destruct dst; monadInv EQ0.
-  (* for value *)
++ (* for value *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
   exploit H1; eauto with gensym. intros [tmp3 [E F]].
   simpl add_dest in *.
@@ -877,14 +893,14 @@ Opaque makeif.
   apply contained_cons. eauto with gensym.
   apply contained_app. eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
   exploit H1; eauto. intros [tmp3 [E F]].
   simpl add_dest in *.
   exists (tmp1 ++ tmp2 ++ tmp3); split.
   intros; eapply tr_condition_effects; eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for test *)
++ (* for test *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
   exploit H1; eauto 10 with gensym. intros [tmp3 [E F]].
   simpl add_dest in *.
@@ -895,69 +911,69 @@ Opaque makeif.
   apply contained_cons; eauto with gensym.
   apply contained_app; eauto with gensym.
   apply contained_app; eauto with gensym.
-(* sizeof *)
+- (* sizeof *)
   monadInv H. UseFinish.
   exists (@nil ident); split; auto with gensym. constructor.
-(* alignof *)
+- (* alignof *)
   monadInv H. UseFinish.
   exists (@nil ident); split; auto with gensym. constructor.
-(* assign *)
+- (* assign *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
   destruct dst; monadInv EQ2; simpl add_dest in *.
-  (* for value *)
++ (* for value *)
   exists (x1 :: tmp1 ++ tmp2); split.
   intros. eapply tr_assign_val with (dst := For_val); eauto with gensym.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for effects *)
++ (* for effects *)
   exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for set *)
++ (* for set *)
   exists (x1 :: tmp1 ++ tmp2); split.
   repeat rewrite app_ass. simpl.
   intros. eapply tr_assign_val with (dst := For_set sd); eauto with gensym.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
-(* assignop *)
+- (* assignop *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
   exploit transl_valof_meets_spec; eauto. intros [tmp3 [E F]].
   destruct dst; monadInv EQ3; simpl add_dest in *.
-  (* for value *)
++ (* for value *)
   exists (x2 :: tmp1 ++ tmp2 ++ tmp3); split.
   intros. eapply tr_assignop_val with (dst := For_val); eauto with gensym.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for effects *)
++ (* for effects *)
   exists (tmp1 ++ tmp2 ++ tmp3); split.
   econstructor; eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for set *)
++ (* for set *)
   exists (x2 :: tmp1 ++ tmp2 ++ tmp3); split.
   repeat rewrite app_ass. simpl.
   intros. eapply tr_assignop_val with (dst := For_set sd); eauto with gensym.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
-(* postincr *)
+- (* postincr *)
   monadInv H0. exploit H; eauto. intros [tmp1 [A B]].
   destruct dst; monadInv EQ0; simpl add_dest in *.
-  (* for value *)
++ (* for value *)
   exists (x0 :: tmp1); split.
   econstructor; eauto with gensym.
   apply contained_cons; eauto with gensym.
-  (* for effects *)
++ (* for effects *)
   exploit transl_valof_meets_spec; eauto. intros [tmp2 [Csyntax D]].
   exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
   eauto with gensym.
-  (* for set *)
++ (* for set *)
   repeat rewrite app_ass; simpl.
   exists (x0 :: tmp1); split.
   econstructor; eauto with gensym.
   apply contained_cons; eauto with gensym.
-(* comma *)
+- (* comma *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto with gensym. intros [tmp2 [Csyntax D]].
   exists (tmp1 ++ tmp2); split.
@@ -967,46 +983,46 @@ Opaque makeif.
   simpl. eapply incl_tran. 2: apply add_dest_incl. auto with gensym.
   destruct dst; simpl; auto with gensym.
   apply contained_app; eauto with gensym.
-(* call *)
+- (* call *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
   destruct dst; monadInv EQ2; simpl add_dest in *.
-  (* for value *)
++ (* for value *)
   exists (x1 :: tmp1 ++ tmp2); split.
   econstructor; eauto with gensym. congruence.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for effects *)
++ (* for effects *)
   exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
   apply contained_app; eauto with gensym.
-  (* for set *)
++ (* for set *)
   exists (x1 :: tmp1 ++ tmp2); split.
   repeat rewrite app_ass. econstructor; eauto with gensym. congruence.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
-(* builtin *)
+- (* builtin *)
   monadInv H0. exploit H; eauto. intros [tmp1 [A B]].
   destruct dst; monadInv EQ0; simpl add_dest in *.
-  (* for value *)
++ (* for value *)
   exists (x0 :: tmp1); split.
   econstructor; eauto with gensym. congruence.
   apply contained_cons; eauto with gensym.
-  (* for effects *)
++ (* for effects *)
   exists tmp1; split.
   econstructor; eauto with gensym.
   auto.
-  (* for set *)
++ (* for set *)
   exists (x0 :: tmp1); split.
   repeat rewrite app_ass. econstructor; eauto with gensym. congruence.
   apply contained_cons; eauto with gensym.
-(* loc *)
+- (* loc *)
   monadInv H.
-(* paren *)
+- (* paren *)
   monadInv H0.
-(* nil *)
+- (* nil *)
   monadInv H; exists (@nil ident); split; auto with gensym. constructor.
-(* cons *)
+- (* cons *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
   exists (tmp1 ++ tmp2); split.

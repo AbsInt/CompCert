@@ -145,18 +145,18 @@ Proof.
   assert (A: forall dst a, dst = For_val \/ dst = For_effects -> final dst a = nil).
     intros. destruct H; subst dst; auto.
   apply tr_expr_exprlist; intros; simpl in *; try discriminate; auto.
-  rewrite H0; auto. simpl; auto.
-  rewrite H0; auto. simpl; auto.
-  destruct H1; congruence.
-  destruct (andb_prop _ _ H6). inv H1.
+- rewrite H0; auto. simpl; auto.
+- rewrite H0; auto. simpl; auto.
+- destruct H1; congruence.
+- destruct (andb_prop _ _ H6). inv H1.
     rewrite H0; eauto. simpl; auto.
     unfold chunk_for_volatile_type in H9.
     destruct (type_is_volatile (Csyntax.typeof e1)); simpl in H8; congruence.
-  rewrite H0; auto. simpl; auto.
-  rewrite H0; auto. simpl; auto.
-  destruct (andb_prop _ _ H7). rewrite H0; auto. rewrite H2; auto. simpl; auto.
-  rewrite H0; auto. simpl; auto.
-  destruct (andb_prop _ _ H6). rewrite H0; auto.
+- rewrite H0; auto. simpl; auto.
+- rewrite H0; auto. simpl; auto.
+- destruct (andb_prop _ _ H7). rewrite H0; auto. rewrite H2; auto. simpl; auto.
+- rewrite H0; auto. simpl; auto.
+- destruct (andb_prop _ _ H6). rewrite H0; auto.
 Qed.
 
 Lemma tr_simple_expr_nil:
@@ -234,11 +234,11 @@ Proof.
 Opaque makeif.
   intros e m.
   apply (eval_simple_rvalue_lvalue_ind ge e m); intros until tmps; intros TR; inv TR.
-(* value *)
+- (* value *)
   auto.
-  auto.
-  exists a0; auto.
-(* rvalof *)
+- auto.
+- exists a0; auto.
+- (* rvalof *)
   inv H7; try congruence.
   exploit H0; eauto. intros [A [B C]].
   subst sl1; simpl.
@@ -248,53 +248,55 @@ Opaque makeif.
     exploit deref_loc_translated; eauto. unfold chunk_for_volatile_type; rewrite H2. tauto.
   destruct dst; auto.
   econstructor. split. simpl; eauto. auto.
-(* addrof *)
+- (* addrof *)
   exploit H0; eauto. intros [A [B C]].
   subst sl1; simpl.
   assert (eval_expr tge e le m (Eaddrof' a1 ty) (Vptr b ofs)) by (apply eval_Eaddrof'; auto).
   assert (typeof (Eaddrof' a1 ty) = ty) by (apply typeof_Eaddrof').
   destruct dst; auto. simpl; econstructor; eauto.  
-(* unop *)
+- (* unop *)
   exploit H0; eauto. intros [A [B C]].
   subst sl1; simpl.
   assert (eval_expr tge e le m (Eunop op a1 ty) v). econstructor; eauto. congruence.
   destruct dst; auto. simpl; econstructor; eauto.
-(* binop *)
+- (* binop *)
   exploit H0; eauto. intros [A [B C]].
   exploit H2; eauto. intros [D [E F]].
   subst sl1 sl2; simpl.
   assert (eval_expr tge e le m (Ebinop op a1 a2 ty) v). econstructor; eauto. rewrite comp_env_preserved; congruence.
   destruct dst; auto. simpl; econstructor; eauto.
-(* cast *)
+- (* cast effects *)
+  exploit H0; eauto.
+- (* cast val *)
   exploit H0; eauto. intros [A [B C]].
   subst sl1; simpl.
   assert (eval_expr tge e le m (Ecast a1 ty) v). econstructor; eauto. congruence.
   destruct dst; auto. simpl; econstructor; eauto.
-(* sizeof *)
+- (* sizeof *)
   rewrite <- comp_env_preserved.
   destruct dst.
   split; auto. split; auto. constructor.
   auto.
   exists (Esizeof ty1 ty). split. auto. split. auto. constructor.
-(* alignof *)
+- (* alignof *)
   rewrite <- comp_env_preserved.
   destruct dst.
   split; auto. split; auto. constructor.
   auto.
   exists (Ealignof ty1 ty). split. auto. split. auto. constructor.
-(* var local *)
+- (* var local *)
   split; auto. split; auto. apply eval_Evar_local; auto.
-(* var global *)
+- (* var global *)
   split; auto. split; auto. apply eval_Evar_global; auto.
     rewrite symbols_preserved; auto.
-(* deref *)
+- (* deref *)
   exploit H0; eauto. intros [A [B C]]. subst sl1.
   split; auto. split. rewrite typeof_Ederef'; auto. apply eval_Ederef'; auto. 
-(* field struct *)
+- (* field struct *)
   rewrite <- comp_env_preserved in *.
   exploit H0; eauto. intros [A [B C]]. subst sl1.
   split; auto. split; auto. rewrite B in H1. eapply eval_Efield_struct; eauto.
-(* field union *)
+- (* field union *)
   rewrite <- comp_env_preserved in *.
   exploit H0; eauto. intros [A [B C]]. subst sl1.
   split; auto. split; auto. rewrite B in H1. eapply eval_Efield_union; eauto.
@@ -408,43 +410,43 @@ Ltac UNCHANGED :=
   (*generalize compat_dest_change; intro CDC.*)
   apply leftcontext_leftcontextlist_ind; intros.
 
-(* base *)
+- (* base *)
   TR. rewrite <- app_nil_end; auto. red; auto.
   intros. rewrite <- app_nil_end; auto.
-(* deref *)
+- (* deref *)
   inv H1.
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1; rewrite app_ass; eauto. auto.
   intros. rewrite <- app_ass. econstructor; eauto.
-(* field *)
+- (* field *)
   inv H1.
   exploit H0. eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1; rewrite app_ass; eauto. auto.
   intros. rewrite <- app_ass. econstructor; eauto.
-(* rvalof *)
+- (* rvalof *)
   inv H1.
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1; rewrite app_ass; eauto. red; eauto.
   intros. rewrite <- app_ass; econstructor; eauto.
   exploit typeof_context; eauto. congruence.
-(* addrof *)
+- (* addrof *)
   inv H1.
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1; rewrite app_ass; eauto. auto.
   intros. rewrite <- app_ass. econstructor; eauto.
-(* unop *)
+- (* unop *)
   inv H1.
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1; rewrite app_ass; eauto. auto.
   intros. rewrite <- app_ass. econstructor; eauto.
-(* binop left *)
+- (* binop left *)
   inv H1.
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1. rewrite app_ass. eauto.
   red; auto.
   intros. rewrite <- app_ass. econstructor; eauto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
-(* binop right *)
+- (* binop right *)
   inv H2.
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
@@ -452,14 +454,19 @@ Ltac UNCHANGED :=
   red; auto.
   intros. rewrite <- app_ass. change (sl3 ++ sl2') with (nil ++ sl3 ++ sl2'). rewrite app_ass. econstructor; eauto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
-(* cast *)
+- (* cast *)
   inv H1.
++ (* for effects *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
-  TR. subst sl1; rewrite app_ass; eauto. auto.
+  TR. eauto. auto. 
+  intros. econstructor; eauto.
++ (* generic *)
+  exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
+  TR. subst sl1. rewrite app_ass. eauto. auto. 
   intros. rewrite <- app_ass. econstructor; eauto.
-(* seqand *)
+- (* seqand *)
   inv H1.
-  (* for val *)
++ (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR.
   rewrite Q. rewrite app_ass. eauto.
@@ -467,7 +474,15 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto.
-  (* for effects *)
++ (* for effects *)
+  exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
+  TR.
+  rewrite Q. rewrite app_ass. eauto.
+  red; auto.
+  intros. rewrite <- app_ass. econstructor. apply S; auto.
+  eapply tr_expr_invariant; eauto. UNCHANGED.
+  auto. auto. auto.
++ (* for set *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR.
   rewrite Q. rewrite app_ass. eauto.
@@ -475,17 +490,9 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto.
-  (* for set *)
-  exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
-  TR.
-  rewrite Q. rewrite app_ass. eauto.
-  red; auto.
-  intros. rewrite <- app_ass. econstructor. apply S; auto.
-  eapply tr_expr_invariant; eauto. UNCHANGED.
-  auto. auto. auto. auto.
-(* seqor *)
+- (* seqor *)
   inv H1.
-  (* for val *)
++ (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR.
   rewrite Q. rewrite app_ass. eauto.
@@ -493,7 +500,15 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto.
-  (* for effects *)
++ (* for effects *)
+  exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
+  TR.
+  rewrite Q. rewrite app_ass. eauto.
+  red; auto.
+  intros. rewrite <- app_ass. econstructor. apply S; auto.
+  eapply tr_expr_invariant; eauto. UNCHANGED.
+  auto. auto. auto.
++ (* for set *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR.
   rewrite Q. rewrite app_ass. eauto.
@@ -501,17 +516,9 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto.
-  (* for set *)
-  exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
-  TR.
-  rewrite Q. rewrite app_ass. eauto.
-  red; auto.
-  intros. rewrite <- app_ass. econstructor. apply S; auto.
-  eapply tr_expr_invariant; eauto. UNCHANGED.
-  auto. auto. auto. auto.
-(* condition *)
+- (* condition *)
   inv H1.
-  (* for val *)
++ (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR.
   rewrite Q. rewrite app_ass. eauto.
@@ -520,7 +527,7 @@ Ltac UNCHANGED :=
   eapply tr_expr_invariant; eauto. UNCHANGED.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto. auto. auto.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR.
   rewrite Q. rewrite app_ass. eauto.
@@ -529,7 +536,7 @@ Ltac UNCHANGED :=
   eapply tr_expr_invariant; eauto. UNCHANGED.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto. auto.
-  (* for set *)
++ (* for set *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR.
   rewrite Q. rewrite app_ass. eauto.
@@ -538,16 +545,16 @@ Ltac UNCHANGED :=
   eapply tr_expr_invariant; eauto. UNCHANGED.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto. auto. auto.
-(* assign left *)
+- (* assign left *)
   inv H1.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1. rewrite app_ass. eauto.
   red; auto.
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto.
-  (* for val *)
++ (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1. rewrite app_ass. eauto.
   red; auto.
@@ -556,9 +563,9 @@ Ltac UNCHANGED :=
   auto. auto. auto. auto. auto. auto.
   eapply typeof_context; eauto.
   auto.
-(* assign right *)
+- (* assign right *)
   inv H2.
-  (* for effects *)
++ (* for effects *)
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl2. rewrite app_ass. eauto.
@@ -567,7 +574,7 @@ Ltac UNCHANGED :=
   econstructor.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   apply S; auto. auto. auto. auto.
-  (* for val *)
++ (* for val *)
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl2. rewrite app_ass. eauto.
@@ -577,9 +584,9 @@ Ltac UNCHANGED :=
   eapply tr_expr_invariant; eauto. UNCHANGED.
   apply S; auto. auto. auto. auto. auto. auto. auto. auto.
   eapply typeof_context; eauto.
-(* assignop left *)
+- (* assignop left *)
   inv H1.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1. rewrite app_ass. eauto.
   red; auto.
@@ -587,7 +594,7 @@ Ltac UNCHANGED :=
   eapply tr_expr_invariant; eauto. UNCHANGED.
   symmetry; eapply typeof_context; eauto. eauto.
   auto. auto. auto. auto. auto. auto.
-  (* for val *)
++ (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1. rewrite app_ass. eauto.
   red; auto.
@@ -595,9 +602,9 @@ Ltac UNCHANGED :=
   eapply tr_expr_invariant; eauto. UNCHANGED.
   eauto. auto. auto. auto. auto. auto. auto. auto. auto. auto. auto.
   eapply typeof_context; eauto.
-(* assignop right *)
+- (* assignop right *)
   inv H2.
-  (* for effects *)
++ (* for effects *)
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl2. rewrite app_ass. eauto.
@@ -605,7 +612,7 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. change (sl0 ++ sl2') with (nil ++ sl0 ++ sl2'). rewrite app_ass. econstructor.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   apply S; auto. auto. eauto. auto. auto. auto. auto. auto. auto.
-  (* for val *)
++ (* for val *)
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl2. rewrite app_ass. eauto.
@@ -613,35 +620,35 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. change (sl0 ++ sl2') with (nil ++ sl0 ++ sl2'). rewrite app_ass. econstructor.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   apply S; auto. eauto. auto. auto. auto. auto. auto. auto. auto. auto. auto. auto. auto.
-(* postincr *)
+- (* postincr *)
   inv H1.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q; rewrite app_ass; eauto. red; auto.
   intros. rewrite <- app_ass. econstructor; eauto.
   symmetry; eapply typeof_context; eauto.
-  (* for val *)
++ (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q; rewrite app_ass; eauto. red; auto.
   intros. rewrite <- app_ass. econstructor; eauto.
   eapply typeof_context; eauto.
-(* call left *)
+- (* call left *)
   inv H1.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q; rewrite app_ass; eauto. red; auto.
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_exprlist_invariant; eauto. UNCHANGED.
   auto. auto. auto.
-  (* for val *)
++ (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q; rewrite app_ass; eauto. red; auto.
   intros. rewrite <- app_ass. econstructor. auto. apply S; auto.
   eapply tr_exprlist_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto.
-(* call right *)
+- (* call right *)
   inv H2.
-  (* for effects *)
++ (* for effects *)
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q; rewrite app_ass; eauto.
@@ -650,7 +657,7 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. change (sl3++sl2') with (nil ++ sl3 ++ sl2'). rewrite app_ass. econstructor.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   apply S; auto. auto. auto. auto.
-  (* for val *)
++ (* for val *)
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q; rewrite app_ass; eauto.
@@ -660,42 +667,42 @@ Ltac UNCHANGED :=
   auto. eapply tr_expr_invariant; eauto. UNCHANGED.
   apply S; auto.
   auto. auto. auto. auto.
-(* builtin *)
+- (* builtin *)
   inv H1.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q; rewrite app_ass; eauto.
   red; auto.
   intros. rewrite <- app_ass. change (sl3++sl2') with (nil ++ sl3 ++ sl2'). rewrite app_ass. econstructor.
   apply S; auto. auto.
-  (* for val *)
++ (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q; rewrite app_ass; eauto.
   red; auto.
   intros. rewrite <- app_ass. change (sl3++sl2') with (nil ++ sl3 ++ sl2'). rewrite app_ass. econstructor.
   auto. apply S; auto. auto. auto.
-(* comma *)
+- (* comma *)
   inv H1.
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q; rewrite app_ass; eauto. red; auto.
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto.
-(* paren *)
+- (* paren *)
   inv H1.
-  (* for val *)
++ (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q. eauto. red; auto.
   intros. econstructor; eauto.
-  (* for effects *)
++ (* for effects *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q. eauto. auto.
   intros. econstructor; eauto.
-  (* for set *)
++ (* for set *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. rewrite Q. eauto. auto.
   intros. econstructor; eauto.
-(* cons left *)
+- (* cons left *)
   inv H1.
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1. rewrite app_ass. eauto.
@@ -703,7 +710,7 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_exprlist_invariant; eauto.  UNCHANGED.
   auto. auto. auto.
-(* cons right *)
+- (* cons right *)
   inv H2.
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
