@@ -126,12 +126,12 @@ Lemma length_move:
   length e'.(te_equ) + (if changed then 1 else 0) <= S(length e.(te_equ)).
 Proof.
   unfold move; intros.
-  destruct (peq r1 r2). inv H. omega.
+  destruct (peq r1 r2). inv H. lia.
   destruct e.(te_typ)!r1 as [ty1|]; destruct e.(te_typ)!r2 as [ty2|]; inv H; simpl.
-  destruct (T.eq ty1 ty2); inv H1. omega.
-  omega.
-  omega.
-  omega.
+  destruct (T.eq ty1 ty2); inv H1. lia.
+  lia.
+  lia.
+  lia.
 Qed.
 
 Lemma length_solve_rec:
@@ -140,14 +140,14 @@ Lemma length_solve_rec:
   length e'.(te_equ) + (if ch' && negb ch then 1 else 0) <= length e.(te_equ) + length q.
 Proof.
   induction q; simpl; intros.
-- inv H. replace (ch' && negb ch') with false. omega. destruct ch'; auto.
+- inv H. replace (ch' && negb ch') with false. lia. destruct ch'; auto.
 - destruct a as [r1 r2]; monadInv H. rename x0 into e0. rename x into ch0.
   exploit IHq; eauto. intros A.
   exploit length_move; eauto. intros B.
   set (X := (if ch' && negb (ch || ch0) then 1 else 0)) in *.
   set (Y := (if ch0 then 1 else 0)) in *.
   set (Z := (if ch' && negb ch then 1 else 0)) in *.
-  cut (Z <= X + Y). intros. omega.
+  cut (Z <= X + Y). intros. lia.
   unfold X, Y, Z. destruct ch'; destruct ch; destruct ch0; simpl; auto.
 Qed.
 
@@ -164,7 +164,7 @@ Function solve_constraints (e: typenv) {measure weight_typenv e}: res typenv :=
   end.
 Proof.
   intros. exploit length_solve_rec; eauto. simpl. intros.
-  unfold weight_typenv. omega.
+  unfold weight_typenv. lia.
 Qed.
 
 Definition typassign := positive -> T.t.

@@ -87,7 +87,7 @@ Proof.
 * (* The new instruction *)
   rewrite (U.repr_union_2 u pc s); auto. rewrite U.repr_union_3.
   unfold measure_edge. destruct (peq (U.repr u s) pc). auto. right. split. auto.
-  rewrite PC. rewrite peq_true. omega.
+  rewrite PC. rewrite peq_true. lia.
 
 * (* An old instruction *)
   assert (U.repr u pc' = pc' -> U.repr (U.union u pc s) pc' = pc').
@@ -96,7 +96,7 @@ Proof.
   intros [P | [P Q]]. left; auto. right.
   split. apply U.sameclass_union_2. auto.
   unfold measure_edge. destruct (peq (U.repr u s) pc). auto.
-  rewrite P. destruct (peq (U.repr u s0) pc). omega. auto.
+  rewrite P. destruct (peq (U.repr u s0) pc). lia. auto.
 Qed.
 
 Definition record_gotos' (f: function) :=
@@ -420,7 +420,7 @@ Proof.
   generalize (record_gotos_correct f pc). rewrite H.
   destruct bb; auto. destruct i; auto.
   intros [A | [B C]]. auto.
-  right. split. simpl. omega.
+  right. split. simpl. lia.
   split. auto.
   rewrite B. econstructor; eauto.
 
@@ -487,7 +487,7 @@ Proof.
   eapply exec_Lbranch; eauto.
   fold (branch_target f pc). econstructor; eauto.
 - (* Lbranch (eliminated) *)
-  right; split. simpl. omega. split. auto. constructor; auto.
+  right; split. simpl. lia. split. auto. constructor; auto.
 
 - (* Lcond *)
   simpl tunneled_block.

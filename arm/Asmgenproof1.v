@@ -352,15 +352,15 @@ Proof.
   apply exec_straight_one. simpl; eauto. auto. split; intros; Simpl.
   econstructor; split.
   eapply exec_straight_two. simpl; reflexivity. simpl; reflexivity. auto. auto.
-  split; intros; Simpl. simpl. f_equal. rewrite Int.zero_ext_and by omega.
+  split; intros; Simpl. simpl. f_equal. rewrite Int.zero_ext_and by lia.
   rewrite Int.and_assoc. change 65535 with (two_p 16 - 1). rewrite Int.and_idem.
   apply Int.same_bits_eq; intros.
   rewrite Int.bits_or, Int.bits_and, Int.bits_shl, Int.testbit_repr by auto.
-  rewrite Ztestbit_two_p_m1 by omega. change (Int.unsigned (Int.repr 16)) with 16.
+  rewrite Ztestbit_two_p_m1 by lia. change (Int.unsigned (Int.repr 16)) with 16.
   destruct (zlt i 16).
   rewrite andb_true_r, orb_false_r; auto.
-  rewrite andb_false_r; simpl. rewrite Int.bits_shru by omega.
-  change (Int.unsigned (Int.repr 16)) with 16. rewrite zlt_true by omega. f_equal; omega.
+  rewrite andb_false_r; simpl. rewrite Int.bits_shru by lia.
+  change (Int.unsigned (Int.repr 16)) with 16. rewrite zlt_true by lia. f_equal; lia.
 }
   destruct (Nat.leb l1 l2).
 { (* mov - orr* *)
@@ -696,10 +696,10 @@ Lemma int_not_lt:
 Proof.
   intros. unfold Int.lt. rewrite int_signed_eq. unfold proj_sumbool.
   destruct (zlt (Int.signed y) (Int.signed x)).
-  rewrite zlt_false. rewrite zeq_false. auto. omega. omega.
+  rewrite zlt_false. rewrite zeq_false. auto. lia. lia.
   destruct (zeq (Int.signed x) (Int.signed y)).
-  rewrite zlt_false. auto. omega.
-  rewrite zlt_true. auto. omega.
+  rewrite zlt_false. auto. lia.
+  rewrite zlt_true. auto. lia.
 Qed.
 
 Lemma int_lt_not:
@@ -713,10 +713,10 @@ Lemma int_not_ltu:
 Proof.
   intros. unfold Int.ltu, Int.eq.
   destruct (zlt (Int.unsigned y) (Int.unsigned x)).
-  rewrite zlt_false. rewrite zeq_false. auto. omega. omega.
+  rewrite zlt_false. rewrite zeq_false. auto. lia. lia.
   destruct (zeq (Int.unsigned x) (Int.unsigned y)).
-  rewrite zlt_false. auto. omega.
-  rewrite zlt_true. auto. omega.
+  rewrite zlt_false. auto. lia.
+  rewrite zlt_true. auto. lia.
 Qed.
 
 Lemma int_ltu_not:
@@ -1279,16 +1279,16 @@ Local Transparent destroyed_by_op.
     rewrite Int.unsigned_repr. apply zlt_true.
     assert (Int.unsigned i <> 0).
     { red; intros; elim H. rewrite <- (Int.repr_unsigned i). rewrite H1; reflexivity. }
-    omega.
+    lia.
     change (Int.unsigned (Int.repr 31)) with (Int.zwordsize - 1) in H0.
-    generalize Int.wordsize_max_unsigned; omega.
+    generalize Int.wordsize_max_unsigned; lia.
   }
   assert (LTU'': Int.ltu i Int.iwordsize = true).
   {
     generalize (Int.ltu_inv _ _ LTU). intros.
     unfold Int.ltu. rewrite Int.unsigned_repr_wordsize. apply zlt_true.
     change (Int.unsigned (Int.repr 31)) with (Int.zwordsize - 1) in H0.
-    omega.
+    lia.
   }
   set (j := Int.sub Int.iwordsize i) in *.
   set (rs1 := nextinstr_nf (rs#IR14 <- (Val.shr (Vint i0) (Vint (Int.repr 31))))).

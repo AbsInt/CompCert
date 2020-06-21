@@ -47,11 +47,11 @@ Proof.
   intro f.
   assert (forall n pc, (return_measure_rec n f pc <= n)%nat).
     induction n; intros; simpl.
-    omega.
-    destruct (f!pc); try omega.
-    destruct i; try omega.
-    generalize (IHn n0). omega.
-    generalize (IHn n0). omega.
+    lia.
+    destruct (f!pc); try lia.
+    destruct i; try lia.
+    generalize (IHn n0). lia.
+    generalize (IHn n0). lia.
   intros. unfold return_measure. apply H.
 Qed.
 
@@ -61,11 +61,11 @@ Remark return_measure_rec_incr:
   (return_measure_rec n1 f pc <= return_measure_rec n2 f pc)%nat.
 Proof.
   induction n1; intros; simpl.
-  omega.
-  destruct n2. omegaContradiction. assert (n1 <= n2)%nat by omega.
-  simpl. destruct f!pc; try omega. destruct i; try omega.
-  generalize (IHn1 n2 n H0). omega.
-  generalize (IHn1 n2 n H0). omega.
+  lia.
+  destruct n2. extlia. assert (n1 <= n2)%nat by lia.
+  simpl. destruct f!pc; try lia. destruct i; try lia.
+  generalize (IHn1 n2 n H0). lia.
+  generalize (IHn1 n2 n H0). lia.
 Qed.
 
 Lemma is_return_measure_rec:
@@ -75,13 +75,13 @@ Lemma is_return_measure_rec:
 Proof.
   induction n; simpl; intros.
   congruence.
-  destruct n'. omegaContradiction. simpl.
+  destruct n'. extlia. simpl.
   destruct (fn_code f)!pc; try congruence.
   destruct i; try congruence.
-  decEq. apply IHn with r. auto. omega.
+  decEq. apply IHn with r. auto. lia.
   destruct (is_move_operation o l); try congruence.
   destruct (Reg.eq r r1); try congruence.
-  decEq. apply IHn with r0. auto. omega.
+  decEq. apply IHn with r0. auto. lia.
 Qed.
 
 (** ** Relational characterization of the code transformation *)
@@ -117,22 +117,22 @@ Proof.
   generalize H. simpl.
   caseEq ((fn_code f)!pc); try congruence.
   intro i. caseEq i; try congruence.
-  intros s; intros. eapply is_return_nop; eauto. eapply IHn; eauto. omega.
+  intros s; intros. eapply is_return_nop; eauto. eapply IHn; eauto. lia.
   unfold return_measure.
   rewrite <- (is_return_measure_rec f (S n) niter pc rret); auto.
   rewrite <- (is_return_measure_rec f n niter s rret); auto.
-  simpl. rewrite H2. omega. omega.
+  simpl. rewrite H2. lia. lia.
 
   intros op args dst s EQ1 EQ2.
   caseEq (is_move_operation op args); try congruence.
   intros src IMO. destruct (Reg.eq rret src); try congruence.
   subst rret. intro.
   exploit is_move_operation_correct; eauto. intros [A B]. subst.
-  eapply is_return_move; eauto. eapply IHn; eauto. omega.
+  eapply is_return_move; eauto. eapply IHn; eauto. lia.
   unfold return_measure.
   rewrite <- (is_return_measure_rec f (S n) niter pc src); auto.
   rewrite <- (is_return_measure_rec f n niter s dst); auto.
-  simpl. rewrite EQ2. omega. omega.
+  simpl. rewrite EQ2. lia. lia.
 
   intros or EQ1 EQ2. destruct or; intros.
   assert (r = rret). eapply proj_sumbool_true; eauto. subst r.
@@ -407,7 +407,7 @@ Proof.
   eapply exec_Inop; eauto. constructor; auto.
 - (* eliminated nop *)
   assert (s0 = pc') by congruence. subst s0.
-  right. split. simpl. omega. split. auto.
+  right. split. simpl. lia. split. auto.
   econstructor; eauto.
 
 - (* op *)
@@ -421,7 +421,7 @@ Proof.
   econstructor; eauto. apply set_reg_lessdef; auto.
 - (* eliminated move *)
   rewrite H1 in H. clear H1. inv H.
-  right. split. simpl. omega. split. auto.
+  right. split. simpl. lia. split. auto.
   econstructor; eauto. simpl in H0. rewrite PMap.gss. congruence.
 
 - (* load *)
@@ -455,13 +455,13 @@ Proof.
 + (* call turned tailcall *)
   assert ({ m'' | Mem.free m' sp0 0 (fn_stacksize (transf_function f)) = Some m''}).
     apply Mem.range_perm_free. rewrite stacksize_preserved. rewrite H7.
-    red; intros; omegaContradiction.
+    red; intros; extlia.
   destruct X as [m'' FREE].
   left. exists (Callstate s' (transf_fundef fd) (rs'##args) m''); split.
   eapply exec_Itailcall; eauto. apply sig_preserved.
   constructor. eapply match_stackframes_tail; eauto. apply regs_lessdef_regs; auto.
   eapply Mem.free_right_extends; eauto.
-  rewrite stacksize_preserved. rewrite H7. intros. omegaContradiction.
+  rewrite stacksize_preserved. rewrite H7. intros. extlia.
 + (* call that remains a call *)
   left. exists (Callstate (Stackframe res (transf_function f) (Vptr sp0 Ptrofs.zero) pc' rs' :: s')
                           (transf_fundef fd) (rs'##args) m'); split.
@@ -514,22 +514,22 @@ Proof.
 
 - (* eliminated return None *)
   assert (or = None) by congruence. subst or.
-  right. split. simpl. omega. split. auto.
+  right. split. simpl. lia. split. auto.
   constructor. auto.
   simpl. constructor.
   eapply Mem.free_left_extends; eauto.
 
 - (* eliminated return Some *)
   assert (or = Some r) by congruence. subst or.
-  right. split. simpl. omega. split. auto.
+  right. split. simpl. lia. split. auto.
   constructor. auto.
   simpl. auto.
   eapply Mem.free_left_extends; eauto.
 
 - (* internal call *)
   exploit Mem.alloc_extends; eauto.
-    instantiate (1 := 0). omega.
-    instantiate (1 := fn_stacksize f). omega.
+    instantiate (1 := 0). lia.
+    instantiate (1 := fn_stacksize f). lia.
   intros [m'1 [ALLOC EXT]].
   assert (fn_stacksize (transf_function f) = fn_stacksize f /\
           fn_entrypoint (transf_function f) = fn_entrypoint f /\
@@ -559,7 +559,7 @@ Proof.
   right. split. unfold measure. simpl length.
   change (S (length s) * (niter + 2))%nat
    with ((niter + 2) + (length s) * (niter + 2))%nat.
-  generalize (return_measure_bounds (fn_code f) pc). omega.
+  generalize (return_measure_bounds (fn_code f) pc). lia.
   split. auto.
   econstructor; eauto.
   rewrite Regmap.gss. auto.

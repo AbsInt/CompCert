@@ -77,11 +77,11 @@ Local Opaque Z.add Z.mul sepconj range.
   set (ostkdata := align oendcs 8).
   generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
   unfold fe_ofs_arg.
-  assert (8 + 4 * b.(bound_outgoing) <= ol) by (apply align_le; omega).
-  assert (ol <= ora) by (unfold ora; omega).
-  assert (ora <= ocs) by (unfold ocs; omega).
+  assert (8 + 4 * b.(bound_outgoing) <= ol) by (apply align_le; lia).
+  assert (ol <= ora) by (unfold ora; lia).
+  assert (ora <= ocs) by (unfold ocs; lia).
   assert (ocs <= oendcs) by (apply size_callee_save_area_incr).
-  assert (oendcs <= ostkdata) by (apply align_le; omega).
+  assert (oendcs <= ostkdata) by (apply align_le; lia).
 (* Reorder as:
      back link
      outgoing
@@ -90,12 +90,12 @@ Local Opaque Z.add Z.mul sepconj range.
      callee-save *)
   rewrite sep_swap3.
 (* Apply range_split and range_split2 repeatedly *)
-  apply range_drop_right with 8. omega.
-  apply range_split. omega.
-  apply range_split_2. fold ol; omega. omega.
-  apply range_split. omega.
-  apply range_split. omega.
-  apply range_drop_right with ostkdata. omega.
+  apply range_drop_right with 8. lia.
+  apply range_split. lia.
+  apply range_split_2. fold ol; lia. lia.
+  apply range_split. lia.
+  apply range_split. lia.
+  apply range_drop_right with ostkdata. lia.
   eapply sep_drop2. eexact H.
 Qed.
 
@@ -112,12 +112,12 @@ Proof.
   set (ostkdata := align oendcs 8).
   generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
   unfold fe_ofs_arg.
-  assert (8 + 4 * b.(bound_outgoing) <= ol) by (apply align_le; omega).
-  assert (ol <= ora) by (unfold ora; omega).
-  assert (ora <= ocs) by (unfold ocs; omega).
+  assert (8 + 4 * b.(bound_outgoing) <= ol) by (apply align_le; lia).
+  assert (ol <= ora) by (unfold ora; lia).
+  assert (ora <= ocs) by (unfold ocs; lia).
   assert (ocs <= oendcs) by (apply size_callee_save_area_incr).
-  assert (oendcs <= ostkdata) by (apply align_le; omega).
-  split. omega. apply align_le. omega.
+  assert (oendcs <= ostkdata) by (apply align_le; lia).
+  split. lia. apply align_le. lia.
 Qed.
 
 Lemma frame_env_aligned:
@@ -136,10 +136,10 @@ Proof.
   set (oendcs := size_callee_save_area b ocs).
   set (ostkdata := align oendcs 8).
   split. exists (fe_ofs_arg / 8); reflexivity.
-  split. apply align_divides; omega.
-  split. apply align_divides; omega.
+  split. apply align_divides; lia.
+  split. apply align_divides; lia.
   split. apply Z.divide_0_r.
   apply Z.divide_add_r.
-    apply Z.divide_trans with 8. exists 2; auto. apply align_divides; omega.
+    apply Z.divide_trans with 8. exists 2; auto. apply align_divides; lia.
     apply Z.divide_factor_l.
 Qed.

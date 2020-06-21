@@ -1449,13 +1449,13 @@ Proof.
   (* for val *)
   intros [SL1 [TY1 EV1]]. subst sl.
   econstructor; split.
-  right; split. apply star_refl. destruct r; simpl; (contradiction || omega).
+  right; split. apply star_refl. destruct r; simpl; (contradiction || lia).
   econstructor; eauto.
   instantiate (1 := tmps). apply tr_top_val_val; auto.
   (* for effects *)
   intros SL1. subst sl.
   econstructor; split.
-  right; split. apply star_refl. destruct r; simpl; (contradiction || omega).
+  right; split. apply star_refl. destruct r; simpl; (contradiction || lia).
   econstructor; eauto.
   instantiate (1 := tmps). apply tr_top_base. constructor.
   (* for set *)
@@ -1779,7 +1779,7 @@ Proof.
   subst; simpl Kseqlist.
   econstructor; split.
   right; split. rewrite app_ass. rewrite Kseqlist_app. eexact EXEC.
-  simpl. omega.
+  simpl. lia.
   constructor.
   (* for value *)
   exploit tr_simple_lvalue; eauto. intros [SL1 [TY1 EV1]].
@@ -1788,7 +1788,7 @@ Proof.
   subst; simpl Kseqlist.
   econstructor; split.
   right; split. rewrite app_ass. rewrite Kseqlist_app. eexact EXEC.
-  simpl. omega.
+  simpl. lia.
   constructor.
 (* postincr *)
   exploit tr_top_leftcontext; eauto. clear H14.
@@ -1846,7 +1846,7 @@ Proof.
   subst. simpl Kseqlist.
   econstructor; split.
   right; split. rewrite app_ass; rewrite Kseqlist_app. eexact EXEC.
-  simpl; omega.
+  simpl; lia.
   constructor.
   (* for value *)
   exploit tr_simple_lvalue; eauto. intros [SL1 [TY1 EV1]].
@@ -1863,7 +1863,7 @@ Proof.
   subst sl0; simpl Kseqlist.
   econstructor; split.
   right; split. apply star_refl. simpl. apply plus_lt_compat_r.
-  apply (leftcontext_size _ _ _ H). simpl. omega.
+  apply (leftcontext_size _ _ _ H). simpl. lia.
   econstructor; eauto. apply S.
   eapply tr_expr_monotone; eauto.
   auto. auto.
@@ -1885,7 +1885,7 @@ Proof.
   (* for effects *)
   econstructor; split.
   right; split. apply star_refl. simpl. apply plus_lt_compat_r.
-  apply (leftcontext_size _ _ _ H). simpl. omega.
+  apply (leftcontext_size _ _ _ H). simpl. lia.
   econstructor; eauto.
   exploit tr_simple_rvalue; eauto. simpl. intros A. subst sl1.
   apply S. constructor; auto. auto. auto.
@@ -2015,12 +2015,12 @@ Proof.
   inv H6. inv H0.
   econstructor; split.
   right; split. apply push_seq.
-  simpl. omega.
+  simpl. lia.
   econstructor; eauto. constructor. auto.
 (* do 2 *)
   inv H7. inv H6. inv H.
   econstructor; split.
-  right; split. apply star_refl. simpl. omega.
+  right; split. apply star_refl. simpl. lia.
   econstructor; eauto. constructor.
 
 (* seq *)

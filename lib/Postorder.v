@@ -314,10 +314,10 @@ Proof.
   destruct (wrk s) as [ | [x succs] l].
   discriminate.
   destruct succs as [ | y succs ].
-  inv H. simpl. apply lex_ord_right. omega.
+  inv H. simpl. apply lex_ord_right. lia.
   destruct ((gr s)!y) as [succs'|] eqn:?.
   inv H. simpl. apply lex_ord_left. eapply PTree_Properties.cardinal_remove; eauto.
-  inv H. simpl. apply lex_ord_right. omega.
+  inv H. simpl. apply lex_ord_right. lia.
 Qed.
 
 End POSTORDER.

@@ -381,9 +381,9 @@ Proof.
 - TrivialExists. simpl. rewrite Int.and_commut; auto.
 - TrivialExists. simpl. rewrite Val.and_assoc. rewrite Int.and_commut. auto.
 - rewrite Val.zero_ext_and. TrivialExists. rewrite Val.and_assoc.
-  rewrite Int.and_commut. auto. omega.
+  rewrite Int.and_commut. auto. lia.
 - rewrite Val.zero_ext_and. TrivialExists. rewrite Val.and_assoc.
-  rewrite Int.and_commut. auto. omega.
+  rewrite Int.and_commut. auto. lia.
 - TrivialExists.
 Qed.
 
@@ -743,7 +743,7 @@ Proof.
   red; intros until x. unfold cast8unsigned. destruct (cast8unsigned_match a); intros; InvEval.
   TrivialExists.
   subst. rewrite Val.zero_ext_and. rewrite Val.and_assoc.
-  rewrite Int.and_commut. apply eval_andimm; auto. omega.
+  rewrite Int.and_commut. apply eval_andimm; auto. lia.
   TrivialExists.
 Qed.
 
@@ -759,7 +759,7 @@ Proof.
   red; intros until x. unfold cast16unsigned. destruct (cast16unsigned_match a); intros; InvEval.
   TrivialExists.
   subst. rewrite Val.zero_ext_and. rewrite Val.and_assoc.
-  rewrite Int.and_commut. apply eval_andimm; auto. omega.
+  rewrite Int.and_commut. apply eval_andimm; auto. lia.
   TrivialExists.
 Qed.
 
@@ -860,7 +860,7 @@ Proof.
   simpl. rewrite Heqo; reflexivity.
   simpl. unfold Int64.loword. rewrite Int64.unsigned_repr, Int.repr_unsigned; auto.
   assert (Int.modulus < Int64.max_unsigned) by reflexivity. 
-  generalize (Int.unsigned_range n); omega.
+  generalize (Int.unsigned_range n); lia.
 Qed.
 
 Theorem eval_floatofintu:

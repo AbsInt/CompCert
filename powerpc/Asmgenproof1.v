@@ -81,12 +81,12 @@ Proof.
     unfold Int.modu, Int.zero. decEq.
     change 0 with (0 mod 65536).
     change (Int.unsigned (Int.repr 65536)) with 65536.
-    apply eqmod_mod_eq. omega.
+    apply eqmod_mod_eq. lia.
     unfold x, low_s. eapply eqmod_trans.
     apply  eqmod_divides with Int.modulus.
     unfold Int.sub. apply Int.eqm_unsigned_repr_l. apply Int.eqm_refl.
     exists 65536. compute; auto.
-    replace 0 with (Int.unsigned n - Int.unsigned n) by omega.
+    replace 0 with (Int.unsigned n - Int.unsigned n) by lia.
     apply eqmod_sub. apply eqmod_refl. apply Int.eqmod_sign_ext'.
     compute; auto.
   rewrite H0 in H. rewrite Int.add_zero in H.
@@ -543,7 +543,7 @@ Proof.
   - econstructor; split; [|split].
     + apply exec_straight_one. simpl; eauto. auto.
     + Simpl. rewrite Int64.add_zero_l. rewrite H. unfold low64_s.
-      rewrite Int64.sign_ext_widen by omega. auto.
+      rewrite Int64.sign_ext_widen by lia. auto.
     + intros; Simpl.
   - econstructor; split; [|split].
     + eapply exec_straight_two. simpl; eauto. simpl; eauto. auto. auto.
@@ -551,16 +551,16 @@ Proof.
       apply Int64.same_bits_eq; intros.  assert (Int64.zwordsize = 64) by auto.
       rewrite Int64.bits_or, Int64.bits_shl by auto.
       unfold low64_s, low64_u.
-      rewrite Int64.bits_zero_ext by omega.
+      rewrite Int64.bits_zero_ext by lia.
       change (Int64.unsigned (Int64.repr 16)) with 16.
       destruct (zlt i 16).
-      * rewrite Int64.bits_sign_ext by omega. rewrite zlt_true by omega. auto.
-      * rewrite ! Int64.bits_sign_ext by omega. rewrite orb_false_r.
+      * rewrite Int64.bits_sign_ext by lia. rewrite zlt_true by lia. auto.
+      * rewrite ! Int64.bits_sign_ext by lia. rewrite orb_false_r.
         destruct (zlt i 32).
-        ** rewrite zlt_true by omega. rewrite Int64.bits_shr by omega.
+        ** rewrite zlt_true by lia. rewrite Int64.bits_shr by lia.
            change (Int64.unsigned (Int64.repr 16)) with 16.
-           rewrite zlt_true by omega. f_equal; omega.
-        ** rewrite zlt_false by omega. rewrite Int64.bits_shr by omega.
+           rewrite zlt_true by lia. f_equal; lia.
+        ** rewrite zlt_false by lia. rewrite Int64.bits_shr by lia.
            change (Int64.unsigned (Int64.repr 16)) with 16.
            reflexivity.
     + intros; Simpl.
@@ -605,11 +605,11 @@ Proof.
     rewrite Int64.bits_shl by auto.
     change (Int64.unsigned (Int64.repr 32)) with 32.
     destruct (zlt i 32); auto.
-    rewrite Int64.bits_sign_ext by omega.
-    rewrite zlt_true by omega.
-    unfold n2. rewrite Int64.bits_shru by omega.
+    rewrite Int64.bits_sign_ext by lia.
+    rewrite zlt_true by lia.
+    unfold n2. rewrite Int64.bits_shru by lia.
     change (Int64.unsigned (Int64.repr 32)) with 32.
-    rewrite zlt_true by omega. f_equal; omega.
+    rewrite zlt_true by lia. f_equal; lia.
   }
   assert (MI: forall i, 0 <= i < Int64.zwordsize ->
               Int64.testbit mi i =
@@ -619,21 +619,21 @@ Proof.
     rewrite Int64.bits_shl by auto.
     change (Int64.unsigned (Int64.repr 16)) with 16.
     destruct (zlt i 16); auto.
-    unfold n1. rewrite Int64.bits_zero_ext by omega.
-    rewrite Int64.bits_shru by omega.
+    unfold n1. rewrite Int64.bits_zero_ext by lia.
+    rewrite Int64.bits_shru by lia.
     destruct (zlt i 32).
-    rewrite zlt_true by omega.
+    rewrite zlt_true by lia.
     change (Int64.unsigned (Int64.repr 16)) with 16.
-    rewrite zlt_true by omega. f_equal; omega.
-    rewrite zlt_false by omega. auto.
+    rewrite zlt_true by lia. f_equal; lia.
+    rewrite zlt_false by lia. auto.
   }
   assert (EQ: Int64.or (Int64.or hi mi) n0 = n).
   { apply Int64.same_bits_eq; intros.
     rewrite ! Int64.bits_or by auto.
-    unfold n0; rewrite Int64.bits_zero_ext by omega.
+    unfold n0; rewrite Int64.bits_zero_ext by lia.
     rewrite HI, MI by auto.
     destruct (zlt i 16).
-    rewrite zlt_true by omega. auto.
+    rewrite zlt_true by lia. auto.
     destruct (zlt i 32); rewrite ! orb_false_r; auto.
   }
   edestruct (loadimm64_32s_correct r n2) as (rs' & A & B & C).
@@ -1180,7 +1180,7 @@ Local Transparent Int.repr.
    rewrite H2. apply Int.mkint_eq; reflexivity.
   rewrite Int.not_involutive in H3.
   congruence.
-  omega.
+  lia.
 Qed.
 
 Remark add_carry_ne0:
@@ -1198,8 +1198,8 @@ Transparent Int.eq.
   rewrite Int.unsigned_zero.  rewrite Int.unsigned_mone.
   unfold negb, Val.of_bool, Vtrue, Vfalse.
   destruct (zeq (Int.unsigned i) 0); decEq.
-  apply zlt_true. omega.
-  apply zlt_false. generalize (Int.unsigned_range i). omega.
+  apply zlt_true. lia.
+  apply zlt_false. generalize (Int.unsigned_range i). lia.
 Qed.
 
 Lemma transl_cond_op_correct:

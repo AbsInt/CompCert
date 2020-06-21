@@ -126,14 +126,14 @@ Program Instance Decidable_ge_Z : forall (x y: Z), Decidable (x >= y) := {
   Decidable_witness := Z.geb x y
 }.
 Next Obligation.
-  rewrite Z.geb_le. intuition omega.
+  rewrite Z.geb_le. intuition lia.
 Qed.
 
 Program Instance Decidable_gt_Z : forall (x y: Z), Decidable (x > y) := {
   Decidable_witness := Z.gtb x y
 }.
 Next Obligation.
-  rewrite Z.gtb_lt. intuition omega.
+  rewrite Z.gtb_lt. intuition lia.
 Qed.
 
 Program Instance Decidable_divides : forall (x y: Z), Decidable (x | y) := {
@@ -146,7 +146,7 @@ Next Obligation.
   destruct (Z.eq_dec x 0).
   subst x. rewrite Z.mul_0_r in EQ. subst y. reflexivity.
   assert (k = y / x).
-  { apply Zdiv_unique_full with 0. red; omega. rewrite EQ; ring. }
+  { apply Zdiv_unique_full with 0. red; lia. rewrite EQ; ring. }
   congruence.
 Qed.
 

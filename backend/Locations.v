@@ -157,7 +157,7 @@ Module Loc.
     forall l, ~(diff l l).
   Proof.
     destruct l; unfold diff; auto.
-    red; intros. destruct H; auto. generalize (typesize_pos ty); omega.
+    red; intros. destruct H; auto. generalize (typesize_pos ty); lia.
   Qed.
 
   Lemma diff_not_eq:
@@ -184,7 +184,7 @@ Module Loc.
     left; auto.
     destruct (zle (pos0 + typesize ty0) pos).
     left; auto.
-    right; red; intros [P | [P | P]]. congruence. omega. omega.
+    right; red; intros [P | [P | P]]. congruence. lia. lia.
     left; auto.
   Defined.
 
@@ -497,7 +497,7 @@ Module OrderedLoc <: OrderedType.
     destruct x.
     eelim Plt_strict; eauto.
     destruct H. eelim OrderedSlot.lt_not_eq; eauto. red; auto.
-    destruct H. destruct H0. omega.
+    destruct H. destruct H0. lia.
     destruct H0. eelim OrderedTyp.lt_not_eq; eauto. red; auto.
   Qed.
   Definition compare : forall x y : t, Compare lt eq x y.
@@ -545,18 +545,18 @@ Module OrderedLoc <: OrderedType.
       { destruct H. apply not_eq_sym. apply Plt_ne; auto. apply Plt_ne; auto. }
       congruence.
     - assert (RANGE: forall ty, 1 <= typesize ty <= 2).
-      { intros; unfold typesize. destruct ty0; omega.  }
+      { intros; unfold typesize. destruct ty0; lia.  }
       destruct H.
       + destruct H. left. apply not_eq_sym. apply OrderedSlot.lt_not_eq; auto.
         destruct H. right.
-        destruct H0. right. generalize (RANGE ty'); omega.
+        destruct H0. right. generalize (RANGE ty'); lia.
         destruct H0.
         assert (ty' = Tint \/ ty' = Tsingle \/ ty' = Tany32).
         { unfold OrderedTyp.lt in H1. destruct ty'; auto; compute in H1; congruence. }
-        right. destruct H2 as [E|[E|E]]; subst ty'; simpl typesize; omega.
+        right. destruct H2 as [E|[E|E]]; subst ty'; simpl typesize; lia.
       + destruct H. left. apply OrderedSlot.lt_not_eq; auto.
         destruct H. right.
-        destruct H0. left; omega.
+        destruct H0. left; lia.
         destruct H0. exfalso. destruct ty'; compute in H1; congruence.
   Qed.
 
@@ -572,14 +572,14 @@ Module OrderedLoc <: OrderedType.
     - destruct (OrderedSlot.compare sl sl'); auto.
       destruct H. contradiction.
       destruct H.
-      right; right; split; auto. left; omega.
+      right; right; split; auto. left; lia.
       left; right; split; auto.
       assert (EITHER: typesize ty' = 1 /\ OrderedTyp.lt ty' Tany64 \/ typesize ty' = 2).
       { destruct ty'; compute; auto. }
       destruct (zlt ofs' (ofs - 1)). left; auto.
       destruct EITHER as [[P Q] | P].
-      right; split; auto. omega.
-      left; omega.
+      right; split; auto. lia.
+      left; lia.
   Qed.
 
 End OrderedLoc.

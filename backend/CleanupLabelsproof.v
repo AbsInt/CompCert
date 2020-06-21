@@ -286,7 +286,7 @@ Proof.
   constructor.
   econstructor; eauto with coqlib.
   (* eliminated *)
-  right. split. simpl. omega. split. auto. econstructor; eauto with coqlib.
+  right. split. simpl. lia. split. auto. econstructor; eauto with coqlib.
 (* Lgoto *)
   left; econstructor; split.
   econstructor. eapply find_label_translated; eauto. red; auto.

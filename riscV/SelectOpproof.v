@@ -365,20 +365,20 @@ Proof.
   change (Int.ltu (Int.repr 32) Int64.iwordsize') with true; simpl.
   apply Val.lessdef_same. f_equal. 
   transitivity (Int.repr (Z.shiftr (Int.signed i * Int.signed i0) 32)).
-  unfold Int.mulhs; f_equal. rewrite Zshiftr_div_two_p by omega. reflexivity.
+  unfold Int.mulhs; f_equal. rewrite Zshiftr_div_two_p by lia. reflexivity.
   apply Int.same_bits_eq; intros n N.
   change Int.zwordsize with 32 in *.
-  assert (N1: 0 <= n < 64) by omega.
+  assert (N1: 0 <= n < 64) by lia.
   rewrite Int64.bits_loword by auto.
   rewrite Int64.bits_shr' by auto.
   change (Int.unsigned (Int.repr 32)) with 32. change Int64.zwordsize with 64.
-  rewrite zlt_true by omega.
+  rewrite zlt_true by lia.
   rewrite Int.testbit_repr by auto. 
-  unfold Int64.mul. rewrite Int64.testbit_repr by (change Int64.zwordsize with 64; omega).
+  unfold Int64.mul. rewrite Int64.testbit_repr by (change Int64.zwordsize with 64; lia).
   transitivity (Z.testbit (Int.signed i * Int.signed i0) (n + 32)).
-  rewrite Z.shiftr_spec by omega. auto.
+  rewrite Z.shiftr_spec by lia. auto.
   apply Int64.same_bits_eqm. apply Int64.eqm_mult; apply Int64.eqm_unsigned_repr. 
-  change Int64.zwordsize with 64; omega.
+  change Int64.zwordsize with 64; lia.
 - TrivialExists.
 Qed.
 
@@ -393,20 +393,20 @@ Proof.
   change (Int.ltu (Int.repr 32) Int64.iwordsize') with true; simpl.
   apply Val.lessdef_same. f_equal. 
   transitivity (Int.repr (Z.shiftr (Int.unsigned i * Int.unsigned i0) 32)).
-  unfold Int.mulhu; f_equal. rewrite Zshiftr_div_two_p by omega. reflexivity.
+  unfold Int.mulhu; f_equal. rewrite Zshiftr_div_two_p by lia. reflexivity.
   apply Int.same_bits_eq; intros n N.
   change Int.zwordsize with 32 in *.
-  assert (N1: 0 <= n < 64) by omega.
+  assert (N1: 0 <= n < 64) by lia.
   rewrite Int64.bits_loword by auto.
   rewrite Int64.bits_shru' by auto.
   change (Int.unsigned (Int.repr 32)) with 32. change Int64.zwordsize with 64.
-  rewrite zlt_true by omega.
+  rewrite zlt_true by lia.
   rewrite Int.testbit_repr by auto. 
-  unfold Int64.mul. rewrite Int64.testbit_repr by (change Int64.zwordsize with 64; omega).
+  unfold Int64.mul. rewrite Int64.testbit_repr by (change Int64.zwordsize with 64; lia).
   transitivity (Z.testbit (Int.unsigned i * Int.unsigned i0) (n + 32)).
-  rewrite Z.shiftr_spec by omega. auto.
+  rewrite Z.shiftr_spec by lia. auto.
   apply Int64.same_bits_eqm. apply Int64.eqm_mult; apply Int64.eqm_unsigned_repr. 
-  change Int64.zwordsize with 64; omega.
+  change Int64.zwordsize with 64; lia.
 - TrivialExists.
 Qed.
 
@@ -563,8 +563,8 @@ Proof.
     assert (LTU2: Int.ltu (Int.sub Int.iwordsize n) Int.iwordsize = true).
     { unfold Int.ltu; apply zlt_true.
       unfold Int.sub. change (Int.unsigned Int.iwordsize) with 32. 
-      rewrite Int.unsigned_repr. omega. 
-      assert (32 < Int.max_unsigned) by reflexivity. omega. }
+      rewrite Int.unsigned_repr. lia. 
+      assert (32 < Int.max_unsigned) by reflexivity. lia. }
     assert (X: eval_expr ge sp e m le
                (Eop (Oshrimm (Int.repr (Int.zwordsize - 1))) (a ::: Enil))
                (Vint (Int.shr i (Int.repr (Int.zwordsize - 1))))).
@@ -575,7 +575,7 @@ Proof.
     TrivialExists. 
     constructor. EvalOp. simpl; eauto. constructor. 
     simpl. unfold Int.ltu; rewrite zlt_true. rewrite Int.shrx_shr_2 by auto. reflexivity. 
-    change (Int.unsigned Int.iwordsize) with 32; omega.
+    change (Int.unsigned Int.iwordsize) with 32; lia.
 *)
 Qed.
 
@@ -763,7 +763,7 @@ Qed.
 Theorem eval_cast8unsigned: unary_constructor_sound cast8unsigned (Val.zero_ext 8).
 Proof.
   red; intros until x. unfold cast8unsigned.
-  rewrite Val.zero_ext_and. apply eval_andimm. omega.
+  rewrite Val.zero_ext_and. apply eval_andimm. lia.
 Qed.
 
 Theorem eval_cast16signed: unary_constructor_sound cast16signed (Val.sign_ext 16).
@@ -776,7 +776,7 @@ Qed.
 Theorem eval_cast16unsigned: unary_constructor_sound cast16unsigned (Val.zero_ext 16).
 Proof.
   red; intros until x. unfold cast8unsigned.
-  rewrite Val.zero_ext_and. apply eval_andimm. omega.
+  rewrite Val.zero_ext_and. apply eval_andimm. lia.
 Qed.
 
 Theorem eval_intoffloat:

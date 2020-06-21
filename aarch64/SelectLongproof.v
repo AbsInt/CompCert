@@ -225,8 +225,8 @@ Proof.
   intros. unfold Int.ltu; apply zlt_true.
   apply Int.ltu_inv in H. apply Int.ltu_inv in H0.
   change (Int.unsigned Int64.iwordsize') with Int64.zwordsize in *.
-  unfold Int.sub; rewrite Int.unsigned_repr. omega.
-  assert (Int64.zwordsize < Int.max_unsigned) by reflexivity. omega.
+  unfold Int.sub; rewrite Int.unsigned_repr. lia.
+  assert (Int64.zwordsize < Int.max_unsigned) by reflexivity. lia.
 Qed.
 
 Theorem eval_shrluimm:
@@ -242,13 +242,13 @@ Local Opaque Int64.zwordsize.
 + destruct (Int.ltu n a) eqn:L2.
 * assert (L3: Int.ltu (Int.sub a n) Int64.iwordsize' = true).
   { apply sub_shift_amount; auto using a64_range.
-    apply Int.ltu_inv in L2. omega. }
+    apply Int.ltu_inv in L2. lia. }
   econstructor; split. EvalOp.
   destruct v1; simpl; auto. rewrite mk_amount64_eq, L3, a64_range by auto.
   simpl. rewrite L. rewrite Int64.shru'_shl', L2 by auto using a64_range. auto.
 * assert (L3: Int.ltu (Int.sub n a) Int64.iwordsize' = true).
   { apply sub_shift_amount; auto using a64_range.
-    unfold Int.ltu in L2. destruct zlt in L2; discriminate || omega. }
+    unfold Int.ltu in L2. destruct zlt in L2; discriminate || lia. }
   econstructor; split. EvalOp.
   destruct v1; simpl; auto. rewrite mk_amount64_eq, L3, a64_range by auto.
   simpl. rewrite L. rewrite Int64.shru'_shl', L2 by auto using a64_range. auto.
@@ -261,11 +261,11 @@ Local Opaque Int64.zwordsize.
 * econstructor; split. EvalOp. rewrite mk_amount64_eq by auto.
   destruct v1; simpl; auto. rewrite ! L; simpl.
   set (s' := s - Int.unsigned n).
-  replace s with (s' + Int.unsigned n) by (unfold s'; omega).
-  rewrite Int64.shru'_zero_ext. auto. unfold s'; omega.
+  replace s with (s' + Int.unsigned n) by (unfold s'; lia).
+  rewrite Int64.shru'_zero_ext. auto. unfold s'; lia.
 * econstructor; split. EvalOp.
   destruct v1; simpl; auto. rewrite ! L; simpl.
-  rewrite Int64.shru'_zero_ext_0 by omega. auto. 
+  rewrite Int64.shru'_zero_ext_0 by lia. auto. 
 + econstructor; eauto using eval_shrluimm_base.
 - intros; TrivialExists.
 Qed.
@@ -290,13 +290,13 @@ Proof.
 + destruct (Int.ltu n a) eqn:L2.
 * assert (L3: Int.ltu (Int.sub a n) Int64.iwordsize' = true).
   { apply sub_shift_amount; auto using a64_range.
-    apply Int.ltu_inv in L2. omega. }
+    apply Int.ltu_inv in L2. lia. }
   econstructor; split. EvalOp.
   destruct v1; simpl; auto. rewrite mk_amount64_eq, L3, a64_range by auto.
   simpl. rewrite L. rewrite Int64.shr'_shl', L2 by auto using a64_range. auto.
 * assert (L3: Int.ltu (Int.sub n a) Int64.iwordsize' = true).
   { apply sub_shift_amount; auto using a64_range.
-    unfold Int.ltu in L2. destruct zlt in L2; discriminate || omega. }
+    unfold Int.ltu in L2. destruct zlt in L2; discriminate || lia. }
   econstructor; split. EvalOp.
   destruct v1; simpl; auto. rewrite mk_amount64_eq, L3, a64_range by auto.
   simpl. rewrite L. rewrite Int64.shr'_shl', L2 by auto using a64_range. auto.
@@ -309,8 +309,8 @@ Proof.
 * InvBooleans. econstructor; split. EvalOp. rewrite mk_amount64_eq by auto.
   destruct v1; simpl; auto. rewrite ! L; simpl.
   set (s' := s - Int.unsigned n).
-  replace s with (s' + Int.unsigned n) by (unfold s'; omega).
-  rewrite Int64.shr'_sign_ext. auto. unfold s'; omega. unfold s'; omega.
+  replace s with (s' + Int.unsigned n) by (unfold s'; lia).
+  rewrite Int64.shr'_sign_ext. auto. unfold s'; lia. unfold s'; lia.
 * econstructor; split; [|eauto]. apply eval_shrlimm_base; auto. EvalOp.
 + econstructor; eauto using eval_shrlimm_base.
 - intros; TrivialExists.
@@ -392,7 +392,7 @@ Proof.
 - TrivialExists.
 - destruct (zlt (Int.unsigned a0) sz).
 + econstructor; split. EvalOp. destruct v1; simpl; auto. rewrite a64_range; simpl.
-  apply Val.lessdef_same. f_equal. rewrite Int64.shl'_zero_ext by omega. f_equal. omega.
+  apply Val.lessdef_same. f_equal. rewrite Int64.shl'_zero_ext by lia. f_equal. lia.
 + TrivialExists.
 - TrivialExists.
 Qed.

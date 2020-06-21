@@ -221,15 +221,15 @@ Proof.
   change (Int64.unsigned Int64.iwordsize) with 64.
   f_equal.
   rewrite Int.unsigned_repr. 
-  apply eqmod_mod_eq. omega. 
+  apply eqmod_mod_eq. lia. 
   apply eqmod_trans with a.
   apply eqmod_divides with Int.modulus. apply Int.eqm_sym. apply Int.eqm_unsigned_repr.
   exists (two_p (32-6)); auto.
   apply eqmod_divides with Int64.modulus. apply Int64.eqm_unsigned_repr.
   exists (two_p (64-6)); auto.
-  assert (0 <= Int.unsigned (Int.repr a) mod 64 < 64) by (apply Z_mod_lt; omega).
+  assert (0 <= Int.unsigned (Int.repr a) mod 64 < 64) by (apply Z_mod_lt; lia).
   assert (64 < Int.max_unsigned) by (compute; auto).
-  omega.
+  lia.
 - InvEval. TrivialExists. simpl. rewrite <- H.
   unfold Val.rolml; destruct v1; simpl; auto. unfold Int64.rolm.
   rewrite Int64.rol_and. rewrite Int64.and_assoc. auto.

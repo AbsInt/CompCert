@@ -237,8 +237,8 @@ Lemma iter_monot:
 Proof.
   induction p; intros.
   simpl. red; intros; red; auto.
-  destruct q. elimtype False; omega.
-  simpl. apply F_iter_monot. apply IHp. omega.
+  destruct q. elimtype False; lia.
+  simpl. apply F_iter_monot. apply IHp. lia.
 Qed.
 
 Lemma iter_either:

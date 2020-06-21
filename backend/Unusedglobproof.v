@@ -982,7 +982,7 @@ Proof.
   intros. exploit G; eauto. intros [U V].
   assert (Mem.valid_block m sp0) by (eapply Mem.valid_block_inject_1; eauto).
   assert (Mem.valid_block tm tsp) by (eapply Mem.valid_block_inject_2; eauto).
-  unfold Mem.valid_block in *; xomega.
+  unfold Mem.valid_block in *; extlia.
   apply set_res_inject; auto. apply regset_inject_incr with j; auto.
 
 - (* cond *)
@@ -1036,7 +1036,7 @@ Proof.
   apply match_stacks_bound with (Mem.nextblock m) (Mem.nextblock tm).
   apply match_stacks_incr with j; auto.
   intros. exploit G; eauto. intros [P Q].
-  unfold Mem.valid_block in *; xomega.
+  unfold Mem.valid_block in *; extlia.
   eapply external_call_nextblock; eauto.
   eapply external_call_nextblock; eauto.
 
@@ -1063,7 +1063,7 @@ Proof.
   - apply IHl. unfold Genv.add_global, P; simpl. intros LT. apply Plt_succ_inv in LT. destruct LT.
   + rewrite PTree.gso. apply H; auto. apply Plt_ne; auto.
   + rewrite H0. rewrite PTree.gss. exists g1; auto. }
-  apply H. red; simpl; intros. exfalso; xomega.
+  apply H. red; simpl; intros. exfalso; extlia.
 Qed.
 *)
 
@@ -1123,10 +1123,10 @@ Lemma Mem_getN_forall2:
   P (ZMap.get i c1) (ZMap.get i c2).
 Proof.
   induction n; simpl Mem.getN; intros.
-- simpl in H1. omegaContradiction.
+- simpl in H1. extlia.
 - inv H. rewrite Nat2Z.inj_succ in H1. destruct (zeq i p0).
 + congruence.
-+ apply IHn with (p0 + 1); auto. omega. omega.
++ apply IHn with (p0 + 1); auto. lia. lia.
 Qed.
 
 Lemma init_mem_inj_1:
@@ -1143,7 +1143,7 @@ Proof.
 + intros (P2 & Q2 & R2 & S2) (P1 & Q1 & R1 & S1).
   apply Q1 in H0. destruct H0. subst.
   apply Mem.perm_cur. eapply Mem.perm_implies; eauto.
-  apply P2. omega.
+  apply P2. lia.
 - exploit init_meminj_invert; eauto. intros (A & id & B & C).
   subst delta. apply Z.divide_0_r.
 - exploit init_meminj_invert_strong; eauto. intros (A & id & gd & B & C & D & E & F).
@@ -1162,8 +1162,8 @@ Local Transparent Mem.loadbytes.
   rewrite Z.add_0_r.
   apply Mem_getN_forall2 with (p := 0) (n := Z.to_nat (init_data_list_size (gvar_init v))).
   rewrite H3, H4. apply bytes_of_init_inject. auto.
-  omega.
-  rewrite Z2Nat.id by (apply Z.ge_le; apply init_data_list_size_pos). omega.
+  lia.
+  rewrite Z2Nat.id by (apply Z.ge_le; apply init_data_list_size_pos). lia.
 Qed.
 
 Lemma init_mem_inj_2:
@@ -1181,18 +1181,18 @@ Proof.
   exploit init_meminj_invert. eexact H1. intros (A2 & id2 & B2 & C2).
   destruct (ident_eq id1 id2). congruence. left; eapply Genv.global_addresses_distinct; eauto.
 - exploit init_meminj_invert; eauto. intros (A & id & B & C). subst delta.
-  split. omega. generalize (Ptrofs.unsigned_range_2 ofs). omega.
+  split. lia. generalize (Ptrofs.unsigned_range_2 ofs). lia.
 - exploit init_meminj_invert_strong; eauto. intros (A & id & gd & B & C & D & E & F).
   exploit (Genv.init_mem_characterization_gen p); eauto.
   exploit (Genv.init_mem_characterization_gen tp); eauto.
   destruct gd as [f|v].
 + intros (P2 & Q2) (P1 & Q1).
-  apply Q2 in H0. destruct H0. subst. replace ofs with 0 by omega.
+  apply Q2 in H0. destruct H0. subst. replace ofs with 0 by lia.
   left; apply Mem.perm_cur; auto.
 + intros (P2 & Q2 & R2 & S2) (P1 & Q1 & R1 & S1).
   apply Q2 in H0. destruct H0. subst.
   left. apply Mem.perm_cur. eapply Mem.perm_implies; eauto.
-  apply P1. omega.
+  apply P1. lia.
 Qed.
 
 End INIT_MEM.

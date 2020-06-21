@@ -689,32 +689,32 @@ Proof.
   destruct (zlt 0 sz); try discriminate.
   destruct (zle sz Ptrofs.max_signed); simpl in SEM; inv SEM.
   assert (E1: Ptrofs.signed (Ptrofs.repr sz) = sz).
-  { apply Ptrofs.signed_repr. generalize Ptrofs.min_signed_neg; omega. }
+  { apply Ptrofs.signed_repr. generalize Ptrofs.min_signed_neg; lia. }
   destruct Archi.ptr64 eqn:SF; inversion EQ0; clear EQ0; subst c.
 + assert (E: Int64.signed (Int64.repr sz) = sz).
   { apply Int64.signed_repr.
     replace Int64.max_signed with Ptrofs.max_signed.
-    generalize Int64.min_signed_neg; omega.
+    generalize Int64.min_signed_neg; lia.
     unfold Ptrofs.max_signed, Ptrofs.half_modulus; rewrite Ptrofs.modulus_eq64 by auto. reflexivity. }
   econstructor; eauto with cshm.
   rewrite SF, dec_eq_true. simpl.
   predSpec Int64.eq Int64.eq_spec (Int64.repr sz) Int64.zero.
-  rewrite H in E; rewrite Int64.signed_zero in E; omegaContradiction.
+  rewrite H in E; rewrite Int64.signed_zero in E; extlia.
   predSpec Int64.eq Int64.eq_spec (Int64.repr sz) Int64.mone.
-  rewrite H0 in E; rewrite Int64.signed_mone in E; omegaContradiction.
+  rewrite H0 in E; rewrite Int64.signed_mone in E; extlia.
   rewrite andb_false_r; simpl. unfold Vptrofs; rewrite SF. apply f_equal.
   apply f_equal. symmetry. auto with ptrofs.
 + assert (E: Int.signed (Int.repr sz) = sz).
   { apply Int.signed_repr.
     replace Int.max_signed with Ptrofs.max_signed.
-    generalize Int.min_signed_neg; omega.
+    generalize Int.min_signed_neg; lia.
     unfold Ptrofs.max_signed, Ptrofs.half_modulus, Ptrofs.modulus, Ptrofs.wordsize, Wordsize_Ptrofs.wordsize. rewrite SF. reflexivity.
   }
   econstructor; eauto with cshm. rewrite SF, dec_eq_true. simpl.
   predSpec Int.eq Int.eq_spec (Int.repr sz) Int.zero.
-  rewrite H in E; rewrite Int.signed_zero in E; omegaContradiction.
+  rewrite H in E; rewrite Int.signed_zero in E; extlia.
   predSpec Int.eq Int.eq_spec (Int.repr sz) Int.mone.
-  rewrite H0 in E; rewrite Int.signed_mone in E; omegaContradiction.
+  rewrite H0 in E; rewrite Int.signed_mone in E; extlia.
   rewrite andb_false_r; simpl. unfold Vptrofs; rewrite SF. apply f_equal. apply f_equal.
   symmetry. auto with ptrofs.
 - destruct Archi.ptr64 eqn:SF; inv EQ0; rewrite (transl_sizeof _ _ _ _ LINK EQ).
@@ -772,7 +772,7 @@ Proof.
   assert (Int64.unsigned i = Int.unsigned (Int64.loword i)).
   {
     unfold Int64.loword. rewrite Int.unsigned_repr; auto.
-    comput Int.max_unsigned; omega.
+    comput Int.max_unsigned; lia.
   }
   split; auto. unfold Int.ltu. apply zlt_true. rewrite <- H0. tauto.
 Qed.
@@ -786,7 +786,7 @@ Proof.
   assert (Int64.unsigned i = Int.unsigned (Int64.loword i)).
   {
     unfold Int64.loword. rewrite Int.unsigned_repr; auto.
-    comput Int.max_unsigned; omega.
+    comput Int.max_unsigned; lia.
   }
   unfold Int.ltu. apply zlt_true. rewrite <- H0. tauto.
 Qed.
@@ -797,7 +797,7 @@ Lemma small_shift_amount_3:
   Int64.unsigned (Int64.repr (Int.unsigned i)) = Int.unsigned i.
 Proof.
   intros. apply Int.ltu_inv in H. comput (Int.unsigned Int64.iwordsize').
-  apply Int64.unsigned_repr. comput Int64.max_unsigned; omega.
+  apply Int64.unsigned_repr. comput Int64.max_unsigned; lia.
 Qed.
 
 Lemma make_shl_correct: shift_constructor_correct make_shl sem_shl.

@@ -1428,8 +1428,8 @@ Lemma pres_cast_int_int:
   forall sz sg n, wt_int (cast_int_int sz sg n) sz sg.
 Proof.
   intros. unfold cast_int_int. destruct sz; simpl.
-- destruct sg. apply Int.sign_ext_idem; omega. apply Int.zero_ext_idem; omega.
-- destruct sg. apply Int.sign_ext_idem; omega. apply Int.zero_ext_idem; omega.
+- destruct sg. apply Int.sign_ext_idem; lia. apply Int.zero_ext_idem; lia.
+- destruct sg. apply Int.sign_ext_idem; lia. apply Int.zero_ext_idem; lia.
 - auto.
 - destruct (Int.eq n Int.zero); auto.
 Qed.
@@ -1616,12 +1616,12 @@ Proof.
   unfold access_mode, Val.load_result. remember Archi.ptr64 as ptr64. 
   intros until v; intros AC. destruct ty; simpl in AC; try discriminate AC.
 - destruct i; [destruct s|destruct s|idtac|idtac]; inv AC; simpl.
-  destruct v; auto with ty. constructor; red. apply Int.sign_ext_idem; omega.
-  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; omega.
-  destruct v; auto with ty. constructor; red. apply Int.sign_ext_idem; omega.
-  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; omega.
+  destruct v; auto with ty. constructor; red. apply Int.sign_ext_idem; lia.
+  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; lia.
+  destruct v; auto with ty. constructor; red. apply Int.sign_ext_idem; lia.
+  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; lia.
   destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
-  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; omega.
+  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; lia.
 - inv AC. destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
 - destruct f; inv AC; destruct v; auto with ty.
 - inv AC. unfold Mptr. destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
@@ -1637,16 +1637,16 @@ Proof.
   destruct ty; simpl in ACC; try discriminate. 
 - destruct i; [destruct s|destruct s|idtac|idtac]; inv ACC; unfold decode_val.
   destruct (proj_bytes vl); auto with ty.
-  constructor; red. apply Int.sign_ext_idem; omega.
+  constructor; red. apply Int.sign_ext_idem; lia.
   destruct (proj_bytes vl); auto with ty.
-  constructor; red. apply Int.zero_ext_idem; omega.
+  constructor; red. apply Int.zero_ext_idem; lia.
   destruct (proj_bytes vl); auto with ty.
-  constructor; red. apply Int.sign_ext_idem; omega.
+  constructor; red. apply Int.sign_ext_idem; lia.
   destruct (proj_bytes vl); auto with ty.
-  constructor; red. apply Int.zero_ext_idem; omega.
+  constructor; red. apply Int.zero_ext_idem; lia.
   destruct (proj_bytes vl). auto with ty. destruct Archi.ptr64 eqn:SF; auto with ty. 
   destruct (proj_bytes vl); auto with ty.
-  constructor; red. apply Int.zero_ext_idem; omega.
+  constructor; red. apply Int.zero_ext_idem; lia.
 - inv ACC. unfold decode_val. destruct (proj_bytes vl). auto with ty.
   destruct Archi.ptr64 eqn:SF; auto with ty. 
 - destruct f; inv ACC; unfold decode_val; destruct (proj_bytes vl); auto with ty.

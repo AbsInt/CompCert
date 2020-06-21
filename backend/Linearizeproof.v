@@ -642,7 +642,7 @@ Proof.
 
   (* Lbranch *)
   assert ((reachable f)!!pc = true). apply REACH; simpl; auto.
-  right; split. simpl; omega. split. auto. simpl. econstructor; eauto.
+  right; split. simpl; lia. split. auto. simpl. econstructor; eauto.
 
   (* Lcond *)
   assert (REACH1: (reachable f)!!pc1 = true) by (apply REACH; simpl; auto).
@@ -659,12 +659,12 @@ Proof.
   rewrite eval_negate_condition. rewrite H. auto. eauto.
   rewrite DC. econstructor; eauto.
   (* cond is false: branch is taken *)
-  right; split. simpl; omega. split. auto.  rewrite <- DC. econstructor; eauto.
+  right; split. simpl; lia. split. auto.  rewrite <- DC. econstructor; eauto.
   rewrite eval_negate_condition. rewrite H. auto.
   (* branch if cond is true *)
   destruct b.
   (* cond is true: branch is taken *)
-  right; split. simpl; omega. split. auto. econstructor; eauto.
+  right; split. simpl; lia. split. auto. econstructor; eauto.
   (* cond is false: no branch *)
   left; econstructor; split.
   apply plus_one. eapply exec_Lcond_false. eauto. eauto.
@@ -673,7 +673,7 @@ Proof.
   (* Ljumptable *)
   assert (REACH': (reachable f)!!pc = true).
     apply REACH. simpl. eapply list_nth_z_in; eauto.
-  right; split. simpl; omega. split. auto. econstructor; eauto.
+  right; split. simpl; lia. split. auto. econstructor; eauto.
 
   (* Lreturn *)
   left; econstructor; split.

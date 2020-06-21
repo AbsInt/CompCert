@@ -451,7 +451,7 @@ Proof.
   Int.bit_solve. destruct (zlt i0 n0).
   replace (Int.testbit n i0) with (negb (Int.testbit Int.zero i0)).
   rewrite Int.bits_zero. simpl. rewrite andb_true_r. auto.
-  rewrite <- EQ. rewrite Int.bits_zero_ext by omega. rewrite zlt_true by auto.
+  rewrite <- EQ. rewrite Int.bits_zero_ext by lia. rewrite zlt_true by auto.
   rewrite Int.bits_not by auto. apply negb_involutive.
   rewrite H6 by auto. auto.
   econstructor; split; eauto. auto.

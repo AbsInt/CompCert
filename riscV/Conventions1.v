@@ -320,14 +320,14 @@ Proof.
   assert (AL: forall ofs ty, ofs >= 0 -> align ofs (typesize ty) >= 0).
   { intros. 
     assert (ofs <= align ofs (typesize ty)) by (apply align_le; apply typesize_pos).
-    omega. }
+    lia. }
   assert (ALD: forall ofs ty, ofs >= 0 -> (typealign ty | align ofs (typesize ty))).
   { intros. eapply Z.divide_trans. apply typealign_typesize.
     apply align_divides. apply typesize_pos. }
   assert (SK: (if Archi.ptr64 then 2 else 1) > 0).
-  { destruct Archi.ptr64; omega. }
+  { destruct Archi.ptr64; lia. }
   assert (SKK: forall ty, (if Archi.ptr64 then 2 else typesize ty) > 0).
-  { intros. destruct Archi.ptr64. omega. apply typesize_pos.  }
+  { intros. destruct Archi.ptr64. lia. apply typesize_pos.  }
   assert (A: forall ri rf ofs ty f,
              OKF f -> ofs >= 0 -> OK (int_arg ri rf ofs ty f)).
   { intros until f; intros OF OO; red; unfold int_arg; intros.
@@ -336,7 +336,7 @@ Proof.
   - eapply OF; eauto. 
   - subst p; simpl. auto using align_divides, typealign_pos.
   - eapply OF; [idtac|eauto].
-    generalize (AL ofs ty OO) (SKK ty); omega.
+    generalize (AL ofs ty OO) (SKK ty); lia.
   }
   assert (B: forall va ri rf ofs ty f,
              OKF f -> ofs >= 0 -> OK (float_arg va ri rf ofs ty f)).
@@ -347,12 +347,12 @@ Proof.
     + subst p; simpl. apply CSF. eapply list_nth_z_in; eauto.
     + eapply OF; eauto.
     + subst p; repeat split; auto.
-    + eapply OF; [idtac|eauto]. generalize (AL ofs ty OO) (SKK ty); omega.
+    + eapply OF; [idtac|eauto]. generalize (AL ofs ty OO) (SKK ty); lia.
     + subst p; simpl. apply CSF. eapply list_nth_z_in; eauto.
     + eapply OF; eauto.
   - destruct H.
     + subst p; repeat split; auto.
-    + eapply OF; [idtac|eauto]. generalize (AL ofs ty OO) (SKK ty); omega.
+    + eapply OF; [idtac|eauto]. generalize (AL ofs ty OO) (SKK ty); lia.
   }
   assert (C: forall va ri rf ofs f,
              OKF f -> ofs >= 0 -> OK (split_long_arg va ri rf ofs f)).
@@ -364,13 +364,13 @@ Proof.
     [destruct (list_nth_z int_param_regs (ri'+1)) as [r2|] eqn:NTH2 | idtac].
   - red; simpl; intros; destruct H.
     + subst p; split; apply CSI; eauto using list_nth_z_in.
-    + eapply OF; [idtac|eauto]. omega.
+    + eapply OF; [idtac|eauto]. lia.
   - red; simpl; intros; destruct H.
     + subst p; split. split; auto using Z.divide_1_l. apply CSI; eauto using list_nth_z_in.
-    + eapply OF; [idtac|eauto]. omega.
+    + eapply OF; [idtac|eauto]. lia.
   - red; simpl; intros; destruct H.
-    + subst p; repeat split; auto using Z.divide_1_l. omega. 
-    + eapply OF; [idtac|eauto]. omega.
+    + subst p; repeat split; auto using Z.divide_1_l. lia. 
+    + eapply OF; [idtac|eauto]. lia.
   }
   cut (forall tyl fixed ri rf ofs, ofs >= 0 -> OK (loc_arguments_rec tyl fixed ri rf ofs)).
   unfold OK. eauto.
@@ -392,7 +392,7 @@ Lemma loc_arguments_acceptable:
   forall (s: signature) (p: rpair loc),
   In p (loc_arguments s) -> forall_rpair loc_argument_acceptable p.
 Proof.
-  unfold loc_arguments; intros. eapply loc_arguments_rec_charact; eauto. omega.
+  unfold loc_arguments; intros. eapply loc_arguments_rec_charact; eauto. lia.
 Qed.
 
 Lemma loc_arguments_main:

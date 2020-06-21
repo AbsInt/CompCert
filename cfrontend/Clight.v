@@ -739,7 +739,7 @@ Proof.
   exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
   exists (Returnstate vres2 k m2). econstructor; eauto.
 (* trace length *)
-  red; simpl; intros. inv H; simpl; try omega.
+  red; simpl; intros. inv H; simpl; try lia.
   eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 Qed.

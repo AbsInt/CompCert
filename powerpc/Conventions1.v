@@ -268,7 +268,7 @@ Remark loc_arguments_rec_charact:
   forall_rpair (loc_argument_charact ofs) p.
 Proof.
   assert (X: forall ofs1 ofs2 l, loc_argument_charact ofs2 l -> ofs1 <= ofs2 -> loc_argument_charact ofs1 l).
-  { destruct l; simpl; intros; auto. destruct sl; auto. intuition omega. }
+  { destruct l; simpl; intros; auto. destruct sl; auto. intuition lia. }
   assert (Y: forall ofs1 ofs2 p, forall_rpair (loc_argument_charact ofs2) p -> ofs1 <= ofs2 -> forall_rpair (loc_argument_charact ofs1) p).
   { destruct p; simpl; intuition eauto. }
 Opaque list_nth_z.
@@ -279,52 +279,52 @@ Opaque list_nth_z.
   destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H.
   subst. left. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. omega. apply Z.divide_1_l.
-  eapply Y; eauto. omega.
+  subst. split. lia. apply Z.divide_1_l.
+  eapply Y; eauto. lia.
 - (* float *)
-  assert (ofs <= align ofs 2) by (apply align_le; omega).
+  assert (ofs <= align ofs 2) by (apply align_le; lia).
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. omega. apply Z.divide_1_l.
-  eapply Y; eauto. omega.
+  subst. split. lia. apply Z.divide_1_l.
+  eapply Y; eauto. lia.
 - (* long *)
-  assert (ofs <= align ofs 2) by (apply align_le; omega).
+  assert (ofs <= align ofs 2) by (apply align_le; lia).
   set (ir' := align ir 2) in *.
   destruct (list_nth_z int_param_regs ir') as [r1|] eqn:E1.
   destruct (list_nth_z int_param_regs (ir' + 1)) as [r2|] eqn:E2.
   destruct H. subst; split; left; eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
   destruct H.
-  subst. destruct Archi.ptr64; [split|split;split]; try omega.
-  apply align_divides; omega. apply Z.divide_1_l. apply Z.divide_1_l.
-  eapply Y; eauto. omega.
+  subst. destruct Archi.ptr64; [split|split;split]; try lia.
+  apply align_divides; lia. apply Z.divide_1_l. apply Z.divide_1_l.
+  eapply Y; eauto. lia.
   destruct H.
-  subst. destruct Archi.ptr64; [split|split;split]; try omega.
-  apply align_divides; omega. apply Z.divide_1_l. apply Z.divide_1_l.
-  eapply Y; eauto. omega.
+  subst. destruct Archi.ptr64; [split|split;split]; try lia.
+  apply align_divides; lia. apply Z.divide_1_l. apply Z.divide_1_l.
+  eapply Y; eauto. lia.
 - (* single *)
-  assert (ofs <= align ofs 1) by (apply align_le; omega).
-  assert (ofs <= align ofs 2) by (apply align_le; omega).
+  assert (ofs <= align ofs 1) by (apply align_le; lia).
+  assert (ofs <= align ofs 2) by (apply align_le; lia).
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. destruct Archi.single_passed_as_single; simpl; omega.
+  subst. split. destruct Archi.single_passed_as_single; simpl; lia.
   destruct Archi.single_passed_as_single; simpl; apply Z.divide_1_l.
-  eapply Y; eauto. destruct Archi.single_passed_as_single; simpl; omega.
+  eapply Y; eauto. destruct Archi.single_passed_as_single; simpl; lia.
 - (* any32 *)
   destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H.
   subst. left. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. omega. apply Z.divide_1_l.
-  eapply Y; eauto. omega.
+  subst. split. lia. apply Z.divide_1_l.
+  eapply Y; eauto. lia.
 - (* float *)
-  assert (ofs <= align ofs 2) by (apply align_le; omega).
+  assert (ofs <= align ofs 2) by (apply align_le; lia).
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. omega. apply Z.divide_1_l.
-  eapply Y; eauto. omega.
+  subst. split. lia. apply Z.divide_1_l.
+  eapply Y; eauto. lia.
 Qed.
 
 Lemma loc_arguments_acceptable:

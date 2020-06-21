@@ -164,8 +164,8 @@ Lemma operation_is_redundant_sound:
   vagree v arg1' nv.
 Proof.
   intros. destruct op; simpl in *; try discriminate; inv H1; FuncInv; subst.
-- apply sign_ext_redundant_sound; auto. omega.
-- apply sign_ext_redundant_sound; auto. omega.
+- apply sign_ext_redundant_sound; auto. lia.
+- apply sign_ext_redundant_sound; auto. lia.
 - apply andimm_redundant_sound; auto.
 - apply orimm_redundant_sound; auto.
 Qed.

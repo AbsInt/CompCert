@@ -1395,7 +1395,7 @@ Theorem cardinal_remove:
 Proof.
   unfold cardinal; intros.
   exploit T.elements_remove; eauto. intros (l1 & l2 & P & Q).
-  rewrite P, Q. rewrite ! app_length. simpl. omega.
+  rewrite P, Q. rewrite ! app_length. simpl. lia.
 Qed.
 
 Theorem cardinal_set:

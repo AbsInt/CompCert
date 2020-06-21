@@ -68,7 +68,7 @@ Lemma transf_function_no_overflow:
   forall f tf,
   transf_function f = OK tf -> list_length_z (fn_code tf) <= Ptrofs.max_unsigned.
 Proof.
-  intros. monadInv H. destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x))); inv EQ0. omega.
+  intros. monadInv H. destruct (zlt Ptrofs.max_unsigned (list_length_z (fn_code x))); inv EQ0. lia.
 Qed.
 
 Lemma exec_straight_exec:
@@ -122,13 +122,13 @@ Proof.
   case (is_label lbl a).
   intro EQ; injection EQ; intro; subst c'.
   exists (pos + 1). split. auto. split.
-  replace (pos + 1 - pos) with (0 + 1) by omega. constructor. constructor.
-  rewrite list_length_z_cons. generalize (list_length_z_pos c). omega.
+  replace (pos + 1 - pos) with (0 + 1) by lia. constructor. constructor.
+  rewrite list_length_z_cons. generalize (list_length_z_pos c). lia.
   intros. generalize (IHc (pos + 1) c' H). intros [pos' [A [B C]]].
   exists pos'. split. auto. split.
-  replace (pos' - pos) with ((pos' - (pos + 1)) + 1) by omega.
+  replace (pos' - pos) with ((pos' - (pos + 1)) + 1) by lia.
   constructor. auto.
-  rewrite list_length_z_cons. omega.
+  rewrite list_length_z_cons. lia.
 Qed.
 
 (** The following lemmas show that the translation from Mach to ARM
@@ -378,8 +378,8 @@ Proof.
   split. unfold goto_label. rewrite P. rewrite H1. auto.
   split. rewrite Pregmap.gss. constructor; auto.
   rewrite Ptrofs.unsigned_repr. replace (pos' - 0) with pos' in Q.
-  auto. omega.
-  generalize (transf_function_no_overflow _ _ H0). omega.
+  auto. lia.
+  generalize (transf_function_no_overflow _ _ H0). lia.
   intros. apply Pregmap.gso; auto.
 Qed.
 
@@ -903,11 +903,11 @@ Opaque loadind.
   simpl; reflexivity. reflexivity.
   }
   (* After the function prologue is the code for the function body *)
-  exploit exec_straight_steps_2; eauto using functions_transl. omega. constructor.
+  exploit exec_straight_steps_2; eauto using functions_transl. lia. constructor.
   intros (ofsbody & U & V).
   (* Conclusions *)
   left; exists (State rs4 m3'); split.
-  eapply exec_straight_steps_1; eauto. omega. constructor.
+  eapply exec_straight_steps_1; eauto. lia. constructor.
   econstructor; eauto. rewrite U. econstructor; eauto. 
   apply agree_nextinstr.
   apply agree_undef_regs2 with rs2.
@@ -934,7 +934,7 @@ Opaque loadind.
 
 - (* return *)
   inv STACKS. simpl in *.
-  right. split. omega. split. auto.
+  right. split. lia. split. auto.
   rewrite <- ATPC in H5. econstructor; eauto. congruence.
 Qed.
 

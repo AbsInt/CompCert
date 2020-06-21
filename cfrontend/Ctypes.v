@@ -350,13 +350,16 @@ Fixpoint sizeof (env: composite_env) (t: type) : Z :=
 Lemma sizeof_pos:
   forall env t, sizeof env t >= 0.
 Proof.
-  induction t; simpl; try omega.
-  destruct i; omega.
-  destruct f; omega.
-  destruct Archi.ptr64; omega.
-  change 0 with (0 * Z.max 0 z) at 2. apply Zmult_ge_compat_r. auto. xomega.
-  destruct (env!i). apply co_sizeof_pos. omega.
-  destruct (env!i). apply co_sizeof_pos. omega.
+  induction t; simpl.
+- lia.
+- destruct i; lia.
+- lia.
+- destruct f; lia.
+- destruct Archi.ptr64; lia.
+- change 0 with (0 * Z.max 0 z) at 2. apply Zmult_ge_compat_r. auto. lia.
+- lia.
+- destruct (env!i). apply co_sizeof_pos. lia.
+- destruct (env!i). apply co_sizeof_pos. lia.
 Qed.
 
 (** The size of a type is an integral multiple of its alignment,
@@ -435,18 +438,18 @@ Lemma sizeof_struct_incr:
   forall env m cur, cur <= sizeof_struct env cur m.
 Proof.
   induction m as [|[id t]]; simpl; intros.
-- omega.
+- lia.
 - apply Z.le_trans with (align cur (alignof env t)).
   apply align_le. apply alignof_pos.
   apply Z.le_trans with (align cur (alignof env t) + sizeof env t).
-  generalize (sizeof_pos env t); omega.
+  generalize (sizeof_pos env t); lia.
   apply IHm.
 Qed.
 
 Lemma sizeof_union_pos:
   forall env m, 0 <= sizeof_union env m.
 Proof.
-  induction m as [|[id t]]; simpl; xomega.
+  induction m as [|[id t]]; simpl; extlia.
 Qed.
 
 (** ** Byte offset for a field of a structure *)
@@ -490,7 +493,7 @@ Proof.
   apply align_le. apply alignof_pos. apply sizeof_struct_incr.
   exploit IHfld; eauto. intros [A B]. split; auto.
   eapply Z.le_trans; eauto. apply Z.le_trans with (align pos (alignof env t)).
-  apply align_le. apply alignof_pos. generalize (sizeof_pos env t). omega.
+  apply align_le. apply alignof_pos. generalize (sizeof_pos env t). lia.
 Qed.
 
 Lemma field_offset_in_range:
@@ -637,7 +640,7 @@ Proof.
     destruct n; auto.
     right; right; right. apply Z.min_l.
     rewrite two_power_nat_two_p. rewrite ! Nat2Z.inj_succ.
-    change 8 with (two_p 3). apply two_p_monotone. omega.
+    change 8 with (two_p 3). apply two_p_monotone. lia.
   }
   induction ty; simpl.
   auto.
@@ -654,7 +657,7 @@ Qed.
 Lemma alignof_blockcopy_pos:
   forall env ty, alignof_blockcopy env ty > 0.
 Proof.
-  intros. generalize (alignof_blockcopy_1248 env ty). simpl. intuition omega.
+  intros. generalize (alignof_blockcopy_1248 env ty). simpl. intuition lia.
 Qed.
 
 Lemma sizeof_alignof_blockcopy_compat:
@@ -670,8 +673,8 @@ Proof.
     apply Z.min_case.
     exists (two_p (Z.of_nat n)).
     change 8 with (two_p 3).
-    rewrite <- two_p_is_exp by omega.
-    rewrite two_power_nat_two_p. rewrite !Nat2Z.inj_succ. f_equal. omega.
+    rewrite <- two_p_is_exp by lia.
+    rewrite two_power_nat_two_p. rewrite !Nat2Z.inj_succ. f_equal. lia.
     apply Z.divide_refl.
   }
   induction ty; simpl.
@@ -1090,8 +1093,8 @@ Remark rank_type_members:
   forall ce id t m, In (id, t) m -> (rank_type ce t <= rank_members ce m)%nat.
 Proof.
   induction m; simpl; intros; intuition auto.
-  subst a. xomega.
-  xomega.
+  subst a. extlia.
+  extlia.
 Qed.
 
 Lemma rank_struct_member:
@@ -1104,7 +1107,7 @@ Proof.
   intros; simpl. rewrite H0.
   erewrite co_consistent_rank by eauto.
   exploit (rank_type_members ce); eauto.
-  omega.
+  lia.
 Qed.
 
 Lemma rank_union_member:
@@ -1117,7 +1120,7 @@ Proof.
   intros; simpl. rewrite H0.
   erewrite co_consistent_rank by eauto.
   exploit (rank_type_members ce); eauto.
-  omega.
+  lia.
 Qed.
 
 (** * Programs and compilation units *)

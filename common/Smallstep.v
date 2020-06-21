@@ -893,8 +893,8 @@ Proof.
   exploit (sd_traces DET). eexact H3. intros L2.
   assert (t1 = t0 /\ t2 = t3).
     destruct t1. inv MT. auto.
-    destruct t1; simpl in L1; try omegaContradiction.
-    destruct t0. inv MT. destruct t0; simpl in L2; try omegaContradiction.
+    destruct t1; simpl in L1; try extlia.
+    destruct t0. inv MT. destruct t0; simpl in L2; try extlia.
     simpl in H5. split. congruence. congruence.
   destruct H1; subst.
   assert (s2 = s4) by (eapply sd_determ_2; eauto). subst s4.
@@ -974,7 +974,7 @@ Proof.
     destruct C as [P | [P Q]]; auto using lex_ord_left.
   + exploit sd_determ_3. eauto. eexact A. eauto. intros [P Q]; subst t s1'0.
     exists (i, n), s2; split; auto.
-    right; split. apply star_refl. apply lex_ord_right. omega.
+    right; split. apply star_refl. apply lex_ord_right. lia.
 - exact public_preserved.
 Qed.
 
@@ -1256,7 +1256,7 @@ Proof.
   subst t.
   assert (EITHER: t1 = E0 \/ t2 = E0).
     unfold Eapp in H2; rewrite app_length in H2.
-    destruct t1; auto. destruct t2; auto. simpl in H2; omegaContradiction.
+    destruct t1; auto. destruct t2; auto. simpl in H2; extlia.
   destruct EITHER; subst.
   exploit IHstar; eauto. intros [s2x [s2y [A [B C]]]].
   exists s2x; exists s2y; intuition. eapply star_left; eauto.
@@ -1305,7 +1305,7 @@ Proof.
 - (* 1 L2 makes one or several transitions *)
   assert (EITHER: t = E0 \/ (length t = 1)%nat).
   { exploit L3_single_events; eauto.
-    destruct t; auto. destruct t; auto. simpl. intros. omegaContradiction. }
+    destruct t; auto. destruct t; auto. simpl. intros. extlia. }
   destruct EITHER.
 + (* 1.1 these are silent transitions *)
   subst t. exploit (bsim_E0_plus S12); eauto.
@@ -1473,7 +1473,7 @@ Remark not_silent_length:
   forall t1 t2, (length (t1 ** t2) <= 1)%nat -> t1 = E0 \/ t2 = E0.
 Proof.
   unfold Eapp, E0; intros. rewrite app_length in H.
-  destruct t1; destruct t2; auto. simpl in H. omegaContradiction.
+  destruct t1; destruct t2; auto. simpl in H. extlia.
 Qed.
 
 Lemma f2b_determinacy_inv:
@@ -1622,7 +1622,7 @@ Proof.
   intros [[EQ1 [EQ2 EQ3]] | [NOT1 [NOT2 MT]]].
 + (* 2.1 L2 makes a silent transition: remain in "before" state *)
   subst. simpl in *. exists (F2BI_before n0); exists s1; split.
-  right; split. apply star_refl. constructor. omega.
+  right; split. apply star_refl. constructor. lia.
   econstructor; eauto. eapply star_right; eauto.
 + (* 2.2 L2 make a non-silent transition *)
   exploit not_silent_length. eapply (sr_traces L1_receptive); eauto. intros [EQ | EQ].
@@ -1650,7 +1650,7 @@ Proof.
   exploit f2b_determinacy_inv. eexact H2. eexact STEP2.
   intros [[EQ1 [EQ2 EQ3]] | [NOT1 [NOT2 MT]]].
   subst. exists (F2BI_after n); exists s1; split.
-  right; split. apply star_refl. constructor; omega.
+  right; split. apply star_refl. constructor; lia.
   eapply f2b_match_after'; eauto.
   congruence.
 Qed.
@@ -1763,7 +1763,7 @@ Proof.
   destruct IHstar as [s2x [A B]]. exists s2x; split; auto.
   eapply plus_left. eauto. apply plus_star; eauto. auto.
   destruct t1. simpl in *. subst t. exists s2; split; auto. apply plus_one; auto.
-  simpl in LEN. omegaContradiction.
+  simpl in LEN. extlia.
 Qed.
 
 Lemma ffs_simulation:
@@ -1955,7 +1955,7 @@ Proof.
   assert (t2 = ev :: nil). inv H1; simpl in H0; tauto.
   subst t2. exists (t, s0). constructor; auto. simpl; auto.
 (* single-event *)
-  red. intros. inv H0; simpl; omega.
+  red. intros. inv H0; simpl; lia.
 Qed.
 
 (** * Connections with big-step semantics *)

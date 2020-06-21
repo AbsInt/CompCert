@@ -588,7 +588,7 @@ Proof.
   exploit external_call_receptive; eauto. intros [vres2 [m2 EC2]].
   exists (Returnstate vres2 k m2). econstructor; eauto.
 (* trace length *)
-  red; intros; inv H; simpl; try omega; eapply external_call_trace_length; eauto.
+  red; intros; inv H; simpl; try lia; eapply external_call_trace_length; eauto.
 Qed.
 
 (** This semantics is determinate. *)
@@ -645,7 +645,7 @@ Proof.
     intros (A & B). split; intros; auto.
     apply B in H; destruct H; congruence.
 - (* single event *)
-  red; simpl. destruct 1; simpl; try omega;
+  red; simpl. destruct 1; simpl; try lia;
   eapply external_call_trace_length; eauto.
 - (* initial states *)
   inv H; inv H0. unfold ge0, ge1 in *. congruence.

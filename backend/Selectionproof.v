@@ -531,7 +531,7 @@ Lemma sel_switch_correct:
      (XElet arg (sel_switch make_cmp_eq make_cmp_ltu make_sub make_to_int O t))
      (switch_target i dfl cases).
 Proof.
-  intros. exploit validate_switch_correct; eauto. omega. intros [A B].
+  intros. exploit validate_switch_correct; eauto. lia. intros [A B].
   econstructor. eauto. eapply sel_switch_correct_rec; eauto.
 Qed.
 
@@ -564,7 +564,7 @@ Proof.
   inv R. unfold Val.cmp in B. simpl in B. revert B.
   predSpec Int.eq Int.eq_spec n0 (Int.repr n); intros B; inv B.
   rewrite Int.unsigned_repr. unfold proj_sumbool; rewrite zeq_true; auto.
-  unfold Int.max_unsigned; omega.
+  unfold Int.max_unsigned; lia.
   unfold proj_sumbool; rewrite zeq_false; auto.
   red; intros; elim H1. rewrite <- (Int.repr_unsigned n0). congruence.
 - intros until n; intros EVAL R RANGE.
@@ -573,7 +573,7 @@ Proof.
   inv R. unfold Val.cmpu in B. simpl in B.
   unfold Int.ltu in B. rewrite Int.unsigned_repr in B.
   destruct (zlt (Int.unsigned n0) n); inv B; auto.
-  unfold Int.max_unsigned; omega.
+  unfold Int.max_unsigned; lia.
 - intros until n; intros EVAL R RANGE.
   exploit eval_sub. eexact EVAL. apply (INTCONST (Int.repr n)). intros (vb & A & B).
   inv R. simpl in B. inv B. econstructor; split; eauto.
@@ -581,7 +581,7 @@ Proof.
      with (Int.unsigned (Int.sub n0 (Int.repr n))).
   constructor.
   unfold Int.sub. rewrite Int.unsigned_repr_eq. f_equal. f_equal.
-  apply Int.unsigned_repr. unfold Int.max_unsigned; omega.
+  apply Int.unsigned_repr. unfold Int.max_unsigned; lia.
 - intros until i0; intros EVAL R. exists v; split; auto.
   inv R. rewrite Z.mod_small by (apply Int.unsigned_range). constructor.
 - constructor.
@@ -599,12 +599,12 @@ Proof.
   eapply eval_cmpl. eexact EVAL. apply eval_longconst with (n := Int64.repr n).
   inv R. unfold Val.cmpl. simpl. f_equal; f_equal. unfold Int64.eq.
   rewrite Int64.unsigned_repr. destruct (zeq (Int64.unsigned n0) n); auto.
-  unfold Int64.max_unsigned; omega.
+  unfold Int64.max_unsigned; lia.
 - intros until n; intros EVAL R RANGE.
   eapply eval_cmplu; auto. eexact EVAL. apply eval_longconst with (n := Int64.repr n).
   inv R. unfold Val.cmplu. simpl. f_equal; f_equal. unfold Int64.ltu.
   rewrite Int64.unsigned_repr. destruct (zlt (Int64.unsigned n0) n); auto.
-  unfold Int64.max_unsigned; omega.
+  unfold Int64.max_unsigned; lia.
 - intros until n; intros EVAL R RANGE.
   exploit eval_subl; auto; try apply HF'. eexact EVAL. apply eval_longconst with (n := Int64.repr n).
   intros (vb & A & B).
@@ -613,7 +613,7 @@ Proof.
      with (Int64.unsigned (Int64.sub n0 (Int64.repr n))).
   constructor.
   unfold Int64.sub. rewrite Int64.unsigned_repr_eq. f_equal. f_equal.
-  apply Int64.unsigned_repr. unfold Int64.max_unsigned; omega.
+  apply Int64.unsigned_repr. unfold Int64.max_unsigned; lia.
 - intros until i0; intros EVAL R.
   exploit eval_lowlong. eexact EVAL. intros (vb & A & B).
   inv R. simpl in B. inv B. econstructor; split; eauto.
@@ -1295,7 +1295,7 @@ Proof.
   eapply match_cont_call with (cunit := cunit) (hf := hf); eauto.
 + (* turned into Sbuiltin *)
   intros EQ. subst fd.
-  right; left; split. simpl; omega. split; auto. econstructor; eauto.
+  right; left; split. simpl; lia. split; auto. econstructor; eauto.
 - (* Stailcall *)
   exploit Mem.free_parallel_extends; eauto. intros [m2' [P Q]].
   erewrite <- stackspace_function_translated in P by eauto.
@@ -1413,7 +1413,7 @@ Proof.
   apply plus_one; econstructor.
   econstructor; eauto. destruct optid; simpl; auto. apply set_var_lessdef; auto.
 - (* return of an external call turned into a Sbuiltin *)
-  right; left; split. simpl; omega. split. auto. econstructor; eauto.
+  right; left; split. simpl; lia. split. auto. econstructor; eauto.
 Qed.
 
 Lemma sel_initial_states:

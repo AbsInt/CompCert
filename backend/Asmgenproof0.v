@@ -473,7 +473,7 @@ Inductive code_tail: Z -> code -> code -> Prop :=
 Lemma code_tail_pos:
   forall pos c1 c2, code_tail pos c1 c2 -> pos >= 0.
 Proof.
-  induction 1. omega. omega.
+  induction 1. lia. lia.
 Qed.
 
 Lemma find_instr_tail:
@@ -484,8 +484,8 @@ Proof.
   induction c1; simpl; intros.
   inv H.
   destruct (zeq pos 0). subst pos.
-  inv H. auto. generalize (code_tail_pos _ _ _ H4). intro. omegaContradiction.
-  inv H. congruence. replace (pos0 + 1 - 1) with pos0 by omega.
+  inv H. auto. generalize (code_tail_pos _ _ _ H4). intro. extlia.
+  inv H. congruence. replace (pos0 + 1 - 1) with pos0 by lia.
   eauto.
 Qed.
 
@@ -494,8 +494,8 @@ Remark code_tail_bounds_1:
   code_tail ofs fn c -> 0 <= ofs <= list_length_z fn.
 Proof.
   induction 1; intros; simpl.
-  generalize (list_length_z_pos c). omega.
-  rewrite list_length_z_cons. omega.
+  generalize (list_length_z_pos c). lia.
+  rewrite list_length_z_cons. lia.
 Qed.
 
 Remark code_tail_bounds_2:
@@ -505,8 +505,8 @@ Proof.
   assert (forall ofs fn c, code_tail ofs fn c ->
           forall i c', c = i :: c' -> 0 <= ofs < list_length_z fn).
   induction 1; intros; simpl.
-  rewrite H. rewrite list_length_z_cons. generalize (list_length_z_pos c'). omega.
-  rewrite list_length_z_cons. generalize (IHcode_tail _ _ H0). omega.
+  rewrite H. rewrite list_length_z_cons. generalize (list_length_z_pos c'). lia.
+  rewrite list_length_z_cons. generalize (IHcode_tail _ _ H0). lia.
   eauto.
 Qed.
 
@@ -531,7 +531,7 @@ Lemma code_tail_next_int:
 Proof.
   intros. rewrite Ptrofs.add_unsigned, Ptrofs.unsigned_one.
   rewrite Ptrofs.unsigned_repr. apply code_tail_next with i; auto.
-  generalize (code_tail_bounds_2 _ _ _ _ H0). omega.
+  generalize (code_tail_bounds_2 _ _ _ _ H0). lia.
 Qed.
 
 (** [transl_code_at_pc pc fb f c ep tf tc] holds if the code pointer [pc] points
@@ -654,7 +654,7 @@ Opaque transl_instr.
   exists (Ptrofs.repr ofs). red; intros.
   rewrite Ptrofs.unsigned_repr. congruence.
   exploit code_tail_bounds_1; eauto.
-  apply transf_function_len in TF. omega.
+  apply transf_function_len in TF. lia.
 + exists Ptrofs.zero; red; intros. congruence.
 Qed.
 
@@ -663,7 +663,7 @@ End RETADDR_EXISTS.
 Remark code_tail_no_bigger:
   forall pos c1 c2, code_tail pos c1 c2 -> (length c2 <= length c1)%nat.
 Proof.
-  induction 1; simpl; omega.
+  induction 1; simpl; lia.
 Qed.
 
 Remark code_tail_unique:
@@ -671,8 +671,8 @@ Remark code_tail_unique:
   code_tail pos fn c -> code_tail pos' fn c -> pos = pos'.
 Proof.
   induction fn; intros until pos'; intros ITA CT; inv ITA; inv CT; auto.
-  generalize (code_tail_no_bigger _ _ _ H3); simpl; intro; omega.
-  generalize (code_tail_no_bigger _ _ _ H3); simpl; intro; omega.
+  generalize (code_tail_no_bigger _ _ _ H3); simpl; intro; lia.
+  generalize (code_tail_no_bigger _ _ _ H3); simpl; intro; lia.
   f_equal. eauto.
 Qed.
 
@@ -713,13 +713,13 @@ Proof.
   case (is_label lbl a).
   intro EQ; injection EQ; intro; subst c'.
   exists (pos + 1). split. auto. split.
-  replace (pos + 1 - pos) with (0 + 1) by omega. constructor. constructor.
-  rewrite list_length_z_cons. generalize (list_length_z_pos c). omega.
+  replace (pos + 1 - pos) with (0 + 1) by lia. constructor. constructor.
+  rewrite list_length_z_cons. generalize (list_length_z_pos c). lia.
   intros. generalize (IHc (pos + 1) c' H). intros [pos' [A [B C]]].
   exists pos'. split. auto. split.
-  replace (pos' - pos) with ((pos' - (pos + 1)) + 1) by omega.
+  replace (pos' - pos) with ((pos' - (pos + 1)) + 1) by lia.
   constructor. auto.
-  rewrite list_length_z_cons. omega.
+  rewrite list_length_z_cons. lia.
 Qed.
 
 (** Helper lemmas to reason about

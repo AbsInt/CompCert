@@ -41,7 +41,7 @@ DIRS += MenhirLib
 COQINCLUDES += -R MenhirLib MenhirLib
 endif
 
-COQCOPTS ?= -w -undeclared-scope -w -omega-is-deprecated
+COQCOPTS ?= -w -undeclared-scope
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"

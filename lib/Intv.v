@@ -41,14 +41,14 @@ Lemma notin_range:
   forall x i,
   x < fst i \/ x >= snd i -> ~In x i.
 Proof.
-  unfold In; intros; omega.
+  unfold In; intros; lia.
 Qed.
 
 Lemma range_notin:
   forall x i,
   ~In x i -> fst i < snd i -> x < fst i \/ x >= snd i.
 Proof.
-  unfold In; intros; omega.
+  unfold In; intros; lia.
 Qed.
 
 (** * Emptyness *)
@@ -60,26 +60,26 @@ Lemma empty_dec:
 Proof.
   unfold empty; intros.
   case (zle (snd i) (fst i)); intros.
-  left; omega.
-  right; omega.
+  left; lia.
+  right; lia.
 Qed.
 
 Lemma is_notempty:
   forall i, fst i < snd i -> ~empty i.
 Proof.
-  unfold empty; intros; omega.
+  unfold empty; intros; lia.
 Qed.
 
 Lemma empty_notin:
   forall x i, empty i -> ~In x i.
 Proof.
-  unfold empty, In; intros. omega.
+  unfold empty, In; intros. lia.
 Qed.
 
 Lemma in_notempty:
   forall x i, In x i -> ~empty i.
 Proof.
-  unfold empty, In; intros. omega.
+  unfold empty, In; intros. lia.
 Qed.
 
 (** * Disjointness *)
@@ -109,7 +109,7 @@ Lemma disjoint_range:
   forall i j,
   snd i <= fst j \/ snd j <= fst i -> disjoint i j.
 Proof.
-  unfold disjoint, In; intros. omega.
+  unfold disjoint, In; intros. lia.
 Qed.
 
 Lemma range_disjoint:
@@ -127,13 +127,13 @@ Proof.
 (* Case 1.1: i ends to the left of j, OK *)
   auto.
 (* Case 1.2: i ends to the right of j's start, not disjoint. *)
-  elim (H (fst j)). red; omega. red; omega.
+  elim (H (fst j)). red; lia. red; lia.
 (* Case 2: j starts to the left of i *)
   destruct (zle (snd j) (fst i)).
 (* Case 2.1: j ends to the left of i, OK *)
   auto.
 (* Case 2.2: j ends to the right of i's start, not disjoint. *)
-  elim (H (fst i)). red; omega. red; omega.
+  elim (H (fst i)). red; lia. red; lia.
 Qed.
 
 Lemma range_disjoint':
@@ -141,7 +141,7 @@ Lemma range_disjoint':
   disjoint i j -> fst i < snd i -> fst j < snd j ->
   snd i <= fst j \/ snd j <= fst i.
 Proof.
-  intros. exploit range_disjoint; eauto. unfold empty; intuition omega.
+  intros. exploit range_disjoint; eauto. unfold empty; intuition lia.
 Qed.
 
 Lemma disjoint_dec:
@@ -163,14 +163,14 @@ Lemma in_shift:
   forall x i delta,
   In x i -> In (x + delta) (shift i delta).
 Proof.
-  unfold shift, In; intros. simpl. omega.
+  unfold shift, In; intros. simpl. lia.
 Qed.
 
 Lemma in_shift_inv:
   forall x i delta,
   In x (shift i delta) -> In (x - delta) i.
 Proof.
-  unfold shift, In; simpl; intros. omega.
+  unfold shift, In; simpl; intros. lia.
 Qed.
 
 (** * Enumerating the elements of an interval *)
@@ -182,7 +182,7 @@ Variable lo: Z.
 Function elements_rec (hi: Z) {wf (Zwf lo) hi} : list Z :=
   if zlt lo hi then (hi-1) :: elements_rec (hi-1) else nil.
 Proof.
-  intros. red. omega.
+  intros. red. lia.
   apply Zwf_well_founded.
 Qed.
 
@@ -192,8 +192,8 @@ Lemma In_elements_rec:
 Proof.
   intros. functional induction (elements_rec hi).
   simpl; split; intros.
-  destruct H. clear IHl. omega. rewrite IHl in H. clear IHl. omega.
-  destruct (zeq (hi - 1) x); auto. right. rewrite IHl. clear IHl. omega.
+  destruct H. clear IHl. lia. rewrite IHl in H. clear IHl. lia.
+  destruct (zeq (hi - 1) x); auto. right. rewrite IHl. clear IHl. lia.
   simpl; intuition.
 Qed.
 
@@ -241,20 +241,20 @@ Program Fixpoint forall_rec (hi: Z) {wf (Zwf lo) hi}:
     left _ _
 .
 Next Obligation.
-  red. omega.
+  red. lia.
 Qed.
 Next Obligation.
-  assert (x = hi - 1 \/ x < hi - 1) by omega.
+  assert (x = hi - 1 \/ x < hi - 1) by lia.
   destruct H2. congruence. auto.
 Qed.
 Next Obligation.
-  exists wildcard'; split; auto. omega.
+  exists wildcard'; split; auto. lia.
 Qed.
 Next Obligation.
-  exists (hi - 1); split; auto. omega.
+  exists (hi - 1); split; auto. lia.
 Qed.
 Next Obligation.
-  omegaContradiction.
+  extlia.
 Defined.
 
 End FORALL.
@@ -276,7 +276,7 @@ Variable a: A.
 Function fold_rec (hi: Z) {wf (Zwf lo) hi} : A :=
   if zlt lo hi then f (hi - 1) (fold_rec (hi - 1)) else a.
 Proof.
-  intros. red. omega.
+  intros. red. lia.
   apply Zwf_well_founded.
 Qed.
 

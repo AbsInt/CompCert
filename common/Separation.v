@@ -355,12 +355,12 @@ Proof.
   intros. rewrite <- sep_assoc. eapply sep_imp; eauto.
   split; simpl; intros.
 - intuition auto.
-+ omega.
-+ apply H5; omega.
-+ omega.
-+ apply H5; omega.
-+ red; simpl; intros; omega.
-- intuition omega.
++ lia.
++ apply H5; lia.
++ lia.
++ apply H5; lia.
++ red; simpl; intros; lia.
+- intuition lia.
 Qed.
 
 Lemma range_drop_left:
@@ -392,12 +392,12 @@ Proof.
   assert (mid <= align mid al) by (apply align_le; auto).
   split; simpl; intros.
 - intuition auto.
-+ omega.
-+ apply H7; omega.
-+ omega.
-+ apply H7; omega.
-+ red; simpl; intros; omega.
-- intuition omega.
++ lia.
++ apply H7; lia.
++ lia.
++ apply H7; lia.
++ red; simpl; intros; lia.
+- intuition lia.
 Qed.
 
 Lemma range_preserved:
@@ -493,7 +493,7 @@ Proof.
   split; [|split].
 - assert (Mem.valid_access m chunk b ofs Freeable).
   { split; auto. red; auto. }
-  split. generalize (size_chunk_pos chunk). unfold Ptrofs.max_unsigned. omega.
+  split. generalize (size_chunk_pos chunk). unfold Ptrofs.max_unsigned. lia.
   split. auto.
 + destruct (Mem.valid_access_load m chunk b ofs) as [v LOAD].
   eauto with mem.
@@ -616,7 +616,7 @@ Next Obligation.
   assert (IMG: forall b1 b2 delta ofs k p,
            j b1 = Some (b2, delta) -> Mem.perm m0 b1 ofs k p -> img b2 (ofs + delta)).
   { intros. red. exists b1, delta; split; auto.
-    replace (ofs + delta - delta) with ofs by omega.
+    replace (ofs + delta - delta) with ofs by lia.
     eauto with mem. }
   destruct H. constructor.
 - destruct mi_inj. constructor; intros.
@@ -668,7 +668,7 @@ Proof.
   intros; red; intros. eelim C; eauto. simpl.
   exists b1, delta; split; auto. destruct VALID as [V1 V2].
   apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
-  apply V1. omega.
+  apply V1. lia.
 - red; simpl; intros. destruct H1 as (b0 & delta0 & U & V).
   eelim C; eauto. simpl. exists b0, delta0; eauto with mem.
 Qed.
@@ -690,7 +690,7 @@ Lemma alloc_parallel_rule:
   /\ (forall b, b <> b1 -> j' b = j b).
 Proof.
   intros until delta; intros SEP ALLOC1 ALLOC2 ALIGN LO HI RANGE1 RANGE2 RANGE3.
-  assert (RANGE4: lo <= hi) by xomega.
+  assert (RANGE4: lo <= hi) by extlia.
   assert (FRESH1: ~Mem.valid_block m1 b1) by (eapply Mem.fresh_block_alloc; eauto).
   assert (FRESH2: ~Mem.valid_block m2 b2) by (eapply Mem.fresh_block_alloc; eauto).
   destruct SEP as (INJ & SP & DISJ). simpl in INJ.
@@ -698,10 +698,10 @@ Proof.
 - eapply Mem.alloc_right_inject; eauto.
 - eexact ALLOC1.
 - instantiate (1 := b2). eauto with mem.
-- instantiate (1 := delta). xomega.
-- intros. assert (0 <= ofs < sz2) by (eapply Mem.perm_alloc_3; eauto). omega.
+- instantiate (1 := delta). extlia.
+- intros. assert (0 <= ofs < sz2) by (eapply Mem.perm_alloc_3; eauto). lia.
 - intros. apply Mem.perm_implies with Freeable; auto with mem.
-  eapply Mem.perm_alloc_2; eauto. xomega.
+  eapply Mem.perm_alloc_2; eauto. extlia.
 - red; intros. apply Z.divide_trans with 8; auto.
   exists (8 / align_chunk chunk). destruct chunk; reflexivity.
 - intros. elim FRESH2. eapply Mem.valid_block_inject_2; eauto.
@@ -709,19 +709,19 @@ Proof.
   exists j'; split; auto.
   rewrite <- ! sep_assoc.
   split; [|split].
-+ simpl. intuition auto; try (unfold Ptrofs.max_unsigned in *; omega).
++ simpl. intuition auto; try (unfold Ptrofs.max_unsigned in *; lia).
 * apply Mem.perm_implies with Freeable; auto with mem.
-  eapply Mem.perm_alloc_2; eauto. omega.
+  eapply Mem.perm_alloc_2; eauto. lia.
 * apply Mem.perm_implies with Freeable; auto with mem.
-  eapply Mem.perm_alloc_2; eauto. omega.
-* red; simpl; intros. destruct H1, H2. omega.
+  eapply Mem.perm_alloc_2; eauto. lia.
+* red; simpl; intros. destruct H1, H2. lia.
 * red; simpl; intros.
   assert (b = b2) by tauto. subst b.
   assert (0 <= ofs < lo \/ hi <= ofs < sz2) by tauto. clear H1.
   destruct H2 as (b0 & delta0 & D & E).
   eapply Mem.perm_alloc_inv in E; eauto.
   destruct (eq_block b0 b1).
-  subst b0. rewrite J2 in D. inversion D; clear D; subst delta0. xomega.
+  subst b0. rewrite J2 in D. inversion D; clear D; subst delta0. extlia.
   rewrite J3 in D by auto. elim FRESH2. eapply Mem.valid_block_inject_2; eauto.
 + apply (m_invar P) with m2; auto. eapply Mem.alloc_unchanged_on; eauto.
 + red; simpl; intros.
@@ -753,11 +753,11 @@ Proof.
   simpl in E.
   assert (PERM: Mem.range_perm m2 b2 0 sz2 Cur Freeable).
   { red; intros.
-    destruct (zlt ofs lo). apply J; omega.
-    destruct (zle hi ofs). apply K; omega.
-    replace ofs with ((ofs - delta) + delta) by omega.
+    destruct (zlt ofs lo). apply J; lia.
+    destruct (zle hi ofs). apply K; lia.
+    replace ofs with ((ofs - delta) + delta) by lia.
     eapply Mem.perm_inject; eauto.
-    eapply Mem.free_range_perm; eauto. xomega.
+    eapply Mem.free_range_perm; eauto. extlia.
   }
   destruct (Mem.range_perm_free _ _ _ _ PERM) as [m2' FREE].
   exists m2'; split; auto. split; [|split].
@@ -768,16 +768,16 @@ Proof.
   destruct (zle hi (ofs + delta0)). intuition auto.
   destruct (eq_block b0 b1).
 * subst b0. rewrite H1 in H; inversion H; clear H; subst delta0.
-  eelim (Mem.perm_free_2 m1); eauto. xomega.
+  eelim (Mem.perm_free_2 m1); eauto. extlia.
 * exploit Mem.mi_no_overlap; eauto.
   apply Mem.perm_max with k. apply Mem.perm_implies with p; auto with mem.
   eapply Mem.perm_free_3; eauto.
   apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
   eapply (Mem.free_range_perm m1); eauto.
-  instantiate (1 := ofs + delta0 - delta). xomega.
-  intros [X|X]. congruence. omega.
+  instantiate (1 := ofs + delta0 - delta). extlia.
+  intros [X|X]. congruence. lia.
 + simpl. exists b0, delta0; split; auto.
-  replace (ofs + delta0 - delta0) with ofs by omega.
+  replace (ofs + delta0 - delta0) with ofs by lia.
   apply Mem.perm_max with k. apply Mem.perm_implies with p; auto with mem.
   eapply Mem.perm_free_3; eauto.
 - apply (m_invar P) with m2; auto.
@@ -787,7 +787,7 @@ Proof.
   destruct (zle hi i). intuition auto.
   right; exists b1, delta; split; auto.
   apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-  eapply Mem.free_range_perm; eauto. xomega.
+  eapply Mem.free_range_perm; eauto. extlia.
 - red; simpl; intros. eelim C; eauto.
   simpl. right. destruct H as (b0 & delta0 & U & V).
   exists b0, delta0; split; auto.

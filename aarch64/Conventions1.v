@@ -274,33 +274,33 @@ Proof.
   assert (ALP: forall ofs ty, ofs >= 0 -> align ofs (typesize ty) >= 0).
   { intros. 
     assert (ofs <= align ofs (typesize ty)) by (apply align_le; apply typesize_pos).
-    omega. }
+    lia. }
   assert (ALD: forall ofs ty, ofs >= 0 -> (typealign ty | align ofs (typesize ty))).
   { intros. apply Z.divide_trans with (typesize ty). apply typealign_typesize. apply align_divides. apply typesize_pos. }
   assert (ALP2: forall ofs, ofs >= 0 -> align ofs 2 >= 0).
   { intros. 
-    assert (ofs <= align ofs 2) by (apply align_le; omega).
-    omega. }
+    assert (ofs <= align ofs 2) by (apply align_le; lia).
+    lia. }
   assert (ALD2: forall ofs ty, ofs >= 0 -> (typealign ty | align ofs 2)).
   { intros. eapply Z.divide_trans with 2.
     exists (2 / typealign ty). destruct ty; reflexivity.
-    apply align_divides. omega. }
+    apply align_divides. lia. }
   assert (STK: forall tyl ofs,
                ofs >= 0 -> OK (loc_arguments_stack tyl ofs)).
   { induction tyl as [ | ty tyl]; intros ofs OO; red; simpl; intros.
   - contradiction.
   - destruct H.
     + subst p. split. auto. simpl. apply Z.divide_1_l.
-    + apply IHtyl with (ofs := ofs + 2). omega. auto.
+    + apply IHtyl with (ofs := ofs + 2). lia. auto.
   }  
   assert (A: forall ty ri rf ofs f,
              OKF f -> ofs >= 0 -> OK (stack_arg ty ri rf ofs f)).
   { intros until f; intros OF OO; red; unfold stack_arg; intros.
     destruct Archi.abi; destruct H.
   - subst p; simpl; auto.
-  - eapply OF; [|eauto]. apply ALP2 in OO. omega.
+  - eapply OF; [|eauto]. apply ALP2 in OO. lia.
   - subst p; simpl; auto.  
-  - eapply OF; [|eauto]. apply (ALP ofs ty) in OO. generalize (typesize_pos ty). omega.
+  - eapply OF; [|eauto]. apply (ALP ofs ty) in OO. generalize (typesize_pos ty). lia.
   }
   assert (B: forall ty ri rf ofs f,
              OKF f -> ofs >= 0 -> OK (int_arg ty ri rf ofs f)).
@@ -332,7 +332,7 @@ Lemma loc_arguments_acceptable:
   In p (loc_arguments s) -> forall_rpair loc_argument_acceptable p.
 Proof.
   unfold loc_arguments; intros.
-  eapply loc_arguments_rec_charact; eauto. omega.
+  eapply loc_arguments_rec_charact; eauto. lia.
 Qed.
 
 Hint Resolve loc_arguments_acceptable: locs.

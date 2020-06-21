@@ -18,7 +18,7 @@ COPYING file for more details.
 *)
 
 (** * Missing definitions/lemmas *)
-Require Import Psatz.
+Require Export Psatz.
 Require Export Reals ZArith.
 Require Export Zaux.
 

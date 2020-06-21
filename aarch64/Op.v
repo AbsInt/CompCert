@@ -957,25 +957,25 @@ End SHIFT_AMOUNT.
 Program Definition mk_amount32 (n: int): amount32 :=
   {| a32_amount := Int.zero_ext 5 n |}.
 Next Obligation.
-  apply mk_amount_range. omega. reflexivity.
+  apply mk_amount_range. lia. reflexivity.
 Qed.
 
 Lemma mk_amount32_eq: forall n,
   Int.ltu n Int.iwordsize = true -> a32_amount (mk_amount32 n) = n.
 Proof.
-  intros. eapply mk_amount_eq; eauto. omega. reflexivity.
+  intros. eapply mk_amount_eq; eauto. lia. reflexivity.
 Qed.
 
 Program Definition mk_amount64 (n: int): amount64 :=
   {| a64_amount := Int.zero_ext 6 n |}.
 Next Obligation.
-  apply mk_amount_range. omega. reflexivity.
+  apply mk_amount_range. lia. reflexivity.
 Qed.
 
 Lemma mk_amount64_eq: forall n,
   Int.ltu n Int64.iwordsize' = true -> a64_amount (mk_amount64 n) = n.
 Proof.
-  intros. eapply mk_amount_eq; eauto. omega. reflexivity.
+  intros. eapply mk_amount_eq; eauto. lia. reflexivity.
 Qed.
  
 (** Recognition of move operations. *)

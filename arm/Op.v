@@ -527,10 +527,10 @@ End SOUNDNESS.
 Program Definition mk_shift_amount (n: int) : shift_amount :=
   {| s_amount := Int.modu n Int.iwordsize; s_range := _ |}.
 Next Obligation.
-  assert (0 <= Z.modulo (Int.unsigned n) 32 < 32). apply Z_mod_lt. omega.
+  assert (0 <= Z.modulo (Int.unsigned n) 32 < 32). apply Z_mod_lt. lia.
   unfold Int.ltu, Int.modu. change (Int.unsigned Int.iwordsize) with 32.
-  rewrite Int.unsigned_repr. apply zlt_true. omega.
-  assert (32 < Int.max_unsigned). compute; auto. omega.
+  rewrite Int.unsigned_repr. apply zlt_true. lia.
+  assert (32 < Int.max_unsigned). compute; auto. lia.
 Qed.
 
 Lemma mk_shift_amount_eq:

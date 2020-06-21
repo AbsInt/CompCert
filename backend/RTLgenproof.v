@@ -1145,7 +1145,7 @@ Proof.
 Qed.
 
 Ltac Lt_state :=
-  apply lt_state_intro; simpl; try omega.
+  apply lt_state_intro; simpl; try lia.
 
 Lemma lt_state_wf:
   well_founded lt_state.

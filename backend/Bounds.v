@@ -163,7 +163,7 @@ Proof.
   intros until valu. unfold max_over_list.
   assert (forall l z, fold_left (fun x y => Z.max x (valu y)) l z >= z).
   induction l; simpl; intros.
-  omega. apply Zge_trans with (Z.max z (valu a)).
+  lia. apply Zge_trans with (Z.max z (valu a)).
   auto. apply Z.le_ge. apply Z.le_max_l. auto.
 Qed.
 
@@ -307,7 +307,7 @@ Proof.
             let f := fold_left (fun x y => Z.max x (valu y)) c z in
             z <= f /\ (In x c -> valu x <= f)).
     induction c; simpl; intros.
-    split. omega. tauto.
+    split. lia. tauto.
     elim (IHc (Z.max z (valu a))); intros.
     split. apply Z.le_trans with (Z.max z (valu a)). apply Z.le_max_l. auto.
     intro H1; elim H1; intro.
@@ -446,12 +446,12 @@ Lemma size_callee_save_area_rec_incr:
 Proof.
 Local Opaque mreg_type.
   induction l as [ | r l]; intros; simpl.
-- omega.
+- lia.
 - eapply Z.le_trans. 2: apply IHl.
   generalize (AST.typesize_pos (mreg_type r)); intros.
   apply Z.le_trans with (align ofs (AST.typesize (mreg_type r))).
   apply align_le; auto.
-  omega.
+  lia.
 Qed.
 
 Lemma size_callee_save_area_incr:

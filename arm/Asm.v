@@ -1004,7 +1004,7 @@ Ltac Equalities :=
   split. auto. intros. destruct B; auto. subst. auto.
 (* trace length *)
   red; intros; inv H; simpl.
-  omega.
+  lia.
   inv H3; eapply external_call_trace_length; eauto.
   eapply external_call_trace_length; eauto.
 (* initial states *)

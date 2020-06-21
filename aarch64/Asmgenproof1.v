@@ -81,8 +81,8 @@ Local Opaque Zzero_ext.
   induction N as [ | N]; simpl; intros.
 - constructor.
 - set (frag := Zzero_ext 16 (Z.shiftr n p)) in *. destruct (Z.eqb frag 0).
-+ apply IHN. omega.
-+ econstructor. reflexivity. omega. apply IHN; omega. 
++ apply IHN. lia.
++ econstructor. reflexivity. lia. apply IHN; lia. 
 Qed.
 
 Fixpoint recompose_int (accu: Z) (l: list (Z * Z)) : Z :=
@@ -100,43 +100,43 @@ Lemma decompose_int_correct:
    if zlt i p then Z.testbit accu i else Z.testbit n i).
 Proof.
   induction N as [ | N]; intros until accu; intros PPOS ABOVE i RANGE.
-- simpl. rewrite zlt_true; auto. xomega.
+- simpl. rewrite zlt_true; auto. extlia.
 - rewrite inj_S in RANGE. simpl.
   set (frag := Zzero_ext 16 (Z.shiftr n p)).
   assert (FRAG: forall i, p <= i < p + 16 -> Z.testbit n i = Z.testbit frag (i - p)).
-  { unfold frag; intros. rewrite Zzero_ext_spec by omega. rewrite zlt_true by omega.
-    rewrite Z.shiftr_spec by omega. f_equal; omega. }
+  { unfold frag; intros. rewrite Zzero_ext_spec by lia. rewrite zlt_true by lia.
+    rewrite Z.shiftr_spec by lia. f_equal; lia. }
   destruct (Z.eqb_spec frag 0).
 + rewrite IHN.
-* destruct (zlt i p). rewrite zlt_true by omega. auto.
+* destruct (zlt i p). rewrite zlt_true by lia. auto.
   destruct (zlt i (p + 16)); auto.
-  rewrite ABOVE by omega. rewrite FRAG by omega. rewrite e, Z.testbit_0_l. auto.
-* omega.
-* intros; apply ABOVE; omega.
-* xomega.
+  rewrite ABOVE by lia. rewrite FRAG by lia. rewrite e, Z.testbit_0_l. auto.
+* lia.
+* intros; apply ABOVE; lia.
+* extlia.
 + simpl. rewrite IHN.
 * destruct (zlt i (p + 16)).
-** rewrite Zinsert_spec by omega. unfold proj_sumbool.
-   rewrite zlt_true by omega.
+** rewrite Zinsert_spec by lia. unfold proj_sumbool.
+   rewrite zlt_true by lia.
    destruct (zlt i p).
-   rewrite zle_false by omega. auto.
-   rewrite zle_true by omega. simpl. symmetry; apply FRAG; omega.
-** rewrite Z.ldiff_spec, Z.shiftl_spec by omega.
-   change 65535 with (two_p 16 - 1). rewrite Ztestbit_two_p_m1 by omega.
-   rewrite zlt_false by omega. rewrite zlt_false by omega. apply andb_true_r. 
-* omega.
-* intros. rewrite Zinsert_spec by omega. unfold proj_sumbool.
-  rewrite zle_true by omega. rewrite zlt_false by omega. simpl.
-  apply ABOVE. omega.
-* xomega.
+   rewrite zle_false by lia. auto.
+   rewrite zle_true by lia. simpl. symmetry; apply FRAG; lia.
+** rewrite Z.ldiff_spec, Z.shiftl_spec by lia.
+   change 65535 with (two_p 16 - 1). rewrite Ztestbit_two_p_m1 by lia.
+   rewrite zlt_false by lia. rewrite zlt_false by lia. apply andb_true_r. 
+* lia.
+* intros. rewrite Zinsert_spec by lia. unfold proj_sumbool.
+  rewrite zle_true by lia. rewrite zlt_false by lia. simpl.
+  apply ABOVE. lia.
+* extlia.
 Qed.
 
 Corollary decompose_int_eqmod: forall N n,
   eqmod (two_power_nat (N * 16)%nat) (recompose_int 0 (decompose_int N n 0)) n.
 Proof.
   intros; apply eqmod_same_bits; intros.
-  rewrite decompose_int_correct. apply zlt_false; omega. 
-  omega. intros; apply Z.testbit_0_l. xomega.
+  rewrite decompose_int_correct. apply zlt_false; lia. 
+  lia. intros; apply Z.testbit_0_l. extlia.
 Qed.
 
 Corollary decompose_notint_eqmod: forall N n,
@@ -145,8 +145,8 @@ Corollary decompose_notint_eqmod: forall N n,
 Proof.
   intros; apply eqmod_same_bits; intros.
   rewrite Z.lnot_spec, decompose_int_correct.
-  rewrite zlt_false by omega. rewrite Z.lnot_spec by omega. apply negb_involutive.
-  omega. intros; apply Z.testbit_0_l. xomega. omega.
+  rewrite zlt_false by lia. rewrite Z.lnot_spec by lia. apply negb_involutive.
+  lia. intros; apply Z.testbit_0_l. extlia. lia.
 Qed.
 
 Lemma negate_decomposition_wf:
@@ -156,7 +156,7 @@ Proof.
   instantiate (1 := (Z.lnot m)).
   apply equal_same_bits; intros.
   rewrite H. change 65535 with (two_p 16 - 1).
-  rewrite Z.lxor_spec, !Zzero_ext_spec, Z.lnot_spec, Ztestbit_two_p_m1 by omega.
+  rewrite Z.lxor_spec, !Zzero_ext_spec, Z.lnot_spec, Ztestbit_two_p_m1 by lia.
   destruct (zlt i 16).
   apply xorb_true_r.
   auto.
@@ -167,7 +167,7 @@ Lemma Zinsert_eqmod:
   eqmod (two_power_nat n) x1 x2 ->
   eqmod (two_power_nat n) (Zinsert x1 y p l) (Zinsert x2 y p l).
 Proof.
-  intros. apply eqmod_same_bits; intros. rewrite ! Zinsert_spec by omega.
+  intros. apply eqmod_same_bits; intros. rewrite ! Zinsert_spec by lia.
   destruct (zle p i && zlt i (p + l)); auto.
   apply same_bits_eqmod with n; auto.
 Qed.
@@ -178,12 +178,12 @@ Lemma Zinsert_0_l:
   Z.shiftl (Zzero_ext l y) p = Zinsert 0 (Zzero_ext l y) p l.
 Proof.
   intros. apply equal_same_bits; intros.
-  rewrite Zinsert_spec by omega. unfold proj_sumbool.
-  destruct (zlt i p); [rewrite zle_false by omega|rewrite zle_true by omega]; simpl.
+  rewrite Zinsert_spec by lia. unfold proj_sumbool.
+  destruct (zlt i p); [rewrite zle_false by lia|rewrite zle_true by lia]; simpl.
 - rewrite Z.testbit_0_l, Z.shiftl_spec_low by auto. auto.
-- rewrite Z.shiftl_spec by omega. 
+- rewrite Z.shiftl_spec by lia. 
   destruct (zlt i (p + l)); auto.
-  rewrite Zzero_ext_spec, zlt_false, Z.testbit_0_l by omega. auto.
+  rewrite Zzero_ext_spec, zlt_false, Z.testbit_0_l by lia. auto.
 Qed.
 
 Lemma recompose_int_negated:
@@ -193,12 +193,12 @@ Proof.
   induction 1; intros accu; simpl.
 - auto.
 - rewrite <- IHwf_decomposition. f_equal. apply equal_same_bits; intros. 
-  rewrite Z.lnot_spec, ! Zinsert_spec, Z.lxor_spec, Z.lnot_spec by omega.
+  rewrite Z.lnot_spec, ! Zinsert_spec, Z.lxor_spec, Z.lnot_spec by lia.
   unfold proj_sumbool.
   destruct (zle p i); simpl; auto.
   destruct (zlt i (p + 16)); simpl; auto.
   change 65535 with (two_p 16 - 1).
-  rewrite Ztestbit_two_p_m1 by omega. rewrite zlt_true by omega.
+  rewrite Ztestbit_two_p_m1 by lia. rewrite zlt_true by lia.
   apply xorb_true_r. 
 Qed.
 
@@ -219,7 +219,7 @@ Proof.
                 (Zinsert accu n p 16))
   as (rs' & P & Q & R).
   Simpl. rewrite ACCU. simpl. f_equal. apply Int.eqm_samerepr. 
-  apply Zinsert_eqmod. auto. omega. apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
+  apply Zinsert_eqmod. auto. lia. apply Int.eqm_sym; apply Int.eqm_unsigned_repr.
   exists rs'; split.
   eapply exec_straight_opt_step_opt. simpl; eauto. auto. exact P.
   split. exact Q. intros; Simpl. rewrite R by auto. Simpl.
@@ -244,7 +244,7 @@ Proof.
   unfold rs1; Simpl.
   exists rs2; split.
   eapply exec_straight_opt_step; eauto.
-  simpl. unfold rs1. do 5 f_equal. unfold accu0. rewrite H. apply Zinsert_0_l; omega.
+  simpl. unfold rs1. do 5 f_equal. unfold accu0. rewrite H. apply Zinsert_0_l; lia.
   reflexivity.
   split. exact Q. 
   intros. rewrite R by auto. unfold rs1; Simpl.
@@ -272,7 +272,7 @@ Proof.
   exists rs2; split.
   eapply exec_straight_opt_step; eauto.
   simpl. unfold rs1. do 5 f_equal.
-  unfold accu0. f_equal. rewrite H. apply Zinsert_0_l; omega.
+  unfold accu0. f_equal. rewrite H. apply Zinsert_0_l; lia.
   reflexivity.  
   split. unfold accu0 in Q; rewrite recompose_int_negated in Q by auto. exact Q.
   intros. rewrite R by auto. unfold rs1; Simpl.
@@ -302,8 +302,8 @@ Proof.
     apply Int.eqm_samerepr. apply decompose_notint_eqmod. 
     apply Int.repr_unsigned. }
   destruct Nat.leb.
-+ rewrite <- A. apply exec_loadimm_z_w. apply decompose_int_wf; omega.
-+ rewrite <- B. apply exec_loadimm_n_w. apply decompose_int_wf; omega.
++ rewrite <- A. apply exec_loadimm_z_w. apply decompose_int_wf; lia.
++ rewrite <- B. apply exec_loadimm_n_w. apply decompose_int_wf; lia.
 Qed.
 
 Lemma exec_loadimm_k_x:
@@ -323,7 +323,7 @@ Proof.
                 (Zinsert accu n p 16))
   as (rs' & P & Q & R).
   Simpl. rewrite ACCU. simpl. f_equal. apply Int64.eqm_samerepr. 
-  apply Zinsert_eqmod. auto. omega. apply Int64.eqm_sym; apply Int64.eqm_unsigned_repr.
+  apply Zinsert_eqmod. auto. lia. apply Int64.eqm_sym; apply Int64.eqm_unsigned_repr.
   exists rs'; split.
   eapply exec_straight_opt_step_opt. simpl; eauto. auto. exact P.
   split. exact Q. intros; Simpl. rewrite R by auto. Simpl.
@@ -348,7 +348,7 @@ Proof.
   unfold rs1; Simpl.
   exists rs2; split.
   eapply exec_straight_opt_step; eauto.
-  simpl. unfold rs1. do 5 f_equal. unfold accu0. rewrite H. apply Zinsert_0_l; omega.
+  simpl. unfold rs1. do 5 f_equal. unfold accu0. rewrite H. apply Zinsert_0_l; lia.
   reflexivity.
   split. exact Q. 
   intros. rewrite R by auto. unfold rs1; Simpl.
@@ -376,7 +376,7 @@ Proof.
   exists rs2; split.
   eapply exec_straight_opt_step; eauto.
   simpl. unfold rs1. do 5 f_equal.
-  unfold accu0. f_equal. rewrite H. apply Zinsert_0_l; omega.
+  unfold accu0. f_equal. rewrite H. apply Zinsert_0_l; lia.
   reflexivity.  
   split. unfold accu0 in Q; rewrite recompose_int_negated in Q by auto. exact Q.
   intros. rewrite R by auto. unfold rs1; Simpl.
@@ -406,8 +406,8 @@ Proof.
     apply Int64.eqm_samerepr. apply decompose_notint_eqmod. 
     apply Int64.repr_unsigned. }
   destruct Nat.leb.
-+ rewrite <- A. apply exec_loadimm_z_x. apply decompose_int_wf; omega.
-+ rewrite <- B. apply exec_loadimm_n_x. apply decompose_int_wf; omega.
++ rewrite <- A. apply exec_loadimm_z_x. apply decompose_int_wf; lia.
++ rewrite <- B. apply exec_loadimm_n_x. apply decompose_int_wf; lia.
 Qed.
 
 (** Add immediate *)
@@ -426,14 +426,14 @@ Lemma exec_addimm_aux_32:
 Proof.
   intros insn sem SEM ASSOC; intros. unfold addimm_aux.
   set (nlo := Zzero_ext 12 (Int.unsigned n)). set (nhi := Int.unsigned n - nlo).
-  assert (E: Int.unsigned n = nhi + nlo) by (unfold nhi; omega).
+  assert (E: Int.unsigned n = nhi + nlo) by (unfold nhi; lia).
   rewrite <- (Int.repr_unsigned n).
   destruct (Z.eqb_spec nhi 0); [|destruct (Z.eqb_spec nlo 0)].
 - econstructor; split. apply exec_straight_one. apply SEM. Simpl. 
-  split. Simpl. do 3 f_equal; omega.
+  split. Simpl. do 3 f_equal; lia.
   intros; Simpl.
 - econstructor; split. apply exec_straight_one. apply SEM. Simpl. 
-  split. Simpl. do 3 f_equal; omega.
+  split. Simpl. do 3 f_equal; lia.
   intros; Simpl.
 - econstructor; split. eapply exec_straight_two.
   apply SEM. apply SEM. Simpl. Simpl.
@@ -484,14 +484,14 @@ Lemma exec_addimm_aux_64:
 Proof.
   intros insn sem SEM ASSOC; intros. unfold addimm_aux.
   set (nlo := Zzero_ext 12 (Int64.unsigned n)). set (nhi := Int64.unsigned n - nlo).
-  assert (E: Int64.unsigned n = nhi + nlo) by (unfold nhi; omega).
+  assert (E: Int64.unsigned n = nhi + nlo) by (unfold nhi; lia).
   rewrite <- (Int64.repr_unsigned n).
   destruct (Z.eqb_spec nhi 0); [|destruct (Z.eqb_spec nlo 0)].
 - econstructor; split. apply exec_straight_one. apply SEM. Simpl. 
-  split. Simpl. do 3 f_equal; omega.
+  split. Simpl. do 3 f_equal; lia.
   intros; Simpl.
 - econstructor; split. apply exec_straight_one. apply SEM. Simpl. 
-  split. Simpl. do 3 f_equal; omega.
+  split. Simpl. do 3 f_equal; lia.
   intros; Simpl.
 - econstructor; split. eapply exec_straight_two.
   apply SEM. apply SEM. Simpl. Simpl.

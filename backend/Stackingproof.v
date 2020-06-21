@@ -58,7 +58,7 @@ Lemma slot_outgoing_argument_valid:
 Proof.
   intros. exploit loc_arguments_acceptable_2; eauto. intros [A B].
   unfold slot_valid. unfold proj_sumbool.
-  rewrite zle_true by omega.
+  rewrite zle_true by lia.
   rewrite pred_dec_true by auto.
   auto.
 Qed.
@@ -126,7 +126,7 @@ Proof.
   destruct (wt_function f); simpl negb.
   destruct (zlt Ptrofs.max_unsigned (fe_size (make_env (function_bounds f)))).
   intros; discriminate.
-  intros. unfold fe. unfold b. omega.
+  intros. unfold fe. unfold b. lia.
   intros; discriminate.
 Qed.
 
@@ -200,7 +200,7 @@ Next Obligation.
 - exploit H4; eauto. intros (v & A & B). exists v; split; auto.
   eapply Mem.load_unchanged_on; eauto.
   simpl; intros. rewrite size_type_chunk, typesize_typesize in H8.
-  split; auto. omega.
+  split; auto. lia.
 Qed.
 Next Obligation.
   eauto with mem.
@@ -215,7 +215,7 @@ Remark valid_access_location:
 Proof.
   intros; split.
 - red; intros. apply Mem.perm_implies with Freeable; auto with mem.
-  apply H0. rewrite size_type_chunk, typesize_typesize in H4. omega.
+  apply H0. rewrite size_type_chunk, typesize_typesize in H4. lia.
 - rewrite align_type_chunk. apply Z.divide_add_r.
   apply Z.divide_trans with 8; auto.
   exists (8 / (4 * typealign ty)); destruct ty; reflexivity.
@@ -233,7 +233,7 @@ Proof.
   intros. destruct H as (D & E & F & G & H).
   exploit H; eauto. intros (v & U & V). exists v; split; auto.
   unfold load_stack; simpl. rewrite Ptrofs.add_zero_l, Ptrofs.unsigned_repr; auto.
-  unfold Ptrofs.max_unsigned. generalize (typesize_pos ty). omega.
+  unfold Ptrofs.max_unsigned. generalize (typesize_pos ty). lia.
 Qed.
 
 Lemma set_location:
@@ -252,19 +252,19 @@ Proof.
   { red; intros; eauto with mem. }
   exists m'; split.
 - unfold store_stack; simpl. rewrite Ptrofs.add_zero_l, Ptrofs.unsigned_repr; eauto.
-  unfold Ptrofs.max_unsigned. generalize (typesize_pos ty). omega.
+  unfold Ptrofs.max_unsigned. generalize (typesize_pos ty). lia.
 - simpl. intuition auto.
 + unfold Locmap.set.
   destruct (Loc.eq (S sl ofs ty) (S sl ofs0 ty0)); [|destruct (Loc.diff_dec (S sl ofs ty) (S sl ofs0 ty0))].
 * (* same location *)
   inv e. rename ofs0 into ofs. rename ty0 into ty.
   exists (Val.load_result (chunk_of_type ty) v'); split.
-  eapply Mem.load_store_similar_2; eauto. omega.
+  eapply Mem.load_store_similar_2; eauto. lia.
   apply Val.load_result_inject; auto.
 * (* different locations *)
   exploit H; eauto. intros (v0 & X & Y). exists v0; split; auto.
   rewrite <- X; eapply Mem.load_store_other; eauto.
-  destruct d. congruence. right. rewrite ! size_type_chunk, ! typesize_typesize. omega.
+  destruct d. congruence. right. rewrite ! size_type_chunk, ! typesize_typesize. lia.
 * (* overlapping locations *)
   destruct (Mem.valid_access_load m' (chunk_of_type ty0) sp (pos + 4 * ofs0)) as [v'' LOAD].
   apply Mem.valid_access_implies with Writable; auto with mem.
@@ -273,7 +273,7 @@ Proof.
 + apply (m_invar P) with m; auto.
   eapply Mem.store_unchanged_on; eauto.
   intros i; rewrite size_type_chunk, typesize_typesize. intros; red; intros.
-  eelim C; eauto. simpl. split; auto. omega.
+  eelim C; eauto. simpl. split; auto. lia.
 Qed.
 
 Lemma initial_locations:
@@ -933,8 +933,8 @@ Local Opaque mreg_type.
   { unfold pos1. apply Z.divide_trans with sz.
     unfold sz; rewrite <- size_type_chunk. apply align_size_chunk_divides.
     apply align_divides; auto. }
-  apply range_drop_left with (mid := pos1) in SEP; [ | omega ].
-  apply range_split with (mid := pos1 + sz) in SEP; [ | omega ].
+  apply range_drop_left with (mid := pos1) in SEP; [ | lia ].
+  apply range_split with (mid := pos1 + sz) in SEP; [ | lia ].
   unfold sz at 1 in SEP. rewrite <- size_type_chunk in SEP.
   apply range_contains in SEP; auto.
   exploit (contains_set_stack (fun v' => Val.inject j (ls (R r)) v') (rs r)).
@@ -1073,7 +1073,7 @@ Local Opaque b fe.
   instantiate (1 := fe_stack_data fe). tauto.
   reflexivity.
   instantiate (1 := fe_stack_data fe + bound_stack_data b). rewrite Z.max_comm. reflexivity.
-  generalize (bound_stack_data_pos b) size_no_overflow; omega.
+  generalize (bound_stack_data_pos b) size_no_overflow; lia.
   tauto.
   tauto.
   clear SEP. intros (j' & SEP & INCR & SAME).
@@ -1607,7 +1607,7 @@ Proof.
 + simpl in SEP. unfold parent_sp.
   assert (slot_valid f Outgoing pos ty = true).
   { destruct H0. unfold slot_valid, proj_sumbool.
-    rewrite zle_true by omega. rewrite pred_dec_true by auto. reflexivity. }
+    rewrite zle_true by lia. rewrite pred_dec_true by auto. reflexivity. }
   assert (slot_within_bounds (function_bounds f) Outgoing pos ty) by eauto.
   exploit frame_get_outgoing; eauto. intros (v & A & B).
   exists v; split.

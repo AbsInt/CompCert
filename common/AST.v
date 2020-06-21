@@ -61,7 +61,7 @@ Definition typesize (ty: typ) : Z :=
   end.
 
 Lemma typesize_pos: forall ty, typesize ty > 0.
-Proof. destruct ty; simpl; omega. Qed.
+Proof. destruct ty; simpl; lia. Qed.
 
 Lemma typesize_Tptr: typesize Tptr = if Archi.ptr64 then 8 else 4.
 Proof. unfold Tptr; destruct Archi.ptr64; auto. Qed.
@@ -265,13 +265,13 @@ Fixpoint init_data_list_size (il: list init_data) {struct il} : Z :=
 Lemma init_data_size_pos:
   forall i, init_data_size i >= 0.
 Proof.
-  destruct i; simpl; try xomega. destruct Archi.ptr64; omega.
+  destruct i; simpl; try extlia. destruct Archi.ptr64; lia.
 Qed.
 
 Lemma init_data_list_size_pos:
   forall il, init_data_list_size il >= 0.
 Proof.
-  induction il; simpl. omega. generalize (init_data_size_pos a); omega.
+  induction il; simpl. lia. generalize (init_data_size_pos a); lia.
 Qed.
 
 (** Information attached to global variables. *)

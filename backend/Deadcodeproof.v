@@ -67,7 +67,7 @@ Lemma mextends_agree:
   forall m1 m2 P, Mem.extends m1 m2 -> magree m1 m2 P.
 Proof.
   intros. destruct H. destruct mext_inj. constructor; intros.
-- replace ofs with (ofs + 0) by omega. eapply mi_perm; eauto. auto.
+- replace ofs with (ofs + 0) by lia. eapply mi_perm; eauto. auto.
 - eauto.
 - exploit mi_memval; eauto. unfold inject_id; eauto.
   rewrite Z.add_0_r. auto.
@@ -99,15 +99,15 @@ Proof.
     induction n; intros; simpl.
     constructor.
     rewrite Nat2Z.inj_succ in H. constructor.
-    apply H. omega.
-    apply IHn. intros; apply H; omega.
+    apply H. lia.
+    apply IHn. intros; apply H; lia.
   }
 Local Transparent Mem.loadbytes.
   unfold Mem.loadbytes; intros. destruct H.
   destruct (Mem.range_perm_dec m1 b ofs (ofs + n) Cur Readable); inv H0.
   rewrite pred_dec_true. econstructor; split; eauto.
   apply GETN. intros. rewrite Z_to_nat_max in H.
-  assert (ofs <= i < ofs + n) by xomega.
+  assert (ofs <= i < ofs + n) by extlia.
   apply ma_memval0; auto.
   red; intros; eauto.
 Qed.
@@ -146,11 +146,11 @@ Proof.
                    (ZMap.get q (Mem.setN bytes2 p c2))).
   {
     induction 1; intros; simpl.
-  - apply H; auto. simpl. omega.
+  - apply H; auto. simpl. lia.
   - simpl length in H1; rewrite Nat2Z.inj_succ in H1.
     apply IHlist_forall2; auto.
     intros. rewrite ! ZMap.gsspec. destruct (ZIndexed.eq i p). auto.
-    apply H1; auto. unfold ZIndexed.t in *; omega.
+    apply H1; auto. unfold ZIndexed.t in *; lia.
   }
   intros.
   destruct (Mem.range_perm_storebytes m2 b ofs bytes2) as [m2' ST2].
@@ -211,8 +211,8 @@ Proof.
 - rewrite (Mem.storebytes_mem_contents _ _ _ _ _ H0).
   rewrite PMap.gsspec. destruct (peq b0 b).
 + subst b0. rewrite Mem.setN_outside. eapply ma_memval; eauto. eapply Mem.perm_storebytes_2; eauto.
-  destruct (zlt ofs0 ofs); auto. destruct (zle (ofs + Z.of_nat (length bytes1)) ofs0); try omega.
-  elim (H1 ofs0). omega. auto.
+  destruct (zlt ofs0 ofs); auto. destruct (zle (ofs + Z.of_nat (length bytes1)) ofs0); try lia.
+  elim (H1 ofs0). lia. auto.
 + eapply ma_memval; eauto. eapply Mem.perm_storebytes_2; eauto.
 - rewrite (Mem.nextblock_storebytes _ _ _ _ _ H0).
   eapply ma_nextblock; eauto.
@@ -966,7 +966,7 @@ Ltac UseTransfer :=
   intros. eapply nlive_remove; eauto.
   unfold adst, vanalyze; rewrite AN; eapply aaddr_arg_sound_1; eauto.
   erewrite Mem.loadbytes_length in H1 by eauto.
-  rewrite Z2Nat.id in H1 by omega. auto.
+  rewrite Z2Nat.id in H1 by lia. auto.
   eauto.
   intros (tm' & A & B).
   econstructor; split.
@@ -993,7 +993,7 @@ Ltac UseTransfer :=
   intros (bc & A & B & C).
   intros. eapply nlive_contains; eauto.
   erewrite Mem.loadbytes_length in H0 by eauto.
-  rewrite Z2Nat.id in H0 by omega. auto.
+  rewrite Z2Nat.id in H0 by lia. auto.
 + (* annot *)
   destruct (transfer_builtin_args (kill_builtin_res res ne, nm) _x2) as (ne1, nm1) eqn:TR.
   InvSoundState.

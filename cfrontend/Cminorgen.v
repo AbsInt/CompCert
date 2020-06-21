@@ -240,7 +240,7 @@ Module VarOrder <: TotalLeBool.
   Theorem leb_total: forall v1 v2, leb v1 v2 = true \/ leb v2 v1 = true.
   Proof.
     unfold leb; intros.
-    assert (snd v1 <= snd v2 \/ snd v2 <= snd v1) by omega.
+    assert (snd v1 <= snd v2 \/ snd v2 <= snd v1) by lia.
     unfold proj_sumbool. destruct H; [left|right]; apply zle_true; auto.
   Qed.
 End VarOrder.

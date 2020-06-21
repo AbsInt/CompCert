@@ -60,9 +60,9 @@ Remark fold_max_outgoing_above:
   forall l n, fold_left max_outgoing_2 l n >= n.
 Proof.
   assert (A: forall n l, max_outgoing_1 n l >= n).
-  { intros; unfold max_outgoing_1. destruct l as [_ | []]; xomega. }
+  { intros; unfold max_outgoing_1. destruct l as [_ | []]; extlia. }
   induction l; simpl; intros. 
-  - omega.
+  - lia.
   - eapply Zge_trans. eauto.
     destruct a; simpl. apply A. eapply Zge_trans; eauto.
 Qed.
@@ -80,14 +80,14 @@ Lemma loc_arguments_bounded:
 Proof.
   intros until ty.
   assert (A: forall n l, n <= max_outgoing_1 n l).
-  { intros; unfold max_outgoing_1. destruct l as [_ | []]; xomega. }
+  { intros; unfold max_outgoing_1. destruct l as [_ | []]; extlia. }
   assert (B: forall p n,
              In (S Outgoing ofs ty) (regs_of_rpair p) ->
              ofs + typesize ty <= max_outgoing_2 n p).
   { intros. destruct p; simpl in H; intuition; subst; simpl.
-  - xomega.
-  - eapply Z.le_trans. 2: apply A. xomega.
-  - xomega. }
+  - extlia.
+  - eapply Z.le_trans. 2: apply A. extlia.
+  - extlia. }
   assert (C: forall l n,
              In (S Outgoing ofs ty) (regs_of_rpairs l) ->
              ofs + typesize ty <= fold_left max_outgoing_2 l n).
@@ -168,7 +168,7 @@ Proof.
   unfold loc_argument_acceptable.
   destruct l; intros. auto. destruct sl; try contradiction. destruct H1.
   generalize (loc_arguments_bounded _ _ _ H0).
-  generalize (typesize_pos ty). omega.
+  generalize (typesize_pos ty). lia.
 Qed.
 
 

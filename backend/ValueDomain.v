@@ -45,10 +45,10 @@ Qed.
 
 Hint Extern 2 (_ = _) => congruence : va.
 Hint Extern 2 (_ <> _) => congruence : va.
-Hint Extern 2 (_ < _) => xomega : va.
-Hint Extern 2 (_ <= _) => xomega : va.
-Hint Extern 2 (_ > _) => xomega : va.
-Hint Extern 2 (_ >= _) => xomega : va.
+Hint Extern 2 (_ < _) => extlia : va.
+Hint Extern 2 (_ <= _) => extlia : va.
+Hint Extern 2 (_ > _) => extlia : va.
+Hint Extern 2 (_ >= _) => extlia : va.
 
 Section MATCH.
 
@@ -595,17 +595,17 @@ Hint Extern 1 (vmatch _ _) => constructor : va.
 
 Lemma is_uns_mon: forall n1 n2 i, is_uns n1 i -> n1 <= n2 -> is_uns n2 i.
 Proof.
-  intros; red; intros. apply H; omega.
+  intros; red; intros. apply H; lia.
 Qed.
 
 Lemma is_sgn_mon: forall n1 n2 i, is_sgn n1 i -> n1 <= n2 -> is_sgn n2 i.
 Proof.
-  intros; red; intros. apply H; omega.
+  intros; red; intros. apply H; lia.
 Qed.
 
 Lemma is_uns_sgn: forall n1 n2 i, is_uns n1 i -> n1 < n2 -> is_sgn n2 i.
 Proof.
-  intros; red; intros. rewrite ! H by omega. auto.
+  intros; red; intros. rewrite ! H by lia. auto.
 Qed.
 
 Definition usize := Int.size.
@@ -616,7 +616,7 @@ Lemma is_uns_usize:
   forall i, is_uns (usize i) i.
 Proof.
   unfold usize; intros; red; intros.
-  apply Int.bits_size_2. omega.
+  apply Int.bits_size_2. lia.
 Qed.
 
 Lemma is_sgn_ssize:
@@ -628,10 +628,10 @@ Proof.
   rewrite <- (negb_involutive (Int.testbit i (Int.zwordsize - 1))).
   f_equal.
   generalize (Int.size_range (Int.not i)); intros RANGE.
-  rewrite <- ! Int.bits_not by omega.
-  rewrite ! Int.bits_size_2 by omega.
+  rewrite <- ! Int.bits_not by lia.
+  rewrite ! Int.bits_size_2 by lia.
   auto.
-- rewrite ! Int.bits_size_2 by omega.
+- rewrite ! Int.bits_size_2 by lia.
   auto.
 Qed.
 
@@ -639,8 +639,8 @@ Lemma is_uns_zero_ext:
   forall n i, is_uns n i <-> Int.zero_ext n i = i.
 Proof.
   intros; split; intros.
-  Int.bit_solve. destruct (zlt i0 n); auto. symmetry; apply H; auto. omega.
-  rewrite <- H. red; intros. rewrite Int.bits_zero_ext by omega. rewrite zlt_false by omega. auto.
+  Int.bit_solve. destruct (zlt i0 n); auto. symmetry; apply H; auto. lia.
+  rewrite <- H. red; intros. rewrite Int.bits_zero_ext by lia. rewrite zlt_false by lia. auto.
 Qed.
 
 Lemma is_sgn_sign_ext:
@@ -649,18 +649,18 @@ Proof.
   intros; split; intros.
   Int.bit_solve. destruct (zlt i0 n); auto.
   transitivity (Int.testbit i (Int.zwordsize - 1)).
-  apply H0; omega. symmetry; apply H0; omega.
-  rewrite <- H0. red; intros. rewrite ! Int.bits_sign_ext by omega.
-  f_equal. transitivity (n-1). destruct (zlt m n); omega.
-  destruct (zlt (Int.zwordsize - 1) n); omega.
+  apply H0; lia. symmetry; apply H0; lia.
+  rewrite <- H0. red; intros. rewrite ! Int.bits_sign_ext by lia.
+  f_equal. transitivity (n-1). destruct (zlt m n); lia.
+  destruct (zlt (Int.zwordsize - 1) n); lia.
 Qed.
 
 Lemma is_zero_ext_uns:
   forall i n m,
   is_uns m i \/ n <= m -> is_uns m (Int.zero_ext n i).
 Proof.
-  intros. red; intros. rewrite Int.bits_zero_ext by omega.
-  destruct (zlt m0 n); auto. destruct H. apply H; omega. omegaContradiction.
+  intros. red; intros. rewrite Int.bits_zero_ext by lia.
+  destruct (zlt m0 n); auto. destruct H. apply H; lia. extlia.
 Qed.
 
 Lemma is_zero_ext_sgn:
@@ -668,9 +668,9 @@ Lemma is_zero_ext_sgn:
   n < m ->
   is_sgn m (Int.zero_ext n i).
 Proof.
-  intros. red; intros. rewrite ! Int.bits_zero_ext by omega.
-  transitivity false. apply zlt_false; omega.
-  symmetry; apply zlt_false; omega.
+  intros. red; intros. rewrite ! Int.bits_zero_ext by lia.
+  transitivity false. apply zlt_false; lia.
+  symmetry; apply zlt_false; lia.
 Qed.
 
 Lemma is_sign_ext_uns:
@@ -679,8 +679,8 @@ Lemma is_sign_ext_uns:
   is_uns m i ->
   is_uns m (Int.sign_ext n i).
 Proof.
-  intros; red; intros. rewrite Int.bits_sign_ext by omega.
-  apply H0. destruct (zlt m0 n); omega. destruct (zlt m0 n); omega.
+  intros; red; intros. rewrite Int.bits_sign_ext by lia.
+  apply H0. destruct (zlt m0 n); lia. destruct (zlt m0 n); lia.
 Qed.
 
 Lemma is_sign_ext_sgn:
@@ -690,9 +690,9 @@ Lemma is_sign_ext_sgn:
 Proof.
   intros. apply is_sgn_sign_ext; auto.
   destruct (zlt m n). destruct H1. apply is_sgn_sign_ext in H1; auto.
-  rewrite <- H1. rewrite (Int.sign_ext_widen i) by omega. apply Int.sign_ext_idem; auto.
-  omegaContradiction.
-  apply Int.sign_ext_widen; omega.
+  rewrite <- H1. rewrite (Int.sign_ext_widen i) by lia. apply Int.sign_ext_idem; auto.
+  extlia.
+  apply Int.sign_ext_widen; lia.
 Qed.
 
 Hint Resolve is_uns_mon is_sgn_mon is_uns_sgn is_uns_usize is_sgn_ssize : va.
@@ -701,8 +701,8 @@ Lemma is_uns_1:
   forall n, is_uns 1 n -> n = Int.zero \/ n = Int.one.
 Proof.
   intros. destruct (Int.testbit n 0) eqn:B0; [right|left]; apply Int.same_bits_eq; intros.
-  rewrite Int.bits_one. destruct (zeq i 0). subst i; auto. apply H; omega.
-  rewrite Int.bits_zero. destruct (zeq i 0). subst i; auto. apply H; omega.
+  rewrite Int.bits_one. destruct (zeq i 0). subst i; auto. apply H; lia.
+  rewrite Int.bits_zero. destruct (zeq i 0). subst i; auto. apply H; lia.
 Qed.
 
 (** Tracking leakage of pointers through arithmetic operations.
@@ -958,13 +958,13 @@ Hint Resolve vge_uns_uns' vge_uns_i' vge_sgn_sgn' vge_sgn_i' : va.
 
 Lemma usize_pos: forall n, 0 <= usize n.
 Proof.
-  unfold usize; intros. generalize (Int.size_range n); omega.
+  unfold usize; intros. generalize (Int.size_range n); lia.
 Qed.
 
 Lemma ssize_pos: forall n, 0 < ssize n.
 Proof.
   unfold ssize; intros.
-  generalize (Int.size_range (if Int.lt n Int.zero then Int.not n else n)); omega.
+  generalize (Int.size_range (if Int.lt n Int.zero then Int.not n else n)); lia.
 Qed.
 
 Lemma vge_lub_l:
@@ -975,12 +975,12 @@ Proof.
   unfold vlub; destruct x, y; eauto using pge_lub_l with va.
 - predSpec Int.eq Int.eq_spec n n0. auto with va.
   destruct (Int.lt n Int.zero || Int.lt n0 Int.zero).
-  apply vge_sgn_i'. generalize (ssize_pos n); xomega. eauto with va.
-  apply vge_uns_i'. generalize (usize_pos n); xomega. eauto with va.
+  apply vge_sgn_i'. generalize (ssize_pos n); extlia. eauto with va.
+  apply vge_uns_i'. generalize (usize_pos n); extlia. eauto with va.
 - destruct (Int.lt n Int.zero).
-  apply vge_sgn_i'. generalize (ssize_pos n); xomega. eauto with va.
-  apply vge_uns_i'. generalize (usize_pos n); xomega. eauto with va.
-- apply vge_sgn_i'. generalize (ssize_pos n); xomega. eauto with va.
+  apply vge_sgn_i'. generalize (ssize_pos n); extlia. eauto with va.
+  apply vge_uns_i'. generalize (usize_pos n); extlia. eauto with va.
+- apply vge_sgn_i'. generalize (ssize_pos n); extlia. eauto with va.
 - destruct (Int.lt n0 Int.zero).
   eapply vge_trans. apply vge_sgn_sgn'.
   apply vge_trans with (Sgn p (n + 1)); eauto with va.
@@ -1269,12 +1269,12 @@ Proof.
   destruct (Int.ltu n Int.iwordsize) eqn:LTU; auto.
   exploit Int.ltu_inv; eauto. intros RANGE.
   inv H; auto with va.
-- apply vmatch_uns'. red; intros. rewrite Int.bits_shl by omega.
-  destruct (zlt m (Int.unsigned n)). auto. apply H1; xomega.
+- apply vmatch_uns'. red; intros. rewrite Int.bits_shl by lia.
+  destruct (zlt m (Int.unsigned n)). auto. apply H1; extlia.
 - apply vmatch_sgn'. red; intros. zify.
-  rewrite ! Int.bits_shl by omega.
-  rewrite ! zlt_false by omega.
-  rewrite H1 by omega. symmetry. rewrite H1 by omega. auto.
+  rewrite ! Int.bits_shl by lia.
+  rewrite ! zlt_false by lia.
+  rewrite H1 by lia. symmetry. rewrite H1 by lia. auto.
 - destruct v; constructor.
 Qed.
 
@@ -1306,13 +1306,13 @@ Proof.
   assert (DEFAULT2: forall i, vmatch (Vint (Int.shru i n)) (uns (provenance x) (Int.zwordsize - Int.unsigned n))).
   {
     intros. apply vmatch_uns. red; intros.
-    rewrite Int.bits_shru by omega. apply zlt_false. omega.
+    rewrite Int.bits_shru by lia. apply zlt_false. lia.
   }
   inv H; auto with va.
 - apply vmatch_uns'. red; intros. zify.
-  rewrite Int.bits_shru by omega.
+  rewrite Int.bits_shru by lia.
   destruct (zlt (m + Int.unsigned n) Int.zwordsize); auto.
-  apply H1; omega.
+  apply H1; lia.
 - destruct v; constructor.
 Qed.
 
@@ -1345,22 +1345,22 @@ Proof.
   assert (DEFAULT2: forall i, vmatch (Vint (Int.shr i n)) (sgn (provenance x) (Int.zwordsize - Int.unsigned n))).
   {
     intros. apply vmatch_sgn. red; intros.
-    rewrite ! Int.bits_shr by omega. f_equal.
+    rewrite ! Int.bits_shr by lia. f_equal.
     destruct (zlt (m + Int.unsigned n) Int.zwordsize);
     destruct (zlt (Int.zwordsize - 1 + Int.unsigned n) Int.zwordsize);
-    omega.
+    lia.
   }
   assert (SGN: forall q i p, is_sgn p i -> 0 < p -> vmatch (Vint (Int.shr i n)) (sgn q (p - Int.unsigned n))).
   {
     intros. apply vmatch_sgn'. red; intros. zify.
-    rewrite ! Int.bits_shr by omega.
+    rewrite ! Int.bits_shr by lia.
     transitivity (Int.testbit i (Int.zwordsize - 1)).
     destruct (zlt (m + Int.unsigned n) Int.zwordsize).
-    apply H0; omega.
+    apply H0; lia.
     auto.
     symmetry.
     destruct (zlt (Int.zwordsize - 1 + Int.unsigned n) Int.zwordsize).
-    apply H0; omega.
+    apply H0; lia.
     auto.
   }
   inv H; eauto with va.
@@ -1418,12 +1418,12 @@ Proof.
   assert (UNS: forall i j n m, is_uns n i -> is_uns m j -> is_uns (Z.max n m) (Int.or i j)).
   {
     intros; red; intros. rewrite Int.bits_or by auto.
-    rewrite H by xomega. rewrite H0 by xomega. auto.
+    rewrite H by extlia. rewrite H0 by extlia. auto.
   }
   assert (SGN: forall i j n m, is_sgn n i -> is_sgn m j -> is_sgn (Z.max n m) (Int.or i j)).
   {
-    intros; red; intros. rewrite ! Int.bits_or by xomega.
-    rewrite H by xomega. rewrite H0 by xomega. auto.
+    intros; red; intros. rewrite ! Int.bits_or by extlia.
+    rewrite H by extlia. rewrite H0 by extlia. auto.
   }
   intros. unfold or, Val.or; inv H; eauto with va; inv H0; eauto with va.
 Qed.
@@ -1443,12 +1443,12 @@ Proof.
   assert (UNS: forall i j n m, is_uns n i -> is_uns m j -> is_uns (Z.max n m) (Int.xor i j)).
   {
     intros; red; intros. rewrite Int.bits_xor by auto.
-    rewrite H by xomega. rewrite H0 by xomega. auto.
+    rewrite H by extlia. rewrite H0 by extlia. auto.
   }
   assert (SGN: forall i j n m, is_sgn n i -> is_sgn m j -> is_sgn (Z.max n m) (Int.xor i j)).
   {
-    intros; red; intros. rewrite ! Int.bits_xor by xomega.
-    rewrite H by xomega. rewrite H0 by xomega. auto.
+    intros; red; intros. rewrite ! Int.bits_xor by extlia.
+    rewrite H by extlia. rewrite H0 by extlia. auto.
   }
   intros. unfold xor, Val.xor; inv H; eauto with va; inv H0; eauto with va.
 Qed.
@@ -1466,7 +1466,7 @@ Lemma notint_sound:
 Proof.
   assert (SGN: forall n i, is_sgn n i -> is_sgn n (Int.not i)).
   {
-    intros; red; intros. rewrite ! Int.bits_not by omega.
+    intros; red; intros. rewrite ! Int.bits_not by lia.
     f_equal. apply H; auto.
   }
   intros. unfold Val.notint, notint; inv H; eauto with va.
@@ -1492,13 +1492,13 @@ Proof.
   inv H; auto with va.
 - apply vmatch_uns. red; intros. rewrite Int.bits_rol by auto.
   generalize (Int.unsigned_range n); intros.
-  rewrite Z.mod_small by omega.
-  apply H1. omega. omega.
+  rewrite Z.mod_small by lia.
+  apply H1. lia. lia.
 - destruct (zlt n0 Int.zwordsize); auto with va.
-  apply vmatch_sgn. red; intros. rewrite ! Int.bits_rol by omega.
+  apply vmatch_sgn. red; intros. rewrite ! Int.bits_rol by lia.
   generalize (Int.unsigned_range n); intros.
-  rewrite ! Z.mod_small by omega.
-  rewrite H1 by omega. symmetry. rewrite H1 by omega. auto.
+  rewrite ! Z.mod_small by lia.
+  rewrite H1 by lia. symmetry. rewrite H1 by lia. auto.
 - destruct (zlt n0 Int.zwordsize); auto with va.
 Qed.
 
@@ -1674,8 +1674,8 @@ Proof.
     generalize (Int.unsigned_range_2 j); intros RANGE.
     assert (Int.unsigned j <> 0).
     { red; intros; elim H. rewrite <- (Int.repr_unsigned j). rewrite H0. auto. }
-    exploit (Z_mod_lt (Int.unsigned i) (Int.unsigned j)). omega. intros MOD.
-    unfold Int.modu. rewrite Int.unsigned_repr. omega. omega.
+    exploit (Z_mod_lt (Int.unsigned i) (Int.unsigned j)). lia. intros MOD.
+    unfold Int.modu. rewrite Int.unsigned_repr. lia. lia.
   }
   intros. destruct v; destruct w; try discriminate; simpl in H1.
   destruct (Int.eq i0 Int.zero) eqn:Z; inv H1.
@@ -2084,12 +2084,12 @@ Lemma zero_ext_sound:
 Proof.
   assert (DFL: forall nbits i, is_uns nbits (Int.zero_ext nbits i)).
   {
-    intros; red; intros. rewrite Int.bits_zero_ext by omega. apply zlt_false; auto.
+    intros; red; intros. rewrite Int.bits_zero_ext by lia. apply zlt_false; auto.
   }
   intros. inv H; simpl; auto with va. apply vmatch_uns.
   red; intros. zify.
-  rewrite Int.bits_zero_ext by omega.
-  destruct (zlt m nbits); auto. apply H1; omega.
+  rewrite Int.bits_zero_ext by lia.
+  destruct (zlt m nbits); auto. apply H1; lia.
 Qed.
 
 Definition sign_ext (nbits: Z) (v: aval) :=
@@ -2109,7 +2109,7 @@ Proof.
     intros. apply vmatch_sgn. apply is_sign_ext_sgn; auto with va.
   }
   intros. unfold sign_ext. destruct (zle nbits 0).
-- destruct v; simpl; auto with va. constructor. omega. 
+- destruct v; simpl; auto with va. constructor. lia. 
   rewrite Int.sign_ext_below by auto. red; intros; apply Int.bits_zero.
 - inv H; simpl; auto with va.
 + destruct (zlt n nbits); eauto with va.
@@ -2514,26 +2514,26 @@ Proof.
   intros c [lo hi] x n; simpl; intros R.
   destruct c; unfold zcmp, proj_sumbool.
 - (* eq *)
-  destruct (zlt n lo). rewrite zeq_false by omega. constructor.
-  destruct (zlt hi n). rewrite zeq_false by omega. constructor.
+  destruct (zlt n lo). rewrite zeq_false by lia. constructor.
+  destruct (zlt hi n). rewrite zeq_false by lia. constructor.
   constructor.
 - (* ne *)
   constructor.
 - (* lt *)
-  destruct (zlt hi n). rewrite zlt_true by omega. constructor.
-  destruct (zle n lo). rewrite zlt_false by omega. constructor.
+  destruct (zlt hi n). rewrite zlt_true by lia. constructor.
+  destruct (zle n lo). rewrite zlt_false by lia. constructor.
   constructor.
 - (* le *)
-  destruct (zle hi n). rewrite zle_true by omega. constructor.
-  destruct (zlt n lo). rewrite zle_false by omega. constructor.
+  destruct (zle hi n). rewrite zle_true by lia. constructor.
+  destruct (zlt n lo). rewrite zle_false by lia. constructor.
   constructor.
 - (* gt *)
-  destruct (zlt n lo). rewrite zlt_true by omega. constructor.
-  destruct (zle hi n). rewrite zlt_false by omega. constructor.
+  destruct (zlt n lo). rewrite zlt_true by lia. constructor.
+  destruct (zle hi n). rewrite zlt_false by lia. constructor.
   constructor.
 - (* ge *)
-  destruct (zle n lo). rewrite zle_true by omega. constructor.
-  destruct (zlt hi n). rewrite zle_false by omega. constructor.
+  destruct (zle n lo). rewrite zle_true by lia. constructor.
+  destruct (zlt hi n). rewrite zle_false by lia. constructor.
   constructor.
 Qed.
 
@@ -2567,10 +2567,10 @@ Lemma uintv_sound:
   forall n v, vmatch (Vint n) v -> fst (uintv v) <= Int.unsigned n <= snd (uintv v).
 Proof.
   intros. inv H; simpl; try (apply Int.unsigned_range_2).
-- omega.
+- lia.
 - destruct (zlt n0 Int.zwordsize); simpl.
-+ rewrite is_uns_zero_ext in H2. rewrite <- H2. rewrite Int.zero_ext_mod by omega.
-  exploit (Z_mod_lt (Int.unsigned n) (two_p n0)). apply two_p_gt_ZERO; auto. omega.
++ rewrite is_uns_zero_ext in H2. rewrite <- H2. rewrite Int.zero_ext_mod by lia.
+  exploit (Z_mod_lt (Int.unsigned n) (two_p n0)). apply two_p_gt_ZERO; auto. lia.
 + apply Int.unsigned_range_2.
 Qed.
 
@@ -2582,8 +2582,8 @@ Proof.
   intros. simpl. replace (Int.cmpu c n1 n2) with (zcmp c (Int.unsigned n1) (Int.unsigned n2)).
   apply zcmp_intv_sound; apply uintv_sound; auto.
   destruct c; simpl; auto.
-  unfold Int.ltu. destruct (zle (Int.unsigned n1) (Int.unsigned n2)); [rewrite zlt_false|rewrite zlt_true]; auto; omega.
-  unfold Int.ltu. destruct (zle (Int.unsigned n2) (Int.unsigned n1)); [rewrite zlt_false|rewrite zlt_true]; auto; omega.
+  unfold Int.ltu. destruct (zle (Int.unsigned n1) (Int.unsigned n2)); [rewrite zlt_false|rewrite zlt_true]; auto; lia.
+  unfold Int.ltu. destruct (zle (Int.unsigned n2) (Int.unsigned n1)); [rewrite zlt_false|rewrite zlt_true]; auto; lia.
 Qed.
 
 Lemma cmpu_intv_sound_2:
@@ -2610,22 +2610,22 @@ Lemma sintv_sound:
   forall n v, vmatch (Vint n) v -> fst (sintv v) <= Int.signed n <= snd (sintv v).
 Proof.
   intros. inv H; simpl; try (apply Int.signed_range).
-- omega.
+- lia.
 - destruct (zlt n0 Int.zwordsize); simpl.
 + rewrite is_uns_zero_ext in H2. rewrite <- H2.
-  assert (Int.unsigned (Int.zero_ext n0 n) = Int.unsigned n mod two_p n0) by (apply Int.zero_ext_mod; omega).
+  assert (Int.unsigned (Int.zero_ext n0 n) = Int.unsigned n mod two_p n0) by (apply Int.zero_ext_mod; lia).
   exploit (Z_mod_lt (Int.unsigned n) (two_p n0)). apply two_p_gt_ZERO; auto. intros.
   replace (Int.signed (Int.zero_ext n0 n)) with (Int.unsigned (Int.zero_ext n0 n)).
-  rewrite H. omega.
+  rewrite H. lia.
   unfold Int.signed. rewrite zlt_true. auto.
   assert (two_p n0 <= Int.half_modulus).
   { change Int.half_modulus with (two_p (Int.zwordsize - 1)).
-    apply two_p_monotone. omega. }
-  omega.
+    apply two_p_monotone. lia. }
+  lia.
 + apply Int.signed_range.
 - destruct (zlt n0 (Int.zwordsize)); simpl.
 + rewrite is_sgn_sign_ext in H2 by auto. rewrite <- H2.
-  exploit (Int.sign_ext_range n0 n). omega. omega.
+  exploit (Int.sign_ext_range n0 n). lia. lia.
 + apply Int.signed_range.
 Qed.
 
@@ -2637,8 +2637,8 @@ Proof.
   intros. simpl. replace (Int.cmp c n1 n2) with (zcmp c (Int.signed n1) (Int.signed n2)).
   apply zcmp_intv_sound; apply sintv_sound; auto.
   destruct c; simpl; rewrite ? Int.eq_signed; auto.
-  unfold Int.lt. destruct (zle (Int.signed n1) (Int.signed n2)); [rewrite zlt_false|rewrite zlt_true]; auto; omega.
-  unfold Int.lt. destruct (zle (Int.signed n2) (Int.signed n1)); [rewrite zlt_false|rewrite zlt_true]; auto; omega.
+  unfold Int.lt. destruct (zle (Int.signed n1) (Int.signed n2)); [rewrite zlt_false|rewrite zlt_true]; auto; lia.
+  unfold Int.lt. destruct (zle (Int.signed n2) (Int.signed n1)); [rewrite zlt_false|rewrite zlt_true]; auto; lia.
 Qed.
 
 Lemma cmp_intv_sound_2:
@@ -2823,7 +2823,7 @@ Proof.
   assert (DEFAULT: vmatch (Val.of_optbool ob) (Uns Pbot 1)).
   {
     destruct ob; simpl; auto with va.
-    destruct b; constructor; try omega.
+    destruct b; constructor; try lia.
     change 1 with (usize Int.one). apply is_uns_usize.
     red; intros. apply Int.bits_zero.
   }
@@ -2942,27 +2942,27 @@ Proof.
 - destruct (zlt n 8); constructor; auto with va.
   apply is_sign_ext_uns; auto.
   apply is_sign_ext_sgn; auto with va.
-- constructor. xomega. apply is_zero_ext_uns. apply Z.min_case; auto with va.
+- constructor. extlia. apply is_zero_ext_uns. apply Z.min_case; auto with va.
 - destruct (zlt n 16); constructor; auto with va.
   apply is_sign_ext_uns; auto.
   apply is_sign_ext_sgn; auto with va.
-- constructor. xomega. apply is_zero_ext_uns. apply Z.min_case; auto with va.
+- constructor. extlia. apply is_zero_ext_uns. apply Z.min_case; auto with va.
 - destruct (zlt n 8); auto with va.
 - destruct (zlt n 16); auto with va.
-- constructor. xomega. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
-- constructor. omega. apply is_zero_ext_uns; auto with va.
-- constructor. xomega. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
-- constructor. omega. apply is_zero_ext_uns; auto with va.
+- constructor. extlia. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
+- constructor. lia. apply is_zero_ext_uns; auto with va.
+- constructor. extlia. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
+- constructor. lia. apply is_zero_ext_uns; auto with va.
 - destruct ptr64; auto with va.
 - destruct ptr64; auto with va.
 - destruct ptr64; auto with va.
 - destruct ptr64; auto with va.
 - destruct ptr64; auto with va.
 - destruct ptr64; auto with va.
-- constructor. omega. apply is_sign_ext_sgn; auto with va.
-- constructor. omega. apply is_zero_ext_uns; auto with va.
-- constructor. omega. apply is_sign_ext_sgn; auto with va.
-- constructor. omega. apply is_zero_ext_uns; auto with va.
+- constructor. lia. apply is_sign_ext_sgn; auto with va.
+- constructor. lia. apply is_zero_ext_uns; auto with va.
+- constructor. lia. apply is_sign_ext_sgn; auto with va.
+- constructor. lia. apply is_zero_ext_uns; auto with va.
 - destruct ptr64; auto with va.
 - destruct ptr64; auto with va.
 - destruct ptr64; auto with va.
@@ -2977,13 +2977,13 @@ Proof.
   intros. exploit Mem.load_cast; eauto. exploit Mem.load_type; eauto.
   destruct chunk; simpl; intros.
 - (* int8signed *)
-  rewrite H2. destruct v; simpl; constructor. omega. apply is_sign_ext_sgn; auto with va.
+  rewrite H2. destruct v; simpl; constructor. lia. apply is_sign_ext_sgn; auto with va.
 - (* int8unsigned *)
-  rewrite H2. destruct v; simpl; constructor. omega. apply is_zero_ext_uns; auto with va.
+  rewrite H2. destruct v; simpl; constructor. lia. apply is_zero_ext_uns; auto with va.
 - (* int16signed *)
-  rewrite H2. destruct v; simpl; constructor. omega. apply is_sign_ext_sgn; auto with va.
+  rewrite H2. destruct v; simpl; constructor. lia. apply is_sign_ext_sgn; auto with va.
 - (* int16unsigned *)
-  rewrite H2. destruct v; simpl; constructor. omega. apply is_zero_ext_uns; auto with va.
+  rewrite H2. destruct v; simpl; constructor. lia. apply is_zero_ext_uns; auto with va.
 - (* int32 *)
   auto.
 - (* int64 *)
@@ -3025,9 +3025,9 @@ Proof with (auto using provenance_monotone with va).
   apply is_sign_ext_sgn...
 - constructor... apply is_zero_ext_uns... apply Z.min_case...
 - unfold provenance; destruct (va_strict tt)...
-- destruct (zlt n1 8). rewrite zlt_true by omega...
+- destruct (zlt n1 8). rewrite zlt_true by lia...
   destruct (zlt n2 8)...
-- destruct (zlt n1 16). rewrite zlt_true by omega...
+- destruct (zlt n1 16). rewrite zlt_true by lia...
   destruct (zlt n2 16)...
 - constructor... apply is_sign_ext_sgn... apply Z.min_case...
 - constructor... apply is_zero_ext_uns...
@@ -3148,7 +3148,7 @@ Function inval_after (lo: Z) (hi: Z) (c: ZTree.t acontent) { wf (Zwf lo) hi } : 
   then inval_after lo (hi - 1) (ZTree.remove hi c)
   else c.
 Proof.
-  intros; red; omega.
+  intros; red; lia.
   apply Zwf_well_founded.
 Qed.
 
@@ -3163,7 +3163,7 @@ Function inval_before (hi: Z) (lo: Z) (c: ZTree.t acontent) { wf (Zwf_up hi) lo 
   then inval_before hi (lo + 1) (inval_if hi lo c)
   else c.
 Proof.
-  intros; red; omega.
+  intros; red; lia.
   apply Zwf_up_well_founded.
 Qed.
 
@@ -3201,7 +3201,7 @@ Remark loadbytes_load_ext:
 Proof.
   intros. exploit Mem.load_loadbytes; eauto. intros [bytes [A B]].
   exploit Mem.load_valid_access; eauto. intros [C D].
-  subst v. apply Mem.loadbytes_load; auto. apply H; auto. generalize (size_chunk_pos chunk); omega.
+  subst v. apply Mem.loadbytes_load; auto. apply H; auto. generalize (size_chunk_pos chunk); lia.
 Qed.
 
 Lemma smatch_ext:
@@ -3212,7 +3212,7 @@ Lemma smatch_ext:
 Proof.
   intros. destruct H. split; intros.
   eapply H; eauto. eapply loadbytes_load_ext; eauto.
-  eapply H1; eauto. apply H0; eauto. omega.
+  eapply H1; eauto. apply H0; eauto. lia.
 Qed.
 
 Lemma smatch_inv:
@@ -3247,19 +3247,19 @@ Proof.
   + rewrite (Mem.loadbytes_empty m b ofs sz) in LOAD by auto.
     inv LOAD. contradiction.
   + exploit (Mem.loadbytes_split m b ofs 1 (sz - 1) bytes).
-    replace (1 + (sz - 1)) with sz by omega. auto.
-    omega.
-    omega.
+    replace (1 + (sz - 1)) with sz by lia. auto.
+    lia.
+    lia.
     intros (bytes1 & bytes2 & LOAD1 & LOAD2 & CONCAT).
     subst bytes.
     exploit Mem.loadbytes_length. eexact LOAD1. change (Z.to_nat 1) with 1%nat. intros LENGTH1.
     rewrite in_app_iff in IN. destruct IN.
   * destruct bytes1; try discriminate. destruct bytes1; try discriminate.
     simpl in H. destruct H; try contradiction. subst m0.
-    exists ofs; split. omega. auto.
-  * exploit (REC (sz - 1)). red; omega. eexact LOAD2. auto.
+    exists ofs; split. lia. auto.
+  * exploit (REC (sz - 1)). red; lia. eexact LOAD2. auto.
     intros (ofs' & A & B).
-    exists ofs'; split. omega. auto.
+    exists ofs'; split. lia. auto.
 Qed.
 
 Lemma smatch_loadbytes:
@@ -3285,13 +3285,13 @@ Proof.
 - apply Zwf_well_founded.
 - intros sz REC ofs bytes LOAD LOAD1 IN.
   exploit (Mem.loadbytes_split m b ofs 1 (sz - 1) bytes).
-  replace (1 + (sz - 1)) with sz by omega. auto.
-  omega.
-  omega.
+  replace (1 + (sz - 1)) with sz by lia. auto.
+  lia.
+  lia.
   intros (bytes1 & bytes2 & LOAD3 & LOAD4 & CONCAT). subst bytes. rewrite in_app_iff.
   destruct (zeq ofs ofs').
 + subst ofs'. rewrite LOAD1 in LOAD3; inv LOAD3. left; simpl; auto.
-+ right. eapply (REC (sz - 1)). red; omega. eexact LOAD4. auto. omega.
++ right. eapply (REC (sz - 1)). red; lia. eexact LOAD4. auto. lia.
 Qed.
 
 Lemma storebytes_provenance:
@@ -3309,10 +3309,10 @@ Proof.
     destruct (eq_block b' b); auto.
     destruct (zle (ofs' + 1) ofs); auto.
     destruct (zle (ofs + Z.of_nat (length bytes)) ofs'); auto.
-    right. split. auto. omega.
+    right. split. auto. lia.
   }
   destruct EITHER as [A | (A & B)].
-- right. rewrite <- H0. symmetry. eapply Mem.loadbytes_storebytes_other; eauto. omega.
+- right. rewrite <- H0. symmetry. eapply Mem.loadbytes_storebytes_other; eauto. lia.
 - subst b'. left.
   eapply loadbytes_provenance; eauto.
   eapply Mem.loadbytes_storebytes_same; eauto.
@@ -3457,7 +3457,7 @@ Remark inval_after_outside:
   forall i lo hi c, i < lo \/ i > hi -> (inval_after lo hi c)##i = c##i.
 Proof.
   intros until c. functional induction (inval_after lo hi c); intros.
-  rewrite IHt by omega. apply ZTree.gro. unfold ZTree.elt, ZIndexed.t; omega.
+  rewrite IHt by lia. apply ZTree.gro. unfold ZTree.elt, ZIndexed.t; lia.
   auto.
 Qed.
 
@@ -3468,18 +3468,18 @@ Remark inval_after_contents:
 Proof.
   intros until c. functional induction (inval_after lo hi c); intros.
   destruct (zeq i hi).
-  subst i. rewrite inval_after_outside in H by omega. rewrite ZTree.grs in H. discriminate.
-  exploit IHt; eauto. intros [A B]. rewrite ZTree.gro in A by auto. split. auto. omega.
-  split. auto. omega.
+  subst i. rewrite inval_after_outside in H by lia. rewrite ZTree.grs in H. discriminate.
+  exploit IHt; eauto. intros [A B]. rewrite ZTree.gro in A by auto. split. auto. lia.
+  split. auto. lia.
 Qed.
 
 Remark inval_before_outside:
   forall i hi lo c, i < lo \/ i >= hi -> (inval_before hi lo c)##i = c##i.
 Proof.
   intros until c. functional induction (inval_before hi lo c); intros.
-  rewrite IHt by omega. unfold inval_if. destruct (c##lo) as [[chunk av]|]; auto.
+  rewrite IHt by lia. unfold inval_if. destruct (c##lo) as [[chunk av]|]; auto.
   destruct (zle (lo + size_chunk chunk) hi); auto.
-  apply ZTree.gro. unfold ZTree.elt, ZIndexed.t; omega.
+  apply ZTree.gro. unfold ZTree.elt, ZIndexed.t; lia.
   auto.
 Qed.
 
@@ -3490,21 +3490,21 @@ Remark inval_before_contents_1:
 Proof.
   intros until c. functional induction (inval_before hi lo c); intros.
 - destruct (zeq lo i).
-+ subst i. rewrite inval_before_outside in H0 by omega.
++ subst i. rewrite inval_before_outside in H0 by lia.
   unfold inval_if in H0. destruct (c##lo) as [[chunk0 v0]|] eqn:C; try congruence.
   destruct (zle (lo + size_chunk chunk0) hi).
   rewrite C in H0; inv H0. auto.
   rewrite ZTree.grs in H0. congruence.
-+ exploit IHt. omega. auto. intros [A B]; split; auto.
++ exploit IHt. lia. auto. intros [A B]; split; auto.
   unfold inval_if in A. destruct (c##lo) as [[chunk0 v0]|] eqn:C; auto.
   destruct (zle (lo + size_chunk chunk0) hi); auto.
   rewrite ZTree.gro in A; auto.
-- omegaContradiction.
+- extlia.
 Qed.
 
 Lemma max_size_chunk: forall chunk, size_chunk chunk <= 8.
 Proof.
-  destruct chunk; simpl; omega.
+  destruct chunk; simpl; lia.
 Qed.
 
 Remark inval_before_contents:
@@ -3513,12 +3513,12 @@ Remark inval_before_contents:
   c##j = Some (ACval chunk' av') /\ (j + size_chunk chunk' <= i \/ i <= j).
 Proof.
   intros. destruct (zlt j (i - 7)).
-  rewrite inval_before_outside in H by omega.
-  split. auto. left. generalize (max_size_chunk chunk'); omega.
+  rewrite inval_before_outside in H by lia.
+  split. auto. left. generalize (max_size_chunk chunk'); lia.
   destruct (zlt j i).
-  exploit inval_before_contents_1; eauto. omega. tauto.
-  rewrite inval_before_outside in H by omega.
-  split. auto. omega.
+  exploit inval_before_contents_1; eauto. lia. tauto.
+  rewrite inval_before_outside in H by lia.
+  split. auto. lia.
 Qed.
 
 Lemma ablock_store_contents:
@@ -3534,7 +3534,7 @@ Proof.
   right. rewrite ZTree.gso in H by auto.
   exploit inval_before_contents; eauto. intros [A B].
   exploit inval_after_contents; eauto. intros [C D].
-  split. auto. omega.
+  split. auto. lia.
 Qed.
 
 Lemma chunk_compat_true:
@@ -3604,7 +3604,7 @@ Proof.
   unfold ablock_storebytes; simpl; intros.
   exploit inval_before_contents; eauto. clear H. intros [A B].
   exploit inval_after_contents; eauto. clear A. intros [C D].
-  split. auto. xomega.
+  split. auto. extlia.
 Qed.
 
 Lemma ablock_storebytes_sound:
@@ -3627,7 +3627,7 @@ Proof.
   exploit ablock_storebytes_contents; eauto. intros [A B].
   assert (Mem.load chunk' m b ofs' = Some v').
   { rewrite <- LOAD'; symmetry. eapply Mem.load_storebytes_other; eauto.
-    rewrite U. rewrite LENGTH. rewrite Z_to_nat_max. right; omega. }
+    rewrite U. rewrite LENGTH. rewrite Z_to_nat_max. right; lia. }
   exploit BM2; eauto. unfold ablock_load. rewrite A. rewrite COMPAT. auto.
 Qed.
 
@@ -3755,7 +3755,7 @@ Proof.
   apply bmatch_inv with m; auto.
 + intros. eapply Mem.loadbytes_store_other; eauto.
   left. red; intros; subst b0. elim (C ofs). apply Mem.perm_cur_max.
-  apply P. generalize (size_chunk_pos chunk); omega.
+  apply P. generalize (size_chunk_pos chunk); lia.
 - intros; red; intros; elim (C ofs0). eauto with mem.
 Qed.
 
@@ -4184,7 +4184,7 @@ Proof.
 - apply bmatch_ext with m; eauto with va.
 - apply smatch_ext with m; auto with va.
 - apply smatch_ext with m; auto with va.
-- red; intros. exploit mmatch_below0; eauto. xomega.
+- red; intros. exploit mmatch_below0; eauto. extlia.
 Qed.
 
 Lemma mmatch_free:
@@ -4195,7 +4195,7 @@ Lemma mmatch_free:
 Proof.
   intros. apply mmatch_ext with m; auto.
   intros. eapply Mem.loadbytes_free_2; eauto.
-  erewrite <- Mem.nextblock_free by eauto. xomega.
+  erewrite <- Mem.nextblock_free by eauto. extlia.
 Qed.
 
 Lemma mmatch_top':
@@ -4419,7 +4419,7 @@ Proof.
   {
     Local Transparent Mem.loadbytes.
     unfold Mem.loadbytes. rewrite pred_dec_true. reflexivity.
-    red; intros. replace ofs0 with ofs by omega. auto.
+    red; intros. replace ofs0 with ofs by lia. auto.
   }
   destruct mv; econstructor. destruct v; econstructor.
   apply inj_of_bc_valid.
@@ -4440,7 +4440,7 @@ Proof.
   auto.
 - (* overflow *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
-  rewrite Z.add_0_r. split. omega. apply Ptrofs.unsigned_range_2.
+  rewrite Z.add_0_r. split. lia. apply Ptrofs.unsigned_range_2.
 - (* perm inv *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
   rewrite Z.add_0_r in H2. auto.

@@ -44,55 +44,55 @@ Proof.
   set (r := n mod d).
   intro EUCL.
   assert (0 <= r <= d - 1).
-    unfold r. generalize (Z_mod_lt n d d_pos). omega.
+    unfold r. generalize (Z_mod_lt n d d_pos). lia.
   assert (0 <= m).
     apply Zmult_le_0_reg_r with d. auto.
-    exploit (two_p_gt_ZERO (N + l)). omega. omega.
+    exploit (two_p_gt_ZERO (N + l)). lia. lia.
   set (k := m * d - two_p (N + l)).
   assert (0 <= k <= two_p l).
-    unfold k; omega.
+    unfold k; lia.
   assert ((m * n - two_p (N + l) * q) * d = k * n + two_p (N + l) * r).
     unfold k. rewrite EUCL. ring.
   assert (0 <= k * n).
-    apply Z.mul_nonneg_nonneg; omega.
+    apply Z.mul_nonneg_nonneg; lia.
   assert (k * n <= two_p (N + l) - two_p l).
     apply Z.le_trans with (two_p l * n).
-    apply Z.mul_le_mono_nonneg_r; omega.
-    replace (N + l) with (l + N) by omega.
+    apply Z.mul_le_mono_nonneg_r; lia.
+    replace (N + l) with (l + N) by lia.
     rewrite two_p_is_exp.
     replace (two_p l * two_p N - two_p l)
        with (two_p l * (two_p N - 1))
          by ring.
-    apply Z.mul_le_mono_nonneg_l. omega. exploit (two_p_gt_ZERO l). omega. omega.
-    omega. omega.
+    apply Z.mul_le_mono_nonneg_l. lia. exploit (two_p_gt_ZERO l). lia. lia.
+    lia. lia.
   assert (0 <= two_p (N + l) * r).
     apply Z.mul_nonneg_nonneg.
-    exploit (two_p_gt_ZERO (N + l)). omega. omega.
-    omega.
+    exploit (two_p_gt_ZERO (N + l)). lia. lia.
+    lia.
   assert (two_p (N + l) * r <= two_p (N + l) * d - two_p (N + l)).
     replace (two_p (N + l) * d - two_p (N + l))
        with (two_p (N + l) * (d - 1)) by ring.
     apply Z.mul_le_mono_nonneg_l. 
-    omega.
-    exploit (two_p_gt_ZERO (N + l)). omega. omega.
+    lia.
+    exploit (two_p_gt_ZERO (N + l)). lia. lia.
   assert (0 <= m * n - two_p (N + l) * q).
     apply Zmult_le_reg_r with d. auto.
-    replace (0 * d) with 0 by ring.  rewrite H2. omega.
+    replace (0 * d) with 0 by ring.  rewrite H2. lia.
   assert (m * n - two_p (N + l) * q < two_p (N + l)).
-    apply Zmult_lt_reg_r with d. omega.
+    apply Zmult_lt_reg_r with d. lia.
     rewrite H2.
     apply Z.le_lt_trans with (two_p (N + l) * d - two_p l).
-    omega.
-    exploit (two_p_gt_ZERO l). omega. omega.
+    lia.
+    exploit (two_p_gt_ZERO l). lia. lia.
   symmetry. apply Zdiv_unique with (m * n - two_p (N + l) * q).
-  ring. omega.
+  ring. lia.
 Qed.
 
 Lemma Zdiv_unique_2:
   forall x y q, y > 0 -> 0 < y * q - x <= y -> Z.div x y = q - 1.
 Proof.
   intros. apply Zdiv_unique with (x - (q - 1) * y). ring.
-  replace ((q - 1) * y) with (y * q - y) by ring. omega.
+  replace ((q - 1) * y) with (y * q - y) by ring. lia.
 Qed.
 
 Lemma Zdiv_mul_opp:
@@ -110,42 +110,42 @@ Proof.
   set (r := n mod d).
   intro EUCL.
   assert (0 <= r <= d - 1).
-    unfold r. generalize (Z_mod_lt n d d_pos). omega.
+    unfold r. generalize (Z_mod_lt n d d_pos). lia.
   assert (0 <= m).
     apply Zmult_le_0_reg_r with d. auto.
-    exploit (two_p_gt_ZERO (N + l)). omega. omega.
+    exploit (two_p_gt_ZERO (N + l)). lia. lia.
   cut (Z.div (- (m * n)) (two_p (N + l)) = -q - 1).
-    omega.
+    lia.
   apply Zdiv_unique_2.
-  apply two_p_gt_ZERO. omega.
+  apply two_p_gt_ZERO. lia.
   replace (two_p (N + l) * - q - - (m * n))
      with (m * n - two_p (N + l) * q)
        by ring.
   set (k := m * d - two_p (N + l)).
   assert (0 < k <= two_p l).
-    unfold k; omega.
+    unfold k; lia.
   assert ((m * n - two_p (N + l) * q) * d = k * n + two_p (N + l) * r).
     unfold k. rewrite EUCL. ring.
   split.
-  apply Zmult_lt_reg_r with d. omega.
-  replace (0 * d) with 0 by omega.
+  apply Zmult_lt_reg_r with d. lia.
+  replace (0 * d) with 0 by lia.
   rewrite H2.
-  assert (0 < k * n). apply Z.mul_pos_pos; omega.
+  assert (0 < k * n). apply Z.mul_pos_pos; lia.
   assert (0 <= two_p (N + l) * r).
-    apply Z.mul_nonneg_nonneg. exploit (two_p_gt_ZERO (N + l)); omega. omega.
-  omega.
-  apply Zmult_le_reg_r with d. omega.
+    apply Z.mul_nonneg_nonneg. exploit (two_p_gt_ZERO (N + l)); lia. lia.
+  lia.
+  apply Zmult_le_reg_r with d. lia.
   rewrite H2.
   assert (k * n <= two_p (N + l)).
-    rewrite Z.add_comm. rewrite two_p_is_exp; try omega.
-    apply Z.le_trans with (two_p l * n). apply Z.mul_le_mono_nonneg_r; omega.
-    apply Z.mul_le_mono_nonneg_l. omega. exploit (two_p_gt_ZERO l). omega. omega.
+    rewrite Z.add_comm. rewrite two_p_is_exp; try lia.
+    apply Z.le_trans with (two_p l * n). apply Z.mul_le_mono_nonneg_r; lia.
+    apply Z.mul_le_mono_nonneg_l. lia. exploit (two_p_gt_ZERO l). lia. lia.
   assert (two_p (N + l) * r <= two_p (N + l) * d - two_p (N + l)).
     replace (two_p (N + l) * d - two_p (N + l))
        with (two_p (N + l) * (d - 1))
          by ring.
-    apply Z.mul_le_mono_nonneg_l. exploit (two_p_gt_ZERO (N + l)). omega. omega. omega.
-  omega.
+    apply Z.mul_le_mono_nonneg_l. exploit (two_p_gt_ZERO (N + l)). lia. lia. lia.
+  lia.
 Qed.
 
 (** This is theorem 5.1 from Granlund and Montgomery, PLDI 1994. *)
@@ -159,13 +159,13 @@ Lemma Zquot_mul:
   Z.quot n d = Z.div (m * n) (two_p (N + l)) + (if zlt n 0 then 1 else 0).
 Proof.
   intros. destruct (zlt n 0).
-  exploit (Zdiv_mul_opp m l H H0 (-n)). omega.
+  exploit (Zdiv_mul_opp m l H H0 (-n)). lia.
   replace (- - n) with n by ring.
   replace (Z.quot n d) with (- Z.quot (-n) d).
-  rewrite Zquot_Zdiv_pos by omega. omega.
-  rewrite Z.quot_opp_l by omega. ring.
-  rewrite Z.add_0_r. rewrite Zquot_Zdiv_pos by omega.
-  apply Zdiv_mul_pos; omega.
+  rewrite Zquot_Zdiv_pos by lia. lia.
+  rewrite Z.quot_opp_l by lia. ring.
+  rewrite Z.add_0_r. rewrite Zquot_Zdiv_pos by lia.
+  apply Zdiv_mul_pos; lia.
 Qed.
 
 End Z_DIV_MUL.
@@ -194,11 +194,11 @@ Proof with (try discriminate).
   destruct (zlt p1 32)...
   intros EQ; inv EQ.
   split. auto. split. auto. intros.
-  replace (32 + p') with (31 + (p' + 1)) by omega.
-  apply Zquot_mul; try omega.
-  replace (31 + (p' + 1)) with (32 + p') by omega. omega.
+  replace (32 + p') with (31 + (p' + 1)) by lia.
+  apply Zquot_mul; try lia.
+  replace (31 + (p' + 1)) with (32 + p') by lia. lia.
   change (Int.min_signed <= n < Int.half_modulus).
-  unfold Int.max_signed in H. omega.
+  unfold Int.max_signed in H. lia.
 Qed.
 
 Lemma divu_mul_params_sound:
@@ -223,7 +223,7 @@ Proof with (try discriminate).
   destruct (zlt p1 32)...
   intros EQ; inv EQ.
   split. auto. split. auto. intros.
-  apply Zdiv_mul_pos; try omega. assumption.
+  apply Zdiv_mul_pos; try lia. assumption.
 Qed.
 
 Lemma divs_mul_shift_gen:
@@ -237,25 +237,25 @@ Proof.
   exploit divs_mul_params_sound; eauto. intros (A & B & C).
   split. auto. split. auto.
   unfold Int.divs. fold n; fold d. rewrite C by (apply Int.signed_range).
-  rewrite two_p_is_exp by omega. rewrite <- Zdiv_Zdiv.
+  rewrite two_p_is_exp by lia. rewrite <- Zdiv_Zdiv.
   rewrite Int.shru_lt_zero. unfold Int.add. apply Int.eqm_samerepr. apply Int.eqm_add.
   rewrite Int.shr_div_two_p. apply Int.eqm_unsigned_repr_r. apply Int.eqm_refl2.
   rewrite Int.unsigned_repr. f_equal.
   rewrite Int.signed_repr. rewrite Int.modulus_power. f_equal. ring.
   cut (Int.min_signed <= n * m / Int.modulus < Int.half_modulus).
-  unfold Int.max_signed; omega.
-  apply Zdiv_interval_1. generalize Int.min_signed_neg; omega. apply Int.half_modulus_pos.
+  unfold Int.max_signed; lia.
+  apply Zdiv_interval_1. generalize Int.min_signed_neg; lia. apply Int.half_modulus_pos.
   apply Int.modulus_pos.
   split. apply Z.le_trans with (Int.min_signed * m). 
-  apply Z.mul_le_mono_nonpos_l. generalize Int.min_signed_neg; omega. omega.
-  apply Z.mul_le_mono_nonneg_r. omega. unfold n; generalize (Int.signed_range x); tauto.
+  apply Z.mul_le_mono_nonpos_l. generalize Int.min_signed_neg; lia. lia.
+  apply Z.mul_le_mono_nonneg_r. lia. unfold n; generalize (Int.signed_range x); tauto.
   apply Z.le_lt_trans with (Int.half_modulus * m).
-  apply Z.mul_le_mono_nonneg_r. tauto. generalize (Int.signed_range x); unfold n, Int.max_signed; omega.
-  apply Zmult_lt_compat_l. generalize Int.half_modulus_pos; omega. tauto.
-  assert (32 < Int.max_unsigned) by (compute; auto). omega.
+  apply Z.mul_le_mono_nonneg_r. tauto. generalize (Int.signed_range x); unfold n, Int.max_signed; lia.
+  apply Zmult_lt_compat_l. generalize Int.half_modulus_pos; lia. tauto.
+  assert (32 < Int.max_unsigned) by (compute; auto). lia.
   unfold Int.lt; fold n. rewrite Int.signed_zero. destruct (zlt n 0); apply Int.eqm_unsigned_repr.
-  apply two_p_gt_ZERO. omega.
-  apply two_p_gt_ZERO. omega.
+  apply two_p_gt_ZERO. lia.
+  apply two_p_gt_ZERO. lia.
 Qed.
 
 Theorem divs_mul_shift_1:
@@ -269,7 +269,7 @@ Proof.
   intros. exploit divs_mul_shift_gen; eauto. instantiate (1 := x).
   intros (A & B & C). split. auto. rewrite C.
   unfold Int.mulhs. rewrite Int.signed_repr. auto.
-  generalize Int.min_signed_neg; unfold Int.max_signed; omega.
+  generalize Int.min_signed_neg; unfold Int.max_signed; lia.
 Qed.
 
 Theorem divs_mul_shift_2:
@@ -305,18 +305,18 @@ Proof.
   split. auto.
   rewrite Int.shru_div_two_p. rewrite Int.unsigned_repr.
   unfold Int.divu, Int.mulhu. f_equal. rewrite C by apply Int.unsigned_range.
-  rewrite two_p_is_exp by omega. rewrite <- Zdiv_Zdiv by (apply two_p_gt_ZERO; omega).
+  rewrite two_p_is_exp by lia. rewrite <- Zdiv_Zdiv by (apply two_p_gt_ZERO; lia).
   f_equal. rewrite (Int.unsigned_repr m).
   rewrite Int.unsigned_repr. f_equal. ring.
   cut (0 <= Int.unsigned x * m / Int.modulus < Int.modulus).
-  unfold Int.max_unsigned; omega.
-  apply Zdiv_interval_1. omega. compute; auto. compute; auto.
-  split. simpl. apply Z.mul_nonneg_nonneg. generalize (Int.unsigned_range x); omega. omega.
+  unfold Int.max_unsigned; lia.
+  apply Zdiv_interval_1. lia. compute; auto. compute; auto.
+  split. simpl. apply Z.mul_nonneg_nonneg. generalize (Int.unsigned_range x); lia. lia.
   apply Z.le_lt_trans with (Int.modulus * m).
-  apply Zmult_le_compat_r. generalize (Int.unsigned_range x); omega. omega.
-  apply Zmult_lt_compat_l. compute; auto. omega.
-  unfold Int.max_unsigned; omega.
-  assert (32 < Int.max_unsigned) by (compute; auto). omega.
+  apply Zmult_le_compat_r. generalize (Int.unsigned_range x); lia. lia.
+  apply Zmult_lt_compat_l. compute; auto. lia.
+  unfold Int.max_unsigned; lia.
+  assert (32 < Int.max_unsigned) by (compute; auto). lia.
 Qed.
 
 (** Same, for 64-bit integers *)
@@ -343,11 +343,11 @@ Proof with (try discriminate).
   destruct (zlt p1 64)...
   intros EQ; inv EQ.
   split. auto. split. auto. intros.
-  replace (64 + p') with (63 + (p' + 1)) by omega.
-  apply Zquot_mul; try omega.
-  replace (63 + (p' + 1)) with (64 + p') by omega. omega.
+  replace (64 + p') with (63 + (p' + 1)) by lia.
+  apply Zquot_mul; try lia.
+  replace (63 + (p' + 1)) with (64 + p') by lia. lia.
   change (Int64.min_signed <= n < Int64.half_modulus).
-  unfold Int64.max_signed in H. omega.
+  unfold Int64.max_signed in H. lia.
 Qed.
 
 Lemma divlu_mul_params_sound:
@@ -372,13 +372,13 @@ Proof with (try discriminate).
   destruct (zlt p1 64)...
   intros EQ; inv EQ.
   split. auto. split. auto. intros.
-  apply Zdiv_mul_pos; try omega. assumption.
+  apply Zdiv_mul_pos; try lia. assumption.
 Qed.
 
 Remark int64_shr'_div_two_p:
   forall x y, Int64.shr' x y = Int64.repr (Int64.signed x / two_p (Int.unsigned y)).
 Proof.
-  intros; unfold Int64.shr'. rewrite Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); omega.
+  intros; unfold Int64.shr'. rewrite Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); lia.
 Qed.
 
 Lemma divls_mul_shift_gen:
@@ -392,25 +392,25 @@ Proof.
   exploit divls_mul_params_sound; eauto. intros (A & B & C).
   split. auto. split. auto.
   unfold Int64.divs. fold n; fold d. rewrite C by (apply Int64.signed_range).
-  rewrite two_p_is_exp by omega. rewrite <- Zdiv_Zdiv.
+  rewrite two_p_is_exp by lia. rewrite <- Zdiv_Zdiv.
   rewrite Int64.shru_lt_zero. unfold Int64.add. apply Int64.eqm_samerepr. apply Int64.eqm_add.
   rewrite int64_shr'_div_two_p. apply Int64.eqm_unsigned_repr_r. apply Int64.eqm_refl2.
   rewrite Int.unsigned_repr. f_equal.
   rewrite Int64.signed_repr. rewrite Int64.modulus_power. f_equal. ring.
   cut (Int64.min_signed <= n * m / Int64.modulus < Int64.half_modulus).
-  unfold Int64.max_signed; omega.
-  apply Zdiv_interval_1. generalize Int64.min_signed_neg; omega. apply Int64.half_modulus_pos.
+  unfold Int64.max_signed; lia.
+  apply Zdiv_interval_1. generalize Int64.min_signed_neg; lia. apply Int64.half_modulus_pos.
   apply Int64.modulus_pos.
   split. apply Z.le_trans with (Int64.min_signed * m).
-  apply Z.mul_le_mono_nonpos_l. generalize Int64.min_signed_neg; omega. omega.
+  apply Z.mul_le_mono_nonpos_l. generalize Int64.min_signed_neg; lia. lia.
   apply Z.mul_le_mono_nonneg_r. tauto. unfold n; generalize (Int64.signed_range x); tauto.
   apply Z.le_lt_trans with (Int64.half_modulus * m).
-  apply Zmult_le_compat_r. generalize (Int64.signed_range x); unfold n, Int64.max_signed; omega. tauto.
-  apply Zmult_lt_compat_l. generalize Int64.half_modulus_pos; omega. tauto.
-  assert (64 < Int.max_unsigned) by (compute; auto). omega.
+  apply Zmult_le_compat_r. generalize (Int64.signed_range x); unfold n, Int64.max_signed; lia. tauto.
+  apply Zmult_lt_compat_l. generalize Int64.half_modulus_pos; lia. tauto.
+  assert (64 < Int.max_unsigned) by (compute; auto). lia.
   unfold Int64.lt; fold n. rewrite Int64.signed_zero. destruct (zlt n 0); apply Int64.eqm_unsigned_repr.
-  apply two_p_gt_ZERO. omega.
-  apply two_p_gt_ZERO. omega.
+  apply two_p_gt_ZERO. lia.
+  apply two_p_gt_ZERO. lia.
 Qed.
 
 Theorem divls_mul_shift_1:
@@ -424,7 +424,7 @@ Proof.
   intros. exploit divls_mul_shift_gen; eauto. instantiate (1 := x).
   intros (A & B & C). split. auto. rewrite C.
   unfold Int64.mulhs. rewrite Int64.signed_repr. auto.
-  generalize Int64.min_signed_neg; unfold Int64.max_signed; omega.
+  generalize Int64.min_signed_neg; unfold Int64.max_signed; lia.
 Qed.
 
 Theorem divls_mul_shift_2:
@@ -453,7 +453,7 @@ Qed.
 Remark int64_shru'_div_two_p:
   forall x y, Int64.shru' x y = Int64.repr (Int64.unsigned x / two_p (Int.unsigned y)).
 Proof.
-  intros; unfold Int64.shru'. rewrite Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); omega.
+  intros; unfold Int64.shru'. rewrite Zshiftr_div_two_p; auto. generalize (Int.unsigned_range y); lia.
 Qed.
 
 Theorem divlu_mul_shift:
@@ -466,18 +466,18 @@ Proof.
   split. auto.
   rewrite int64_shru'_div_two_p. rewrite Int.unsigned_repr.
   unfold Int64.divu, Int64.mulhu. f_equal. rewrite C by apply Int64.unsigned_range.
-  rewrite two_p_is_exp by omega. rewrite <- Zdiv_Zdiv by (apply two_p_gt_ZERO; omega).
+  rewrite two_p_is_exp by lia. rewrite <- Zdiv_Zdiv by (apply two_p_gt_ZERO; lia).
   f_equal. rewrite (Int64.unsigned_repr m).
   rewrite Int64.unsigned_repr. f_equal. ring.
   cut (0 <= Int64.unsigned x * m / Int64.modulus < Int64.modulus).
-  unfold Int64.max_unsigned; omega.
-  apply Zdiv_interval_1. omega. compute; auto. compute; auto.
-  split. simpl. apply Z.mul_nonneg_nonneg. generalize (Int64.unsigned_range x); omega. omega.
+  unfold Int64.max_unsigned; lia.
+  apply Zdiv_interval_1. lia. compute; auto. compute; auto.
+  split. simpl. apply Z.mul_nonneg_nonneg. generalize (Int64.unsigned_range x); lia. lia.
   apply Z.le_lt_trans with (Int64.modulus * m).
-  apply Zmult_le_compat_r. generalize (Int64.unsigned_range x); omega. omega.
-  apply Zmult_lt_compat_l. compute; auto. omega.
-  unfold Int64.max_unsigned; omega.
-  assert (64 < Int.max_unsigned) by (compute; auto). omega.
+  apply Zmult_le_compat_r. generalize (Int64.unsigned_range x); lia. lia.
+  apply Zmult_lt_compat_l. compute; auto. lia.
+  unfold Int64.max_unsigned; lia.
+  assert (64 < Int.max_unsigned) by (compute; auto). lia.
 Qed.
 
 (** * Correctness of the smart constructors for division and modulus *)
@@ -515,7 +515,7 @@ Proof.
   replace (Int.ltu (Int.repr p) Int.iwordsize) with true in Q.
   inv Q. rewrite B. auto.
   unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true; auto. tauto.
-  assert (32 < Int.max_unsigned) by (compute; auto). omega.
+  assert (32 < Int.max_unsigned) by (compute; auto). lia.
 Qed.
 
 Theorem eval_divuimm:
@@ -630,7 +630,7 @@ Proof.
   simpl in LD. inv LD.
   assert (RANGE: 0 <= p < 32 -> Int.ltu (Int.repr p) Int.iwordsize = true).
   { intros. unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true by tauto. auto.
-    assert (32 < Int.max_unsigned) by (compute; auto). omega. }
+    assert (32 < Int.max_unsigned) by (compute; auto). lia. }
   destruct (zlt M Int.half_modulus).
 - exploit (divs_mul_shift_1 x); eauto. intros [A B].
   exploit eval_shrimm. eexact X. instantiate (1 := Int.repr p). intros [v1 [Z LD]].
@@ -768,7 +768,7 @@ Proof.
   simpl in B1; inv B1. simpl in B2. replace (Int.ltu (Int.repr p) Int64.iwordsize') with true in B2. inv B2.
   rewrite B. assumption.
   unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true; auto. tauto.
-  assert (64 < Int.max_unsigned) by (compute; auto). omega.
+  assert (64 < Int.max_unsigned) by (compute; auto). lia.
 Qed.
 
 Theorem eval_divlu:
@@ -847,10 +847,10 @@ Proof.
   exploit eval_addl. auto. eexact A5. eexact A3. intros (v6 & A6 & B6).
   assert (RANGE: forall x, 0 <= x < 64 -> Int.ltu (Int.repr x) Int64.iwordsize' = true).
   { intros. unfold Int.ltu. rewrite Int.unsigned_repr. rewrite zlt_true by tauto. auto.
-    assert (64 < Int.max_unsigned) by (compute; auto). omega. }
+    assert (64 < Int.max_unsigned) by (compute; auto). lia. }
   simpl in B1; inv B1.
   simpl in B2; inv B2.
-  simpl in B3; rewrite RANGE in B3 by omega; inv B3.
+  simpl in B3; rewrite RANGE in B3 by lia; inv B3.
   destruct (zlt M Int64.half_modulus).
 - exploit (divls_mul_shift_1 x); eauto. intros [A B].
   simpl in B5; rewrite RANGE in B5 by auto; inv B5.

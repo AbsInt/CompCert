@@ -522,9 +522,9 @@ Lemma insert_lenv_lookup1:
   nth_error le' n = Some v.
 Proof.
   induction 1; intros.
-  omegaContradiction.
+  extlia.
   destruct n; simpl; simpl in H0. auto.
-  apply IHinsert_lenv. auto. omega.
+  apply IHinsert_lenv. auto. lia.
 Qed.
 
 Lemma insert_lenv_lookup2:
@@ -536,8 +536,8 @@ Lemma insert_lenv_lookup2:
 Proof.
   induction 1; intros.
   simpl. assumption.
-  simpl. destruct n. omegaContradiction.
-  apply IHinsert_lenv. exact H0. omega.
+  simpl. destruct n. extlia.
+  apply IHinsert_lenv. exact H0. lia.
 Qed.
 
 Lemma eval_lift_expr:

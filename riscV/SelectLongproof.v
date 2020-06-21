@@ -502,8 +502,8 @@ Proof.
     assert (LTU2: Int.ltu (Int.sub Int64.iwordsize' n) Int64.iwordsize' = true).
     { unfold Int.ltu; apply zlt_true.
       unfold Int.sub. change (Int.unsigned Int64.iwordsize') with 64. 
-      rewrite Int.unsigned_repr. omega. 
-      assert (64 < Int.max_unsigned) by reflexivity. omega. }
+      rewrite Int.unsigned_repr. lia. 
+      assert (64 < Int.max_unsigned) by reflexivity. lia. }
     assert (X: eval_expr ge sp e m le
                (Eop (Oshrlimm (Int.repr (Int64.zwordsize - 1))) (a ::: Enil))
                (Vlong (Int64.shr' i (Int.repr (Int64.zwordsize - 1))))).
@@ -514,7 +514,7 @@ Proof.
     TrivialExists. 
     constructor. EvalOp. simpl; eauto. constructor. 
     simpl. unfold Int.ltu; rewrite zlt_true. rewrite Int64.shrx'_shr_2 by auto. reflexivity. 
-    change (Int.unsigned Int64.iwordsize') with 64; omega.
+    change (Int.unsigned Int64.iwordsize') with 64; lia.
 *)
 Qed.
 

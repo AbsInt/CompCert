@@ -69,16 +69,16 @@ Local Opaque Z.add Z.mul sepconj range.
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   set (oretaddr := align (ostkdata + b.(bound_stack_data)) w).
   replace (size_chunk Mptr) with w by (rewrite size_chunk_Mptr; auto).
-  assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
+  assert (0 < w) by (unfold w; destruct Archi.ptr64; lia).
   generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
-  assert (0 <= fe_ofs_arg) by (unfold fe_ofs_arg; destruct Archi.win64; omega).
-  assert (0 <= 4 * b.(bound_outgoing)) by omega.
-  assert (fe_ofs_arg + 4 * b.(bound_outgoing) <= olink) by (apply align_le; omega).
-  assert (olink + w <= ocs) by (unfold ocs; omega).
+  assert (0 <= fe_ofs_arg) by (unfold fe_ofs_arg; destruct Archi.win64; lia).
+  assert (0 <= 4 * b.(bound_outgoing)) by lia.
+  assert (fe_ofs_arg + 4 * b.(bound_outgoing) <= olink) by (apply align_le; lia).
+  assert (olink + w <= ocs) by (unfold ocs; lia).
   assert (ocs <= size_callee_save_area b ocs) by (apply size_callee_save_area_incr).
-  assert (size_callee_save_area b ocs <= ol) by (apply align_le; omega).
-  assert (ol + 4 * b.(bound_local) <= ostkdata) by (apply align_le; omega).
-  assert (ostkdata + bound_stack_data b <= oretaddr) by (apply align_le; omega).
+  assert (size_callee_save_area b ocs <= ol) by (apply align_le; lia).
+  assert (ol + 4 * b.(bound_local) <= ostkdata) by (apply align_le; lia).
+  assert (ostkdata + bound_stack_data b <= oretaddr) by (apply align_le; lia).
 (* Reorder as:
      outgoing
      back link
@@ -90,13 +90,13 @@ Local Opaque Z.add Z.mul sepconj range.
   rewrite sep_swap45.
   rewrite sep_swap34.
 (* Apply range_split and range_split2 repeatedly *)
-  apply range_drop_left with 0. omega. 
-  apply range_split_2. fold olink. omega. omega.
-  apply range_split. omega.
-  apply range_split_2. fold ol. omega. omega.
-  apply range_drop_right with ostkdata. omega.
+  apply range_drop_left with 0. lia. 
+  apply range_split_2. fold olink. lia. lia.
+  apply range_split. lia.
+  apply range_split_2. fold ol. lia. lia.
+  apply range_drop_right with ostkdata. lia.
   rewrite sep_swap.
-  apply range_drop_left with (ostkdata + bound_stack_data b). omega.
+  apply range_drop_left with (ostkdata + bound_stack_data b). lia.
   rewrite sep_swap.
   exact H.
 Qed.
@@ -113,17 +113,17 @@ Proof.
   set (ol :=  align (size_callee_save_area b ocs) 8).
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   set (oretaddr := align (ostkdata + b.(bound_stack_data)) w).
-  assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
+  assert (0 < w) by (unfold w; destruct Archi.ptr64; lia).
   generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
-  assert (0 <= fe_ofs_arg) by (unfold fe_ofs_arg; destruct Archi.win64; omega).
-  assert (0 <= 4 * b.(bound_outgoing)) by omega.
-  assert (fe_ofs_arg + 4 * b.(bound_outgoing) <= olink) by (apply align_le; omega).
-  assert (olink + w <= ocs) by (unfold ocs; omega).
+  assert (0 <= fe_ofs_arg) by (unfold fe_ofs_arg; destruct Archi.win64; lia).
+  assert (0 <= 4 * b.(bound_outgoing)) by lia.
+  assert (fe_ofs_arg + 4 * b.(bound_outgoing) <= olink) by (apply align_le; lia).
+  assert (olink + w <= ocs) by (unfold ocs; lia).
   assert (ocs <= size_callee_save_area b ocs) by (apply size_callee_save_area_incr).
-  assert (size_callee_save_area b ocs <= ol) by (apply align_le; omega).
-  assert (ol + 4 * b.(bound_local) <= ostkdata) by (apply align_le; omega).
-  assert (ostkdata + bound_stack_data b <= oretaddr) by (apply align_le; omega).
-  split. omega. omega.
+  assert (size_callee_save_area b ocs <= ol) by (apply align_le; lia).
+  assert (ol + 4 * b.(bound_local) <= ostkdata) by (apply align_le; lia).
+  assert (ostkdata + bound_stack_data b <= oretaddr) by (apply align_le; lia).
+  split. lia. lia.
 Qed.
 
 Lemma frame_env_aligned:
@@ -142,11 +142,11 @@ Proof.
   set (ol :=  align (size_callee_save_area b ocs) 8).
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   set (oretaddr := align (ostkdata + b.(bound_stack_data)) w).
-  assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
+  assert (0 < w) by (unfold w; destruct Archi.ptr64; lia).
   replace (align_chunk Mptr) with w by (rewrite align_chunk_Mptr; auto).
   split. exists (fe_ofs_arg / 8). unfold fe_ofs_arg; destruct Archi.win64; reflexivity.
-  split. apply align_divides; omega.
-  split. apply align_divides; omega.
-  split. apply align_divides; omega.
-  apply align_divides; omega.
+  split. apply align_divides; lia.
+  split. apply align_divides; lia.
+  split. apply align_divides; lia.
+  apply align_divides; lia.
 Qed.

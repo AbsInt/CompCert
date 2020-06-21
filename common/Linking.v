@@ -123,7 +123,7 @@ Defined.
 Next Obligation.
   inv H; inv H0; constructor; auto.
   congruence.
-  simpl. generalize (init_data_list_size_pos z). xomega.
+  simpl. generalize (init_data_list_size_pos z). extlia.
 Defined.
 Next Obligation.
   revert H; unfold link_varinit.

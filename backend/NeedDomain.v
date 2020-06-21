@@ -240,9 +240,9 @@ Proof.
   destruct (zlt i (Int.unsigned n)).
 - auto.
 - generalize (Int.unsigned_range n); intros.
-  apply H. omega. rewrite Int.bits_shru by omega.
-  replace (i - Int.unsigned n + Int.unsigned n) with i by omega.
-  rewrite zlt_true by omega. auto.
+  apply H. lia. rewrite Int.bits_shru by lia.
+  replace (i - Int.unsigned n + Int.unsigned n) with i by lia.
+  rewrite zlt_true by lia. auto.
 Qed.
 
 Lemma iagree_shru:
@@ -252,9 +252,9 @@ Proof.
   intros; red; intros. autorewrite with ints; auto.
   destruct (zlt (i + Int.unsigned n) Int.zwordsize).
 - generalize (Int.unsigned_range n); intros.
-  apply H. omega. rewrite Int.bits_shl by omega.
-  replace (i + Int.unsigned n - Int.unsigned n) with i by omega.
-  rewrite zlt_false by omega. auto.
+  apply H. lia. rewrite Int.bits_shl by lia.
+  replace (i + Int.unsigned n - Int.unsigned n) with i by lia.
+  rewrite zlt_false by lia. auto.
 - auto.
 Qed.
 
@@ -266,7 +266,7 @@ Proof.
   intros; red; intros. rewrite <- H in H2. rewrite Int.bits_shru in H2 by auto.
   rewrite ! Int.bits_shr by auto.
   destruct (zlt (i + Int.unsigned n) Int.zwordsize).
-- apply H0; auto. generalize (Int.unsigned_range n); omega.
+- apply H0; auto. generalize (Int.unsigned_range n); lia.
 - discriminate.
 Qed.
 
@@ -281,11 +281,11 @@ Proof.
             then i + Int.unsigned n
             else Int.zwordsize - 1).
   assert (0 <= j < Int.zwordsize).
-  { unfold j; destruct (zlt (i + Int.unsigned n) Int.zwordsize); omega. }
+  { unfold j; destruct (zlt (i + Int.unsigned n) Int.zwordsize); lia. }
   apply H; auto. autorewrite with ints; auto. apply orb_true_intro.
   unfold j; destruct (zlt (i + Int.unsigned n) Int.zwordsize).
-- left. rewrite zlt_false by omega.
-  replace (i + Int.unsigned n - Int.unsigned n) with i by omega.
+- left. rewrite zlt_false by lia.
+  replace (i + Int.unsigned n - Int.unsigned n) with i by lia.
   auto.
 - right. reflexivity.
 Qed.
@@ -303,7 +303,7 @@ Proof.
    mod Int.zwordsize) with i. auto.
   apply eqmod_small_eq with Int.zwordsize; auto.
   apply eqmod_trans with ((i - Int.unsigned amount) + Int.unsigned amount).
-  apply eqmod_refl2; omega.
+  apply eqmod_refl2; lia.
   eapply eqmod_trans. 2: apply eqmod_mod; auto.
   apply eqmod_add.
   apply eqmod_mod; auto.
@@ -330,12 +330,12 @@ Lemma eqmod_iagree:
 Proof.
   intros. set (p := Z.to_nat (Int.size m)).
   generalize (Int.size_range m); intros RANGE.
-  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply Z2Nat.id. omega. }
+  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply Z2Nat.id. lia. }
   rewrite EQ in H; rewrite <- two_power_nat_two_p in H.
   red; intros. rewrite ! Int.testbit_repr by auto.
   destruct (zlt i (Int.size m)).
-  eapply same_bits_eqmod; eauto. omega.
-  assert (Int.testbit m i = false) by (eapply Int.bits_size_2; omega).
+  eapply same_bits_eqmod; eauto. lia.
+  assert (Int.testbit m i = false) by (eapply Int.bits_size_2; lia).
   congruence.
 Qed.
 
@@ -348,11 +348,11 @@ Lemma iagree_eqmod:
 Proof.
   intros. set (p := Z.to_nat (Int.size m)).
   generalize (Int.size_range m); intros RANGE.
-  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply Z2Nat.id. omega. }
+  assert (EQ: Int.size m = Z.of_nat p). { symmetry; apply Z2Nat.id. lia. }
   rewrite EQ; rewrite <- two_power_nat_two_p.
-  apply eqmod_same_bits. intros. apply H. omega.
-  unfold complete_mask. rewrite Int.bits_zero_ext by omega.
-  rewrite zlt_true by omega. rewrite Int.bits_mone by omega. auto.
+  apply eqmod_same_bits. intros. apply H. lia.
+  unfold complete_mask. rewrite Int.bits_zero_ext by lia.
+  rewrite zlt_true by lia. rewrite Int.bits_mone by lia. auto.
 Qed.
 
 Lemma complete_mask_idem:
@@ -363,12 +363,12 @@ Proof.
 + assert (Int.unsigned m <> 0).
   { red; intros; elim n. rewrite <- (Int.repr_unsigned m). rewrite H; auto. }
   assert (0 < Int.size m).
-  { apply Zsize_pos'. generalize (Int.unsigned_range m); omega. }
+  { apply Zsize_pos'. generalize (Int.unsigned_range m); lia. }
   generalize (Int.size_range m); intros.
   f_equal. apply Int.bits_size_4. tauto.
-  rewrite Int.bits_zero_ext by omega. rewrite zlt_true by omega.
-  apply Int.bits_mone; omega.
-  intros. rewrite Int.bits_zero_ext by omega. apply zlt_false; omega.
+  rewrite Int.bits_zero_ext by lia. rewrite zlt_true by lia.
+  apply Int.bits_mone; lia.
+  intros. rewrite Int.bits_zero_ext by lia. apply zlt_false; lia.
 Qed.
 
 (** ** Abstract operations over value needs. *)
@@ -676,12 +676,12 @@ Proof.
   destruct x; simpl in *.
 - auto.
 - unfold Val.zero_ext; InvAgree.
-  red; intros. autorewrite with ints; try omega.
+  red; intros. autorewrite with ints; try lia.
   destruct (zlt i1 n); auto. apply H; auto.
-  autorewrite with ints; try omega. rewrite zlt_true; auto.
+  autorewrite with ints; try lia. rewrite zlt_true; auto.
 - unfold Val.zero_ext; InvAgree; auto. apply Val.lessdef_same. f_equal.
-  Int.bit_solve; try omega. destruct (zlt i1 n); auto. apply H; auto.
-  autorewrite with ints; try omega. apply zlt_true; auto.
+  Int.bit_solve; try lia. destruct (zlt i1 n); auto. apply H; auto.
+  autorewrite with ints; try lia. apply zlt_true; auto.
 Qed.
 
 Definition sign_ext (n: Z) (x: nval) :=
@@ -700,25 +700,25 @@ Proof.
   unfold sign_ext; intros. destruct x; simpl in *.
 - auto.
 - unfold Val.sign_ext; InvAgree.
-  red; intros. autorewrite with ints; try omega.
+  red; intros. autorewrite with ints; try lia.
   set (j := if zlt i1 n then i1 else n - 1).
   assert (0 <= j < Int.zwordsize).
-  { unfold j; destruct (zlt i1 n); omega. }
+  { unfold j; destruct (zlt i1 n); lia. }
   apply H; auto.
-  autorewrite with ints; try omega. apply orb_true_intro.
+  autorewrite with ints; try lia. apply orb_true_intro.
   unfold j; destruct (zlt i1 n).
   left. rewrite zlt_true; auto.
-  right. rewrite Int.unsigned_repr. rewrite zlt_false by omega.
-  replace (n - 1 - (n - 1)) with 0 by omega. reflexivity.
-  generalize Int.wordsize_max_unsigned; omega.
+  right. rewrite Int.unsigned_repr. rewrite zlt_false by lia.
+  replace (n - 1 - (n - 1)) with 0 by lia. reflexivity.
+  generalize Int.wordsize_max_unsigned; lia.
 - unfold Val.sign_ext; InvAgree; auto. apply Val.lessdef_same. f_equal.
-  Int.bit_solve; try omega.
+  Int.bit_solve; try lia.
   set (j := if zlt i1 n then i1 else n - 1).
   assert (0 <= j < Int.zwordsize).
-  { unfold j; destruct (zlt i1 n); omega. }
-  apply H; auto. rewrite Int.bits_zero_ext; try omega.
+  { unfold j; destruct (zlt i1 n); lia. }
+  apply H; auto. rewrite Int.bits_zero_ext; try lia.
   rewrite zlt_true. apply Int.bits_mone; auto.
-  unfold j. destruct (zlt i1 n); omega.
+  unfold j. destruct (zlt i1 n); lia.
 Qed.
 
 (** The needs of a memory store concerning the value being stored. *)
@@ -778,11 +778,11 @@ Proof.
 - apply sign_ext_sound with (v := Vint i) (w := Vint i0) (x := All) (n := 8).
   auto. compute; auto.
 - apply zero_ext_sound with (v := Vint i) (w := Vint i0) (x := All) (n := 8).
-  auto. omega.
+  auto. lia.
 - apply sign_ext_sound with (v := Vint i) (w := Vint i0) (x := All) (n := 16).
   auto. compute; auto.
 - apply zero_ext_sound with (v := Vint i) (w := Vint i0) (x := All) (n := 16).
-  auto. omega.
+  auto. lia.
 Qed.
 
 (** The needs of a comparison *)
@@ -1014,9 +1014,9 @@ Proof.
   unfold zero_ext_redundant; intros. destruct x; try discriminate.
 - auto.
 - simpl in *; InvAgree. simpl. InvBooleans. rewrite <- H.
-  red; intros; autorewrite with ints; try omega.
+  red; intros; autorewrite with ints; try lia.
   destruct (zlt i1 n). apply H0; auto.
-  rewrite Int.bits_zero_ext in H3 by omega. rewrite zlt_false in H3 by auto. discriminate.
+  rewrite Int.bits_zero_ext in H3 by lia. rewrite zlt_false in H3 by auto. discriminate.
 Qed.
 
 Definition sign_ext_redundant (n: Z) (x: nval) :=
@@ -1036,10 +1036,10 @@ Proof.
   unfold sign_ext_redundant; intros. destruct x; try discriminate.
 - auto.
 - simpl in *; InvAgree. simpl. InvBooleans. rewrite <- H.
-  red; intros; autorewrite with ints; try omega.
+  red; intros; autorewrite with ints; try lia.
   destruct (zlt i1 n). apply H0; auto.
   rewrite Int.bits_or; auto. rewrite H3; auto.
-  rewrite Int.bits_zero_ext in H3 by omega. rewrite zlt_false in H3 by auto. discriminate.
+  rewrite Int.bits_zero_ext in H3 by lia. rewrite zlt_false in H3 by auto. discriminate.
 Qed.
 
 (** * Neededness for register environments *)
@@ -1300,13 +1300,13 @@ Proof.
   split; simpl; auto; intros.
   rewrite PTree.gsspec in H6. destruct (peq id0 id).
 + inv H6. destruct H3. congruence. destruct gl!id as [iv0|] eqn:NG.
-  unfold iv'; rewrite ISet.In_add. intros [P|P]. omega. eelim GL; eauto.
-  unfold iv'; rewrite ISet.In_interval. omega.
+  unfold iv'; rewrite ISet.In_add. intros [P|P]. lia. eelim GL; eauto.
+  unfold iv'; rewrite ISet.In_interval. lia.
 + eauto.
 - (* Stk ofs *)
   split; simpl; auto; intros. destruct H3.
   elim H3. subst b'. eapply bc_stack; eauto.
-  rewrite ISet.In_add. intros [P|P]. omega. eapply STK; eauto.
+  rewrite ISet.In_add. intros [P|P]. lia. eapply STK; eauto.
 Qed.
 
 (** Test (conservatively) whether some locations in the range delimited

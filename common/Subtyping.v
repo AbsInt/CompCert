@@ -222,7 +222,7 @@ Definition weight_bounds (ob: option bounds) : nat :=
 Lemma weight_bounds_1:
   forall lo hi s, weight_bounds (Some (B lo hi s)) < weight_bounds None.
 Proof.
-  intros; simpl. generalize (T.weight_range hi); omega.
+  intros; simpl. generalize (T.weight_range hi); lia.
 Qed.
 
 Lemma weight_bounds_2:
@@ -233,8 +233,8 @@ Proof.
   intros; simpl.
   generalize (T.weight_sub _ _ s1) (T.weight_sub _ _ s2) (T.weight_sub _ _ H) (T.weight_sub _ _ H0); intros.
   destruct H1.
-  assert (T.weight lo2 < T.weight lo1) by (apply T.weight_sub_strict; auto). omega.
-  assert (T.weight hi1 < T.weight hi2) by (apply T.weight_sub_strict; auto). omega.
+  assert (T.weight lo2 < T.weight lo1) by (apply T.weight_sub_strict; auto). lia.
+  assert (T.weight hi1 < T.weight hi2) by (apply T.weight_sub_strict; auto). lia.
 Qed.
 
 Hint Resolve T.sub_refl: ty.
@@ -250,11 +250,11 @@ Lemma weight_type_move:
 Proof.
   unfold type_move; intros.
   destruct (peq r1 r2).
-  inv H. split; auto. split; intros. omega. discriminate.
+  inv H. split; auto. split; intros. lia. discriminate.
   destruct (te_typ e)!r1 as [[lo1 hi1 s1]|] eqn:E1;
   destruct (te_typ e)!r2 as [[lo2 hi2 s2]|] eqn:E2.
 - destruct (T.sub_dec hi1 lo2).
-  inv H. split; auto. split; intros. omega. discriminate.
+  inv H. split; auto. split; intros. lia. discriminate.
   destruct (T.sub_dec lo1 hi2); try discriminate.
   set (lo2' := T.lub lo1 lo2) in *.
   set (hi1' := T.glb hi1 hi2) in *.
@@ -264,45 +264,45 @@ Proof.
   set (b2 := B lo2' hi2 (T.lub_min lo1 lo2 hi2 s s2)) in *.
 Local Opaque weight_bounds.
   destruct (T.eq lo2 lo2'); destruct (T.eq hi1 hi1'); inversion H; clear H; subst changed e'; simpl.
-+ split; auto. split; intros. omega. discriminate.
++ split; auto. split; intros. lia. discriminate.
 + assert (weight_bounds (Some b1) < weight_bounds (Some (B lo1 hi1 s1)))
   by (apply weight_bounds_2; auto with ty).
   split; auto. split; intros.
-  rewrite PTree.gsspec. destruct (peq r r1). subst r. rewrite E1. omega. omega.
-  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite E2. omega.
+  rewrite PTree.gsspec. destruct (peq r r1). subst r. rewrite E1. lia. lia.
+  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite E2. lia.
 + assert (weight_bounds (Some b2) < weight_bounds (Some (B lo2 hi2 s2)))
   by (apply weight_bounds_2; auto with ty).
   split; auto. split; intros.
-  rewrite PTree.gsspec. destruct (peq r r2). subst r. rewrite E2. omega. omega.
-  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite E1. omega.
+  rewrite PTree.gsspec. destruct (peq r r2). subst r. rewrite E2. lia. lia.
+  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite E1. lia.
 + assert (weight_bounds (Some b1) < weight_bounds (Some (B lo1 hi1 s1)))
   by (apply weight_bounds_2; auto with ty).
   assert (weight_bounds (Some b2) < weight_bounds (Some (B lo2 hi2 s2)))
   by (apply weight_bounds_2; auto with ty).
   split; auto. split; intros.
   rewrite ! PTree.gsspec.
-  destruct (peq r r2). subst r. rewrite E2. omega.
-  destruct (peq r r1). subst r. rewrite E1. omega.
-  omega.
-  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite PTree.gss. omega.
+  destruct (peq r r2). subst r. rewrite E2. lia.
+  destruct (peq r r1). subst r. rewrite E1. lia.
+  lia.
+  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite PTree.gss. lia.
 
 - set (b2 := B lo1 (T.high_bound lo1) (T.high_bound_sub lo1)) in *.
   assert (weight_bounds (Some b2) < weight_bounds None) by (apply weight_bounds_1).
   inv H; simpl.
   split. destruct (T.sub_dec hi1 lo1); auto.
   split; intros.
-  rewrite PTree.gsspec. destruct (peq r r2). subst r; rewrite E2; omega. omega.
-  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite E1. omega.
+  rewrite PTree.gsspec. destruct (peq r r2). subst r; rewrite E2; lia. lia.
+  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite E1. lia.
 
 - set (b1 := B (T.low_bound hi2) hi2 (T.low_bound_sub hi2)) in *.
   assert (weight_bounds (Some b1) < weight_bounds None) by (apply weight_bounds_1).
   inv H; simpl.
   split. destruct (T.sub_dec hi2 lo2); auto.
   split; intros.
-  rewrite PTree.gsspec. destruct (peq r r1). subst r; rewrite E1; omega. omega.
-  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite E2. omega.
+  rewrite PTree.gsspec. destruct (peq r r1). subst r; rewrite E1; lia. lia.
+  rewrite PTree.gss. rewrite PTree.gso by auto. rewrite E2. lia.
 
-- inv H. split; auto. simpl; split; intros. omega. congruence.
+- inv H. split; auto. simpl; split; intros. lia. congruence.
 Qed.
 
 Definition weight_constraints (b: PTree.t bounds) (cstr: list constraint) : nat :=
@@ -312,7 +312,7 @@ Remark weight_constraints_tighter:
   forall b1 b2, (forall r, weight_bounds b1!r <= weight_bounds b2!r) ->
   forall q, weight_constraints b1 q <= weight_constraints b2 q.
 Proof.
-  induction q; simpl. omega. generalize (H (fst a)) (H (snd a)); omega.
+  induction q; simpl. lia. generalize (H (fst a)) (H (snd a)); lia.
 Qed.
 
 Lemma weight_solve_rec:
@@ -323,8 +323,8 @@ Lemma weight_solve_rec:
      <= weight_constraints e.(te_typ) e.(te_sub) + weight_constraints e.(te_typ) q.
 Proof.
   induction q; simpl; intros.
-- inv H. split. intros; omega. replace (changed' && negb changed') with false.
-  omega. destruct changed'; auto.
+- inv H. split. intros; lia. replace (changed' && negb changed') with false.
+  lia. destruct changed'; auto.
 - destruct a as [r1 r2]; monadInv H; simpl.
   rename x into changed1. rename x0 into e1.
   exploit weight_type_move; eauto. intros [A [B C]].
@@ -336,7 +336,7 @@ Proof.
   assert (Q: weight_constraints (te_typ e1) (te_sub e1) <=
              weight_constraints (te_typ e1) (te_sub e) +
              weight_bounds (te_typ e1)!r1 + weight_bounds (te_typ e1)!r2).
-  { destruct A as [Q|Q]; rewrite Q. omega. simpl. omega. }
+  { destruct A as [Q|Q]; rewrite Q. lia. simpl. lia. }
   assert (R: weight_constraints (te_typ e1) q <= weight_constraints (te_typ e) q)
   by (apply weight_constraints_tighter; auto).
   set (ch1 := if changed' && negb (changed || changed1) then 1 else 0) in *.
@@ -344,11 +344,11 @@ Proof.
   destruct changed1.
   assert (ch2 <= ch1 + 1).
   { unfold ch2, ch1. rewrite orb_true_r. simpl. rewrite andb_false_r.
-    destruct (changed' && negb changed); omega. }
-  exploit C; eauto. omega.
+    destruct (changed' && negb changed); lia. }
+  exploit C; eauto. lia.
   assert (ch2 <= ch1).
-  { unfold ch2, ch1. rewrite orb_false_r. omega. }
-  generalize (B r1) (B r2); omega.
+  { unfold ch2, ch1. rewrite orb_false_r. lia. }
+  generalize (B r1) (B r2); lia.
 Qed.
 
 Definition weight_typenv (e: typenv) : nat :=
@@ -364,7 +364,7 @@ Function solve_constraints (e: typenv) {measure weight_typenv e}: res typenv :=
   end.
 Proof.
   intros. exploit weight_solve_rec; eauto. simpl. intros [A B].
-  unfold weight_typenv. omega.
+  unfold weight_typenv. lia.
 Qed.
 
 Definition typassign := positive -> T.t.

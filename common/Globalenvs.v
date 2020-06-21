@@ -55,7 +55,7 @@ Function store_zeros (m: mem) (b: block) (p: Z) (n: Z) {wf (Zwf 0) n}: option me
     | None => None
     end.
 Proof.
-  intros. red. omega.
+  intros. red. lia.
   apply Zwf_well_founded.
 Qed.
 
@@ -849,8 +849,8 @@ Proof.
   intros until n. functional induction (store_zeros m b p n); intros.
 - inv H; apply Mem.unchanged_on_refl.
 - apply Mem.unchanged_on_trans with m'.
-+ eapply Mem.store_unchanged_on; eauto. simpl. intros. apply H0. omega.
-+ apply IHo; auto. intros; apply H0; omega.
++ eapply Mem.store_unchanged_on; eauto. simpl. intros. apply H0. lia.
++ apply IHo; auto. intros; apply H0; lia.
 - discriminate.
 Qed.
 
@@ -879,7 +879,7 @@ Proof.
 - destruct (store_init_data m b p a) as [m1|] eqn:?; try congruence.
   apply Mem.unchanged_on_trans with m1.
   eapply store_init_data_unchanged; eauto. intros; apply H0; tauto.
-  eapply IHil; eauto. intros; apply H0. generalize (init_data_size_pos a); omega.
+  eapply IHil; eauto. intros; apply H0. generalize (init_data_size_pos a); lia.
 Qed.
 
 (** Properties related to [loadbytes] *)
@@ -895,24 +895,24 @@ Lemma store_zeros_loadbytes:
   readbytes_as_zero m' b p n.
 Proof.
   intros until n; functional induction (store_zeros m b p n); red; intros.
-- destruct n0. simpl. apply Mem.loadbytes_empty. omega.
-  rewrite Nat2Z.inj_succ in H1. omegaContradiction.
+- destruct n0. simpl. apply Mem.loadbytes_empty. lia.
+  rewrite Nat2Z.inj_succ in H1. extlia.
 - destruct (zeq p0 p).
-  + subst p0. destruct n0. simpl. apply Mem.loadbytes_empty. omega.
+  + subst p0. destruct n0. simpl. apply Mem.loadbytes_empty. lia.
     rewrite Nat2Z.inj_succ in H1. rewrite Nat2Z.inj_succ.
-    replace (Z.succ (Z.of_nat n0)) with (1 + Z.of_nat n0) by omega.
+    replace (Z.succ (Z.of_nat n0)) with (1 + Z.of_nat n0) by lia.
     change (list_repeat (S n0) (Byte Byte.zero))
       with ((Byte Byte.zero :: nil) ++ list_repeat n0 (Byte Byte.zero)).
     apply Mem.loadbytes_concat.
     eapply Mem.loadbytes_unchanged_on with (P := fun b1 ofs1 => ofs1 = p).
-    eapply store_zeros_unchanged; eauto. intros; omega.
-    intros; omega.
+    eapply store_zeros_unchanged; eauto. intros; lia.
+    intros; lia.
     replace (Byte Byte.zero :: nil) with (encode_val Mint8unsigned Vzero).
     change 1 with (size_chunk Mint8unsigned).
     eapply Mem.loadbytes_store_same; eauto.
     unfold encode_val; unfold encode_int; unfold rev_if_be; destruct Archi.big_endian; reflexivity.
-    eapply IHo; eauto. omega. omega. omega. omega.
-  + eapply IHo; eauto. omega. omega.
+    eapply IHo; eauto. lia. lia. lia. lia.
+  + eapply IHo; eauto. lia. lia.
 - discriminate.
 Qed.
 
@@ -947,8 +947,8 @@ Proof.
   intros; destruct i; simpl in H; try apply (Mem.loadbytes_store_same _ _ _ _ _ _ H).
 - inv H. simpl.
   assert (EQ: Z.of_nat (Z.to_nat z) = Z.max z 0).
-  { destruct (zle 0 z). rewrite Z2Nat.id; xomega. destruct z; try discriminate. simpl. xomega. }
-  rewrite <- EQ. apply H0. omega. simpl. omega.
+  { destruct (zle 0 z). rewrite Z2Nat.id; extlia. destruct z; try discriminate. simpl. extlia. }
+  rewrite <- EQ. apply H0. lia. simpl. lia.
 - rewrite init_data_size_addrof. simpl.
   destruct (find_symbol ge i) as [b'|]; try discriminate.
   rewrite (Mem.loadbytes_store_same _ _ _ _ _ _ H).
@@ -968,23 +968,23 @@ Lemma store_init_data_list_loadbytes:
   Mem.loadbytes m' b p (init_data_list_size il) = Some (bytes_of_init_data_list il).
 Proof.
   induction il as [ | i1 il]; simpl; intros.
-- apply Mem.loadbytes_empty. omega.
+- apply Mem.loadbytes_empty. lia.
 - generalize (init_data_size_pos i1) (init_data_list_size_pos il); intros P1 PL.
   destruct (store_init_data m b p i1) as [m1|] eqn:S; try discriminate.
   apply Mem.loadbytes_concat.
   eapply Mem.loadbytes_unchanged_on with (P := fun b1 ofs1 => ofs1 < p + init_data_size i1).
   eapply store_init_data_list_unchanged; eauto.
-  intros; omega.
-  intros; omega.
+  intros; lia.
+  intros; lia.
   eapply store_init_data_loadbytes; eauto.
-  red; intros; apply H0. omega. omega.
+  red; intros; apply H0. lia. lia.
   apply IHil with m1; auto.
   red; intros.
   eapply Mem.loadbytes_unchanged_on with (P := fun b1 ofs1 => p + init_data_size i1 <= ofs1).
   eapply store_init_data_unchanged; eauto.
-  intros; omega.
-  intros; omega.
-  apply H0. omega. omega.
+  intros; lia.
+  intros; lia.
+  apply H0. lia. lia.
   auto. auto.
 Qed.
 
@@ -1011,7 +1011,7 @@ Remark read_as_zero_unchanged:
   read_as_zero m' b ofs len.
 Proof.
   intros; red; intros. eapply Mem.load_unchanged_on; eauto.
-  intros; apply H1. omega.
+  intros; apply H1. lia.
 Qed.
 
 Lemma store_zeros_read_as_zero:
@@ -1068,7 +1068,7 @@ Proof.
   {
     intros.
     eapply Mem.load_unchanged_on with (P := fun b' ofs' => ofs' < p + size_chunk chunk).
-    eapply store_init_data_list_unchanged; eauto. intros; omega.
+    eapply store_init_data_list_unchanged; eauto. intros; lia.
     intros; tauto.
     eapply Mem.load_store_same; eauto.
   }
@@ -1078,10 +1078,10 @@ Proof.
   exploit IHil; eauto.
   set (P := fun (b': block) ofs' => p + init_data_size a <= ofs').
   apply read_as_zero_unchanged with (m := m) (P := P).
-  red; intros; apply H0; auto. generalize (init_data_size_pos a); omega. omega.
+  red; intros; apply H0; auto. generalize (init_data_size_pos a); lia. lia.
   eapply store_init_data_unchanged with (P := P); eauto.
-  intros; unfold P. omega.
-  intros; unfold P. omega.
+  intros; unfold P. lia.
+  intros; unfold P. lia.
   intro D.
   destruct a; simpl in Heqo.
 + split; auto. eapply (A Mint8unsigned (Vint i)); eauto.
@@ -1093,10 +1093,10 @@ Proof.
 + split; auto.
   set (P := fun (b': block) ofs' => ofs' < p + init_data_size (Init_space z)).
   inv Heqo. apply read_as_zero_unchanged with (m := m1) (P := P).
-  red; intros. apply H0; auto. simpl. generalize (init_data_list_size_pos il); xomega.
+  red; intros. apply H0; auto. simpl. generalize (init_data_list_size_pos il); extlia.
   eapply store_init_data_list_unchanged; eauto.
-  intros; unfold P. omega.
-  intros; unfold P. simpl; xomega.
+  intros; unfold P. lia.
+  intros; unfold P. simpl; extlia.
 + rewrite init_data_size_addrof in *.
   split; auto.
   destruct (find_symbol ge i); try congruence.
@@ -1195,11 +1195,11 @@ Proof.
 * destruct (Mem.alloc m 0 1) as [m1 b] eqn:ALLOC.
   exploit Mem.alloc_result; eauto. intros RES.
   rewrite H, <- RES. split.
-  eapply Mem.perm_drop_1; eauto. omega.
+  eapply Mem.perm_drop_1; eauto. lia.
   intros.
   assert (0 <= ofs < 1). { eapply Mem.perm_alloc_3; eauto. eapply Mem.perm_drop_4; eauto. }
   exploit Mem.perm_drop_2; eauto. intros ORD.
-  split. omega. inv ORD; auto.
+  split. lia. inv ORD; auto.
 * set (init := gvar_init v) in *.
   set (sz := init_data_list_size init) in *.
   destruct (Mem.alloc m 0 sz) as [m1 b] eqn:?.
@@ -1442,7 +1442,7 @@ Proof.
   exploit alloc_global_neutral; eauto.
   assert (Ple (Pos.succ (Mem.nextblock m)) (Mem.nextblock m')).
   { rewrite EQ. apply advance_next_le. }
-  unfold Plt, Ple in *; zify; omega.
+  unfold Plt, Ple in *; zify; lia.
 Qed.
 
 End INITMEM_INJ.
@@ -1563,9 +1563,9 @@ Lemma store_zeros_exists:
 Proof.
   intros until n. functional induction (store_zeros m b p n); intros PERM.
 - exists m; auto.
-- apply IHo. red; intros. eapply Mem.perm_store_1; eauto. apply PERM. omega.
+- apply IHo. red; intros. eapply Mem.perm_store_1; eauto. apply PERM. lia.
 - destruct (Mem.valid_access_store m Mint8unsigned b p Vzero) as (m' & STORE).
-  split. red; intros. apply Mem.perm_cur. apply PERM. simpl in H. omega.
+  split. red; intros. apply Mem.perm_cur. apply PERM. simpl in H. lia.
   simpl. apply Z.divide_1_l.
   congruence.
 Qed.
@@ -1603,10 +1603,10 @@ Proof.
 - exists m; auto.
 - destruct H0.
   destruct (@store_init_data_exists m b p i1) as (m1 & S1); eauto.
-  red; intros. apply H. generalize (init_data_list_size_pos il); omega.
+  red; intros. apply H. generalize (init_data_list_size_pos il); lia.
   rewrite S1.
   apply IHil; eauto.
-  red; intros. erewrite <- store_init_data_perm by eauto. apply H. generalize (init_data_size_pos i1); omega.
+  red; intros. erewrite <- store_init_data_perm by eauto. apply H. generalize (init_data_size_pos i1); lia.
 Qed.
 
 Lemma alloc_global_exists:

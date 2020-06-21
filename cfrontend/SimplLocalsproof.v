@@ -173,10 +173,10 @@ Proof.
   eapply H1; eauto.
   destruct (f' b) as [[b' delta]|] eqn:?; auto.
   exploit H2; eauto. unfold Mem.valid_block. intros [A B].
-  xomegaContradiction.
+  extlia.
   intros. destruct (f b) as [[b'' delta']|] eqn:?. eauto.
   exploit H2; eauto. unfold Mem.valid_block. intros [A B].
-  xomegaContradiction.
+  extlia.
 Qed.
 
 (** Properties of values resulting from a cast *)
@@ -606,7 +606,7 @@ Proof.
   generalize (alloc_variables_nextblock _ _ _ _ _ _ H0). intros A B C.
   subst b. split. apply Ple_refl. eapply Pos.lt_le_trans; eauto. rewrite B. apply Plt_succ.
   auto.
-  right. exploit Mem.nextblock_alloc; eauto. intros B. rewrite B in A. xomega.
+  right. exploit Mem.nextblock_alloc; eauto. intros B. rewrite B in A. extlia.
 Qed.
 
 Lemma alloc_variables_injective:
@@ -622,12 +622,12 @@ Proof.
   repeat rewrite PTree.gsspec; intros.
   destruct (peq id1 id); destruct (peq id2 id).
   congruence.
-  inv H6. exploit Mem.alloc_result; eauto. exploit H2; eauto. unfold block; xomega.
-  inv H7. exploit Mem.alloc_result; eauto. exploit H2; eauto. unfold block; xomega.
+  inv H6. exploit Mem.alloc_result; eauto. exploit H2; eauto. unfold block; extlia.
+  inv H7. exploit Mem.alloc_result; eauto. exploit H2; eauto. unfold block; extlia.
   eauto.
   intros. rewrite PTree.gsspec in H6. destruct (peq id0 id). inv H6.
-  exploit Mem.alloc_result; eauto. exploit Mem.nextblock_alloc; eauto. unfold block; xomega.
-  exploit H2; eauto. exploit Mem.nextblock_alloc; eauto. unfold block; xomega.
+  exploit Mem.alloc_result; eauto. exploit Mem.nextblock_alloc; eauto. unfold block; extlia.
+  exploit H2; eauto. exploit Mem.nextblock_alloc; eauto. unfold block; extlia.
 Qed.
 
 Lemma match_alloc_variables:
@@ -719,7 +719,7 @@ Proof.
     eapply Mem.valid_new_block; eauto.
     eapply Q; eauto. unfold Mem.valid_block in *.
     exploit Mem.nextblock_alloc. eexact A. exploit Mem.alloc_result. eexact A.
-    unfold block; xomega.
+    unfold block; extlia.
   split. intros. destruct (ident_eq id0 id).
     (* same var *)
     subst id0.
@@ -760,7 +760,7 @@ Proof.
     destruct ty; try destruct i; try destruct s; try destruct f; inv H; auto;
     unfold Mptr; simpl; destruct Archi.ptr64; auto.
   }
-  omega.
+  lia.
 Qed.
 
 Definition env_initial_value (e: env) (m: mem) :=
@@ -778,7 +778,7 @@ Proof.
   apply IHalloc_variables. red; intros. rewrite PTree.gsspec in H2.
   destruct (peq id0 id). inv H2.
   eapply Mem.load_alloc_same'; eauto.
-  omega. rewrite Z.add_0_l. eapply sizeof_by_value; eauto.
+  lia. rewrite Z.add_0_l. eapply sizeof_by_value; eauto.
   apply Z.divide_0_r.
   eapply Mem.load_alloc_other; eauto.
 Qed.
@@ -985,7 +985,7 @@ Proof.
   (* flat *)
   exploit alloc_variables_range. eexact A. eauto.
   rewrite PTree.gempty. intros [P|P]. congruence.
-  exploit K; eauto. unfold Mem.valid_block. xomega.
+  exploit K; eauto. unfold Mem.valid_block. extlia.
   intros [id0 [ty0 [U [V W]]]]. split; auto.
   destruct (ident_eq id id0). congruence.
   assert (b' <> b').
@@ -1032,34 +1032,34 @@ Proof.
 + (* special case size = 0 *)
   assert (bytes = nil).
   { exploit (Mem.loadbytes_empty m bsrc (Ptrofs.unsigned osrc) (sizeof tge ty)).
-    omega. congruence. }
+    lia. congruence. }
   subst.
   destruct (Mem.range_perm_storebytes tm bdst' (Ptrofs.unsigned (Ptrofs.add odst (Ptrofs.repr delta))) nil)
   as [tm' SB].
-  simpl. red; intros; omegaContradiction.
+  simpl. red; intros; extlia.
   exists tm'.
   split. eapply assign_loc_copy; eauto.
-  intros; omegaContradiction.
-  intros; omegaContradiction.
-  rewrite e; right; omega.
-  apply Mem.loadbytes_empty. omega.
+  intros; extlia.
+  intros; extlia.
+  rewrite e; right; lia.
+  apply Mem.loadbytes_empty. lia.
   split. eapply Mem.storebytes_empty_inject; eauto.
   intros. rewrite <- H0. eapply Mem.load_storebytes_other; eauto.
   left. congruence.
 + (* general case size > 0 *)
   exploit Mem.loadbytes_length; eauto. intros LEN.
   assert (SZPOS: sizeof tge ty > 0).
-  { generalize (sizeof_pos tge ty); omega. }
+  { generalize (sizeof_pos tge ty); lia. }
   assert (RPSRC: Mem.range_perm m bsrc (Ptrofs.unsigned osrc) (Ptrofs.unsigned osrc + sizeof tge ty) Cur Nonempty).
     eapply Mem.range_perm_implies. eapply Mem.loadbytes_range_perm; eauto. auto with mem.
   assert (RPDST: Mem.range_perm m bdst (Ptrofs.unsigned odst) (Ptrofs.unsigned odst + sizeof tge ty) Cur Nonempty).
     replace (sizeof tge ty) with (Z.of_nat (List.length bytes)).
     eapply Mem.range_perm_implies. eapply Mem.storebytes_range_perm; eauto. auto with mem.
-    rewrite LEN. apply Z2Nat.id. omega.
+    rewrite LEN. apply Z2Nat.id. lia.
   assert (PSRC: Mem.perm m bsrc (Ptrofs.unsigned osrc) Cur Nonempty).
-    apply RPSRC. omega.
+    apply RPSRC. lia.
   assert (PDST: Mem.perm m bdst (Ptrofs.unsigned odst) Cur Nonempty).
-    apply RPDST. omega.
+    apply RPDST. lia.
   exploit Mem.address_inject.  eauto. eexact PSRC. eauto. intros EQ1.
   exploit Mem.address_inject.  eauto. eexact PDST. eauto. intros EQ2.
   exploit Mem.loadbytes_inject; eauto. intros [bytes2 [A B]].
@@ -1244,7 +1244,7 @@ Proof.
   destruct (Mem.range_perm_free m b lo hi) as [m1 A]; auto.
   rewrite A. apply IHl; auto.
   intros. red; intros. eapply Mem.perm_free_1; eauto.
-  exploit H1; eauto. intros [B|B]. auto. right; omega.
+  exploit H1; eauto. intros [B|B]. auto. right; lia.
   eapply H; eauto.
 Qed.
 
@@ -1276,11 +1276,11 @@ Proof.
       change id' with (fst (id', (b', ty'))). apply List.in_map; auto. }
     assert (Mem.perm m b0 0 Max Nonempty).
     { apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable.
-      eapply PERMS; eauto. omega. auto with mem. }
+      eapply PERMS; eauto. lia. auto with mem. }
     assert (Mem.perm m b0' 0 Max Nonempty).
     { apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable.
-      eapply PERMS; eauto. omega. auto with mem. }
-    exploit Mem.mi_no_overlap; eauto. intros [A|A]. auto. omegaContradiction.
+      eapply PERMS; eauto. lia. auto with mem. }
+    exploit Mem.mi_no_overlap; eauto. intros [A|A]. auto. extlia.
 Qed.
 
 Lemma free_list_right_inject:
@@ -1326,7 +1326,7 @@ Local Opaque ge tge.
     unfold block_of_binding in EQ; inv EQ.
     exploit me_mapped; eauto. eapply PTree.elements_complete; eauto.
     intros [b [A B]].
-    change 0 with (0 + 0). replace (sizeof ge ty) with (sizeof ge ty + 0) by omega.
+    change 0 with (0 + 0). replace (sizeof ge ty) with (sizeof ge ty + 0) by lia.
     eapply Mem.range_perm_inject; eauto.
     eapply free_blocks_of_env_perm_2; eauto.
   - (* no overlap *)
@@ -1343,7 +1343,7 @@ Local Opaque ge tge.
   intros [[id [b' ty]] [EQ IN]]. unfold block_of_binding in EQ. inv EQ.
   exploit me_flat; eauto. apply PTree.elements_complete; eauto.
   intros [P Q]. subst delta. eapply free_blocks_of_env_perm_1 with (m := m); eauto.
-  rewrite <- comp_env_preserved. omega.
+  rewrite <- comp_env_preserved. lia.
 Qed.
 
 (** Matching global environments *)
@@ -1577,17 +1577,17 @@ Proof.
   induction 1; intros LOAD INCR INJ1 INJ2; econstructor; eauto.
 (* globalenvs *)
   inv H. constructor; intros; eauto.
-  assert (f b1 = Some (b2, delta)). rewrite <- H; symmetry; eapply INJ2; eauto. xomega.
+  assert (f b1 = Some (b2, delta)). rewrite <- H; symmetry; eapply INJ2; eauto. extlia.
   eapply IMAGE; eauto.
 (* call *)
   eapply match_envs_invariant; eauto.
-  intros. apply LOAD; auto. xomega.
-  intros. apply INJ1; auto; xomega.
-  intros. eapply INJ2; eauto; xomega.
+  intros. apply LOAD; auto. extlia.
+  intros. apply INJ1; auto; extlia.
+  intros. eapply INJ2; eauto; extlia.
   eapply IHmatch_cont; eauto.
-  intros; apply LOAD; auto. inv H0; xomega.
-  intros; apply INJ1. inv H0; xomega.
-  intros; eapply INJ2; eauto. inv H0; xomega.
+  intros; apply LOAD; auto. inv H0; extlia.
+  intros; apply INJ1. inv H0; extlia.
+  intros; eapply INJ2; eauto. inv H0; extlia.
 Qed.
 
 (** Invariance by assignment to location "above" *)
@@ -1602,9 +1602,9 @@ Proof.
   intros. eapply match_cont_invariant; eauto.
   intros. rewrite <- H4. inv H0.
   (* scalar *)
-  simpl in H6. eapply Mem.load_store_other; eauto. left. unfold block; xomega.
+  simpl in H6. eapply Mem.load_store_other; eauto. left. unfold block; extlia.
   (* block copy *)
-  eapply Mem.load_storebytes_other; eauto. left. unfold block; xomega.
+  eapply Mem.load_storebytes_other; eauto. left. unfold block; extlia.
 Qed.
 
 (** Invariance by external calls *)
@@ -1622,9 +1622,9 @@ Proof.
   intros. eapply Mem.load_unchanged_on; eauto.
   red in H2. intros. destruct (f b) as [[b' delta] | ] eqn:?. auto.
   destruct (f' b) as [[b' delta] | ] eqn:?; auto.
-  exploit H2; eauto. unfold Mem.valid_block. intros [A B]. xomegaContradiction.
+  exploit H2; eauto. unfold Mem.valid_block. intros [A B]. extlia.
   red in H2. intros. destruct (f b) as [[b'' delta''] | ] eqn:?. auto.
-  exploit H2; eauto. unfold Mem.valid_block. intros [A B]. xomegaContradiction.
+  exploit H2; eauto. unfold Mem.valid_block. intros [A B]. extlia.
 Qed.
 
 (** Invariance by change of bounds *)
@@ -1636,7 +1636,7 @@ Lemma match_cont_incr_bounds:
   Ple bound bound' -> Ple tbound tbound' ->
   match_cont f cenv k tk m bound' tbound'.
 Proof.
-  induction 1; intros; econstructor; eauto; xomega.
+  induction 1; intros; econstructor; eauto; extlia.
 Qed.
 
 (** [match_cont] and call continuations. *)
@@ -1690,7 +1690,7 @@ Proof.
   inv H; auto.
   destruct a. destruct p. destruct (Mem.free m b z0 z) as [m1|] eqn:?; try discriminate.
   transitivity (Mem.load chunk m1 b' 0). eauto.
-  eapply Mem.load_free. eauto. left. assert (Plt b' b) by eauto. unfold block; xomega.
+  eapply Mem.load_free. eauto. left. assert (Plt b' b) by eauto. unfold block; extlia.
 Qed.
 
 Lemma match_cont_free_env:
@@ -1708,9 +1708,9 @@ Proof.
   intros. rewrite <- H7. eapply free_list_load; eauto.
   unfold blocks_of_env; intros. exploit list_in_map_inv; eauto.
   intros [[id [b1 ty]] [P Q]]. simpl in P. inv P.
-  exploit me_range; eauto. eapply PTree.elements_complete; eauto. xomega.
-  rewrite (free_list_nextblock _ _ _ H3). inv H; xomega.
-  rewrite (free_list_nextblock _ _ _ H4). inv H; xomega.
+  exploit me_range; eauto. eapply PTree.elements_complete; eauto. extlia.
+  rewrite (free_list_nextblock _ _ _ H3). inv H; extlia.
+  rewrite (free_list_nextblock _ _ _ H4). inv H; extlia.
 Qed.
 
 (** Matching of global environments *)
@@ -2018,7 +2018,7 @@ Proof.
   eapply step_Sset_debug. eauto. rewrite typeof_simpl_expr. eauto.
   econstructor; eauto with compat.
   eapply match_envs_assign_lifted; eauto. eapply cast_val_is_casted; eauto.
-  eapply match_cont_assign_loc; eauto. exploit me_range; eauto. xomega.
+  eapply match_cont_assign_loc; eauto. exploit me_range; eauto. extlia.
   inv MV; try congruence. inv H2; try congruence. unfold Mem.storev in H3.
   eapply Mem.store_unmapped_inject; eauto. congruence.
   erewrite assign_loc_nextblock; eauto.
@@ -2068,7 +2068,7 @@ Proof.
   eapply match_envs_set_opttemp; eauto.
   eapply match_envs_extcall; eauto.
   eapply match_cont_extcall; eauto.
-  inv MENV; xomega. inv MENV; xomega.
+  inv MENV; extlia. inv MENV; extlia.
   eapply Ple_trans; eauto. eapply external_call_nextblock; eauto.
   eapply Ple_trans; eauto. eapply external_call_nextblock; eauto.
 
@@ -2212,11 +2212,11 @@ Proof.
   eapply bind_parameters_load; eauto. intros.
   exploit alloc_variables_range. eexact H1. eauto.
   unfold empty_env. rewrite PTree.gempty. intros [?|?]. congruence.
-  red; intros; subst b'. xomega.
+  red; intros; subst b'. extlia.
   eapply alloc_variables_load; eauto.
   apply compat_cenv_for.
-  rewrite (bind_parameters_nextblock _ _ _ _ _ _ H2). xomega.
-  rewrite T; xomega.
+  rewrite (bind_parameters_nextblock _ _ _ _ _ _ H2). extlia.
+  rewrite T; extlia.
 
 (* external function *)
   monadInv TRFD. inv FUNTY.
@@ -2227,7 +2227,7 @@ Proof.
   apply plus_one. econstructor; eauto. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
   intros. apply match_cont_incr_bounds with (Mem.nextblock m) (Mem.nextblock tm).
-  eapply match_cont_extcall; eauto. xomega. xomega.
+  eapply match_cont_extcall; eauto. extlia. extlia.
   eapply external_call_nextblock; eauto.
   eapply external_call_nextblock; eauto.
 
@@ -2262,7 +2262,7 @@ Proof.
   eapply Genv.find_symbol_not_fresh; eauto.
   eapply Genv.find_funct_ptr_not_fresh; eauto.
   eapply Genv.find_var_info_not_fresh; eauto.
-  xomega. xomega.
+  extlia. extlia.
   eapply Genv.initmem_inject; eauto.
   constructor.
 Qed.

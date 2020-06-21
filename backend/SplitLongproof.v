@@ -335,7 +335,7 @@ Proof.
   fold (Int.testbit i i0).
   destruct (zlt i0 Int.zwordsize).
   auto.
-  rewrite Int.bits_zero. rewrite Int.bits_above by omega. auto.
+  rewrite Int.bits_zero. rewrite Int.bits_above by lia. auto.
 Qed.
 
 Theorem eval_longofint: unary_constructor_sound longofint Val.longofint.
@@ -352,13 +352,13 @@ Proof.
   apply Int64.same_bits_eq; intros.
   rewrite Int64.testbit_repr by auto.
   rewrite Int64.bits_ofwords by auto.
-  rewrite Int.bits_signed by omega.
+  rewrite Int.bits_signed by lia.
   destruct (zlt i0 Int.zwordsize).
   auto.
   assert (Int64.zwordsize = 2 * Int.zwordsize) by reflexivity.
-  rewrite Int.bits_shr by omega.
+  rewrite Int.bits_shr by lia.
   change (Int.unsigned (Int.repr 31)) with (Int.zwordsize - 1).
-  f_equal. destruct (zlt (i0 - Int.zwordsize + (Int.zwordsize - 1)) Int.zwordsize); omega.
+  f_equal. destruct (zlt (i0 - Int.zwordsize + (Int.zwordsize - 1)) Int.zwordsize); lia.
 Qed.
 
 Theorem eval_negl: unary_constructor_sound negl Val.negl.
@@ -545,24 +545,24 @@ Proof.
   { red; intros. elim H. rewrite <- (Int.repr_unsigned n). rewrite H0. auto. }
   destruct (Int.ltu n Int.iwordsize) eqn:LT.
   exploit Int.ltu_iwordsize_inv; eauto. intros RANGE.
-  assert (0 <= Int.zwordsize - Int.unsigned n < Int.zwordsize) by omega.
+  assert (0 <= Int.zwordsize - Int.unsigned n < Int.zwordsize) by lia.
   apply A1. auto. auto.
   unfold Int.ltu, Int.sub. rewrite Int.unsigned_repr_wordsize.
-  rewrite Int.unsigned_repr. rewrite zlt_true; auto. omega.
-  generalize Int.wordsize_max_unsigned; omega.
+  rewrite Int.unsigned_repr. rewrite zlt_true; auto. lia.
+  generalize Int.wordsize_max_unsigned; lia.
   unfold Int.ltu. rewrite zlt_true; auto.
   change (Int.unsigned Int64.iwordsize') with 64.
-  change Int.zwordsize with 32 in RANGE. omega.
+  change Int.zwordsize with 32 in RANGE. lia.
   destruct (Int.ltu n Int64.iwordsize') eqn:LT'.
   exploit Int.ltu_inv; eauto.
   change (Int.unsigned Int64.iwordsize') with (Int.zwordsize * 2).
   intros RANGE.
   assert (Int.zwordsize <= Int.unsigned n).
     unfold Int.ltu in LT. rewrite Int.unsigned_repr_wordsize in LT.
-    destruct (zlt (Int.unsigned n) Int.zwordsize). discriminate. omega.
+    destruct (zlt (Int.unsigned n) Int.zwordsize). discriminate. lia.
   apply A2. tauto. unfold Int.ltu, Int.sub. rewrite Int.unsigned_repr_wordsize.
-  rewrite Int.unsigned_repr. rewrite zlt_true; auto. omega.
-  generalize Int.wordsize_max_unsigned; omega.
+  rewrite Int.unsigned_repr. rewrite zlt_true; auto. lia.
+  generalize Int.wordsize_max_unsigned; lia.
   auto.
 Qed.
 
@@ -918,19 +918,19 @@ Proof.
   rewrite Int.bits_zero. rewrite Int.bits_or by auto.
   symmetry. apply orb_false_intro.
   transitivity (Int64.testbit (Int64.ofwords h l) (i + Int.zwordsize)).
-  rewrite Int64.bits_ofwords by omega. rewrite zlt_false by omega. f_equal; omega.
+  rewrite Int64.bits_ofwords by lia. rewrite zlt_false by lia. f_equal; lia.
   rewrite H0. apply Int64.bits_zero.
   transitivity (Int64.testbit (Int64.ofwords h l) i).
-  rewrite Int64.bits_ofwords by omega. rewrite zlt_true by omega. auto.
+  rewrite Int64.bits_ofwords by lia. rewrite zlt_true by lia. auto.
   rewrite H0. apply Int64.bits_zero.
   symmetry. apply Int.eq_false. red; intros; elim H0.
   apply Int64.same_bits_eq; intros.
   rewrite Int64.bits_zero. rewrite Int64.bits_ofwords by auto.
   destruct (zlt i Int.zwordsize).
   assert (Int.testbit (Int.or h l) i = false) by (rewrite H1; apply Int.bits_zero).
-  rewrite Int.bits_or in H3 by omega. exploit orb_false_elim; eauto. tauto.
+  rewrite Int.bits_or in H3 by lia. exploit orb_false_elim; eauto. tauto.
   assert (Int.testbit (Int.or h l) (i - Int.zwordsize) = false) by (rewrite H1; apply Int.bits_zero).
-  rewrite Int.bits_or in H3 by omega. exploit orb_false_elim; eauto. tauto.
+  rewrite Int.bits_or in H3 by lia. exploit orb_false_elim; eauto. tauto.
 Qed.
 
 Lemma eval_cmpl_eq_zero:
