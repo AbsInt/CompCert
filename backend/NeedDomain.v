@@ -47,7 +47,7 @@ Definition iagree (p q mask: int) : Prop :=
   forall i, 0 <= i < Int.zwordsize -> Int.testbit mask i = true ->
             Int.testbit p i = Int.testbit q i.
 
-Fixpoint vagree (v w: val) (x: nval) {struct x}: Prop :=
+Definition vagree (v w: val) (x: nval) : Prop :=
   match x with
   | Nothing => True
   | I m =>

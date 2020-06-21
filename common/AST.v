@@ -105,7 +105,7 @@ Lemma rettype_eq: forall (t1 t2: rettype), {t1=t2} + {t1<>t2}.
 Proof. generalize typ_eq; decide equality. Defined.
 Global Opaque rettype_eq.
 
-Fixpoint proj_rettype (r: rettype) : typ :=
+Definition proj_rettype (r: rettype) : typ :=
   match r with
   | Tret t => t
   | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => Tint

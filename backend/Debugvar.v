@@ -92,7 +92,7 @@ Fixpoint remove_state (v: ident) (s: avail) : avail :=
       end
   end.
 
-Fixpoint set_debug_info (v: ident) (info: list (builtin_arg loc)) (s: avail) :=
+Definition set_debug_info (v: ident) (info: list (builtin_arg loc)) (s: avail) :=
   match normalize_debug info with
   | Some a => set_state v a s
   | None   => remove_state v s
