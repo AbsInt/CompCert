@@ -843,8 +843,8 @@ Lemma sel_builtin_default_correct:
   external_call ef ge vl m1 t v m2 ->
   env_lessdef e1 e1' -> Mem.extends m1 m1' ->
   exists e2' m2',
-     step tge (State f (sel_builtin_default optid ef al) k sp e1' m1')
-            t (State f Sskip k sp e2' m2')
+     plus step tge (State f (sel_builtin_default optid ef al) k sp e1' m1')
+                 t (State f Sskip k sp e2' m2')
   /\ env_lessdef (set_optvar optid v e1) e2'
   /\ Mem.extends m2 m2'.
 Proof.
@@ -852,6 +852,7 @@ Proof.
   exploit sel_builtin_args_correct; eauto. intros (vl' & A & B).
   exploit external_call_mem_extends; eauto. intros (v' & m2' & D & E & F & _).
   econstructor; exists m2'; split.
+  apply plus_one.
   econstructor. eexact A. eapply external_call_symbols_preserved. eexact senv_preserved. eexact D.
   split; auto. apply sel_builtin_res_correct; auto.
 Qed. 
@@ -862,8 +863,8 @@ Lemma sel_builtin_correct:
   external_call ef ge vl m1 t v m2 ->
   env_lessdef e1 e1' -> Mem.extends m1 m1' ->
   exists e2' m2',
-     step tge (State f (sel_builtin optid ef al) k sp e1' m1')
-            t (State f Sskip k sp e2' m2')
+     plus step tge (State f (sel_builtin optid ef al) k sp e1' m1')
+                 t (State f Sskip k sp e2' m2')
   /\ env_lessdef (set_optvar optid v e1) e2'
   /\ Mem.extends m2 m2'.
 Proof.
@@ -871,15 +872,18 @@ Proof.
   exploit sel_exprlist_correct; eauto. intros (vl' & A & B).
   exploit external_call_mem_extends; eauto. intros (v' & m2' & D & E & F & _).
   unfold sel_builtin.
-  destruct optid as [id|]; eauto using sel_builtin_default_correct.
   destruct ef; eauto using sel_builtin_default_correct.
   destruct (lookup_builtin_function name sg) as [bf|] eqn:LKUP; eauto using sel_builtin_default_correct.
-  destruct (sel_known_builtin bf (sel_exprlist al)) as [a|] eqn:SKB; eauto using sel_builtin_default_correct.
   simpl in D. red in D. rewrite LKUP in D. inv D.
+  destruct optid as [id|]; eauto using sel_builtin_default_correct.
+- destruct (sel_known_builtin bf (sel_exprlist al)) as [a|] eqn:SKB; eauto using sel_builtin_default_correct.
   exploit eval_sel_known_builtin; eauto. intros (v'' & U & V).
   econstructor; exists m2'; split.
-  econstructor. eexact U.
+  apply plus_one. econstructor. eexact U.
   split; auto. apply set_var_lessdef; auto. apply Val.lessdef_trans with v'; auto.
+- exists e1', m2'; split.
+  eapply plus_two. constructor. constructor. auto.
+  simpl; auto.  
 Qed.
 
 (** If-conversion *)
@@ -1170,8 +1174,8 @@ Remark sel_builtin_nolabel:
   forall (hf: helper_functions) optid ef args, nolabel' (sel_builtin optid ef args).
 Proof.
   unfold sel_builtin; intros; red; intros.
-  destruct optid; auto. destruct ef; auto. destruct lookup_builtin_function; auto.
-  destruct sel_known_builtin; auto. 
+  destruct ef; auto. destruct lookup_builtin_function; auto.
+  destruct optid; auto. destruct sel_known_builtin; auto. 
 Qed. 
 
 Remark find_label_commut:
@@ -1234,34 +1238,34 @@ Definition measure (s: Cminor.state) : nat :=
 Lemma sel_step_correct:
   forall S1 t S2, Cminor.step ge S1 t S2 ->
   forall T1, match_states S1 T1 -> wt_state S1 ->
-  (exists T2, step tge T1 t T2 /\ match_states S2 T2)
+  (exists T2, plus step tge T1 t T2 /\ match_states S2 T2)
   \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 T1)%nat
   \/ (exists S3 T2, star Cminor.step ge S2 E0 S3 /\ step tge T1 t T2 /\ match_states S3 T2).
 Proof.
   induction 1; intros T1 ME WTS; inv ME; try (monadInv TS).
 - (* skip seq *)
-  inv MC. left; econstructor; split. econstructor. econstructor; eauto.
+  inv MC. left; econstructor; split. apply plus_one; econstructor. econstructor; eauto.
   inv H.
 - (* skip block *)
-  inv MC. left; econstructor; split. econstructor. econstructor; eauto.
+  inv MC. left; econstructor; split. apply plus_one; econstructor. econstructor; eauto.
   inv H.
 - (* skip call *)
   exploit Mem.free_parallel_extends; eauto. intros [m2' [A B]].
   left; econstructor; split.
-  econstructor. eapply match_is_call_cont; eauto.
+  apply plus_one; econstructor. eapply match_is_call_cont; eauto.
   erewrite stackspace_function_translated; eauto.
   econstructor; eauto. eapply match_is_call_cont; eauto.
 - (* assign *)
   exploit sel_expr_correct; eauto. intros [v' [A B]].
   left; econstructor; split.
-  econstructor; eauto.
+  apply plus_one; econstructor; eauto.
   econstructor; eauto. apply set_var_lessdef; auto.
 - (* store *)
   exploit sel_expr_correct. try apply LINK. try apply HF. eexact H. eauto. eauto. intros [vaddr' [A B]].
   exploit sel_expr_correct. try apply LINK. try apply HF. eexact H0. eauto. eauto. intros [v' [C D]].
   exploit Mem.storev_extends; eauto. intros [m2' [P Q]].
   left; econstructor; split.
-  eapply eval_store; eauto.
+  apply plus_one; eapply eval_store; eauto.
   econstructor; eauto.
 - (* Scall *)
   exploit classify_call_correct; eauto.
@@ -1271,7 +1275,7 @@ Proof.
   exploit sel_exprlist_correct; eauto. intros [vargs' [C D]].
   exploit functions_translated; eauto. intros (cunit' & fd' & U & V & W).
   left; econstructor; split.
-  econstructor; eauto. econstructor; eauto.
+  apply plus_one; econstructor; eauto. econstructor; eauto.
   eapply sig_function_translated; eauto.
   eapply match_callstate with (cunit := cunit'); eauto.
   eapply match_cont_call with (cunit := cunit) (hf := hf); eauto.
@@ -1280,7 +1284,7 @@ Proof.
   exploit sel_exprlist_correct; eauto. intros [vargs' [C D]].
   exploit functions_translated; eauto. intros (cunit' & fd' & X & Y & Z).
   left; econstructor; split.
-  econstructor; eauto.
+  apply plus_one; econstructor; eauto.
   subst vf. econstructor; eauto. rewrite symbols_preserved; eauto.
   eapply sig_function_translated; eauto.
   eapply match_callstate with (cunit := cunit'); eauto.
@@ -1295,6 +1299,7 @@ Proof.
   exploit sel_exprlist_correct; eauto. intros [vargs' [C D]].
   exploit functions_translated; eauto. intros (cunit' & fd' & E & F & G).
   left; econstructor; split.
+  apply plus_one.
   exploit classify_call_correct. eexact LINK. eauto. eauto.
   destruct (classify_call (prog_defmap cunit)) as [ | id | ef]; intros.
   econstructor; eauto. econstructor; eauto. eapply sig_function_translated; eauto.
@@ -1308,7 +1313,7 @@ Proof.
   left; econstructor; split. eexact P. econstructor; eauto.
 - (* Seq *)
   left; econstructor; split.
-  constructor.
+  apply plus_one; constructor.
   econstructor; eauto. constructor; auto.
 - (* Sifthenelse *)
   simpl in TS. destruct (if_conversion (known_id f) env a s1 s2) as [s|] eqn:IFC; monadInv TS.
@@ -1320,21 +1325,21 @@ Proof.
 + exploit sel_expr_correct; eauto. intros [v' [A B]].
   assert (Val.bool_of_val v' b). inv B. auto. inv H0.
   left; exists (State f' (if b then x else x0) k' sp e' m'); split.
-  econstructor; eauto. eapply eval_condexpr_of_expr; eauto.
+  apply plus_one; econstructor; eauto. eapply eval_condexpr_of_expr; eauto.
   econstructor; eauto. destruct b; auto.
 - (* Sloop *)
-  left; econstructor; split. constructor. econstructor; eauto.
+  left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
   constructor; auto. simpl; rewrite EQ; auto.
 - (* Sblock *)
-  left; econstructor; split. constructor. econstructor; eauto. constructor; auto.
+  left; econstructor; split. apply plus_one; constructor. econstructor; eauto. constructor; auto.
 - (* Sexit seq *)
-  inv MC. left; econstructor; split. constructor. econstructor; eauto.
+  inv MC. left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
   inv H.
 - (* Sexit0 block *)
-  inv MC. left; econstructor; split. constructor. econstructor; eauto.
+  inv MC. left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
   inv H.
 - (* SexitS block *)
-  inv MC. left; econstructor; split. constructor. econstructor; eauto.
+  inv MC. left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
   inv H.
 - (* Sswitch *)
   inv H0; simpl in TS.
@@ -1342,29 +1347,29 @@ Proof.
   destruct (validate_switch Int.modulus default cases ct) eqn:VALID; inv TS.
   exploit sel_expr_correct; eauto. intros [v' [A B]]. inv B.
   left; econstructor; split.
-  econstructor. eapply sel_switch_int_correct; eauto.
+  apply plus_one; econstructor. eapply sel_switch_int_correct; eauto.
   econstructor; eauto.
 + set (ct := compile_switch Int64.modulus default cases) in *.
   destruct (validate_switch Int64.modulus default cases ct) eqn:VALID; inv TS.
   exploit sel_expr_correct; eauto. intros [v' [A B]]. inv B.
   left; econstructor; split.
-  econstructor. eapply sel_switch_long_correct; eauto.
+  apply plus_one; econstructor. eapply sel_switch_long_correct; eauto.
   econstructor; eauto.
 - (* Sreturn None *)
   exploit Mem.free_parallel_extends; eauto. intros [m2' [P Q]].
   erewrite <- stackspace_function_translated in P by eauto.
   left; econstructor; split.
-  econstructor. simpl; eauto.
+  apply plus_one; econstructor. simpl; eauto.
   econstructor; eauto. eapply call_cont_commut; eauto.
 - (* Sreturn Some *)
   exploit Mem.free_parallel_extends; eauto. intros [m2' [P Q]].
   erewrite <- stackspace_function_translated in P by eauto.
   exploit sel_expr_correct; eauto. intros [v' [A B]].
   left; econstructor; split.
-  econstructor; eauto.
+  apply plus_one; econstructor; eauto.
   econstructor; eauto. eapply call_cont_commut; eauto.
 - (* Slabel *)
-  left; econstructor; split. constructor. econstructor; eauto.
+  left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
 - (* Sgoto *)
   assert (sel_stmt (prog_defmap cunit) (known_id f) env (Cminor.fn_body f) = OK (fn_body f')).
   { monadInv TF; simpl. congruence. }
@@ -1375,7 +1380,7 @@ Proof.
   as [[s'' k'']|] eqn:?; intros; try contradiction.
   destruct H1.
   left; econstructor; split.
-  econstructor; eauto.
+  apply plus_one; econstructor; eauto.
   econstructor; eauto.
 - (* internal function *)
   destruct TF as (hf & HF & TF). 
@@ -1383,7 +1388,7 @@ Proof.
   exploit Mem.alloc_extends. eauto. eauto. apply Z.le_refl. apply Z.le_refl.
   intros [m2' [A B]].
   left; econstructor; split.
-  econstructor; simpl; eauto.
+  apply plus_one; econstructor; simpl; eauto.
   econstructor; simpl; eauto.
   apply match_cont_other; auto.
   apply set_locals_lessdef. apply set_params_lessdef; auto.
@@ -1393,7 +1398,7 @@ Proof.
   exploit external_call_mem_extends; eauto.
   intros [vres' [m2 [A [B [C D]]]]].
   left; econstructor; split.
-  econstructor. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+  apply plus_one; econstructor. eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   econstructor; eauto.
 - (* external call turned into a Sbuiltin *)
   exploit sel_builtin_correct; eauto. intros (e2' & m2' & P & Q & R).
@@ -1401,7 +1406,7 @@ Proof.
 - (* return *)
   inv MC.
   left; econstructor; split.
-  econstructor.
+  apply plus_one; econstructor.
   econstructor; eauto. destruct optid; simpl; auto. apply set_var_lessdef; auto.
 - (* return of an external call turned into a Sbuiltin *)
   right; left; split. simpl; omega. split. auto. econstructor; eauto.
@@ -1444,7 +1449,7 @@ Proof.
   unfold MS.
   exploit sel_step_correct; eauto.
   intros [(T2 & D & E) | [(D & E & F) | (S3 & T2 & D & E & F)]].
-+ exists S2, T2. intuition auto using star_refl, plus_one.
++ exists S2, T2. intuition auto using star_refl.
 + subst t. exists S2, T1. intuition auto using star_refl.
 + assert (wt_state S3) by (eapply subject_reduction_star; eauto using wt_prog).
   exists S3, T2. intuition auto using plus_one.
