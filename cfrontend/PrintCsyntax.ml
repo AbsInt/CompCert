@@ -268,6 +268,9 @@ let rec expr p (prec, e) =
   | Ebuiltin(EF_debug(kind,txt,_),_,args,_) ->
       fprintf p "__builtin_debug@[<hov 1>(%d,%S%a)@]"
         (P.to_int kind) (extern_atom txt) exprlist (false,args)
+  | Ebuiltin(EF_builtin(name, _), _, args, _) ->
+      fprintf p "%s@[<hov 1>(%a)@]"
+                (camlstring_of_coqstring name) exprlist (true, args)
   | Ebuiltin(_, _, args, _) ->
       fprintf p "<unknown builtin>@[<hov 1>(%a)@]" exprlist (true, args)
   | Eparen(a1, tycast, ty) ->
