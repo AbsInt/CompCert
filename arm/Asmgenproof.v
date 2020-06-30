@@ -225,7 +225,7 @@ Proof.
   TailNoLabel.
   eapply tail_nolabel_trans; TailNoLabel.
 Qed.
-Hint Resolve indexed_memory_access_label.
+Hint Resolve indexed_memory_access_label: labels.
 
 Remark loadind_label:
   forall base ofs ty dst k c, loadind base ofs ty dst k = OK c -> tail_nolabel k c.
