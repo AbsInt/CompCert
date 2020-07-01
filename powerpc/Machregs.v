@@ -232,7 +232,7 @@ Definition mregs_for_builtin (ef: external_function): list (option mreg) * list 
     | EF_builtin id sg =>
       if string_dec id "__builtin_atomic_exchange" then ((Some R3)::(Some R4)::(Some R5)::nil,nil)
       else if string_dec id "__builtin_sync_fetch_and_add" then ((Some R4)::(Some R5)::nil,(Some R3)::nil)
-      else if string_dec id "___builtin_atomic_compare_exchange" then ((Some R4)::(Some R5)::(Some R6)::nil, (Some R3):: nil)
+      else if string_dec id "__builtin_atomic_compare_exchange" then ((Some R4)::(Some R5)::(Some R6)::nil, (Some R3):: nil)
       else (nil, nil)
     | _ => (nil, nil)
   end.
