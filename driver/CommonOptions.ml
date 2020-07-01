@@ -24,9 +24,24 @@ let version_string tool_name =
 let print_version_and_exit tool_name () =
   Printf.printf "%s" (version_string tool_name); exit 0
 
+let version_file_string tool_name =
+  if Version.buildnr <> "" && Version.tag <> "" then
+    Printf.sprintf "This is CompCert %s,\nVersion: %s,\nBuild: %s,\nTag: %s\n" tool_name Version.version Version.buildnr Version.tag
+  else
+    Printf.sprintf "The CompCert %s,\nversion %s\n" tool_name Version.version
+
+let print_version_file_and_exit tool_name file =
+  let oc = open_out_bin file in
+  output_string oc (version_file_string tool_name);
+  close_out_noerr oc;
+  exit 0
+
 let version_options tool_name =
   [ Exact "-version", Unit (print_version_and_exit tool_name);
-    Exact "--version", Unit (print_version_and_exit tool_name);]
+    Exact "--version", Unit (print_version_and_exit tool_name);
+    Exact "-version-file", String (print_version_file_and_exit tool_name);
+    Exact "--version-file", String (print_version_file_and_exit tool_name);
+  ]
 
 (* Language support options *)
 
@@ -76,6 +91,7 @@ let general_help =
   -v             Print external commands before invoking them
   -timings       Show the time spent in various compiler passes
   -version       Print the version string and exit
+  -version-file <file> Print version inforation to <file> and exit
   -target <value> Generate code for the given target
   -conf <file>   Read configuration from file
   @<file>        Read command line options from <file>
