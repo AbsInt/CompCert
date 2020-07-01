@@ -767,6 +767,8 @@ let expand_builtin_inline name args res =
       emit (Pori (GPR0, GPR0, Cint _0))
   (* atomic operations *)
   | "__builtin_atomic_exchange", [BA (IR a1); BA (IR a2); BA (IR a3)],_ ->
+      (* Register constraints imposed by Machregs.v *)
+      assert(a1 = GPR3 && a2 = GPR4 && a3 = GPR5);
       emit (Plwz (GPR10,Cint _0,a2));
       emit (Psync);
       let lbl = new_label() in
@@ -786,6 +788,8 @@ let expand_builtin_inline name args res =
       emit (Pisync);
       emit (Pstw (GPR0,Cint _0, a2))
   | "__builtin_sync_fetch_and_add", [BA (IR a1); BA(IR a2)], BR (IR res) ->
+      (* Register constraints imposed by Machregs.v *)
+      assert (a1 = GPR4 && a2 = GPR5 && res = GPR3);
       let lbl = new_label() in
       emit (Psync);
       emit (Plabel lbl);
@@ -795,6 +799,8 @@ let expand_builtin_inline name args res =
       emit (Pbf (CRbit_2, lbl));
       emit (Pisync);
   | "__builtin_atomic_compare_exchange", [BA (IR dst); BA(IR exp); BA (IR des)],  BR (IR res) ->
+      (* Register constraints imposed by Machregs.v *)
+      assert (dst = GPR4 && exp = GPR5 && des = GPR6 && res = GPR3);
       let lbls = new_label ()
       and lblneq = new_label ()
       and lblsucc = new_label () in
