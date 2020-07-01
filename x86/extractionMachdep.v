@@ -15,7 +15,7 @@
 
 (* Additional extraction directives specific to the x86-64 port *)
 
-Require SelectOp ConstpropOp.
+From compcert Require SelectOp ConstpropOp.
 
 (* SelectOp *)
 

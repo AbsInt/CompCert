@@ -1,0 +1,12 @@
+(coq.theory
+ (name compcert)
+ (package compcert)
+ (flags -w -undeclared-scope)
+ (modules :standard \ common.Subtyping x86.extractionMachdep))
+
+(include_subdirs qualified)
+
+(dirs :standard \ arm powerpc riscV aarch64 x86_64)
+
+(env
+ (_ (binaries tools/ndfun.exe)))
