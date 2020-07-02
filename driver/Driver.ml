@@ -238,12 +238,6 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
 let print_usage_and_exit () =
   printf "%s" usage_string; exit 0
 
-let enforce_buildnr nr =
-  let build = int_of_string Version.buildnr in
-  if nr != build then
-    fatal_error no_loc "Mismatching builds: This is CompCert build %d, but QSK requires build %d.\n\
-Please use matching builds of QSK and CompCert." build nr
-
 let dump_mnemonics destfile =
   let oc = open_out_bin destfile in
   let pp = Format.formatter_of_out_channel oc in
@@ -279,10 +273,7 @@ let cmdline_actions =
   @ version_options tool_name @
 (* Enforcing CompCert build numbers for QSKs and mnemonics dump *)
   (if Version.buildnr <> "" then
-    [ Exact "-qsk-enforce-build", Integer enforce_buildnr;
-      Exact "--qsk-enforce-build", Integer enforce_buildnr;
-      Exact "-dump-mnemonics", String  dump_mnemonics;
-    ]
+     [Exact "-dump-mnemonics", String  dump_mnemonics;]
    else []) @
 (* Processing options *)
  [ Exact "-c", Set option_c;
