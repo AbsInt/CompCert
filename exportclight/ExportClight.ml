@@ -514,6 +514,7 @@ let print_clightgen_info p sourcefile normalized =
   fprintf p "@ Definition version := %S." Version.version;
   fprintf p "@ Definition build_number := %S." Version.buildnr;
   fprintf p "@ Definition build_tag := %S." Version.tag;
+  fprintf p "@ Definition build_branch := %S." Version.branch;
   fprintf p "@ Definition arch := %S." Configuration.arch;
   fprintf p "@ Definition model := %S." Configuration.model;
   fprintf p "@ Definition abi := %S." Configuration.abi;

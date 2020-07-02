@@ -400,16 +400,16 @@ let raise_on_errors () =
     raise Abort
 
 let crash exn =
-  if Version.buildnr <> "" && Version.tag <> "" then begin
+  if Version.buildnr <> "" && Version.tag <> "" && Version.branch <> "" then begin
     let backtrace = Printexc.get_backtrace () in
-    eprintf "%tThis is CompCert, Release %s, Build:%s, Tag:%s%t\n"
-      bc Version.version Version.buildnr Version.tag rsc;
+    eprintf "%tThis is CompCert, Release %s, Build:%s, Tag:%s, Branch:%s%t\n"
+      bc Version.version Version.buildnr Version.tag Version.branch rsc;
     eprintf "Backtrace (please include this in your support request):\n%s"
       backtrace;
     eprintf "%tUncaught exception: %s.\n\
 \    Please report this problem to our support.\n\
-\    Error occurred in Build: %s, Tag: %s.\n%t"
-      rc (Printexc.to_string exn) Version.buildnr Version.tag rsc;
+\    Error occurred in Build: %s, Tag: %s, Branch %s.\n%t"
+      rc (Printexc.to_string exn) Version.buildnr Version.tag Version.branch rsc;
     exit 2
   end else begin
     let backtrace = Printexc.get_backtrace ()

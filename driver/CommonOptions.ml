@@ -15,8 +15,9 @@ open Commandline
 
 (* The version string for [tool_name] *)
 let version_string tool_name =
-  if Version.buildnr <> "" && Version.tag <> "" then
-    Printf.sprintf "The CompCert %s, Release: %s, Build: %s, Tag: %s\n" tool_name Version.version Version.buildnr Version.tag
+  if Version.buildnr <> "" && Version.tag <> "" && Version.branch <> "" then
+    Printf.sprintf "The CompCert %s, Release: %s, Build: %s, Tag: %s, Branch %s\n"
+      tool_name Version.version Version.buildnr Version.tag Version.branch
   else
     Printf.sprintf "The CompCert %s, version %s\n" tool_name Version.version
 
@@ -26,7 +27,8 @@ let print_version_and_exit tool_name () =
 
 let version_file_string tool_name =
   if Version.buildnr <> "" && Version.tag <> "" then
-    Printf.sprintf "This is CompCert %s,\nVersion: %s,\nBuild: %s,\nTag: %s\n" tool_name Version.version Version.buildnr Version.tag
+    Printf.sprintf "This is CompCert %s,\nVersion: %s,\nBuild: %s,\nTag: %s,\nBranch: %s\n"
+      tool_name Version.version Version.buildnr Version.tag Version.branch
   else
     Printf.sprintf "The CompCert %s,\nversion %s\n" tool_name Version.version
 

@@ -19,6 +19,7 @@ include VERSION
 BUILDVERSION ?= $(version)
 BUILDNR ?= $(buildnr)
 TAG ?= $(tag)
+BRANCH ?= $(branch)
 
 ifeq ($(wildcard $(ARCH)_$(BITSIZE)),)
 ARCHDIRS=$(ARCH)
@@ -238,12 +239,14 @@ compcert.config: Makefile.config
         echo "COMPCERT_VERSION=$(BUILDVERSION)"; \
         echo "COMPCERT_BUILDNR=$(BUILDNR)"; \
         echo "COMPCERT_TAG=$(TAG)" \
+        echo "COMPCERT_BRANCH=$(BRANCH)" \
         ) > compcert.config
 
 driver/Version.ml: VERSION
 	(echo 'let version = "$(BUILDVERSION)"'; \
          echo 'let buildnr = "$(BUILDNR)"'; \
-         echo 'let tag = "$(TAG)"';) > driver/Version.ml
+         echo 'let tag = "$(TAG)"'; \
+         echo 'let branch = "$(BRANCH)"') > driver/Version.ml
 
 cparser/Parser.v: cparser/Parser.vy
 	@rm -f $@
