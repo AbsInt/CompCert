@@ -16,7 +16,7 @@ open Commandline
 (* The version string for [tool_name] *)
 let version_string tool_name =
   if Version.buildnr <> "" && Version.tag <> "" && Version.branch <> "" then
-    Printf.sprintf "The CompCert %s, Release: %s, Build: %s, Tag: %s, Branch %s\n"
+    Printf.sprintf "The CompCert %s\nVersion: %s\nBuild: %s\nTag: %s\nBranch: %s\n"
       tool_name Version.version Version.buildnr Version.tag Version.branch
   else
     Printf.sprintf "The CompCert %s, version %s\n" tool_name Version.version
@@ -25,16 +25,10 @@ let version_string tool_name =
 let print_version_and_exit tool_name () =
   Printf.printf "%s" (version_string tool_name); exit 0
 
-let version_file_string tool_name =
-  if Version.buildnr <> "" && Version.tag <> "" then
-    Printf.sprintf "This is CompCert %s,\nVersion: %s,\nBuild: %s,\nTag: %s,\nBranch: %s\n"
-      tool_name Version.version Version.buildnr Version.tag Version.branch
-  else
-    Printf.sprintf "The CompCert %s,\nversion %s\n" tool_name Version.version
-
+(* Print the version string to a file and exit the program *)
 let print_version_file_and_exit tool_name file =
   let oc = open_out_bin file in
-  output_string oc (version_file_string tool_name);
+  output_string oc (version_string tool_name);
   close_out_noerr oc;
   exit 0
 
@@ -93,7 +87,6 @@ let general_help =
   -v             Print external commands before invoking them
   -timings       Show the time spent in various compiler passes
   -version       Print the version string and exit
-  -version-file <file> Print version inforation to <file> and exit
   -target <value> Generate code for the given target
   -conf <file>   Read configuration from file
   @<file>        Read command line options from <file>
