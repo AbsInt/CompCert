@@ -547,7 +547,7 @@ case "$coq_ver" in
 esac
 
 echo "Testing OCaml... " | tr -d '\n'
-ocaml_ver=`ocamlopt -version 2>/dev/null`
+ocaml_ver=`ocamlc -version 2>/dev/null`
 case "$ocaml_ver" in
   4.00.*|4.01.*| 4.02.*|4.03.*|4.04.*)
         echo "version $ocaml_ver -- UNSUPPORTED"
@@ -565,9 +565,19 @@ case "$ocaml_ver" in
         missingtools=true;;
 esac
 
+echo "Testing OCaml native-code compiler..." | tr -d '\n'
+ocamlopt_ver=`ocamlopt -version 2>/dev/null`
+if test "$ocamlopt_ver" = "$ocaml_ver"; then
+  echo "yes"
+  ocaml_native_comp=true
+else
+  echo "no, will build to bytecode only"
+  ocaml_native_comp=false
+fi
+
 echo "Testing OCaml .opt compilers... " | tr -d '\n'
-ocaml_opt_ver=`ocamlopt.opt -version 2>/dev/null`
-if test "$ocaml_opt_ver" = "$ocaml_ver"; then
+ocamlopt_opt_ver=`ocamlopt.opt -version 2>/dev/null`
+if test "$ocamlopt_opt_ver" = "$ocaml_ver"; then
   echo "yes"
   ocaml_opt_comp=true
 else
@@ -680,6 +690,7 @@ LIBDIR=$libdir
 MANDIR=$sharedir/man
 SHAREDIR=$sharedir
 COQDEVDIR=$coqdevdir
+OCAML_NATIVE_COMP=$ocaml_native_comp
 OCAML_OPT_COMP=$ocaml_opt_comp
 MENHIR_DIR=$menhir_dir
 COMPFLAGS=-bin-annot

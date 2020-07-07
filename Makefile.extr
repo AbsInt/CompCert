@@ -19,7 +19,8 @@ include Makefile.config
 
 #
 # Variables from Makefile.config:
-# -OCAML_OPT_COMP: can we use the native version
+# -OCAML_NATIVE_COMP: native-code compilation is supported
+# -OCAML_OPT_COMP: can we use the natively-compiled compilers
 # -COMPFLAGS: compile options
 # -LINK_OPT: additional linker flags for the native binary
 #
@@ -71,6 +72,7 @@ OCAMLDEP=ocamldep$(DOTOPT) -slash $(INCLUDES)
 
 OCAMLLEX=ocamllex -q
 MODORDER=tools/modorder .depend.extr
+COPY=cp
 
 PARSERS=cparser/pre_parser.mly
 LEXERS=cparser/Lexer.mll lib/Tokenize.mll \
@@ -88,9 +90,15 @@ ifeq ($(wildcard .depend.extr),.depend.extr)
 
 CCOMP_OBJS:=$(shell $(MODORDER) driver/Driver.cmx)
 
+ifeq ($(OCAML_NATIVE_COMP),true)
 ccomp: $(CCOMP_OBJS)
 	@echo "Linking $@"
 	@$(OCAMLOPT) -o $@ $(LIBS) $(LINK_OPT) $+
+else
+ccomp: ccomp.byte
+	@echo "Copying to $@"
+	@$(COPY) $+ $@
+endif
 
 ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
@@ -98,9 +106,15 @@ ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 
 CLIGHTGEN_OBJS:=$(shell $(MODORDER) exportclight/Clightgen.cmx)
 
+ifeq ($(OCAML_NATIVE_COMP),true)
 clightgen: $(CLIGHTGEN_OBJS)
 	@echo "Linking $@"
 	@$(OCAMLOPT) -o $@ $(LIBS) $(LINK_OPT) $+
+else
+clightgen: clightgen.byte
+	@echo "Copying to $@"
+	@$(COPY) $+ $@
+endif
 
 clightgen.byte: $(CLIGHTGEN_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
