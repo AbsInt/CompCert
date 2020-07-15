@@ -247,7 +247,7 @@ compcert.config: Makefile.config
         echo "COMPCERT_SYSTEM=$(SYSTEM)"; \
         echo "COMPCERT_VERSION=$(BUILDVERSION)"; \
         echo "COMPCERT_BUILDNR=$(BUILDNR)"; \
-        echo "COMPCERT_TAG=$(TAG)" \
+        echo "COMPCERT_TAG=$(TAG)"; \
         echo "COMPCERT_BRANCH=$(BRANCH)" \
         ) > compcert.config
 
