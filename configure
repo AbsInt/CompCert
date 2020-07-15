@@ -592,11 +592,10 @@ case "$menhir_ver" in
   20[0-9][0-9][0-9][0-9][0-9][0-9])
       if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
           echo "version $menhir_ver -- good!"
-          menhir_dir=$(ocamlfind query menhirLib 2>/dev/null \
-                           | tr -d '\r' | tr '\\' '/') || \
-          menhir_dir=$(menhir --suggest-menhirLib \
-                           | tr -d '\r' | tr '\\' '/') || \
+          menhir_dir=$(ocamlfind query menhirLib 2>/dev/null) || \
+          menhir_dir=$(menhir --suggest-menhirLib) || \
           menhir_dir=""
+          menhir_dir=$(echo "$menhir_dir" | tr -d '\r' | tr '\\' '/')
           if test ! -d "$menhir_dir"; then
               echo "Error: cannot determine the location of the Menhir API library."
               echo "This can be due to an incorrect Menhir package."
@@ -852,6 +851,7 @@ CompCert configuration:
     Linker needs '-no-pie'........ $clinker_needs_no_pie
     Math library.................. $libmath
     Build command to use.......... $make
+    Menhir API library............ $menhir_dir
     Binaries installed in......... $bindirexp
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $libdirexp
