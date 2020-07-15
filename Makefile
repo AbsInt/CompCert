@@ -191,9 +191,18 @@ documentation: $(FILES)
           $(filter-out doc/coq2html cparser/Parser.v, $^)
 
 tools/ndfun: tools/ndfun.ml
+ifeq ($(OCAML_NATIVE_COMP),true)
 	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml
+else
+	ocamlc -o tools/ndfun str.cma tools/ndfun.ml
+endif
+
 tools/modorder: tools/modorder.ml
+ifeq ($(OCAML_NATIVE_COMP),true)
 	ocamlopt -o tools/modorder str.cmxa tools/modorder.ml
+else
+	ocamlc -o tools/modorder str.cma tools/modorder.ml
+endif
 
 latexdoc:
 	cd doc; $(COQDOC) --latex -o doc/doc.tex -g $(FILES)
