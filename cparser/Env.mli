@@ -84,3 +84,4 @@ val initial: unit -> t
 val initial_identifiers: unit -> C.ident list
 val initial_declarations: unit -> C.globdecl list
 val set_builtins: C.builtins -> unit
+val is_builtin : string -> bool

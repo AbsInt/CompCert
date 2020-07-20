@@ -2624,6 +2624,8 @@ let elab_fundef genv spec name defs body loc =
        and structs and unions defined in the parameter list. *)
   let (fun_id, sto, inline, noret, ty, kr_params, genv, lenv) =
     elab_fundef_name genv spec name in
+  if Env.is_builtin fun_id.C.name then
+    error loc "definition of builtin function '%s'" fun_id.C.name;
   let s = fun_id.C.name in
   if sto = Storage_auto || sto = Storage_register then
     fatal_error loc "invalid storage class %s on function"

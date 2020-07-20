@@ -316,6 +316,9 @@ let set_builtins blt =
   List.iter Init.add_typedef blt.builtin_typedefs;
   List.iter Init.add_function blt.builtin_functions
 
+let is_builtin name =
+  ident_is_bound !Init.env name
+
 (* Error reporting *)
 
 open Printf
