@@ -1809,6 +1809,16 @@ let elab_expr ctx loc env a =
           (print_typ env) ty (print_typ env) ty'  (print_typ env) ty'  (print_typ env) ty;
       { edesc = ECall(ident, [b2; b3]); etyp = ty },env
 
+  | CALL(VARIABLE "__builtin_constant_p", al) ->
+      begin match al with
+      | [a1] ->
+          let b1,env = elab env a1 in
+          let v = if Ceval.is_constant_expr env b1 then 1L else 0L in
+          intconst v IInt, env
+      | _ ->
+          fatal_error "'__builtin_constant_p' expects one argument"
+      end
+
   | CALL((VARIABLE "__builtin_sel" as a0), al) ->
       begin match al with
       | [a1; a2; a3] ->
