@@ -1808,14 +1808,18 @@ let elab_expr ctx loc env a =
       (preprocessing) --> __builtin_va_arg(ap, ty)
       (elaboration)   --> __builtin_va_arg(ap, sizeof(ty))
 *)
-  | CALL((VARIABLE "__builtin_va_start" as a1), [a2; a3]) ->
+  | CALL((VARIABLE "__builtin_va_start" as a1), args) ->
       if not ctx.ctx_vararg then
         error "'va_start' used in function with fixed args";
-      let b1,env = elab env a1 in
-      let b2,env = elab env a2 in
-      let _b3,env = elab env a3 in
-      { edesc = ECall(b1, [b2]);
-        etyp = TVoid [] },env
+      let b1, env = elab env a1 in
+      begin match args with
+        | [a2; a3] ->
+          let b2,env = elab env a2 in
+          let _b3,env = elab env a3 in
+          { edesc = ECall(b1, [b2]);
+            etyp = TVoid [] },env
+        | _ -> fatal_error "'__builtin_va_start' expects 2 arguments"
+      end
 
   | BUILTIN_VA_ARG (a2, a3) ->
       let ident =
