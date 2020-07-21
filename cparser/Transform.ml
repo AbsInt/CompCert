@@ -161,8 +161,8 @@ let stmt ~expr ?(decl = fun env decl -> assert false) env s =
   | Scontinue -> s
   | Sswitch(e, s1) ->
       {s with sdesc = Sswitch(expr s.sloc env Val e, stm s1)}
-  | Slabeled(lbl, s) ->
-      {s with sdesc = Slabeled(lbl, stm s)}
+  | Slabeled(lbl, s1) ->
+      {s with sdesc = Slabeled(lbl, stm s1)}
   | Sgoto lbl -> s
   | Sreturn None -> s
   | Sreturn (Some e) ->
