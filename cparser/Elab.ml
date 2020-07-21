@@ -459,6 +459,23 @@ let elab_simple_string loc wide chars =
   | CStr s -> s
   | _ -> error loc "cannot use wide string literal in 'asm'"; ""
 
+(** Elaboration and checking of static assertions *)
+
+let elab_static_assert env exp loc_exp msg loc_msg loc =
+  let (exp, env) = !elab_expr_f loc_exp env exp in
+  match Ceval.integer_expr env exp  with
+  | None ->
+      error loc_exp "expression in static assertion is not an integer constant"
+  | Some n ->
+      if n = 0L then begin
+        match elab_constant loc_msg msg with
+          | CStr s ->
+              error loc "static assertion failed: \"%s\"" s
+          | _ ->
+              (* This can happen with a wide string literal *)
+              error loc "static assertion failed (cannot display associated message)"
+      end
+
 
 (** * Elaboration of type expressions, type specifiers, name declarations *)
 
@@ -954,7 +971,9 @@ and elab_name_group loc env  (spec, namelist) =
 
 (* Elaboration of a field group *)
 
-and elab_field_group env (Field_group (spec, fieldlist, loc)) =
+and elab_field_group env = function
+
+| Field_group (spec, fieldlist, loc) ->
 
   let fieldlist = List.map
     (function (None, x) -> (Name ("", JUSTBASE, [], loc), x)
@@ -1019,6 +1038,10 @@ and elab_field_group env (Field_group (spec, fieldlist, loc)) =
   in
   (mmap2 elab_bitfield env' fieldlist names)
 
+| Field_group_static_assert(exp, loc_exp, msg, loc_msg, loc) ->
+    elab_static_assert env exp loc_exp msg loc_msg loc;
+    ([], env)
+  
 (* Elaboration of a struct or union. C99 section 6.7.2.1 *)
 
 and elab_struct_or_union_info kind loc env members attrs =
@@ -2837,6 +2860,11 @@ let elab_definition (for_loop: bool) (local: bool) (nonstatic_inline: bool)
   (* pragma *)
   | PRAGMA(s, loc) ->
       emit_elab env loc (Gpragma s);
+      ([], env)
+
+  (* static assertion *)
+  | STATIC_ASSERT(exp, loc_exp, msg, loc_msg, loc) ->
+      elab_static_assert env exp loc_exp msg loc_msg loc;
       ([], env)
 
 (* Extended asm *)

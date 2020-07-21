@@ -44,6 +44,7 @@ let get_definitionloc (d : definition) : loc =
   | FUNDEF(_, _, _, _, l) -> l
   | DECDEF(_, l) -> l
   | PRAGMA(_, l) -> l
+  | STATIC_ASSERT(_, _, _, _, l) -> l
 
 let get_statementloc (s : statement) : loc =
 begin

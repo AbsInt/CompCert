@@ -35,6 +35,7 @@ let () =
       ("_Bool", fun loc -> UNDERSCORE_BOOL loc);
       ("_Complex", fun loc -> reserved_keyword loc "_Complex");
       ("_Imaginary", fun loc -> reserved_keyword loc "_Imaginary");
+      ("_Static_assert", fun loc -> STATIC_ASSERT loc);
       ("__alignof", fun loc -> ALIGNOF loc);
       ("__alignof__", fun loc -> ALIGNOF loc);
       ("__asm", fun loc -> ASM loc);
@@ -577,6 +578,7 @@ and singleline_comment = parse
       | Pre_parser.SLASH loc -> loop (Parser.SLASH loc)
       | Pre_parser.STAR loc -> loop (Parser.STAR loc)
       | Pre_parser.STATIC loc -> loop (Parser.STATIC loc)
+      | Pre_parser.STATIC_ASSERT loc -> loop (Parser.STATIC_ASSERT loc)
       | Pre_parser.STRING_LITERAL (wide, str, loc) ->
           (* Merge consecutive string literals *)
           let rec doConcat wide str =
