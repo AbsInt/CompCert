@@ -4689,6 +4689,114 @@ translation_unit_file: PACKED LPAREN BUILTIN_OFFSETOF LPAREN VOID COMMA PRE_NAME
 
 Ill-formed __builtin_offsetof.
 At this point, a member-designator is expected.
+# ------------------------------------------------------------------------------
+
+translation_unit_file: STATIC_ASSERT XOR_ASSIGN
+##
+## Ends in an error in state: 76.
+##
+## static_assert_declaration -> STATIC_ASSERT . LPAREN conditional_expression COMMA STRING_LITERAL RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED NORETURN MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN EOF ENUM DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BUILTIN_OFFSETOF BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## STATIC_ASSERT
+##
+Ill-formed _Static_assert.
+At this point, an opening parenthesis '(' is expected.
+
+#------------------------------------------------------------------------------
+
+translation_unit_file: STATIC_ASSERT LPAREN XOR_ASSIGN
+##
+## Ends in an error in state: 77.
+##
+## static_assert_declaration -> STATIC_ASSERT LPAREN . conditional_expression COMMA STRING_LITERAL RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED NORETURN MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN EOF ENUM DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BUILTIN_OFFSETOF BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## STATIC_ASSERT LPAREN
+##
+
+Ill-formed _Static_assert.
+At this point, a constant expression is expected.
+
+#------------------------------------------------------------------------------
+
+translation_unit_file: STATIC_ASSERT LPAREN STRING_LITERAL XOR_ASSIGN
+##
+## Ends in an error in state: 167.
+##
+## static_assert_declaration -> STATIC_ASSERT LPAREN conditional_expression . COMMA STRING_LITERAL RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED NORETURN MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN EOF ENUM DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BUILTIN_OFFSETOF BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## STATIC_ASSERT LPAREN conditional_expression
+##
+## WARNING: This example involves spurious reductions.
+## This implies that, although the LR(1) items shown above provide an
+## accurate view of the past (what has been recognized so far), they
+## may provide an INCOMPLETE view of the future (what was expected next).
+## In state 80, spurious reduction of production primary_expression -> string_literals_list
+## In state 82, spurious reduction of production postfix_expression -> primary_expression
+## In state 83, spurious reduction of production unary_expression -> postfix_expression
+## In state 79, spurious reduction of production cast_expression -> unary_expression
+## In state 110, spurious reduction of production multiplicative_expression -> cast_expression
+## In state 104, spurious reduction of production additive_expression -> multiplicative_expression
+## In state 123, spurious reduction of production shift_expression -> additive_expression
+## In state 100, spurious reduction of production relational_expression -> shift_expression
+## In state 116, spurious reduction of production equality_expression -> relational_expression
+## In state 132, spurious reduction of production and_expression -> equality_expression
+## In state 140, spurious reduction of production exclusive_or_expression -> and_expression
+## In state 141, spurious reduction of production inclusive_or_expression -> exclusive_or_expression
+## In state 142, spurious reduction of production logical_and_expression -> inclusive_or_expression
+## In state 126, spurious reduction of production logical_or_expression -> logical_and_expression
+## In state 124, spurious reduction of production conditional_expression -> logical_or_expression
+##
+
+Ill-formed _Static_assert.
+At this point, a comma ',' is expected.
+
+#------------------------------------------------------------------------------
+
+translation_unit_file: STATIC_ASSERT LPAREN STRING_LITERAL COMMA XOR_ASSIGN
+##
+## Ends in an error in state: 168.
+##
+## static_assert_declaration -> STATIC_ASSERT LPAREN conditional_expression COMMA . STRING_LITERAL RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED NORETURN MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN EOF ENUM DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BUILTIN_OFFSETOF BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## STATIC_ASSERT LPAREN conditional_expression COMMA
+##
+
+Ill-formed _Static_assert.
+At this point, a string literal is expected.
+
+#------------------------------------------------------------------------------
+
+translation_unit_file: STATIC_ASSERT LPAREN STRING_LITERAL COMMA STRING_LITERAL XOR_ASSIGN
+##
+## Ends in an error in state: 169.
+##
+## static_assert_declaration -> STATIC_ASSERT LPAREN conditional_expression COMMA STRING_LITERAL . RPAREN SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED NORETURN MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN EOF ENUM DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BUILTIN_OFFSETOF BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## STATIC_ASSERT LPAREN conditional_expression COMMA STRING_LITERAL
+##
+
+Ill-formed _Static_assert.
+At this point, a closing parenthesis ')' is expected.
+
+#------------------------------------------------------------------------------
+
+translation_unit_file: STATIC_ASSERT LPAREN STRING_LITERAL COMMA STRING_LITERAL RPAREN XOR_ASSIGN
+##
+## Ends in an error in state: 170.
+##
+## static_assert_declaration -> STATIC_ASSERT LPAREN conditional_expression COMMA STRING_LITERAL RPAREN . SEMICOLON [ WHILE VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL TYPEDEF TILDE SWITCH STRUCT STRING_LITERAL STATIC_ASSERT STATIC STAR SIZEOF SIGNED SHORT SEMICOLON RETURN RESTRICT REGISTER RBRACE PRE_NAME PRAGMA PLUS PACKED NORETURN MINUS LPAREN LONG LBRACE INT INLINE INC IF GOTO FOR FLOAT EXTERN EOF ENUM DOUBLE DO DEFAULT DEC CONTINUE CONSTANT CONST CHAR CASE BUILTIN_VA_ARG BUILTIN_OFFSETOF BREAK BANG AUTO ATTRIBUTE ASM AND ALIGNOF ALIGNAS ]
+##
+## The known suffix of the stack is as follows:
+## STATIC_ASSERT LPAREN conditional_expression COMMA STRING_LITERAL RPAREN
+##
+
+Ill-formed _Static_assert.
+At this point, a semicolon ';' is expected.
 
 #------------------------------------------------------------------------------
 
