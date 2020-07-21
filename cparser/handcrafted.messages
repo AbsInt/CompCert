@@ -4700,6 +4700,7 @@ translation_unit_file: STATIC_ASSERT XOR_ASSIGN
 ## The known suffix of the stack is as follows:
 ## STATIC_ASSERT
 ##
+
 Ill-formed _Static_assert.
 At this point, an opening parenthesis '(' is expected.
 
