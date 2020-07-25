@@ -1,4 +1,4 @@
-/* Fun with builtins */
+/* PowerPC-specific builtins */
 
 #include <stdio.h>
 #include <math.h>
@@ -11,7 +11,6 @@ char * check_relative_error(double exact, double actual, double precision)
 
 unsigned int x = 0x12345678;
 unsigned int y = 0xDEADBEEF;
-unsigned long long xx = 0x1234567812345678ULL;
 double a = 3.14159;
 double b = 2.718;
 double c = 1.414;
@@ -23,19 +22,9 @@ int main(int argc, char ** argv)
 
   printf("mulhw(%x, %x) = %x\n", x, y, __builtin_mulhw(x, y));
   printf("mulhwu(%x, %x) = %x\n", x, y, __builtin_mulhwu(x, y));
-  printf("clz(%x) = %d\n", x, __builtin_clz(x));
-  printf("clzll(%llx) = %d\n", (unsigned long long) x, __builtin_clzll(x));
-  printf("clzll(%llx) = %d\n", xx, __builtin_clzll(xx));
-  z = __builtin_bswap(x);
-  printf("clzll(%lx) = %d\n", z, __builtin_clzll(z));
-  printf("bswap(%x) = %x\n", x, __builtin_bswap(x));
-  printf("bswap16(%x) = %x\n", s, __builtin_bswap16(s));
 
   printf("fmadd(%f, %f, %f) = %f\n", a, b, c, __builtin_fmadd(a, b, c));
   printf("fmsub(%f, %f, %f) = %f\n", a, b, c, __builtin_fmsub(a, b, c));
-  printf("fabs(%f) = %f\n", a, __builtin_fabs(a));
-  printf("fabs(%f) = %f\n", -a, __builtin_fabs(-a));
-  printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
   printf("frsqrte(%f) = %s\n",
          a, check_relative_error(1.0 / sqrt(a), __builtin_frsqrte(a), 1./32.));
   printf("fres(%f) = %s\n",

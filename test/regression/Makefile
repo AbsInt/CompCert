@@ -22,7 +22,7 @@ TESTS=int32 int64 floats floats-basics floats-lit \
 
 TESTS_COMP=attribs1 bitfields1 bitfields2 bitfields3 bitfields4 \
   bitfields5 bitfields6 bitfields7 bitfields8 \
-  builtins-$(ARCH) packedstruct1 packedstruct2 alignas \
+  builtins-common builtins-$(ARCH) packedstruct1 packedstruct2 alignas \
   varargs1 varargs2 varargs3 sections alias aligned
 
 # Can run, both in compiled mode and in interpreter mode,
