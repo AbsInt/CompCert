@@ -194,6 +194,17 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_inline_asm txt sg clob => destroyed_by_clobber clob
   | EF_memcpy sz al => R5 :: R6 :: R7 :: F0 :: nil
+  | EF_builtin name sg =>
+      if string_dec name "__builtin_clz"
+      || string_dec name "__builtin_clzl"
+      || string_dec name "__builtin_clzll" then
+        R5 :: R8 :: R9 :: nil
+      else if string_dec name "__builtin_ctz"
+      || string_dec name "__builtin_ctzl"
+      || string_dec name "__builtin_ctzll" then
+        R6 :: R8 :: R9 :: nil
+      else
+        nil
   | _ => nil
   end.
 
@@ -213,6 +224,20 @@ Definition mregs_for_builtin (ef: external_function): list (option mreg) * list(
   | EF_builtin name sg =>
       if (negb Archi.ptr64) && string_dec name "__builtin_bswap64" then
         (Some R6 :: Some R5 :: nil, Some R5 :: Some R6 :: nil)
+      else if string_dec name "__builtin_clz"
+           || string_dec name "__builtin_clzl" then
+        (Some R5 :: nil, Some R7 :: nil)
+      else if string_dec name "__builtin_clzll" then
+        if Archi.ptr64
+        then (Some R5 :: nil, Some R7 :: nil)
+        else (Some R6 :: Some R5 :: nil, Some R7 :: nil)
+      else if string_dec name "__builtin_ctz"
+           || string_dec name "__builtin_ctzl" then
+        (Some R6 :: nil, Some R7 :: nil)
+      else if string_dec name "__builtin_ctzll" then
+        if Archi.ptr64
+        then (Some R6 :: nil, Some R7 :: nil)
+        else (Some R6 :: Some R5 :: nil, Some R7 :: nil)
       else
         (nil, nil)
   | _ =>

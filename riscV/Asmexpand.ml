@@ -394,6 +394,90 @@ let expand_bswap64 d s =
   emit (Psrlil(X31, X s, coqint_of_camlint 56l));
   emit (Porl(d, X X1, X X31))
 
+(* Count leading zeros.  Algorithm 5-7 from Hacker's Delight,
+   re-rolled as a loop to produce more compact code. *)
+
+let expand_clz ~sixtyfour ~splitlong =
+  (* Input:  X in X5 or (X5, X6) if splitlong
+     Result: N in X7
+     Temporaries: S in X8, Y in X9 *)
+  let lbl1 = new_label() in
+  let lbl2 = new_label() in
+  (* N := bitsize of X's type (32 or 64) *)
+  expand_loadimm32 X7 (coqint_of_camlint
+                         (if sixtyfour || splitlong then 64l else 32l));
+  (* S := initial shift amount (16 or 32) *)                         
+  expand_loadimm32 X8 (coqint_of_camlint (if sixtyfour then 32l else 16l));
+  if splitlong then begin
+    (* if (Xhigh == 0) goto lbl1 *)
+    emit (Pbeqw(X X6, X0, lbl1));
+    (* N := 32 *)
+    expand_loadimm32 X7 (coqint_of_camlint 32l);
+    (* X := Xhigh *)
+    emit (Pmv(X5, X6))
+  end;
+  (* lbl1: *)
+  emit (Plabel lbl1);
+  (* Y := X >> S *)
+  emit (if sixtyfour then Psrll(X9, X X5, X X8) else Psrlw(X9, X X5, X X8));
+  (* if (Y == 0) goto lbl2 *)
+  emit (if sixtyfour then Pbeql(X X9, X0, lbl2) else Pbeqw(X X9, X0, lbl2));
+  (* N := N - S *)
+  emit (Psubw(X7, X X7, X X8));
+  (* X := Y *)
+  emit (Pmv(X5, X9));
+  (* lbl2: *)
+  emit (Plabel lbl2);
+  (* S := S / 2 *)
+  emit (Psrliw(X8, X X8, _1));
+  (* if (S != 0) goto lbl1; *)
+  emit (Pbnew(X X8, X0, lbl1));
+  (* N := N - X *)
+  emit (Psubw(X7, X X7, X X5))
+
+(* Count trailing zeros.  Algorithm 5-14 from Hacker's Delight,
+   re-rolled as a loop to produce more compact code. *)
+
+let expand_ctz ~sixtyfour ~splitlong =
+  (* Input:  X in X6 or (X5, X6) if splitlong
+     Result: N in X7
+     Temporaries: S in X8, Y in X9 *)
+  let lbl1 = new_label() in
+  let lbl2 = new_label() in
+  (* N := bitsize of X's type (32 or 64) *)
+  expand_loadimm32 X7 (coqint_of_camlint
+                         (if sixtyfour || splitlong then 64l else 32l));
+  (* S := initial shift amount (16 or 32) *)                         
+  expand_loadimm32 X8 (coqint_of_camlint (if sixtyfour then 32l else 16l));
+  if splitlong then begin
+    (* if (Xlow == 0) goto lbl1 *)
+    emit (Pbeqw(X X5, X0, lbl1));
+    (* N := 32 *)
+    expand_loadimm32 X7 (coqint_of_camlint 32l);
+    (* X := Xlow *)
+    emit (Pmv(X6, X5))
+  end;
+  (* lbl1: *)
+  emit (Plabel lbl1);
+  (* Y := X >> S *)
+  emit (if sixtyfour then Pslll(X9, X X6, X X8) else Psllw(X9, X X6, X X8));
+  (* if (Y == 0) goto lbl2 *)
+  emit (if sixtyfour then Pbeql(X X9, X0, lbl2) else Pbeqw(X X9, X0, lbl2));
+  (* N := N - S *)
+  emit (Psubw(X7, X X7, X X8));
+  (* X := Y *)
+  emit (Pmv(X6, X9));
+  (* lbl2: *)
+  emit (Plabel lbl2);
+  (* S := S / 2 *)
+  emit (Psrliw(X8, X X8, _1));
+  (* if (S != 0) goto lbl1; *)
+  emit (Pbnew(X X8, X0, lbl1));
+  (* N := N - most significant bit of X *)
+  emit (if sixtyfour then Psrlil(X6, X X6, coqint_of_camlint 63l)
+                     else Psrliw(X6, X X6, coqint_of_camlint 31l));
+  emit (Psubw(X7, X X7, X X6))
+
 (* Handling of compiler-inlined builtins *)
 
 let expand_builtin_inline name args res =
@@ -418,6 +502,31 @@ let expand_builtin_inline name args res =
      assert (ah = X6 && al = X5 && rh = X5 && rl = X6);
      expand_bswap32 X5 X5;
      expand_bswap32 X6 X6
+  (* Count zeros *)
+  | "__builtin_clz", [BA(IR a)], BR(IR res) ->
+     assert (a = X5 && res = X7);
+     expand_clz ~sixtyfour:false ~splitlong:false
+  | "__builtin_clzl", [BA(IR a)], BR(IR res) ->
+     assert (a = X5 && res = X7);
+     expand_clz ~sixtyfour:Archi.ptr64 ~splitlong:false
+  | "__builtin_clzll", [BA(IR a)], BR(IR res) ->
+     assert (a = X5 && res = X7);
+     expand_clz ~sixtyfour:true ~splitlong:false
+  | "__builtin_clzll", [BA_splitlong(BA(IR ah), BA(IR al))], BR(IR res) ->
+     assert (al = X5 && ah = X6 && res = X7);
+     expand_clz ~sixtyfour:false ~splitlong:true
+  | "__builtin_ctz", [BA(IR a)], BR(IR res) ->
+     assert (a = X6 && res = X7);
+     expand_ctz ~sixtyfour:false ~splitlong:false
+  | "__builtin_ctzl", [BA(IR a)], BR(IR res) ->
+     assert (a = X6 && res = X7);
+     expand_ctz ~sixtyfour:Archi.ptr64 ~splitlong:false
+  | "__builtin_ctzll", [BA(IR a)], BR(IR res) ->
+     assert (a = X6 && res = X7);
+     expand_ctz ~sixtyfour:true ~splitlong:false
+  | "__builtin_ctzll", [BA_splitlong(BA(IR ah), BA(IR al))], BR(IR res) ->
+     assert (al = X5 && ah = X6 && res = X7);
+     expand_ctz ~sixtyfour:false ~splitlong:true
   (* Float arithmetic *)
   | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
      emit (Pfsqrtd(res, a1))
