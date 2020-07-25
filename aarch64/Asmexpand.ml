@@ -337,7 +337,7 @@ let expand_builtin_inline name args res =
   | "__builtin_bswap16", [BA(IR a1)], BR(IR res) ->
      emit (Prev16(W, res, a1));
      emit (Pandimm(W, res, RR0 res, Z.of_uint 0xFFFF))
-  (* Count leading zeros and leading sign bits *)
+  (* Count leading zeros, leading sign bits, trailing zeros *)
   | "__builtin_clz",  [BA(IR a1)], BR(IR res) ->
      emit (Pclz(W, res, a1))
   | ("__builtin_clzl" | "__builtin_clzll"),  [BA(IR a1)], BR(IR res) ->
@@ -346,6 +346,12 @@ let expand_builtin_inline name args res =
      emit (Pcls(W, res, a1))
   | ("__builtin_clsl" | "__builtin_clsll"),  [BA(IR a1)], BR(IR res) ->
      emit (Pcls(X, res, a1))
+  | "__builtin_ctz",  [BA(IR a1)], BR(IR res) ->
+     emit (Prbit(W, res, a1));
+     emit (Pclz(W, res, res))
+  | ("__builtin_ctzl" | "__builtin_ctzll"),  [BA(IR a1)], BR(IR res) ->
+     emit (Prbit(X, res, a1));
+     emit (Pclz(X, res, res))
  (* Float arithmetic *)
   | "__builtin_fsqrt",  [BA(FR a1)], BR(FR res) ->
      emit (Pfsqrt(D, res, a1))

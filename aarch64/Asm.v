@@ -237,6 +237,7 @@ Inductive instruction: Type :=
   | Pclz (sz: isize) (rd r1: ireg)                                    (**r count leading zero bits *)
   | Prev (sz: isize) (rd r1: ireg)                                    (**r reverse bytes *)
   | Prev16 (sz: isize) (rd r1: ireg)                                  (**r reverse bytes in each 16-bit word *)
+  | Prbit (sz: isize) (rd r1: ireg)                                   (**r reverse bits *)
   (** Conditional data processing *)
   | Pcsel (rd: ireg) (r1 r2: ireg) (c: testcond)                      (**r int conditional move *)
   | Pcset (rd: ireg) (c: testcond)                                    (**r set to 1/0 if cond is true/false *)
@@ -1107,6 +1108,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pclz _ _ _
   | Prev _ _ _
   | Prev16 _ _ _
+  | Prbit _ _ _
   | Pfsqrt _ _ _
   | Pfmadd _ _ _ _ _
   | Pfmsub _ _ _ _ _

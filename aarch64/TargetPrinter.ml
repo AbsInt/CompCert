@@ -375,6 +375,8 @@ module Target : TARGET =
         fprintf oc "	rev	%a, %a\n" ireg (sz, rd) ireg (sz, r1)
     | Prev16(sz, rd, r1) ->
         fprintf oc "	rev16	%a, %a\n" ireg (sz, rd) ireg (sz, r1)
+    | Prbit(sz, rd, r1) ->
+        fprintf oc "	rbit	%a, %a\n" ireg (sz, rd) ireg (sz, r1)
     (* Conditional data processing *)
     | Pcsel(rd, r1, r2, c) ->
         fprintf oc "	csel	%a, %a, %a, %s\n" xreg rd xreg r1 xreg r2 (condition_name c)
