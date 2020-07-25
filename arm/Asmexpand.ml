@@ -349,8 +349,6 @@ let expand_builtin_inline name args res =
      emit (Prsb(res, res, SOimm _32));
      emit (Plabel lbl2)
   (* Float arithmetic *)
-  | "__builtin_fabs",  [BA(FR a1)], BR(FR res) ->
-     emit (Pfabsd (res,a1))
   | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
      emit (Pfsqrt (res,a1))
   (* 64-bit integer arithmetic *)

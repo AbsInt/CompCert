@@ -419,8 +419,6 @@ let expand_builtin_inline name args res =
      expand_bswap32 X5 X5;
      expand_bswap32 X6 X6
   (* Float arithmetic *)
-  | "__builtin_fabs",  [BA(FR a1)], BR(FR res) ->
-     emit (Pfabsd(res, a1))
   | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
      emit (Pfsqrtd(res, a1))
   | "__builtin_fmadd", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->

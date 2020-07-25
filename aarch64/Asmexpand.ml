@@ -347,8 +347,6 @@ let expand_builtin_inline name args res =
   | ("__builtin_clsl" | "__builtin_clsll"),  [BA(IR a1)], BR(IR res) ->
      emit (Pcls(X, res, a1))
  (* Float arithmetic *)
-  | "__builtin_fabs",  [BA(FR a1)], BR(FR res) ->
-     emit (Pfabs(D, res, a1))
   | "__builtin_fsqrt",  [BA(FR a1)], BR(FR res) ->
      emit (Pfsqrt(D, res, a1))
   | "__builtin_fmadd", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->

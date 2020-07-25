@@ -378,10 +378,6 @@ let expand_builtin_inline name args res =
      emit (Paddl_ri(res, coqint_of_camlint 32l));
      emit (Plabel lbl2)
   (* Float arithmetic *)
-  | "__builtin_fabs", [BA(FR a1)], BR(FR res) ->
-     if a1 <> res then
-       emit (Pmovsd_ff (res,a1));
-     emit (Pabsd res) (* This ensures that need_masks is set to true *)
   | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
      emit (Psqrtsd (res,a1))
   | "__builtin_fmax", [BA(FR a1); BA(FR a2)], BR(FR res) ->
