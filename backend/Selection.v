@@ -248,6 +248,8 @@ Function sel_known_builtin (bf: builtin_function) (args: exprlist) :=
       Some (sel_select ty a1 a2 a3)
   | BI_standard BI_fabs, a1 ::: Enil =>
       Some (SelectOp.absf a1)
+  | BI_standard BI_fabsf, a1 ::: Enil =>
+      Some (SelectOp.absfs a1)
   | _, _ =>
       None
   end.

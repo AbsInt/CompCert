@@ -332,6 +332,7 @@ End LOOKUP.
 Inductive standard_builtin : Type :=
   | BI_select (t: typ)
   | BI_fabs
+  | BI_fabsf
   | BI_fsqrt
   | BI_negl
   | BI_addl
@@ -364,6 +365,7 @@ Definition standard_builtin_table : list (string * standard_builtin) :=
  :: ("__builtin_sel", BI_select Tfloat)
  :: ("__builtin_sel", BI_select Tsingle)
  :: ("__builtin_fabs", BI_fabs)
+ :: ("__builtin_fabsf", BI_fabsf)
  :: ("__builtin_fsqrt", BI_fsqrt)
  :: ("__builtin_negl", BI_negl)
  :: ("__builtin_addl", BI_addl)
@@ -396,6 +398,8 @@ Definition standard_builtin_sig (b: standard_builtin) : signature :=
       mksignature (Tint :: t :: t :: nil) t cc_default
   | BI_fabs | BI_fsqrt =>
       mksignature (Tfloat :: nil) Tfloat cc_default
+  | BI_fabsf =>
+      mksignature (Tsingle :: nil) Tsingle cc_default
   | BI_negl =>
       mksignature (Tlong :: nil) Tlong cc_default
   | BI_addl | BI_subl | BI_i64_umulh| BI_i64_smulh 
@@ -428,6 +432,7 @@ Program Definition standard_builtin_sem (b: standard_builtin) : builtin_sem (sig
           | _ => None
         end) _ _
   | BI_fabs => mkbuiltin_n1t Tfloat Tfloat Float.abs
+  | BI_fabsf => mkbuiltin_n1t Tsingle Tsingle Float32.abs
   | BI_fsqrt => mkbuiltin_n1t Tfloat Tfloat Float.sqrt
   | BI_negl => mkbuiltin_n1t Tlong Tlong Int64.neg
   | BI_addl => mkbuiltin_v2t Tlong Val.addl _ _ 

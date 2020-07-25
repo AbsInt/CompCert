@@ -183,6 +183,8 @@ let builtins_generic = {
     (* Floating-point absolute value *)
     "__builtin_fabs",
     (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
+    "__builtin_fabsf",
+    (TFloat(FFloat, []), [TFloat(FFloat, [])], false);
     (* Float arithmetic *)
     "__builtin_fsqrt",
     (TFloat(FDouble, []), [TFloat(FDouble, [])], false);

@@ -394,6 +394,10 @@ Proof.
   inv ARGS; try discriminate. inv H0; try discriminate.
   inv SEL.  
   simpl in SEM; inv SEM. apply eval_absf; auto.
++ (* fabsf *)
+  inv ARGS; try discriminate. inv H0; try discriminate.
+  inv SEL.  
+  simpl in SEM; inv SEM. apply eval_absfs; auto.
 - eapply eval_platform_builtin; eauto.
 Qed.
 
