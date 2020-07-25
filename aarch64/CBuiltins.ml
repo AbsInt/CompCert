@@ -32,14 +32,6 @@ let builtins = {
     "__builtin_fence",
       (TVoid [], [], false);
     (* Integer arithmetic *)
-    "__builtin_bswap64",
-      (TInt(IULongLong, []), [TInt(IULongLong, [])], false);
-    "__builtin_clz",
-      (TInt(IInt, []), [TInt(IUInt, [])], false);
-    "__builtin_clzl",
-      (TInt(IInt, []), [TInt(IULong, [])], false);
-    "__builtin_clzll",
-      (TInt(IInt, []), [TInt(IULongLong, [])], false);
     "__builtin_cls",
       (TInt(IInt, []), [TInt(IInt, [])], false);
     "__builtin_clsl",

@@ -180,6 +180,18 @@ let builtins_generic = {
       (TInt(IUInt, []), [TInt(IUInt, [])], false);
     "__builtin_bswap16",
       (TInt(IUShort, []), [TInt(IUShort, [])], false);
+    "__builtin_clz",
+      (TInt(IInt, []), [TInt(IUInt, [])], false);
+    "__builtin_clzl",
+      (TInt(IInt, []), [TInt(IULong, [])], false);
+    "__builtin_clzll",
+      (TInt(IInt, []), [TInt(IULongLong, [])], false);
+    "__builtin_ctz",
+      (TInt(IInt, []), [TInt(IUInt, [])], false);
+    "__builtin_ctzl",
+      (TInt(IInt, []), [TInt(IULong, [])], false);
+    "__builtin_ctzll",
+      (TInt(IInt, []), [TInt(IULongLong, [])], false);
     (* Floating-point absolute value *)
     "__builtin_fabs",
     (TFloat(FDouble, []), [TFloat(FDouble, [])], false);

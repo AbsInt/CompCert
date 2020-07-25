@@ -22,19 +22,6 @@ let builtins = {
     "__builtin_va_list", TPtr(TVoid [], [])
   ];
   builtin_functions = [
-    (* Integer arithmetic *)
-    "__builtin_clz",
-      (TInt(IInt, []), [TInt(IUInt, [])], false);
-    "__builtin_clzl",
-      (TInt(IInt, []), [TInt(IULong, [])], false);
-    "__builtin_clzll",
-      (TInt(IInt, []), [TInt(IULongLong, [])], false);
-    "__builtin_ctz",
-      (TInt(IInt, []), [TInt(IUInt, [])], false);
-    "__builtin_ctzl",
-      (TInt(IInt, []), [TInt(IULong, [])], false);
-    "__builtin_ctzll",
-      (TInt(IInt, []), [TInt(IULongLong, [])], false);
     (* Memory accesses *)
     "__builtin_read16_reversed",
       (TInt(IUShort, []), [TPtr(TInt(IUShort, [AConst]), [])], false);

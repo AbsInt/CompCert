@@ -28,18 +28,6 @@ let builtins = {
       (TInt(IInt, []), [TInt(IInt, []); TInt(IInt, [])], false);
     "__builtin_mulhwu",
       (TInt(IUInt, []), [TInt(IUInt, []); TInt(IUInt, [])], false);
-    "__builtin_clz",
-      (TInt(IInt, []), [TInt(IUInt, [])], false);
-    "__builtin_clzl",
-      (TInt(IInt, []), [TInt(IULong, [])], false);
-    "__builtin_clzll",
-      (TInt(IInt, []), [TInt(IULongLong, [])], false);
-    "__builtin_ctz",
-      (TInt(IInt, []), [TInt(IUInt, [])], false);
-    "__builtin_ctzl",
-      (TInt(IInt, []), [TInt(IULong, [])], false);
-    "__builtin_ctzll",
-      (TInt(IInt, []), [TInt(IULongLong, [])], false);
     "__builtin_cmpb",
       (TInt (IUInt, []),  [TInt(IUInt, []);TInt(IUInt, [])], false);
     (* Integer arithmetic in 32/64-bit hybrid mode *)
