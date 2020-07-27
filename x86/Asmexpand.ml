@@ -378,7 +378,7 @@ let expand_builtin_inline name args res =
      emit (Paddl_ri(res, coqint_of_camlint 32l));
      emit (Plabel lbl2)
   (* Float arithmetic *)
-  | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
+  | ("__builtin_fsqrt" | "__builtin_sqrt"), [BA(FR a1)], BR(FR res) ->
      emit (Psqrtsd (res,a1))
   | "__builtin_fmax", [BA(FR a1); BA(FR a2)], BR(FR res) ->
      if res = a1 then

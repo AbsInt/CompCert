@@ -367,6 +367,7 @@ Definition standard_builtin_table : list (string * standard_builtin) :=
  :: ("__builtin_fabs", BI_fabs)
  :: ("__builtin_fabsf", BI_fabsf)
  :: ("__builtin_fsqrt", BI_fsqrt)
+ :: ("__builtin_sqrt", BI_fsqrt)
  :: ("__builtin_negl", BI_negl)
  :: ("__builtin_addl", BI_addl)
  :: ("__builtin_subl", BI_subl)

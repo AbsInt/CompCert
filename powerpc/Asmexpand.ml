@@ -594,7 +594,7 @@ let expand_builtin_inline name args res =
       emit (Pfnmadd(res, a1, a2, a3))
   | "__builtin_fnmsub", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       emit (Pfnmsub(res, a1, a2, a3))
-  | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
+  | ("__builtin_fsqrt" | "__builtin_sqrt"), [BA(FR a1)], BR(FR res) ->
       emit (Pfsqrt(res, a1))
   | "__builtin_frsqrte", [BA(FR a1)], BR(FR res) ->
       emit (Pfrsqrte(res, a1))

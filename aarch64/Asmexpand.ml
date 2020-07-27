@@ -353,7 +353,7 @@ let expand_builtin_inline name args res =
      emit (Prbit(X, res, a1));
      emit (Pclz(X, res, res))
  (* Float arithmetic *)
-  | "__builtin_fsqrt",  [BA(FR a1)], BR(FR res) ->
+  | ("__builtin_fsqrt" | "__builtin_sqrt"),  [BA(FR a1)], BR(FR res) ->
      emit (Pfsqrt(D, res, a1))
   | "__builtin_fmadd", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       emit (Pfmadd(D, res, a1, a2, a3))

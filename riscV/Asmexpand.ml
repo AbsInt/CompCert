@@ -528,7 +528,7 @@ let expand_builtin_inline name args res =
      assert (al = X5 && ah = X6 && res = X7);
      expand_ctz ~sixtyfour:false ~splitlong:true
   (* Float arithmetic *)
-  | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
+  | ("__builtin_fsqrt" | "__builtin_sqrt"), [BA(FR a1)], BR(FR res) ->
      emit (Pfsqrtd(res, a1))
   | "__builtin_fmadd", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       emit (Pfmaddd(res, a1, a2, a3))

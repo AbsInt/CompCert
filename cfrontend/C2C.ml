@@ -200,6 +200,8 @@ let builtins_generic = {
     (* Float arithmetic *)
     "__builtin_fsqrt",
     (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
+    "__builtin_sqrt",
+    (TFloat(FDouble, []), [TFloat(FDouble, [])], false);
     (* Block copy *)
     "__builtin_memcpy_aligned",
          (TVoid [],

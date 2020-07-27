@@ -349,7 +349,7 @@ let expand_builtin_inline name args res =
      emit (Prsb(res, res, SOimm _32));
      emit (Plabel lbl2)
   (* Float arithmetic *)
-  | "__builtin_fsqrt", [BA(FR a1)], BR(FR res) ->
+  | ("__builtin_fsqrt" | "__builtin_sqrt"), [BA(FR a1)], BR(FR res) ->
      emit (Pfsqrt (res,a1))
   (* 64-bit integer arithmetic *)
   | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
