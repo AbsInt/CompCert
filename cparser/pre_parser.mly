@@ -610,7 +610,7 @@ gcc_attribute_word:
     {}
 
 static_assert_declaration:
-|  STATIC_ASSERT LPAREN constant_expression COMMA STRING_LITERAL RPAREN SEMICOLON
+|  STATIC_ASSERT LPAREN constant_expression COMMA string_literals_list RPAREN SEMICOLON
     {}
 
 function_specifier:
