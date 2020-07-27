@@ -8,6 +8,7 @@ unsigned long long xx = 0x123456789ABCDEF0ULL;
 double a = 3.14159;
 double b = 2.718;
 double c = 1.414;
+float f = 7.25;
 unsigned short s = 0x1234;
 
 int main(int argc, char ** argv)
@@ -41,7 +42,10 @@ int main(int argc, char ** argv)
   }
   printf("fabs(%f) = %f\n", a, __builtin_fabs(a));
   printf("fabs(%f) = %f\n", -a, __builtin_fabs(-a));
+  printf("fabsf(%f) = %f\n", f, __builtin_fabsf(f));
+  printf("fabsf(%f) = %f\n", -f, __builtin_fabsf(-f));
   printf("fsqrt(%f) = %f\n", a, __builtin_fsqrt(a));
+  printf("sqrt(%f) = %f\n", a, __builtin_sqrt(a));
 
   /* Make sure that ignoring the result of a builtin
      doesn't cause an internal error */
