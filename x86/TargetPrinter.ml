@@ -197,7 +197,7 @@ module MacOS_System : SYSTEM =
           if i || (not !Clflags.option_fcommon) then ".const" else "COMM"
       | Section_string -> ".const"
       | Section_literal -> ".literal8"
-      | Section_jumptable -> ".text"  (* needed in 64 bits, not a problem in 32 bits *)
+      | Section_jumptable -> ".text"
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\", %s, %s"
             (if wr then "__DATA" else "__TEXT") s
@@ -216,32 +216,14 @@ module MacOS_System : SYSTEM =
     let print_align oc n =
       fprintf oc "	.align	%d\n" (log2 n)
 
-    let indirect_symbols : StringSet.t ref = ref StringSet.empty
-
     let print_mov_rs oc rd id =
-      if Archi.ptr64 then begin
-        fprintf oc "	movq    %a@GOTPCREL(%%rip), %a\n" symbol id ireg64 rd
-      end else begin
-        let id = extern_atom id in
-        indirect_symbols := StringSet.add id !indirect_symbols;
-        fprintf oc "	movl	L%a$non_lazy_ptr, %a\n" raw_symbol id ireg rd
-      end
+      fprintf oc "	movq    %a@GOTPCREL(%%rip), %a\n" symbol id ireg64 rd
 
     let print_fun_info _ _ = ()
 
     let print_var_info _ _ = ()
 
-    let print_epilogue oc =
-      if not Archi.ptr64 then begin
-        fprintf oc "	.section __IMPORT,__pointers,non_lazy_symbol_pointers\n";
-        StringSet.iter
-          (fun s ->
-            fprintf oc "L%a$non_lazy_ptr:\n" raw_symbol s;
-            fprintf oc "	.indirect_symbol %a\n" raw_symbol s;
-            fprintf oc "	.long	0\n")
-          !indirect_symbols;
-        indirect_symbols := StringSet.empty
-      end
+    let print_epilogue oc = ()
 
     let print_comm_decl oc name sz al =
       fprintf oc "	.comm	%a, %s, %d\n"
