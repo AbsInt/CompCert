@@ -32,6 +32,7 @@ let version_file_string tool_name =
   else
     Printf.sprintf "The CompCert %s,\nversion %s\n" tool_name Version.version
 
+(* Print the version string to a file and exit the program *)
 let print_version_file_and_exit tool_name file =
   let oc = open_out_bin file in
   output_string oc (version_file_string tool_name);
