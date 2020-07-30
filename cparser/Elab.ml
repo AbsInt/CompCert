@@ -985,6 +985,7 @@ and elab_field_group env = function
     elab_name_group loc env  (spec, List.map fst fieldlist) in
 
   if sto <> Storage_default then
+    (* This should actually never be triggered, catched by pre-parser *)
     error loc "non-default storage in struct or union";
   if fieldlist = [] then
       (* This should actually never be triggered, empty structs are captured earlier *)
@@ -2853,6 +2854,7 @@ let elab_definition (for_loop: bool) (local: bool) (nonstatic_inline: bool)
   (* "int f(int x) { ... }" *)
   (* "int f(x, y) double y; { ... }" *)
   | FUNDEF(spec, name, defs, body, loc) ->
+      (* This should actually never be triggered, catched by pre-parser *)
       if local then error loc "function definition is not allowed here";
       let env1 = elab_fundef env spec name defs body loc in
       ([], env1)
