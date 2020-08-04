@@ -116,6 +116,7 @@ let delex (symbol : string) : string =
   | "DOT" -> "."
   | "PRAGMA" -> "#pragma \n"
   | "BUILTIN_OFFSETOF" -> "__builtin_offsetof"
+  | "STATIC_ASSERT" -> "_Static_assert"
   | "EOF" -> ""                             (* this should be ok *)
   | _ -> raise Not_found               (* this should not happen *)
 
