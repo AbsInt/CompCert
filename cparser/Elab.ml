@@ -1710,11 +1710,12 @@ let elab_expr ctx loc env a =
   let check_ptr_arith env ty s =
     match unroll env ty with
     | TVoid _ ->
-        error "illegal arithmetic on a pointer to void in binary '%c'" s
+        error "illegal arithmetic on a pointer to void in %s" s
     | TFun _ ->
-        error "illegal arithmetic on a pointer to the function type %a in binary '%c'" (print_typ env) ty s
-    | _ -> if incomplete_type env ty then
-        error "arithmetic on a pointer to an incomplete type %a in binary '%c'" (print_typ env) ty s
+        error "illegal arithmetic on a pointer to the function type %a in %s" (print_typ env) ty s
+    | _ ->
+        if incomplete_type env ty then
+          error "arithmetic on a pointer to an incomplete type %a in %s" (print_typ env) ty s
   in
 
   let check_static_var env id sto ty =
@@ -2120,7 +2121,7 @@ let elab_expr ctx loc env a =
             | _, _ -> fatal_error "invalid operands to binary '+' (%a and %a)"
                   (print_typ env) b1.etyp (print_typ env) b2.etyp
           in
-          check_ptr_arith env ty '+';
+          check_ptr_arith env ty "binary '+'";
           TPtr(ty, [])
         end in
       { edesc = EBinop(Oadd, b1, b2, tyres); etyp = tyres },env
@@ -2135,20 +2136,20 @@ let elab_expr ctx loc env a =
         end else begin
           match wrap unroll loc env b1.etyp, wrap  unroll loc env b2.etyp with
           | (TPtr(ty, a) | TArray(ty, _, a)), (TInt _ | TEnum _) ->
-              if not (wrap pointer_arithmetic_ok loc env ty) then
-                error "illegal pointer arithmetic in binary '-'";
+              check_ptr_arith env ty "binary '-'";
               (TPtr(ty, []), TPtr(ty, []))
           | (TPtr(ty1, a1) | TArray(ty1, _, a1)),
             (TPtr(ty2, a2) | TArray(ty2, _, a2)) ->
               if not (compatible_types AttrIgnoreAll env ty1 ty2) then
                 error "%a and %a are not pointers to compatible types"
                    (print_typ env) b1.etyp (print_typ env) b1.etyp;
-              check_ptr_arith env ty1 '-';
-              check_ptr_arith env ty2 '-';
+              check_ptr_arith env ty1 "binary '-'";
+              check_ptr_arith env ty2 "binary '-'";
               if wrap sizeof loc env ty1 = Some 0 then
                 error "subtraction between two pointers to zero-sized objects";
               (TPtr(ty1, []), TInt(ptrdiff_t_ikind(), []))
-          | _, _ -> fatal_error "invalid operands to binary '-' (%a and %a)"
+          | _, _ ->
+              fatal_error "invalid operands to binary '-' (%a and %a)"
                 (print_typ env) b1.etyp (print_typ env) b2.etyp
         end in
       { edesc = EBinop(Osub, b1, b2, tyop); etyp = tyres },env
@@ -2306,6 +2307,11 @@ let elab_expr ctx loc env a =
       error "expression is not assignable";
     if not (is_scalar_type env b1.etyp) then
       error "cannot %s value of type %a" msg (print_typ env) b1.etyp;
+    begin match unroll env b1.etyp with
+    | TPtr (ty, _) | TArray (ty, _ , _) ->
+      check_ptr_arith env ty ("unary " ^ msg)
+    | _ -> ()
+    end;
     { edesc = EUnop(op, b1); etyp = b1.etyp },env
 
 (* Elaboration of binary operators over integers *)
