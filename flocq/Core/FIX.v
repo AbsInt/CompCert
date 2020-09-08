@@ -19,8 +19,9 @@ COPYING file for more details.
 
 (** * Fixed-point format *)
 
-From Coq Require Import Lia.
-Require Import Raux Defs Round_pred Generic_fmt Ulp Round_NE.
+From Coq Require Import ZArith Reals Lia.
+
+Require Import Zaux Raux Defs Round_pred Generic_fmt Ulp Round_NE.
 
 Section RND_FIX.
 

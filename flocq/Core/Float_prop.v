@@ -19,8 +19,9 @@ COPYING file for more details.
 
 (** * Basic properties of floating-point formats: lemmas about mantissa, exponent... *)
 
-From Coq Require Import Lia.
-Require Import Raux Defs Digits.
+From Coq Require Import ZArith Reals Lia.
+
+Require Import Zaux Raux Defs Digits.
 
 Section Float_prop.
 
@@ -381,10 +382,9 @@ rewrite <-IZR_Zpower. 2: now apply Zle_left.
 now apply IZR_lt.
 elim Zlt_not_le with (1 := Hm).
 simpl.
-cut (e' - e < 0)%Z. 2: lia.
-clear.
-case (e' - e)%Z ; try easy.
-intros p _.
+assert (H: (e' - e < 0)%Z) by lia.
+clear -H.
+destruct (e' - e)%Z ; try easy.
 apply Zabs_pos.
 Qed.
 

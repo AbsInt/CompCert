@@ -19,8 +19,9 @@ COPYING file for more details.
 
 (** * Basic operations on floats: alignment, addition, multiplication *)
 
-From Coq Require Import Lia.
-Require Import Raux Defs Float_prop.
+From Coq Require Import ZArith Reals Lia.
+
+Require Import Zaux Raux Defs Float_prop.
 
 Set Implicit Arguments.
 Set Strongly Strict Implicit.

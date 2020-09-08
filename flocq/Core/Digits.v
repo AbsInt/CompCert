@@ -18,12 +18,12 @@ COPYING file for more details.
 *)
 
 From Coq Require Import Lia ZArith Zquot.
+From Coq Require SpecFloat.
 
 Require Import Zaux.
-Require Import SpecFloatCompat.
 
-Notation digits2_pos := digits2_pos (only parsing).
-Notation Zdigits2 := Zdigits2 (only parsing).
+Notation digits2_pos := SpecFloat.digits2_pos (only parsing).
+Notation Zdigits2 := SpecFloat.Zdigits2 (only parsing).
 
 (** Number of bits (radix 2) of a positive integer.
 
@@ -594,12 +594,12 @@ destruct (Zle_or_lt k2' k) as [Hk''|Hk''].
 now apply Zdigit_slice_out.
 rewrite Zdigit_slice by now split.
 apply Zdigit_slice_out.
-zify ; lia.
-rewrite Zdigit_slice by (zify ; lia).
+lia.
+rewrite Zdigit_slice by lia.
 rewrite (Zdigit_slice n (k1 + k1')) by now split.
 rewrite Zdigit_slice.
 now rewrite Zplus_assoc.
-zify ; lia.
+lia.
 unfold Zslice.
 rewrite Z.min_r.
 now rewrite Zle_bool_false.
@@ -821,6 +821,18 @@ Proof.
 now intros [|n|n].
 Qed.
 
+Theorem Zdigits_opp :
+  forall n, Zdigits (Z.opp n) = Zdigits n.
+Proof.
+now intros [|n|n].
+Qed.
+
+Theorem Zdigits_cond_Zopp :
+  forall s n, Zdigits (cond_Zopp s n) = Zdigits n.
+Proof.
+now intros [|] [|n|n].
+Qed.
+
 Theorem Zdigits_gt_0 :
   forall n, n <> Z0 -> (0 < Zdigits n)%Z.
 Proof.
@@ -933,7 +945,7 @@ intros x y Zx Hxy.
 assert (Hx := Zdigits_correct x).
 assert (Hy := Zdigits_correct y).
 apply (Zpower_lt_Zpower beta).
-zify ; lia.
+lia.
 Qed.
 
 Theorem lt_Zdigits :

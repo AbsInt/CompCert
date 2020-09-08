@@ -18,7 +18,10 @@ COPYING file for more details.
 *)
 
 (** * Basic definitions: float and rounding property *)
-Require Import Raux.
+
+From Coq Require Import ZArith Reals.
+
+Require Import Raux Zaux.
 
 Section Def.
 

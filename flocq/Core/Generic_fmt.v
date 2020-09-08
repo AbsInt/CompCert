@@ -19,8 +19,9 @@ COPYING file for more details.
 
 (** * What is a real number belonging to a format, and many properties. *)
 
-From Coq Require Import Lia.
-Require Import Raux Defs Round_pred Float_prop.
+From Coq Require Import ZArith Reals Lia.
+
+Require Import Zaux Raux Defs Round_pred Float_prop.
 
 Section Generic.
 
@@ -427,7 +428,7 @@ rewrite Gx.
 replace (Ztrunc (scaled_mantissa x)) with Z0.
 apply F2R_0.
 cut (Z.abs (Ztrunc (scaled_mantissa x)) < 1)%Z.
-clear ; zify ; lia.
+clear ; lia.
 apply lt_IZR.
 rewrite abs_IZR.
 now rewrite <- scaled_mantissa_generic.
@@ -1804,7 +1805,7 @@ Theorem Znearest_imp :
 Proof.
 intros x n Hd.
 cut (Z.abs (Znearest x - n) < 1)%Z.
-clear ; zify ; lia.
+clear ; lia.
 apply lt_IZR.
 rewrite abs_IZR, minus_IZR.
 replace (IZR (Znearest x) - IZR n)%R with (- (x - IZR (Znearest x)) + (x - IZR n))%R by ring.

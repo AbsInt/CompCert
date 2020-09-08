@@ -19,13 +19,14 @@ COPYING file for more details.
 
 (** * Locations: where a real number is positioned with respect to its rounded-down value in an arbitrary format. *)
 
-From Coq Require Import Lia.
-Require Import Raux Defs Float_prop.
-Require Import SpecFloatCompat.
+From Coq Require Import ZArith Reals Lia.
+From Coq Require SpecFloat.
 
-Notation location := location (only parsing).
-Notation loc_Exact := loc_Exact (only parsing).
-Notation loc_Inexact := loc_Inexact (only parsing).
+Require Import Zaux Raux Defs Float_prop.
+
+Notation location := SpecFloat.location (only parsing).
+Notation loc_Exact := SpecFloat.loc_Exact (only parsing).
+Notation loc_Inexact := SpecFloat.loc_Inexact (only parsing).
 
 Section Fcalc_bracket.
 
@@ -533,15 +534,34 @@ Qed.
 
 End Fcalc_bracket_step.
 
-Section Fcalc_bracket_scale.
+Section Bracket_plus.
 
-Lemma inbetween_mult_aux :
-  forall x d s,
-  ((x * s + d * s) / 2 = (x + d) / 2 * s)%R.
+Theorem inbetween_plus_compat :
+  forall x d u l t,
+  inbetween x d u l ->
+  inbetween (x + t) (d + t) (u + t) l.
 Proof.
-intros x d s.
-field.
+intros x d u l t [Hx|l' Hx Hl] ; constructor.
+now rewrite Hx.
+now split ; apply Rplus_lt_compat_r.
+replace ((x + t + (d + t)) / 2)%R with ((x + d) / 2 + t)%R by field.
+now rewrite Rcompare_plus_r.
 Qed.
+
+Theorem inbetween_plus_reg :
+  forall x d u l t,
+  inbetween (x + t) (d + t) (u + t) l ->
+  inbetween x d u l.
+Proof.
+intros x d u l t H.
+generalize (inbetween_plus_compat _ _ _ _ (Ropp t) H).
+assert (K: forall y, (y + t + -t = y)%R) by (intros y ; ring).
+now rewrite 3!K.
+Qed.
+
+End Bracket_plus.
+
+Section Fcalc_bracket_scale.
 
 Theorem inbetween_mult_compat :
   forall x d u l s,
@@ -552,7 +572,7 @@ Proof.
 intros x d u l s Hs [Hx|l' Hx Hl] ; constructor.
 now rewrite Hx.
 now split ; apply Rmult_lt_compat_r.
-rewrite inbetween_mult_aux.
+replace ((x * s + d * s) / 2)%R with ((x + d) / 2 * s)%R by field.
 now rewrite Rcompare_mult_r.
 Qed.
 
@@ -562,12 +582,11 @@ Theorem inbetween_mult_reg :
   inbetween (x * s) (d * s) (u * s) l ->
   inbetween x d u l.
 Proof.
-intros x d u l s Hs [Hx|l' Hx Hl] ; constructor.
-apply Rmult_eq_reg_r with (1 := Hx).
-now apply Rgt_not_eq.
-now split ; apply Rmult_lt_reg_r with s.
-rewrite <- Rcompare_mult_r with (1 := Hs).
-now rewrite inbetween_mult_aux in Hl.
+intros x d u l s Hs H.
+generalize (inbetween_mult_compat _ _ _ _ _ (Rinv_0_lt_compat s Hs) H).
+assert (K: forall y, (y * s * /s = y)%R).
+{ intros y. field. now apply Rgt_not_eq. }
+now rewrite 3!K.
 Qed.
 
 End Fcalc_bracket_scale.

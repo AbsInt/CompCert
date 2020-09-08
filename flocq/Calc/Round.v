@@ -19,7 +19,8 @@ COPYING file for more details.
 
 (** * Helper function for computing the rounded value of a real number. *)
 
-From Coq Require Import Lia.
+From Coq Require Import ZArith Reals Lia.
+
 Require Import Core Digits Float_prop Bracket.
 
 Section Fcalc_round.

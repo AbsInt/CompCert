@@ -19,7 +19,8 @@ COPYING file for more details.
 
 (** * Error of the multiplication is in the FLX/FLT format *)
 
-From Coq Require Import Lia.
+From Coq Require Import ZArith Reals Lia.
+
 Require Import Core Operations Plus_error.
 
 Section Fprop_mult_error.
@@ -243,8 +244,7 @@ destruct (mag beta x) as (ex,Ex) ; simpl.
 specialize (Ex Hx0).
 destruct (mag beta y) as (ey,Ey) ; simpl.
 specialize (Ey Hy0).
-assert (emin + 2 * prec -1 < ex + ey)%Z.
-2: lia.
+cut (emin + 2 * prec -1 < ex + ey)%Z. lia.
 apply (lt_bpow beta).
 apply Rle_lt_trans with (1:=Hxy).
 rewrite Rabs_mult, bpow_plus.
@@ -298,7 +298,7 @@ destruct (mag beta x) as (ex,Hx).
 destruct (mag beta y) as (ey,Hy).
 simpl; apply Z.le_trans with ((ex-prec)+(ey-prec))%Z.
 2: apply Zplus_le_compat; apply Z.le_max_l.
-assert (e + 2*prec -1< ex+ey)%Z;[idtac|lia].
+cut (e + 2*prec -1< ex+ey)%Z. lia.
 apply lt_bpow with beta.
 apply Rle_lt_trans with (1:=H1).
 rewrite Rabs_mult, bpow_plus.
@@ -329,7 +329,7 @@ apply (generic_format_F2R' _ _ _ f).
 { now unfold F2R; simpl; rewrite bpow_plus, Rmult_assoc. }
 intro Nzmx; unfold mx, ex; rewrite <- Fx.
 unfold f, ex; simpl; unfold cexp; rewrite (mag_mult_bpow _ _ _ Nzx).
-unfold FLT_exp; rewrite Z.max_l; [|lia]; rewrite <- Z.add_max_distr_r.
+unfold FLT_exp; rewrite Z.max_l by lia; rewrite <- Z.add_max_distr_r.
 set (n := (_ - _ + _)%Z); apply (Z.le_trans _ n); [unfold n; lia|].
 apply Z.le_max_l.
 Qed.

@@ -19,7 +19,8 @@ COPYING file for more details.
 
 (** * Remainder of the division and square root are in the FLX format *)
 
-Require Import Psatz.
+From Coq Require Import ZArith Reals Psatz.
+
 Require Import Core Operations Relative Sterbenz Mult_error.
 
 Section Fprop_divsqrt_error.

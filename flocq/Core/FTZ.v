@@ -19,9 +19,9 @@ COPYING file for more details.
 
 (** * Floating-point format with abrupt underflow *)
 
-From Coq Require Import Lia.
-Require Import Raux Defs Round_pred Generic_fmt.
-Require Import Float_prop Ulp FLX.
+From Coq Require Import ZArith Reals Lia.
+
+Require Import Zaux Raux Defs Round_pred Generic_fmt Float_prop Ulp FLX.
 
 Section RND_FTZ.
 

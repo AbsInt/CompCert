@@ -18,9 +18,10 @@ COPYING file for more details.
 *)
 
 (** * Missing definitions/lemmas *)
-Require Import Psatz.
-Require Export Reals ZArith.
-Require Export Zaux.
+
+From Coq Require Import Psatz Reals ZArith.
+
+Require Import Zaux.
 
 Section Rmissing.
 
@@ -1317,9 +1318,9 @@ rewrite Ropp_inv_permute with (1 := Zy').
 rewrite <- 2!opp_IZR.
 rewrite <- Zmod_opp_opp.
 apply H.
-clear -Hy. lia.
+clear -Hy ; lia.
 apply H.
-clear -Zy Hy. lia.
+clear -Zy Hy ; lia.
 (* *)
 split.
 pattern (IZR (x / y)) at 1 ; rewrite <- Rplus_0_r.
@@ -1912,7 +1913,7 @@ apply bpow_le.
 now apply Zlt_le_weak.
 apply IZR_le.
 clear -Zm.
-zify ; lia.
+lia.
 Qed.
 
 Lemma mag_mult :
@@ -2038,6 +2039,33 @@ assert (Hbxy : (bpow (ex - 2) <= x - y)%R).
 apply mag_ge_bpow.
 replace (ex - 1 - 1)%Z with (ex - 2)%Z by ring.
 now apply Rabs_ge; right.
+Qed.
+
+Theorem mag_plus_ge :
+  forall x y,
+  (x <> 0)%R ->
+  (mag y <= mag x - 2)%Z ->
+  (mag x - 1 <= mag (x + y))%Z.
+Proof.
+intros x y Zx.
+destruct (Req_dec y 0) as [Zy|Zy].
+{ intros _.
+  rewrite Zy, Rplus_0_r.
+  lia. }
+rewrite <- (mag_abs x), <- (mag_abs y).
+intros Hm.
+assert (H: Rabs x <> Rabs y).
+{ intros H.
+  apply Zlt_not_le with (2 := Hm).
+  rewrite H.
+  lia. }
+apply mag_minus_lb in Hm ; try now apply Rabs_pos_lt.
+apply Z.le_trans with (1 := Hm).
+apply mag_le_abs.
+now apply Rminus_eq_contra.
+rewrite <- (Ropp_involutive y).
+rewrite Rabs_Ropp.
+apply Rabs_triang_inv2.
 Qed.
 
 Lemma mag_div :
@@ -2335,8 +2363,7 @@ refine (Rle_not_lt _ _ (lub (/ (INR (S N) + 1))%R _) _).
   intros Hy.
   refine (H _ _ Py).
   apply INR_lt in Hy.
-  clear -Hy HyN.
-  lia.
+  clear -Hy HyN ; lia.
   now apply Rlt_le, Rinv_0_lt_compat.
 rewrite S_INR, HN.
 ring_simplify (IZR (up (/ l)) - 1 + 1)%R.
