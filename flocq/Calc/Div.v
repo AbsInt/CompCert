@@ -19,6 +19,7 @@ COPYING file for more details.
 
 (** * Helper function and theorem for computing the rounded quotient of two floating-point numbers. *)
 
+From Coq Require Import Lia.
 Require Import Raux Defs Generic_fmt Float_prop Digits Bracket.
 
 Set Implicit Arguments.
@@ -80,7 +81,7 @@ assert ((F2R (Float beta m1 e1) / F2R (Float beta m2 e2) = IZR m1' / IZR m2' * b
   destruct (Zle_bool e (e1 - e2)) eqn:He' ; injection Hm ; intros ; subst.
   - split ; try easy.
     apply Zle_bool_imp_le in He'.
-    rewrite mult_IZR, IZR_Zpower by omega.
+    rewrite mult_IZR, IZR_Zpower by lia.
     unfold Zminus ; rewrite 2!bpow_plus, 2!bpow_opp.
     field.
     repeat split ; try apply Rgt_not_eq, bpow_gt_0.
@@ -88,8 +89,8 @@ assert ((F2R (Float beta m1 e1) / F2R (Float beta m2 e2) = IZR m1' / IZR m2' * b
   - apply Z.leb_gt in He'.
     split ; cycle 1.
     { apply Z.mul_pos_pos with (1 := Hm2).
-      apply Zpower_gt_0 ; omega. }
-    rewrite mult_IZR, IZR_Zpower by omega.
+      apply Zpower_gt_0 ; lia. }
+    rewrite mult_IZR, IZR_Zpower by lia.
     unfold Zminus ; rewrite bpow_plus, bpow_opp, bpow_plus, bpow_opp.
     field.
     repeat split ; try apply Rgt_not_eq, bpow_gt_0.
@@ -113,7 +114,7 @@ destruct (Z_lt_le_dec 1 m2') as [Hm2''|Hm2''].
   now apply IZR_neq, Zgt_not_eq.
   field.
   now apply IZR_neq, Zgt_not_eq.
-- assert (r = 0 /\ m2' = 1)%Z as [-> ->] by (clear -Hr Hm2'' ; omega).
+- assert (r = 0 /\ m2' = 1)%Z as [-> ->] by (clear -Hr Hm2'' ; lia).
   unfold Rdiv.
   rewrite Rmult_1_l, Rplus_0_r, Rinv_1, Rmult_1_r.
   now constructor.
@@ -150,10 +151,10 @@ unfold cexp.
 destruct (Zle_lt_or_eq _ _ H1) as [H|H].
 - replace (fexp (mag _ _)) with (fexp (e + 1)).
   apply Z.le_min_r.
-  clear -H1 H2 H ; apply f_equal ; omega.
+  clear -H1 H2 H ; apply f_equal ; lia.
 - replace (fexp (mag _ _)) with (fexp e).
   apply Z.le_min_l.
-  clear -H1 H2 H ; apply f_equal ; omega.
+  clear -H1 H2 H ; apply f_equal ; lia.
 Qed.
 
 End Fcalc_div.

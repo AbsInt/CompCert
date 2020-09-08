@@ -18,7 +18,7 @@
 
 Require Import Coqlib Zbits Integers.
 (*From Flocq*)
-Require Import Binary Bits Core.
+Require Import BinarySingleNaN Binary Bits Core.
 Require Import IEEE754_extra.
 Require Import Program.
 Require Archi.
@@ -29,6 +29,12 @@ Open Scope Z_scope.
 
 Definition float := binary64. (**r the type of IEE754 double-precision FP numbers *)
 Definition float32 := binary32. (**r the type of IEE754 single-precision FP numbers *)
+
+Lemma integer_representable_n :
+  forall n : Z, - 2 ^ 53 <= n <= 2 ^ 53 -> integer_representable 53 1024 n.
+Proof.
+now apply integer_representable_n.
+Qed.
 
 (** Boolean-valued comparisons *)
 
@@ -471,9 +477,9 @@ Proof.
   set (y := Int.sub x ox8000_0000).
   pose proof (Int.unsigned_range x); pose proof (Int.signed_range y).
   assert (Ry: integer_representable 53 1024 (Int.signed y)).
-  { apply integer_representable_n; auto; smart_omega. }
+  { apply integer_representable_n. smart_omega. }
   assert (R8: integer_representable 53 1024 (Int.unsigned ox8000_0000)).
-  { apply integer_representable_2p with (p := 31);auto; smart_omega. }
+  { apply integer_representable_2p with (p := 31); easy. }
   rewrite BofZ_plus by auto.
   f_equal.
   unfold Int.ltu in H. destruct zlt in H; try discriminate.
@@ -490,7 +496,7 @@ Proof.
   set (lo := Int.and x ox7FFF_FFFF).
   assert (R: forall n, integer_representable 53 1024 (Int.signed n)).
   { intros. pose proof (Int.signed_range n).
-    apply integer_representable_n; auto; smart_omega. }
+    apply integer_representable_n. smart_omega. }
   unfold sub, of_int. rewrite BofZ_minus by auto. unfold of_intu. f_equal.
   assert (E: Int.add hi lo = x).
   { unfold hi, lo. rewrite Int.add_is_or. 
@@ -639,8 +645,8 @@ Proof.
   intros. pose proof (Int.unsigned_range x).
   rewrite ! from_words_eq. unfold sub. rewrite BofZ_minus.
   unfold of_intu. apply (f_equal (BofZ 53 1024 __ __)). rewrite Int.unsigned_zero. omega.
-  apply integer_representable_n; auto; smart_omega.
-  apply integer_representable_n; auto; rewrite Int.unsigned_zero; smart_omega.
+  apply integer_representable_n. smart_omega.
+  apply integer_representable_n. easy.
 Qed.
 
 Lemma ox8000_0000_signed_unsigned:
@@ -666,8 +672,8 @@ Proof.
   change (Int.unsigned ox8000_0000) with Int.half_modulus.
   unfold sub. rewrite BofZ_minus.
   unfold of_int. apply f_equal. omega.
-  apply integer_representable_n; auto; smart_omega.
-  apply integer_representable_n; auto; smart_omega.
+  apply integer_representable_n. smart_omega.
+  apply integer_representable_n. easy.
 Qed.
 
 Definition ox4530_0000 := Int.repr 1160773632.        (**r [0x4530_0000] *)
@@ -712,7 +718,7 @@ Proof.
   destruct (BofZ_representable 53 1024 __ __ (2^84 + Int.unsigned x * 2^32)) as (D & E & F).
   replace (2^84 + Int.unsigned x * 2^32)
     with  ((2^52 + Int.unsigned x) * 2^32) by ring.
-  apply integer_representable_n2p; auto. smart_omega. omega. omega.
+  apply integer_representable_n2p; try easy. smart_omega.
   apply B2R_Bsign_inj; auto.
   rewrite A, D. rewrite <- IZR_Zpower by omega. rewrite <- plus_IZR. auto.
   rewrite C, F. symmetry. apply Zlt_bool_false.
@@ -742,13 +748,13 @@ Proof.
   unfold of_longu. f_equal.
   rewrite <- (Int64.ofwords_recompose l) at 1. rewrite Int64.ofwords_add'.
   fold xh; fold xl. compute_this (two_p 32); compute_this p20; ring.
-  apply integer_representable_n2p; auto.
-  compute_this p20; smart_omega. omega. omega.
-  apply integer_representable_n; auto; smart_omega.
+  apply integer_representable_n2p; try easy.
+  compute_this p20; smart_omega.
+  apply integer_representable_n. smart_omega.
   replace (2^84 + xh * 2^32) with ((2^52 + xh) * 2^32) by ring.
-  apply integer_representable_n2p; auto. smart_omega. omega. omega.
+  apply integer_representable_n2p; try easy. smart_omega.
   change (2^84 + p20 * 2^32) with ((2^52 + 1048576) * 2^32).
-  apply integer_representable_n2p; auto. omega. omega.
+  apply integer_representable_n2p; easy.
 Qed.
 
 Theorem of_long_from_words:
@@ -776,16 +782,15 @@ Proof.
   unfold of_long. apply f_equal.
   rewrite <- (Int64.ofwords_recompose l) at 1. rewrite Int64.ofwords_add''.
   fold xh; fold xl. compute_this (two_p 32); ring.
-  apply integer_representable_n2p; auto.
-  compute_this (2^20); smart_omega. omega. omega.
-  apply integer_representable_n; auto; smart_omega.
+  apply integer_representable_n2p; try easy.
+  compute_this (2^20); smart_omega.
+  apply integer_representable_n. smart_omega.
   replace (2^84 + (xh + Int.half_modulus) * 2^32)
      with ((2^52 + xh + Int.half_modulus) * 2^32)
        by (compute_this Int.half_modulus; ring).
-  apply integer_representable_n2p; auto. smart_omega. omega. omega.
+  apply integer_representable_n2p; try easy. smart_omega.
   change (2^84 + p * 2^32) with ((2^52 + p) * 2^32).
-  apply integer_representable_n2p; auto.
-  compute_this p; smart_omega. omega.
+  apply integer_representable_n2p; easy.
 Qed.
 
 (** Conversions from 64-bit integers can be expressed in terms of
@@ -807,11 +812,11 @@ Proof.
   assert (DECOMP: x = yh * 2^32 + yl).
   { unfold x. rewrite <- (Int64.ofwords_recompose l). apply Int64.ofwords_add'. }
   rewrite BofZ_mult. rewrite BofZ_plus. rewrite DECOMP; auto.
-  apply integer_representable_n2p; auto. smart_omega. omega. omega.
-  apply integer_representable_n; auto; smart_omega.
-  apply integer_representable_n; auto; smart_omega.
-  apply integer_representable_n; auto; smart_omega.
-  compute; auto.
+  apply integer_representable_n2p; try easy. smart_omega.
+  apply integer_representable_n. smart_omega.
+  apply integer_representable_n. smart_omega.
+  apply integer_representable_n. easy.
+  easy.
 Qed.
 
 Theorem of_long_decomp:
@@ -830,11 +835,11 @@ Proof.
   assert (DECOMP: x = yh * 2^32 + yl).
   { unfold x. rewrite <- (Int64.ofwords_recompose l), Int64.ofwords_add''. auto. }
   rewrite BofZ_mult. rewrite BofZ_plus. rewrite DECOMP; auto.
-  apply integer_representable_n2p; auto. smart_omega. omega. omega.
-  apply integer_representable_n; auto; smart_omega.
-  apply integer_representable_n; auto; smart_omega.
-  apply integer_representable_n; auto. compute; intuition congruence.
-  compute; auto.
+  apply integer_representable_n2p; try easy. smart_omega.
+  apply integer_representable_n. smart_omega.
+  apply integer_representable_n. smart_omega.
+  apply integer_representable_n. easy.
+  easy.
 Qed.
 
 (** Conversions from unsigned longs can be expressed in terms of conversions from signed longs.
@@ -895,7 +900,7 @@ Proof.
   }
   assert (EQ: Int64.signed n * 2 = int_round_odd (Int64.unsigned x) 1).
   {
-  symmetry. apply (int_round_odd_bits 53 1024). omega.
+  symmetry. apply int_round_odd_bits. easy.
   intros. rewrite NB2 by omega. replace i with 0 by omega. auto.
   rewrite NB2 by omega. rewrite dec_eq_false by omega. rewrite dec_eq_true.
   rewrite orb_comm. unfold Int64.testbit. change (2^1) with 2.
@@ -916,7 +921,7 @@ Proof.
   compute_this Int64.min_signed; compute_this Int64.max_signed;
   compute_this Int64.modulus; xomega.
 - assert (2^63 <= int_round_odd (Int64.unsigned x) 1).
-  { change (2^63) with (int_round_odd (2^63) 1). apply (int_round_odd_le 0 0); omega. }
+  { change (2^63) with (int_round_odd (2^63) 1). apply int_round_odd_le; omega. }
   rewrite <- EQ in H1. compute_this (2^63). compute_this (2^53). xomega.
 - omega.
 Qed.
@@ -1215,7 +1220,7 @@ Theorem of_int_double:
   forall n, of_int n = of_double (Float.of_int n).
 Proof.
   intros. symmetry. apply Bconv_BofZ.
-  apply integer_representable_n; auto. generalize (Int.signed_range n); Float.smart_omega.
+  apply integer_representable_n. generalize (Int.signed_range n); Float.smart_omega.
 Qed.
 
 Theorem of_intu_double:
@@ -1322,20 +1327,18 @@ Lemma of_long_round_odd:
 Proof.
   intros. rewrite <- (int_round_odd_plus 11) by omega.
   assert (-2^64 <= int_round_odd n 11).
-  { change (-2^64) with (int_round_odd (-2^64) 11). apply (int_round_odd_le 0 0); xomega. }
+  { change (-2^64) with (int_round_odd (-2^64) 11). apply int_round_odd_le; xomega. }
   assert (int_round_odd n 11 <= 2^64).
-  { change (2^64) with (int_round_odd (2^64) 11). apply (int_round_odd_le 0 0); xomega. }
+  { change (2^64) with (int_round_odd (2^64) 11). apply int_round_odd_le; xomega. }
   rewrite Bconv_BofZ.
   apply BofZ_round_odd with (p := 11).
   omega.
   apply Z.le_trans with (2^64). omega. compute; intuition congruence.
   omega.
   exact (proj1 H).
-  unfold int_round_odd. apply integer_representable_n2p_wide. auto. omega.
+  unfold int_round_odd. apply integer_representable_n2p_wide; try easy.
   unfold int_round_odd in H0, H1.
   split; (apply Zmult_le_reg_r with (2^11); [compute; auto | assumption]).
-  omega.
-  omega.
 Qed.
 
 Theorem of_longu_double_1:
@@ -1364,10 +1367,10 @@ Proof.
   set (n' := Z.land (Z.lor (Int64.unsigned n) (Z.land (Int64.unsigned n) 2047 + 2047)) (-2048)).
   assert (int_round_odd (Int64.unsigned n) 11 = n') by (apply int_round_odd_plus; omega).
   assert (0 <= n').
-  { rewrite <- H1. change 0 with (int_round_odd 0 11). apply (int_round_odd_le 0 0); omega. }
+  { rewrite <- H1. change 0 with (int_round_odd 0 11). apply int_round_odd_le; omega. }
   assert (n' < Int64.modulus).
   { apply Z.le_lt_trans with (int_round_odd (Int64.modulus - 1) 11).
-    rewrite <- H1. apply (int_round_odd_le 0 0); omega.
+    rewrite <- H1. apply int_round_odd_le; omega.
     compute; auto. }
   rewrite <- (Int64.unsigned_repr n') by (unfold Int64.max_unsigned; omega).
   f_equal. Int64.bit_solve. rewrite Int64.testbit_repr by auto. unfold n'.
@@ -1410,10 +1413,10 @@ Proof.
   set (n' := Z.land (Z.lor (Int64.signed n) (Z.land (Int64.signed n) 2047 + 2047)) (-2048)).
   assert (int_round_odd (Int64.signed n) 11 = n') by (apply int_round_odd_plus; omega).
   assert (Int64.min_signed <= n').
-  { rewrite <- H1. change Int64.min_signed with (int_round_odd Int64.min_signed 11). apply (int_round_odd_le 0 0); omega. }
+  { rewrite <- H1. change Int64.min_signed with (int_round_odd Int64.min_signed 11). apply int_round_odd_le; omega. }
   assert (n' <= Int64.max_signed).
   { apply Z.le_trans with (int_round_odd Int64.max_signed 11).
-    rewrite <- H1. apply (int_round_odd_le 0 0); omega.
+    rewrite <- H1; apply int_round_odd_le; easy.
     compute; intuition congruence. }
   rewrite <- (Int64.signed_repr n') by omega.
   f_equal. Int64.bit_solve. rewrite Int64.testbit_repr by auto. unfold n'.

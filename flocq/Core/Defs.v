@@ -80,4 +80,8 @@ Definition Rnd_NA_pt (F : R -> Prop) (x f : R) :=
   Rnd_N_pt F x f /\
   forall f2 : R, Rnd_N_pt F x f2 -> (Rabs f2 <= Rabs f)%R.
 
+Definition Rnd_N0_pt (F : R -> Prop) (x f : R) :=
+  Rnd_N_pt F x f /\
+  forall f2 : R, Rnd_N_pt F x f2 -> (Rabs f <= Rabs f2)%R.
+
 End RND.
