@@ -170,7 +170,7 @@ Definition floatsize_eq: forall (x y: floatsize), {x=y} + {x<>y}.
 Proof. decide equality. Defined.
 
 Definition callconv_combine (cc1 cc2: calling_convention) : res calling_convention :=
-  if bool_eq cc1.(cc_vararg) cc2.(cc_vararg) then
+  if option_eq Z.eq_dec cc1.(cc_vararg) cc2.(cc_vararg) then
     OK {| cc_vararg := cc1.(cc_vararg);
           cc_unproto := cc1.(cc_unproto) && cc2.(cc_unproto);
           cc_structret := cc1.(cc_structret) |}

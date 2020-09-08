@@ -111,8 +111,8 @@ let rec name_cdecl id ty =
       | Tnil ->
           if first then
             Buffer.add_string b
-               (if cconv.cc_vararg then "..." else "void")
-          else if cconv.cc_vararg then
+               (if cconv.cc_vararg <> None then "..." else "void")
+          else if cconv.cc_vararg <> None then
             Buffer.add_string b ", ..."
           else
             ()
@@ -400,11 +400,11 @@ let name_function_parameters name_param fun_name params cconv =
   Buffer.add_char b '(';
   begin match params with
   | [] ->
-      Buffer.add_string b (if cconv.cc_vararg then "..." else "void")
+      Buffer.add_string b (if cconv.cc_vararg <> None then "..." else "void")
   | _ ->
       let rec add_params first = function
       | [] ->
-          if cconv.cc_vararg then Buffer.add_string b ",..."
+          if cconv.cc_vararg <> None then Buffer.add_string b ",..."
       | (id, ty) :: rem ->
           if not first then Buffer.add_string b ", ";
           Buffer.add_string b (name_cdecl (name_param id) ty);

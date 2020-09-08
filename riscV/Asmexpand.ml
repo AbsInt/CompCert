@@ -100,7 +100,7 @@ let rec fixup_variadic_call ri rf tyl =
         end
         
 let fixup_call sg =
-  if sg.sig_cc.cc_vararg then fixup_variadic_call 0 0 sg.sig_args
+  if (sg.sig_cc.cc_vararg <> None) then fixup_variadic_call 0 0 sg.sig_args
 
 (* Handling of annotations *)
 
@@ -588,7 +588,7 @@ let expand_instruction instr =
   | Pallocframe (sz, ofs) ->
       let sg = get_current_function_sig() in
       emit (Pmv (X30, X2));
-      if sg.sig_cc.cc_vararg then begin
+      if (sg.sig_cc.cc_vararg <> None) then begin
         let n = arguments_size sg in
         let extra_sz = if n >= 8 then 0 else align ((8 - n) * wordsize) 16 in
         let full_sz = Z.add sz (Z.of_uint extra_sz) in
@@ -606,7 +606,7 @@ let expand_instruction instr =
   | Pfreeframe (sz, ofs) ->
      let sg = get_current_function_sig() in
      let extra_sz =
-      if sg.sig_cc.cc_vararg then begin
+      if (sg.sig_cc.cc_vararg <> None) then begin
         let n = arguments_size sg in
         if n >= 8 then 0 else align ((8 - n) * wordsize) 16
       end else 0 in

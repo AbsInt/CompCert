@@ -94,6 +94,7 @@ Proof.
   decide equality.
   decide equality.
   decide equality.
+  decide equality.
 Defined.
 
 Opaque type_eq typelist_eq.

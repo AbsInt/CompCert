@@ -500,7 +500,7 @@ let expand_builtin_inline name args res =
    unprototyped. *)
 
 let fixup_funcall_elf64 sg =
-  if sg.sig_cc.cc_vararg || sg.sig_cc.cc_unproto then begin
+  if sg.sig_cc.cc_vararg <> None || sg.sig_cc.cc_unproto then begin
     let (ir, fr, ofs) = next_arg_locations 0 0 0 sg.sig_args in
     emit (Pmovl_ri (RAX, coqint_of_camlint (Int32.of_int fr)))
   end
@@ -521,7 +521,7 @@ let rec copy_fregs_to_iregs args fr ir =
       ()
 
 let fixup_funcall_win64 sg =
-  if sg.sig_cc.cc_vararg then
+  if sg.sig_cc.cc_vararg <> None then
     copy_fregs_to_iregs sg.sig_args [XMM0; XMM1; XMM2; XMM3] [RCX; RDX; R8; R9]
 
 let fixup_funcall sg =

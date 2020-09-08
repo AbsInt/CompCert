@@ -54,7 +54,7 @@ let get_current_function_args () =
   (!current_function).fn_sig.sig_args
 
 let is_current_function_variadic () =
-  (!current_function).fn_sig.sig_cc.cc_vararg
+  (!current_function).fn_sig.sig_cc.cc_vararg <> None
 
 let get_current_function_sig () =
   (!current_function).fn_sig

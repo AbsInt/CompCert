@@ -830,7 +830,7 @@ let expand_builtin_inline name args res =
    function is unprototyped. *)
 
 let set_cr6 sg =
-  if sg.sig_cc.cc_vararg || sg.sig_cc.cc_unproto then begin
+  if (sg.sig_cc.cc_vararg <> None) || sg.sig_cc.cc_unproto then begin
     if List.exists (function Tfloat | Tsingle -> true | _ -> false) sg.sig_args
     then emit (Pcreqv(CRbit_6, CRbit_6, CRbit_6))
     else emit (Pcrxor(CRbit_6, CRbit_6, CRbit_6))

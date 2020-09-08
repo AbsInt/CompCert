@@ -122,17 +122,17 @@ These signatures are used in particular to determine appropriate
 calling conventions for the function. *)
 
 Record calling_convention : Type := mkcallconv {
-  cc_vararg: bool;                      (**r variable-arity function *)
-  cc_unproto: bool;                     (**r old-style unprototyped function *)
-  cc_structret: bool                    (**r function returning a struct  *)
+  cc_vararg: option Z;  (**r variable-arity function (+ number of fixed args) *)
+  cc_unproto: bool;     (**r old-style unprototyped function *)
+  cc_structret: bool    (**r function returning a struct  *)
 }.
 
 Definition cc_default :=
-  {| cc_vararg := false; cc_unproto := false; cc_structret := false |}.
+  {| cc_vararg := None; cc_unproto := false; cc_structret := false |}.
 
 Definition calling_convention_eq (x y: calling_convention) : {x=y} + {x<>y}.
 Proof.
-  decide equality; apply bool_dec.
+  decide equality; try (apply bool_dec). decide equality; apply Z.eq_dec.
 Defined.
 Global Opaque calling_convention_eq.
 

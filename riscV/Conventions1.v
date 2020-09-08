@@ -281,7 +281,8 @@ Fixpoint loc_arguments_rec (va: bool)
   when calling a function with signature [s].  *)
 
 Definition loc_arguments (s: signature) : list (rpair loc) :=
-  loc_arguments_rec s.(sig_cc).(cc_vararg) s.(sig_args) 0 0 0.
+  let va := match s.(sig_cc).(cc_vararg) with Some _ => true | None => false end in
+  loc_arguments_rec va s.(sig_args) 0 0 0.
 
 (** Argument locations are either non-temporary registers or [Outgoing]
   stack slots at nonnegative offsets. *)

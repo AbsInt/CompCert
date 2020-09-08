@@ -545,7 +545,7 @@ module FixupHF = struct
       end
 
   let fixup_arguments dir sg =
-    if sg.sig_cc.cc_vararg then
+    if sg.sig_cc.cc_vararg <> None then
       FixupEABI.fixup_arguments dir sg
     else begin
       let act = fixup_actions (Array.make 16 false) 0 sg.sig_args in
@@ -555,7 +555,7 @@ module FixupHF = struct
     end
 
   let fixup_result dir sg =
-    if sg.sig_cc.cc_vararg then
+    if sg.sig_cc.cc_vararg <> None then
       FixupEABI.fixup_result dir sg
 end
 
