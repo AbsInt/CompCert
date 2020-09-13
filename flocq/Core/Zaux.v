@@ -17,8 +17,12 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 COPYING file for more details.
 *)
 
-Require Import ZArith Omega.
-Require Import Zquot.
+From Coq Require Import ZArith Lia Zquot.
+
+Require Import SpecFloatCompat.
+
+Notation cond_Zopp := cond_Zopp (only parsing).
+Notation iter_pos := iter_pos (only parsing).
 
 Section Zmissing.
 
@@ -262,7 +266,7 @@ apply Z.le_refl.
 split.
 easy.
 apply Zpower_gt_1.
-clear -He ; omega.
+clear -He ; lia.
 apply Zle_minus_le_0.
 now apply Zlt_le_weak.
 revert H1.
@@ -282,7 +286,7 @@ apply Znot_gt_le.
 intros H.
 apply Zlt_not_le with (1 := He).
 apply Zpower_le.
-clear -H ; omega.
+clear -H ; lia.
 Qed.
 
 Theorem Zpower_gt_id :
@@ -302,7 +306,7 @@ clear.
 apply Zlt_0_minus_lt.
 replace (r * (Z_of_nat n0 + 1) - (Z_of_nat n0 + 1))%Z with ((r - 1) * (Z_of_nat n0 + 1))%Z by ring.
 apply Zmult_lt_0_compat.
-cut (2 <= r)%Z. omega.
+cut (2 <= r)%Z. lia.
 apply Zle_bool_imp_le.
 apply r.
 apply (Zle_lt_succ 0).
@@ -420,7 +424,7 @@ apply Z.opp_inj.
 rewrite <- Zquot_opp_l, Z.opp_0.
 apply Z.quot_small.
 generalize (Zabs_non_eq a).
-omega.
+lia.
 Qed.
 
 Theorem ZOmod_small_abs :
@@ -437,7 +441,7 @@ apply Z.opp_inj.
 rewrite <- Zrem_opp_l.
 apply Z.rem_small.
 generalize (Zabs_non_eq a).
-omega.
+lia.
 Qed.
 
 Theorem ZOdiv_plus :
@@ -702,8 +706,6 @@ End Zcompare.
 
 Section cond_Zopp.
 
-Definition cond_Zopp (b : bool) m := if b then Z.opp m else m.
-
 Theorem cond_Zopp_negb :
   forall x y, cond_Zopp (negb x) y = Z.opp (cond_Zopp x y).
 Proof.
@@ -921,16 +923,9 @@ intros x.
 apply IHp.
 Qed.
 
-Fixpoint iter_pos (n : positive) (x : A) {struct n} : A :=
-  match n with
-  | xI n' => iter_pos n' (iter_pos n' (f x))
-  | xO n' => iter_pos n' (iter_pos n' x)
-  | xH => f x
-  end.
-
 Lemma iter_pos_nat :
   forall (p : positive) (x : A),
-  iter_pos p x = iter_nat (Pos.to_nat p) x.
+  iter_pos f p x = iter_nat (Pos.to_nat p) x.
 Proof.
 induction p ; intros x.
 rewrite Pos2Nat.inj_xI.

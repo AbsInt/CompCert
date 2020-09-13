@@ -18,6 +18,8 @@ COPYING file for more details.
 *)
 
 (** * Rounding to nearest, ties to even: existence, unicity... *)
+
+From Coq Require Import Lia.
 Require Import Raux Defs Round_pred Generic_fmt Float_prop Ulp.
 
 Notation ZnearestE := (Znearest (fun x => negb (Z.even x))).
@@ -148,7 +150,7 @@ split.
 apply (round_DN_pt beta fexp x).
 apply generic_format_bpow.
 ring_simplify (ex - 1 + 1)%Z.
-omega.
+lia.
 apply Hex.
 apply Rle_lt_trans with (2 := proj2 Hex).
 apply (round_DN_pt beta fexp x).
@@ -209,14 +211,14 @@ rewrite Z.even_add.
 rewrite eqb_sym. simpl.
 fold (negb (Z.even (beta ^ (ex - fexp ex)))).
 rewrite Bool.negb_involutive.
-rewrite (Z.even_pow beta (ex - fexp ex)). 2: omega.
+rewrite (Z.even_pow beta (ex - fexp ex)) by lia.
 destruct exists_NE_.
 rewrite H.
 apply Zeven_Zpower_odd with (2 := H).
 now apply Zle_minus_le_0.
 apply Z.even_pow.
 specialize (H ex).
-omega.
+lia.
 (* - xu < bpow ex *)
 revert Hud.
 rewrite ulp_neq_0;[idtac|now apply Rgt_not_eq].
@@ -413,18 +415,18 @@ now rewrite Hs in Hr.
 destruct (Hs ex) as (H,_).
 rewrite Z.even_pow.
 exact Hr.
-omega.
+lia.
 assert (Z.even (Zfloor mx) = true). 2: now rewrite H in Hmx.
-replace (Zfloor mx) with (Zceil mx + -1)%Z by omega.
+replace (Zfloor mx) with (Zceil mx + -1)%Z by lia.
 rewrite Z.even_add.
 apply eqb_true.
 unfold mx.
 replace (Zceil (scaled_mantissa beta fexp x)) with (Zpower beta (ex - fexp ex)).
 rewrite Zeven_Zpower_odd with (2 := Hr).
 easy.
-omega.
+lia.
 apply eq_IZR.
-rewrite IZR_Zpower. 2: omega.
+rewrite IZR_Zpower by lia.
 apply Rmult_eq_reg_r with (bpow (fexp ex)).
 unfold Zminus.
 rewrite bpow_plus.
@@ -434,7 +436,7 @@ now apply sym_eq.
 apply Rgt_not_eq.
 apply bpow_gt_0.
 generalize (proj1 (valid_exp ex) He).
-omega.
+lia.
 (* .. small pos *)
 assert (Z.even (Zfloor mx) = true). 2: now rewrite H in Hmx.
 unfold mx, scaled_mantissa.

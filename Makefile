@@ -51,12 +51,13 @@ GPATH=$(DIRS)
 # Flocq
 
 FLOCQ=\
+  SpecFloatCompat.v \
   Raux.v Zaux.v Defs.v Digits.v Float_prop.v FIX.v FLT.v FLX.v FTZ.v \
   Generic_fmt.v Round_pred.v Round_NE.v Ulp.v Core.v \
   Bracket.v Div.v Operations.v Round.v Sqrt.v \
   Div_sqrt_error.v Mult_error.v Plus_error.v \
   Relative.v Sterbenz.v Round_odd.v Double_rounding.v \
-  Binary.v Bits.v
+  BinarySingleNaN.v Binary.v Bits.v
 
 # General-purpose libraries (in lib/)
 

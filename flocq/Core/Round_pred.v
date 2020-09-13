@@ -42,6 +42,9 @@ Definition Rnd_NG (F : R -> Prop) (P : R -> R -> Prop) (rnd : R -> R) :=
 Definition Rnd_NA (F : R -> Prop) (rnd : R -> R) :=
   forall x : R, Rnd_NA_pt F x (rnd x).
 
+Definition Rnd_N0 (F : R -> Prop) (rnd : R -> R) :=
+  forall x : R, Rnd_N0_pt F x (rnd x).
+
 Theorem round_val_of_pred :
   forall rnd : R -> R -> Prop,
   round_pred rnd ->
@@ -1021,6 +1024,251 @@ intros F x f (Hf,_) Hx.
 now apply Rnd_N_pt_idempotent with F.
 Qed.
 
+Theorem Rnd_N0_NG_pt :
+  forall F : R -> Prop,
+  F 0 ->
+  forall x f,
+  Rnd_N0_pt F x f <-> Rnd_NG_pt F (fun x f => Rabs f <= Rabs x) x f.
+Proof.
+intros F HF x f.
+destruct (Rle_or_lt 0 x) as [Hx|Hx].
+(* *)
+split ; intros (H1, H2).
+(* . *)
+assert (Hf := Rnd_N_pt_ge_0 F HF x f Hx H1).
+split.
+exact H1.
+destruct (Rnd_N_pt_DN_or_UP _ _ _ H1) as [H3|H3].
+(* . . *)
+left.
+rewrite Rabs_pos_eq with (1 := Hf).
+rewrite Rabs_pos_eq with (1 := Hx).
+apply H3.
+(* . . *)
+right.
+intros f2 Hxf2.
+specialize (H2 _ Hxf2).
+destruct (Rnd_N_pt_DN_or_UP _ _ _ Hxf2) as [H4|H4].
+apply Rle_antisym.
+apply Rle_trans with x.
+apply H4.
+apply H3.
+rewrite Rabs_pos_eq with (1 := Hf) in H2.
+rewrite Rabs_pos_eq in H2.
+exact H2.
+now apply Rnd_N_pt_ge_0 with F x.
+eapply Rnd_UP_pt_unique ; eassumption.
+(* . *)
+split.
+exact H1.
+intros f2 Hxf2.
+destruct H2 as [H2|H2].
+assert (Hf := Rnd_N_pt_ge_0 F HF x f Hx H1).
+assert (Hf2 := Rnd_N_pt_ge_0 F HF x f2 Hx Hxf2).
+rewrite 2!Rabs_pos_eq ; trivial.
+rewrite 2!Rabs_pos_eq in H2 ; trivial.
+destruct (Rnd_N_pt_DN_or_UP _ _ _ Hxf2) as [H3|H3].
+apply H3.
+apply H1.
+apply H2.
+apply Rle_trans with (1 := H2).
+apply H3.
+rewrite (H2 _ Hxf2).
+apply Rle_refl.
+(* *)
+assert (Hx' := Rlt_le _ _ Hx).
+clear Hx. rename Hx' into Hx.
+split ; intros (H1, H2).
+(* . *)
+assert (Hf := Rnd_N_pt_le_0 F HF x f Hx H1).
+split.
+exact H1.
+destruct (Rnd_N_pt_DN_or_UP _ _ _ H1) as [H3|H3].
+(* . . *)
+right.
+intros f2 Hxf2.
+specialize (H2 _ Hxf2).
+destruct (Rnd_N_pt_DN_or_UP _ _ _ Hxf2) as [H4|H4].
+eapply Rnd_DN_pt_unique ; eassumption.
+apply Rle_antisym.
+2: apply Rle_trans with x.
+2: apply H3.
+2: apply H4.
+rewrite Rabs_left1 with (1 := Hf) in H2.
+rewrite Rabs_left1 in H2.
+now apply Ropp_le_cancel.
+now apply Rnd_N_pt_le_0 with F x.
+(* . . *)
+left.
+rewrite Rabs_left1 with (1 := Hf).
+rewrite Rabs_left1 with (1 := Hx).
+apply Ropp_le_contravar.
+apply H3.
+(* . *)
+split.
+exact H1.
+intros f2 Hxf2.
+destruct H2 as [H2|H2].
+assert (Hf := Rnd_N_pt_le_0 F HF x f Hx H1).
+assert (Hf2 := Rnd_N_pt_le_0 F HF x f2 Hx Hxf2).
+rewrite 2!Rabs_left1 ; trivial.
+rewrite 2!Rabs_left1 in H2 ; trivial.
+apply Ropp_le_contravar.
+apply Ropp_le_cancel in H2.
+destruct (Rnd_N_pt_DN_or_UP _ _ _ Hxf2) as [H3|H3].
+2: apply H3.
+2: apply H1.
+2: apply H2.
+apply Rle_trans with (2 := H2).
+apply H3.
+rewrite (H2 _ Hxf2).
+apply Rle_refl.
+Qed.
+
+Lemma Rnd_N0_pt_unique_prop :
+  forall F : R -> Prop,
+  F 0 ->
+  Rnd_NG_pt_unique_prop F (fun x f => Rabs f <= Rabs x).
+Proof.
+intros F HF x d u Hxd1 Hxd2 Hxu1 Hxu2 Hd Hu.
+apply Rle_antisym.
+apply Rle_trans with x.
+apply Hxd1.
+apply Hxu1.
+destruct (Rle_or_lt 0 x) as [Hx|Hx].
+apply Hxd1.
+apply Hxu1.
+rewrite Rabs_pos_eq with (1 := Hx) in Hu.
+rewrite Rabs_pos_eq in Hu.
+exact Hu.
+apply Rle_trans with (1:=Hx).
+apply Hxu1.
+(* *)
+apply Hxu1.
+apply Hxd1.
+rewrite Rabs_left with (1 := Hx) in Hd.
+rewrite Rabs_left1 in Hd.
+now apply Ropp_le_cancel.
+apply Rlt_le, Rle_lt_trans with (2:=Hx).
+apply Hxd1.
+Qed.
+
+Theorem Rnd_N0_pt_unique :
+  forall F : R -> Prop,
+  F 0 ->
+  forall x f1 f2 : R,
+  Rnd_N0_pt F x f1 -> Rnd_N0_pt F x f2 ->
+  f1 = f2.
+Proof.
+intros F HF x f1 f2 H1 H2.
+apply (Rnd_NG_pt_unique F _ (Rnd_N0_pt_unique_prop F HF) x).
+now apply -> Rnd_N0_NG_pt.
+now apply -> Rnd_N0_NG_pt.
+Qed.
+
+Theorem Rnd_N0_pt_N :
+  forall F : R -> Prop,
+  F 0 ->
+  forall x f : R,
+  Rnd_N_pt F x f ->
+  (Rabs f <= Rabs x)%R ->
+  Rnd_N0_pt F x f.
+Proof.
+intros F HF x f Rxf Hxf.
+split.
+apply Rxf.
+intros g Rxg.
+destruct (Rabs_eq_Rabs (f - x) (g - x)) as [H|H].
+apply Rle_antisym.
+apply Rxf.
+apply Rxg.
+apply Rxg.
+apply Rxf.
+(* *)
+replace g with f.
+apply Rle_refl.
+apply Rplus_eq_reg_r with (1 := H).
+(* *)
+assert (g = 2 * x - f)%R.
+replace (2 * x - f)%R with (x - (f - x))%R by ring.
+rewrite H.
+ring.
+destruct (Rle_lt_dec 0 x) as [Hx|Hx].
+(* . *)
+revert Hxf.
+rewrite Rabs_pos_eq with (1 := Hx).
+rewrite 2!Rabs_pos_eq ; try ( apply (Rnd_N_pt_ge_0 F HF x) ; assumption ).
+intros Hxf.
+rewrite H0.
+apply Rplus_le_reg_r with f.
+ring_simplify.
+apply Rmult_le_compat_l with (2 := Hxf).
+now apply IZR_le.
+(* . *)
+revert Hxf.
+apply Rlt_le in Hx.
+rewrite Rabs_left1 with (1 := Hx).
+rewrite 2!Rabs_left1 ; try ( apply (Rnd_N_pt_le_0 F HF x) ; assumption ).
+intros Hxf.
+rewrite H0.
+apply Ropp_le_contravar.
+apply Rplus_le_reg_r with f.
+ring_simplify.
+apply Rmult_le_compat_l.
+now apply IZR_le.
+now apply Ropp_le_cancel.
+Qed.
+
+Theorem Rnd_N0_unique :
+  forall (F : R -> Prop),
+  F 0 ->
+  forall rnd1 rnd2 : R -> R,
+  Rnd_N0 F rnd1 -> Rnd_N0 F rnd2 ->
+  forall x, rnd1 x = rnd2 x.
+Proof.
+intros F HF rnd1 rnd2 H1 H2 x.
+now apply Rnd_N0_pt_unique with F x.
+Qed.
+
+Theorem Rnd_N0_pt_monotone :
+  forall F : R -> Prop,
+  F 0 ->
+  round_pred_monotone (Rnd_N0_pt F).
+Proof.
+intros F HF x y f g Hxf Hyg Hxy.
+apply (Rnd_NG_pt_monotone F _ (Rnd_N0_pt_unique_prop F HF) x y).
+now apply -> Rnd_N0_NG_pt.
+now apply -> Rnd_N0_NG_pt.
+exact Hxy.
+Qed.
+
+Theorem Rnd_N0_pt_refl :
+  forall F : R -> Prop,
+  forall x : R, F x ->
+  Rnd_N0_pt F x x.
+Proof.
+intros F x Hx.
+split.
+now apply Rnd_N_pt_refl.
+intros f Hxf.
+apply Req_le.
+apply f_equal.
+now apply sym_eq, Rnd_N_pt_idempotent with (1 := Hxf).
+Qed.
+
+Theorem Rnd_N0_pt_idempotent :
+  forall F : R -> Prop,
+  forall x f : R,
+  Rnd_N0_pt F x f -> F x ->
+  f = x.
+Proof.
+intros F x f (Hf,_) Hx.
+now apply Rnd_N_pt_idempotent with F.
+Qed.
+
+
+
+
 Theorem round_pred_ge_0 :
   forall P : R -> R -> Prop,
   round_pred_monotone P ->
@@ -1403,6 +1651,40 @@ apply Hf.
 apply Hany.
 apply Rnd_NA_pt_monotone.
 apply Hany.
+Qed.
+
+Theorem satisfies_any_imp_N0 :
+  forall F : R -> Prop,
+  F 0 -> satisfies_any F ->
+  round_pred (Rnd_N0_pt F).
+Proof.
+intros F HF0 Hany.
+split.
+assert (H : round_pred_total (Rnd_NG_pt F (fun a b => (Rabs b <= Rabs a)%R))).
+apply satisfies_any_imp_NG.
+apply Hany.
+intros x d u Hf Hd Hu.
+destruct (Rle_lt_dec 0 x) as [Hx|Hx].
+right.
+rewrite Rabs_pos_eq with (1 := Hx).
+rewrite Rabs_pos_eq.
+apply Hd.
+apply Hd; try easy.
+left.
+rewrite Rabs_left with (1 := Hx).
+rewrite Rabs_left1.
+apply Ropp_le_contravar.
+apply Hu.
+apply Hu; try easy.
+now apply Rlt_le.
+intros x.
+destruct (H x) as (f, Hf).
+exists f.
+apply <- Rnd_N0_NG_pt.
+apply Hf.
+apply HF0.
+apply Rnd_N0_pt_monotone.
+apply HF0.
 Qed.
 
 End RND_prop.
