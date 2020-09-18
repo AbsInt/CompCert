@@ -266,7 +266,7 @@ Qed.
 Remark Ztestbit_shiftin_base:
   forall b x, Z.testbit (Zshiftin b x) 0 = b.
 Proof.
-  intros. rewrite Ztestbit_shiftin. apply zeq_true. omega.
+  intros. rewrite Ztestbit_shiftin; reflexivity.
 Qed.
 
 Remark Ztestbit_shiftin_succ:
@@ -316,7 +316,7 @@ Qed.
 Remark Ztestbit_base:
   forall x, Z.testbit x 0 = Z.odd x.
 Proof.
-  intros. rewrite Ztestbit_eq. apply zeq_true. omega.
+  intros. rewrite Ztestbit_eq; reflexivity.
 Qed.
 
 Remark Ztestbit_succ:
