@@ -1,9 +1,7 @@
 #!/bin/sh
-# Start coqide with the right -I options
+# Start coqide with the right options
 # Use the Makefile to rebuild dependencies if needed
 # Recompile the modified file after coqide editing
-
-INCLUDES=`make print-includes`
 
 make -q ${1}o || {
   make -n ${1}o | grep -v "\\b${1}\\b" | \
@@ -12,4 +10,4 @@ make -q ${1}o || {
    done)
 }
 
-"${COQBIN}coqide" -async-proofs off $INCLUDES $1 && make ${1}o
+"${COQBIN}coqide" -async-proofs off $1 && make ${1}o
