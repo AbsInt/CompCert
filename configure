@@ -27,6 +27,8 @@ clightgen=false
 install_coqdev=false
 responsefile="gnu"
 ignore_coq_version=false
+library_Flocq=local
+library_MenhirLib=local
 
 usage='Usage: ./configure [options] target
 For help on options and targets, do: ./configure -help
@@ -84,6 +86,8 @@ Options:
   -libdir <dir>        Install libraries in <dir>
   -coqdevdir <dir>     Install Coq development (.vo files) in <dir>
   -toolprefix <pref>   Prefix names of tools ("gcc", etc) with <pref>
+  -use-external-Flocq  Use an already-installed Flocq library
+  -use-external-MenhirLib  Use an already-installed MenhirLib library
   -no-runtime-lib      Do not compile nor install the runtime support library
   -no-standard-headers Do not install nor use the standard .h headers
   -clightgen           Also compile and install the clightgen tool
@@ -124,6 +128,10 @@ while : ; do
         ignore_coq_version=true;;
     -install-coqdev|--install-coqdev|-install-coq-dev|--install-coq-dev)
         install_coqdev=true;;
+    -use-external-Flocq|--use-external-Flocq)
+        library_Flocq=external;;
+    -use-external-MenhirLib|--use-external-MenhirLib)
+        library_MenhirLib=external;;
     -help|--help)
         echo "$help"; exit 0;;
     -*)
@@ -611,47 +619,6 @@ if $missingtools; then
   exit 2
 fi
 
-cat > .merlin <<EOF
-S lib
-S common
-S $arch
-S backend
-S cfrontend
-S driver
-S debug
-S exportclight
-S cparser
-S extraction
-
-B lib
-B common
-B $arch
-B backend
-B cfrontend
-B driver
-B debug
-B exportclight
-B cparser
-B extraction
-
-EOF
-
-echo "-R lib compcert.lib \
--R common compcert.common \
--R ${arch} compcert.${arch} \
--R backend compcert.backend \
--R cfrontend compcert.cfrontend \
--R driver compcert.driver \
--R flocq compcert.flocq \
--R exportclight compcert.exportclight \
--R cparser compcert.cparser \
--R MenhirLib compcert.MenhirLib" > _CoqProject
-case $arch in
-    x86)
-        echo "-R x86_${bitsize} compcert.x86_${bitsize}" >> _CoqProject
-        ;;
-esac
-
 #
 # Generate Makefile.config
 #
@@ -694,6 +661,8 @@ LIBMATH=$libmath
 MODEL=$model
 SYSTEM=$system
 RESPONSEFILE=$responsefile
+LIBRARY_FLOCQ=$library_Flocq
+LIBRARY_MENHIRLIB=$library_MenhirLib
 EOF
 else
 cat >> Makefile.config <<'EOF'
@@ -787,8 +756,40 @@ CLIGHTGEN=false
 # Whether the other tools support responsefiles in gnu syntax
 RESPONSEFILE="none"
 
+# Whether to use the local copies of Flocq and MenhirLib
+LIBRARY_FLOCQ=local      # external
+LIBRARY_MENHIRLIB=local  # external
 EOF
 fi
+
+#
+# Generate Merlin and CoqProject files to simplify development
+#
+cat > .merlin <<EOF
+S lib
+S common
+S $arch
+S backend
+S cfrontend
+S driver
+S debug
+S exportclight
+S cparser
+S extraction
+
+B lib
+B common
+B $arch
+B backend
+B cfrontend
+B driver
+B debug
+B exportclight
+B cparser
+B extraction
+EOF
+
+make CoqProject
 
 #
 # Clean up target-dependent files to force their recompilation
@@ -828,6 +829,8 @@ CompCert configuration:
     Math library.................. $libmath
     Build command to use.......... $make
     Menhir API library............ $menhir_dir
+    The Flocq library............. $library_Flocq
+    The MenhirLib library......... $library_MenhirLib
     Binaries installed in......... $bindirexp
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $libdirexp
@@ -846,4 +849,3 @@ EOF
 fi
 
 fi
-

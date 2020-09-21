@@ -17,8 +17,7 @@
 (** Formalization of floating-point numbers, using the Flocq library. *)
 
 Require Import Coqlib Zbits Integers.
-(*From Flocq*)
-Require Import Binary Bits Core.
+From Flocq Require Import Binary Bits Core.
 Require Import IEEE754_extra.
 Require Import Program.
 Require Archi.

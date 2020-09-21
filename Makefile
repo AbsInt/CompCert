@@ -27,14 +27,19 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
-DIRS=lib common $(ARCHDIRS) backend cfrontend driver \
-  flocq/Core flocq/Prop flocq/Calc flocq/IEEE754 \
-  exportclight MenhirLib cparser
+DIRS := lib common $(ARCHDIRS) backend cfrontend driver exportclight cparser
 
-RECDIRS=lib common $(ARCHDIRS) backend cfrontend driver flocq exportclight \
-  MenhirLib cparser
+COQINCLUDES := $(foreach d, $(DIRS), -R $(d) compcert.$(d))
 
-COQINCLUDES=$(foreach d, $(RECDIRS), -R $(d) compcert.$(d))
+ifeq ($(LIBRARY_FLOCQ),local)
+DIRS += flocq/Core flocq/Prop flocq/Calc flocq/IEEE754
+COQINCLUDES += -R flocq Flocq
+endif
+
+ifeq ($(LIBRARY_MENHIRLIB),local)
+DIRS += MenhirLib
+COQINCLUDES += -R MenhirLib MenhirLib
+endif
 
 COQCOPTS ?= -w -undeclared-scope -w -omega-is-deprecated
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
@@ -50,6 +55,7 @@ GPATH=$(DIRS)
 
 # Flocq
 
+ifeq ($(LIBRARY_FLOCQ),local)
 FLOCQ=\
   Raux.v Zaux.v Defs.v Digits.v Float_prop.v FIX.v FLT.v FLX.v FTZ.v \
   Generic_fmt.v Round_pred.v Round_NE.v Ulp.v Core.v \
@@ -57,6 +63,9 @@ FLOCQ=\
   Div_sqrt_error.v Mult_error.v Plus_error.v \
   Relative.v Sterbenz.v Round_odd.v Double_rounding.v \
   Binary.v Bits.v
+else
+FLOCQ=
+endif
 
 # General-purpose libraries (in lib/)
 
@@ -117,9 +126,13 @@ PARSER=Cabs.v Parser.v
 
 # MenhirLib
 
+ifeq ($(LIBRARY_MENHIRLIB),local)
 MENHIRLIB=Alphabet.v Automaton.v Grammar.v Interpreter_complete.v \
   Interpreter_correct.v Interpreter.v Main.v Validator_complete.v \
   Validator_safe.v Validator_classes.v
+else
+MENHIRLIB=
+endif
 
 # Putting everything together (in driver/)
 
@@ -259,7 +272,7 @@ driver/Version.ml: VERSION
 
 cparser/Parser.v: cparser/Parser.vy
 	@rm -f $@
-	$(MENHIR) --coq --coq-lib-path compcert.MenhirLib --coq-no-version-check cparser/Parser.vy
+	$(MENHIR) --coq --coq-no-version-check cparser/Parser.vy
 	@chmod a-w $@
 
 depend: $(GENERATED) depend1
@@ -317,6 +330,9 @@ check-proof: $(FILES)
 
 print-includes:
 	@echo $(COQINCLUDES)
+
+CoqProject:
+	@echo $(COQINCLUDES) > _CoqProject
 
 -include .depend
 
