@@ -646,21 +646,20 @@ Fixpoint transl_stmt (map: mapping) (s: stmt) (nd: node)
 
 (** Preallocate CFG nodes for each label defined in the function body. *)
 
-Definition alloc_label (lbl: Cminor.label) (maps: labelmap * state) : labelmap * state :=
-  let (map, s) := maps in
-  let n := s.(st_nextnode) in
-  (PTree.set lbl n map,
-   mkstate s.(st_nextreg) (Pos.succ s.(st_nextnode)) s.(st_code) (reserve_instr_wf s)).
+Definition alloc_label (lbl: Cminor.label) (map: labelmap) : mon labelmap :=
+  do n <- reserve_instr;
+  ret (PTree.set lbl n map).
+   
 
-Fixpoint reserve_labels (s: stmt) (ms: labelmap * state)
-                        {struct s} : labelmap * state :=
+Fixpoint reserve_labels (s: stmt) (lm: labelmap)
+                        {struct s} : mon labelmap :=
   match s with
-  | Sseq s1 s2 => reserve_labels s1 (reserve_labels s2 ms)
-  | Sifthenelse c s1 s2 => reserve_labels s1 (reserve_labels s2 ms)
-  | Sloop s1 => reserve_labels s1 ms
-  | Sblock s1 => reserve_labels s1 ms
-  | Slabel lbl s1 => alloc_label lbl (reserve_labels s1 ms)
-  | _ => ms
+  | Sseq s1 s2 | Sifthenelse _ s1 s2 =>
+      do lm' <- reserve_labels s2 lm; reserve_labels s1 lm'
+  | Sloop s1 | Sblock s1 => reserve_labels s1 lm
+  | Slabel lbl s1 =>
+      do lm' <- reserve_labels s1 lm; alloc_label lbl lm'
+  | _ => ret lm
   end.
 
 (** Translation of a CminorSel function. *)
@@ -668,7 +667,8 @@ Fixpoint reserve_labels (s: stmt) (ms: labelmap * state)
 Definition ret_reg (sig: signature) (rd: reg) : option reg :=
   if rettype_eq sig.(sig_res) Tvoid then None else Some rd.
 
-Definition transl_fun (f: CminorSel.function) (ngoto: labelmap): mon (node * list reg) :=
+Definition transl_fun (f: CminorSel.function): mon (node * list reg) :=
+  do ngoto <- reserve_labels f.(fn_body) (PTree.empty node);
   do (rparams, map1) <- add_vars init_mapping f.(CminorSel.fn_params);
   do (rvars, map2) <- add_vars map1 f.(CminorSel.fn_vars);
   do rret <- new_reg;
@@ -678,8 +678,7 @@ Definition transl_fun (f: CminorSel.function) (ngoto: labelmap): mon (node * lis
   ret (nentry, rparams).
 
 Definition transl_function (f: CminorSel.function) : Errors.res RTL.function :=
-  let (ngoto, s0) := reserve_labels f.(fn_body) (PTree.empty node, init_state) in
-  match transl_fun f ngoto s0 with
+  match transl_fun f init_state with
   | Error msg => Errors.Error msg
   | OK (nentry, rparams) s i =>
       Errors.OK (RTL.mkfunction

@@ -1,3 +1,7 @@
+Coq development:
+- RTLgen: use the state and error monad for reserving goto labels (#371)
+  (by Pierre Nigron)
+
 Release 3.11, 2022-06-27
 ========================
 
