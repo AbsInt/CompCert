@@ -1339,14 +1339,12 @@ Lemma transl_function_charact:
   tr_function f tf.
 Proof.
   intros until tf. unfold transl_function.
-  caseEq (reserve_labels (fn_body f) (PTree.empty node, init_state)).
-  intros ngoto s0 RESERVE.
-  caseEq (transl_fun f ngoto s0). congruence.
+  caseEq (transl_fun f init_state). congruence.
   intros [nentry rparams] sfinal INCR TR E. inv E.
   monadInv TR.
-  exploit add_vars_valid. eexact EQ. apply init_mapping_valid.
+  exploit add_vars_valid. eexact EQ1. apply init_mapping_valid.
   intros [A B].
-  exploit add_vars_valid. eexact EQ1. auto.
+  exploit add_vars_valid. eexact EQ0. auto.
   intros [C D].
   eapply tr_function_intro; eauto with rtlg.
   eapply transl_stmt_charact; eauto with rtlg.

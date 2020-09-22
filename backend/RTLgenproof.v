@@ -397,9 +397,8 @@ Lemma sig_transl_function:
 Proof.
   intros until tf. unfold transl_fundef, transf_partial_fundef.
   case f; intro.
-  unfold transl_function.
-  destruct (reserve_labels (fn_body f0) (PTree.empty node, init_state)) as [ngoto s0].
-  case (transl_fun f0 ngoto s0); simpl; intros.
+  unfold transl_function. 
+  case (transl_fun f0 (init_state)); simpl; intros.
   discriminate.
   destruct p. simpl in H. inversion H. reflexivity.
   intro. inversion H. reflexivity.
