@@ -28,6 +28,12 @@ SRC+=arrays.c eval.c gmllexer.c gmlparser.c intersect.c light.c main.c \
 
 CFLAGS=-DSYSTEM_$(SYSTEM)
 
+aes.vo almabench.vo binarytrees.vo bisect.vo chomp.vo: CFLAGS += -short-idents
+
+fft.vo fftsp.vo fftw.vo fib.vo integr.vo knucleotide.vo: CFLAGS += -short-idents -normalize
+
+qsort.vo sha1.vo sha3.vo siphash24.vo spectral.vo vmach.vo: CFLAGS += -normalize
+
 all: $(SRC:.c=.vo)
 
 test:
