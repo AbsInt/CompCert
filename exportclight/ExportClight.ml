@@ -43,70 +43,6 @@ let print_list fn p l =
       in plist l;
       fprintf p ")@]"
 
-(* Identifiers *)
-
-exception Not_an_identifier
-
-let sanitize s =
-  let s' = Bytes.create (String.length s) in
-  for i = 0 to String.length s - 1 do
-    Bytes.set  s' i
-    (match String.get s i with
-      | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' as c -> c
-      | ' ' | '$' -> '_'
-      | _ -> raise Not_an_identifier)
-  done;
-  Bytes.to_string s'
-
-let temp_names : (ident, string) Hashtbl.t = Hashtbl.create 17
-
-let ident p id =
-  try
-    let s = Hashtbl.find string_of_atom id in
-    fprintf p "_%s" (sanitize s)
-  with Not_found | Not_an_identifier ->
-  try
-    let s = Hashtbl.find temp_names id in
-    fprintf p "%s" s
-  with Not_found ->
-    fprintf p "%ld%%positive" (P.to_int32 id)
-
-let iter_hashtbl_sorted (h: ('a, string) Hashtbl.t) (f: 'a * string -> unit) =
-  List.iter f
-    (List.fast_sort (fun (k1, d1) (k2, d2) -> String.compare d1 d2)
-      (Hashtbl.fold (fun k d accu -> (k, d) :: accu) h []))
-
-let define_idents p =
-  iter_hashtbl_sorted
-    string_of_atom
-    (fun (id, name) ->
-      try
-        if !use_canonical_atoms && id = pos_of_string name then
-          fprintf p "Definition _%s : ident := $\"%s\".@ "
-                    (sanitize name) name
-        else
-          fprintf p "Definition _%s : ident := %ld%%positive.@ "
-                    (sanitize name) (P.to_int32 id)
-      with Not_an_identifier ->
-        ());
-  iter_hashtbl_sorted
-    temp_names
-    (fun (id, name) ->
-      fprintf p "Definition %s : ident := %ld%%positive.@ "
-                name (P.to_int32 id));
-  fprintf p "@ "
-
-let name_temporary t =
-  if not (Hashtbl.mem string_of_atom t) && not (Hashtbl.mem temp_names t)
-  then begin
-    let t1 = P.to_int t and t0 = P.to_int (first_unused_ident ()) in
-    Hashtbl.add temp_names t (sprintf "_t'%d" (t1 - t0 + 1))
-  end
-
-let name_opt_temporary = function
-  | None -> ()
-  | Some id -> name_temporary id
-
 (* Numbers *)
 
 let coqint p n =
@@ -133,8 +69,11 @@ let coqfloat p n =
 let coqsingle p n =
   fprintf p "(Float32.of_bits %a)" coqint (Floats.Float32.to_bits n)
 
+let positive p n =
+  fprintf p "%s%%positive" (Z.to_string (Z.Zpos n))
+
 let coqN p n =
-  fprintf p "%ld%%N" (N.to_int32 n)
+  fprintf p "%s%%N" (Z.to_string (Z.of_N n))
 
 let coqZ p n =
   if Z.ge n Z.zero
@@ -145,6 +84,71 @@ let coqZ p n =
 
 let coqstring p s =
   fprintf p "\"%s\"" (camlstring_of_coqstring s)
+
+(* Identifiers *)
+
+exception Not_an_identifier
+
+let sanitize s =
+  let s' = Bytes.create (String.length s) in
+  for i = 0 to String.length s - 1 do
+    Bytes.set  s' i
+    (match String.get s i with
+      | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' as c -> c
+      | ' ' | '$' -> '_'
+      | _ -> raise Not_an_identifier)
+  done;
+  Bytes.to_string s'
+
+let temp_names : (ident, string) Hashtbl.t = Hashtbl.create 17
+
+let ident p id =
+  try
+    let s = Hashtbl.find string_of_atom id in
+    fprintf p "_%s" (sanitize s)
+  with Not_found | Not_an_identifier ->
+  try
+    let s = Hashtbl.find temp_names id in
+    fprintf p "%s" s
+  with Not_found ->
+    positive p id
+
+let iter_hashtbl_sorted (h: ('a, string) Hashtbl.t) (f: 'a * string -> unit) =
+  List.iter f
+    (List.fast_sort (fun (k1, d1) (k2, d2) -> String.compare d1 d2)
+      (Hashtbl.fold (fun k d accu -> (k, d) :: accu) h []))
+
+let define_idents p =
+  iter_hashtbl_sorted
+    string_of_atom
+    (fun (id, name) ->
+      try
+        if !use_canonical_atoms && id = pos_of_string name then
+          fprintf p "Definition _%s : ident := $\"%s\".@ "
+                    (sanitize name) name
+        else
+          fprintf p "Definition _%s : ident := %a.@ "
+                    (sanitize name) positive id
+      with Not_an_identifier ->
+        ());
+  iter_hashtbl_sorted
+    temp_names
+    (fun (id, name) ->
+      fprintf p "Definition %s : ident := %a.@ "
+                name positive id);
+  fprintf p "@ "
+
+let name_temporary t =
+  if not (Hashtbl.mem string_of_atom t) && not (Hashtbl.mem temp_names t)
+  then begin
+    let t0 = first_unused_ident () in
+    let d = Z.succ (Z.sub (Z.Zpos t) (Z.Zpos t0)) in
+    Hashtbl.add temp_names t ("_t'" ^ Z.to_string d)
+  end
+
+let name_opt_temporary = function
+  | None -> ()
+  | Some id -> name_temporary id
 
 (* Raw attributes *)
 
@@ -269,14 +273,14 @@ let external_function p = function
   | EF_memcpy(sz, al) ->
       fprintf p "(EF_memcpy %ld %ld)" (Z.to_int32 sz) (Z.to_int32 al)
   | EF_annot(kind, text, targs) ->
-      fprintf p "(EF_annot %ld%%positive %a %a)"
-                (P.to_int32 kind) coqstring text (print_list asttype) targs
+      fprintf p "(EF_annot %a %a %a)"
+                positive kind coqstring text (print_list asttype) targs
   | EF_annot_val(kind, text, targ) ->
-      fprintf p "(EF_annot_val %ld%%positive %a %a)"
-                (P.to_int32 kind) coqstring text asttype targ
+      fprintf p "(EF_annot_val %a %a %a)"
+                positive kind coqstring text asttype targ
   | EF_debug(kind, text, targs) ->
-      fprintf p "(EF_debug %ld%%positive %ld%%positive %a)"
-                (P.to_int32 kind) (P.to_int32 text) (print_list asttype) targs
+      fprintf p "(EF_debug %a %a %a)"
+                positive kind positive text (print_list asttype) targs
   | EF_inline_asm(text, sg, clob) ->
       fprintf p "@[<hov 2>(EF_inline_asm %a@ %a@ %a)@]"
               coqstring text
