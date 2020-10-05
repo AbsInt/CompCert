@@ -39,18 +39,18 @@
 // Conversion unsigned long -> double-precision float
 
 FUNCTION(__compcert_i64_utod)
-        testq   %rdi, %rdi
+        testq   INT_ARG_1, INT_ARG_1
         js      1f
-        pxor    %xmm0, %xmm0            // if < 2^63,
-        cvtsi2sdq %rdi, %xmm0           // convert as if signed
+        pxor    FP_RES, FP_RES          // if < 2^63,
+        cvtsi2sdq INT_ARG_1, FP_RES     // convert as if signed
         ret
 1:                                      // if >= 2^63, use round-to-odd trick
-        movq    %rdi, %rax
+        movq    INT_ARG_1, %rax
         shrq    %rax
-        andq    $1, %rdi
-        orq     %rdi, %rax              // (arg >> 1) | (arg & 1)
-        pxor    %xmm0, %xmm0
-        cvtsi2sdq %rax, %xmm0           // convert as if signed
-        addsd   %xmm0, %xmm0            // multiply result by 2.0
+        andq    $1, INT_ARG_1
+        orq     INT_ARG_1, %rax         // (arg >> 1) | (arg & 1)
+        pxor    FP_RES, FP_RES
+        cvtsi2sdq %rax, FP_RES          // convert as if signed
+        addsd   FP_RES, FP_RES          // multiply result by 2.0
         ret
 ENDFUNCTION(__compcert_i64_utod)       

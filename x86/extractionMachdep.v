@@ -15,15 +15,19 @@
 
 (* Additional extraction directives specific to the x86-64 port *)
 
-Require SelectOp ConstpropOp.
+Require Archi SelectOp.
+
+(* Archi *)
+
+Extract Constant Archi.win64 =>
+  "match Configuration.system with
+    | ""cygwin"" when ptr64 -> true
+    | _ -> false".
 
 (* SelectOp *)
 
 Extract Constant SelectOp.symbol_is_external =>
-  "fun id -> Configuration.system = ""macosx"" && C2C.atom_is_extern id".
-
-(* ConstpropOp *)
-
-Extract Constant ConstpropOp.symbol_is_external =>
-  "fun id -> Configuration.system = ""macosx"" && C2C.atom_is_extern id".
-
+  "match Configuration.system with
+    | ""macosx"" -> C2C.atom_is_extern
+    | ""cygwin"" when Archi.ptr64 -> C2C.atom_is_extern
+    | _ -> (fun _ -> false)".

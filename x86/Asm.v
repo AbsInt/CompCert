@@ -279,6 +279,7 @@ Inductive instruction: Type :=
   | Pmaxsd (rd: freg) (r2: freg)
   | Pminsd (rd: freg) (r2: freg)
   | Pmovb_rm (rd: ireg) (a: addrmode)
+  | Pmovq_rf (rd: ireg) (r1: freg)
   | Pmovsq_mr  (a: addrmode) (rs: freg)
   | Pmovsq_rm (rd: freg) (a: addrmode)
   | Pmovsb
@@ -998,6 +999,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmaxsd _ _
   | Pminsd _ _
   | Pmovb_rm _ _
+  | Pmovq_rf _ _
   | Pmovsq_rm _ _
   | Pmovsq_mr _ _
   | Pmovsb

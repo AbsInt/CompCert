@@ -19,8 +19,12 @@ open C
 
 let (va_list_type, va_list_scalar, size_va_list) =
   if Archi.ptr64 then
-    (* Actually a struct passed by reference; equivalent to 3 64-bit words *)
-    (TArray(TInt(IULong, []), Some 3L, []), false, 3*8)
+    if Archi.win64 then
+      (* Just a pointer *)
+      (TPtr(TVoid [], []), true, 8)
+    else
+      (* Actually a struct passed by reference; equivalent to 3 64-bit words *)
+      (TArray(TInt(IULong, []), Some 3L, []), false, 3*8)
   else
     (* Just a pointer *)
     (TPtr(TVoid [], []), true, 4)

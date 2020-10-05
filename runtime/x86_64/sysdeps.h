@@ -63,13 +63,25 @@ _##f:
 
 #if defined(SYS_cygwin)
 
-#define GLOB(x) _##x
+#define GLOB(x) x
 #define FUNCTION(f) \
 	.text; \
-	.globl _##f; \
+	.globl f; \
 	.align 16; \
-_##f:
+f:
 
 #define ENDFUNCTION(f)
 
 #endif
+
+// Names for argument and result registers
+
+#if defined(SYS_cygwin)
+#define INT_ARG_1 %rcx
+#else
+#define INT_ARG_1 %rdi
+#endif
+#define FP_ARG_1 %xmm0
+#define INT_RES %rax
+#define FP_RES %xmm0
+

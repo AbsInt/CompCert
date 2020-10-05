@@ -34,6 +34,12 @@
 
 // Helper functions for variadic functions <stdarg.h>.  x86_64 version.
 	
+#include "sysdeps.h"
+
+// ELF ABI
+
+#if defined(SYS_linux) || defined(SYS_bsd) || defined(SYS_macosx)
+
 // typedef struct {
 //    unsigned int gp_offset;
 //    unsigned int fp_offset;
@@ -59,8 +65,6 @@
 // unsigned int __compcert_va_int32(va_list ap);
 // unsigned long long __compcert_va_int64(va_list ap);
 // double __compcert_va_float64(va_list ap);
-
-#include "sysdeps.h"
 
 FUNCTION(__compcert_va_int32)
         movl    0(%rdi), %edx           // edx = gp_offset
@@ -146,3 +150,58 @@ FUNCTION(__compcert_va_saveregs)
         movaps %xmm7, 160(%r10)
 1:      ret
 ENDFUNCTION(__compcert_va_saveregs)
+
+#endif
+
+// Windows ABI
+
+#if defined(SYS_cygwin)
+
+// typedef void * va_list;
+// unsigned int __compcert_va_int32(va_list * ap);
+// unsigned long long __compcert_va_int64(va_list * ap);
+// double __compcert_va_float64(va_list * ap);
+
+FUNCTION(__compcert_va_int32)      // %rcx = pointer to argument pointer
+        movq 0(%rcx), %rdx         // %rdx = current argument pointer
+        movl 0(%rdx), %eax         // load the int32 value there
+        addq $8, %rdx              // increment argument pointer by 8
+        movq %rdx, 0(%rcx)
+        ret
+ENDFUNCTION(__compcert_va_int32)
+        
+FUNCTION(__compcert_va_int64)      // %rcx = pointer to argument pointer
+        movq 0(%rcx), %rdx         // %rdx = current argument pointer
+        movq 0(%rdx), %rax         // load the int64 value there
+        addq $8, %rdx              // increment argument pointer by 8
+        movq %rdx, 0(%rcx)
+        ret
+ENDFUNCTION(__compcert_va_int64)
+	
+FUNCTION(__compcert_va_float64)    // %rcx = pointer to argument pointer
+        movq 0(%rcx), %rdx         // %rdx = current argument pointer
+        movsd 0(%rdx), %xmm0       // load the float64 value there
+        addq $8, %rdx              // increment argument pointer by 8
+        movq %rdx, 0(%rcx)
+        ret
+ENDFUNCTION(__compcert_va_float64)
+
+FUNCTION(__compcert_va_composite)
+        jmp     GLOB(__compcert_va_int64)     // by-ref convention, FIXME
+ENDFUNCTION(__compcert_va_composite)
+
+// Save arguments passed in register in the stack at beginning of vararg
+// function.  The caller of the vararg function reserved 32 bytes of stack
+// just for this purpose.
+// FP arguments are passed both in FP registers and integer registers,
+// so it's enough to save the integer registers used for parameter passing.
+
+FUNCTION(__compcert_va_saveregs)
+        movq %rcx, 16(%rsp)
+        movq %rdx, 24(%rsp)
+        movq %r8, 32(%rsp)
+        movq %r9, 40(%rsp)
+        ret
+ENDFUNCTION(__compcert_va_saveregs)
+
+#endif

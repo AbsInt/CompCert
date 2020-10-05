@@ -239,8 +239,11 @@ module MacOS_System : SYSTEM =
 module Cygwin_System : SYSTEM =
   struct
 
+    let symbol_prefix =
+      if Archi.ptr64 then "" else "_"
+
     let raw_symbol oc s =
-       fprintf oc "_%s" s
+       fprintf oc "%s%s" symbol_prefix s
 
     let symbol oc symb =
       raw_symbol oc (extern_atom symb)
@@ -268,19 +271,39 @@ module Cygwin_System : SYSTEM =
       | Section_debug_str-> assert false (* Should not be used *)
       | Section_ais_annotation -> assert false (* Not supported for coff binaries *)
 
-    let stack_alignment = 8 (* minimum is 4, 8 is better for perfs *)
+    let stack_alignment = 8
+      (* minimum is 4 for 32 bits, 8 for 64 bits; 8 is better for perfs *)
 
     let print_align oc n =
       fprintf oc "	.balign	%d\n" n
 
+    let indirect_symbols : StringSet.t ref = ref StringSet.empty
+
     let print_mov_rs oc rd id =
-      fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
+      if Archi.ptr64 then begin
+        let s = extern_atom id in
+        indirect_symbols := StringSet.add s !indirect_symbols;
+        fprintf oc "	movq	.refptr.%s(%%rip), %a\n" s ireg rd
+      end else begin
+        fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
+      end
 
     let print_fun_info _ _  = ()
 
     let print_var_info _ _ = ()
 
-    let print_epilogue _ = ()
+    let declare_indirect_symbol oc s =
+      fprintf oc "	.section	.rdata$.refptr.%s, \"dr\"\n" s;
+      fprintf oc "	.globl	.refptr.%s\n" s;
+      fprintf oc "	.linkonce	discard\n";
+      fprintf oc ".refptr.%s:\n" s;
+      fprintf oc "	.quad	%s\n" s
+
+    let print_epilogue oc =
+      if Archi.ptr64 then begin
+        StringSet.iter (declare_indirect_symbol oc) !indirect_symbols;
+        indirect_symbols := StringSet.empty
+      end
 
     let print_comm_decl oc name sz al =
       fprintf oc "	.comm   %a, %s, %d\n" 
@@ -288,7 +311,8 @@ module Cygwin_System : SYSTEM =
 
     let print_lcomm_decl oc name sz al =
       fprintf oc "	.lcomm   %a, %s, %d\n" 
-                 symbol name (Z.to_string sz) (log2 al)
+                 symbol name (Z.to_string sz)
+                 (if Archi.ptr64 then al else log2 al)
 
   end
 
@@ -769,6 +793,8 @@ module Target(System: SYSTEM):TARGET =
 	 fprintf oc "	minsd	%a, %a\n" freg a1 freg res
       | Pmovb_rm (rd,a) ->
 	 fprintf oc "	movb	%a, %a\n" addressing a ireg8 rd
+      | Pmovq_rf (rd, r1) ->
+         fprintf oc "	movq	%a, %a\n" freg r1 ireg64 rd
       | Pmovsq_mr(a, rs) ->
           fprintf oc "	movq	%a, %a\n" freg rs addressing a
       | Pmovsq_rm(rd, a) ->

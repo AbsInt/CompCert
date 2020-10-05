@@ -15,11 +15,13 @@
 Require Import Coqlib.
 Require Import AST Memory Separation.
 Require Import Bounds.
+Require Archi.
 
 Local Open Scope sep_scope.
 
 (** The general shape of activation records is as follows,
   from bottom (lowest offsets) to top:
+- For the Win64 ABI: 32 reserved bytes
 - Space for outgoing arguments to function calls.
 - Back link to parent frame
 - Saved values of integer callee-save registers used by the function.
@@ -29,11 +31,11 @@ Local Open Scope sep_scope.
 - Return address.
 *)
 
-Definition fe_ofs_arg := 0.
+Definition fe_ofs_arg := if Archi.win64 then 32 else 0.
 
 Definition make_env (b: bounds) : frame_env :=
   let w := if Archi.ptr64 then 8 else 4 in
-  let olink := align (4 * b.(bound_outgoing)) w in  (* back link *)
+  let olink := align (fe_ofs_arg + 4 * b.(bound_outgoing)) w in  (* back link *)
   let ocs := olink + w in                           (* callee-saves *)
   let ol :=  align (size_callee_save_area b ocs) 8 in (* locals *)
   let ostkdata := align (ol + 4 * b.(bound_local)) 8 in (* stack data *)
@@ -61,7 +63,7 @@ Proof.
 Local Opaque Z.add Z.mul sepconj range.
   intros; simpl.
   set (w := if Archi.ptr64 then 8 else 4).
-  set (olink := align (4 * b.(bound_outgoing)) w).
+  set (olink := align (fe_ofs_arg + 4 * b.(bound_outgoing)) w).
   set (ocs := olink + w).
   set (ol :=  align (size_callee_save_area b ocs) 8).
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
@@ -69,8 +71,9 @@ Local Opaque Z.add Z.mul sepconj range.
   replace (size_chunk Mptr) with w by (rewrite size_chunk_Mptr; auto).
   assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
   generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
+  assert (0 <= fe_ofs_arg) by (unfold fe_ofs_arg; destruct Archi.win64; omega).
   assert (0 <= 4 * b.(bound_outgoing)) by omega.
-  assert (4 * b.(bound_outgoing) <= olink) by (apply align_le; omega).
+  assert (fe_ofs_arg + 4 * b.(bound_outgoing) <= olink) by (apply align_le; omega).
   assert (olink + w <= ocs) by (unfold ocs; omega).
   assert (ocs <= size_callee_save_area b ocs) by (apply size_callee_save_area_incr).
   assert (size_callee_save_area b ocs <= ol) by (apply align_le; omega).
@@ -87,7 +90,7 @@ Local Opaque Z.add Z.mul sepconj range.
   rewrite sep_swap45.
   rewrite sep_swap34.
 (* Apply range_split and range_split2 repeatedly *)
-  unfold fe_ofs_arg.
+  apply range_drop_left with 0. omega. 
   apply range_split_2. fold olink. omega. omega.
   apply range_split. omega.
   apply range_split_2. fold ol. omega. omega.
@@ -105,15 +108,16 @@ Lemma frame_env_range:
 Proof.
   intros; simpl.
   set (w := if Archi.ptr64 then 8 else 4).
-  set (olink := align (4 * b.(bound_outgoing)) w).
+  set (olink := align (fe_ofs_arg + 4 * b.(bound_outgoing)) w).
   set (ocs := olink + w).
   set (ol :=  align (size_callee_save_area b ocs) 8).
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   set (oretaddr := align (ostkdata + b.(bound_stack_data)) w).
   assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
   generalize b.(bound_local_pos) b.(bound_outgoing_pos) b.(bound_stack_data_pos); intros.
+  assert (0 <= fe_ofs_arg) by (unfold fe_ofs_arg; destruct Archi.win64; omega).
   assert (0 <= 4 * b.(bound_outgoing)) by omega.
-  assert (4 * b.(bound_outgoing) <= olink) by (apply align_le; omega).
+  assert (fe_ofs_arg + 4 * b.(bound_outgoing) <= olink) by (apply align_le; omega).
   assert (olink + w <= ocs) by (unfold ocs; omega).
   assert (ocs <= size_callee_save_area b ocs) by (apply size_callee_save_area_incr).
   assert (size_callee_save_area b ocs <= ol) by (apply align_le; omega).
@@ -133,14 +137,14 @@ Lemma frame_env_aligned:
 Proof.
   intros; simpl.
   set (w := if Archi.ptr64 then 8 else 4).
-  set (olink := align (4 * b.(bound_outgoing)) w).
+  set (olink := align (fe_ofs_arg + 4 * b.(bound_outgoing)) w).
   set (ocs := olink + w).
   set (ol :=  align (size_callee_save_area b ocs) 8).
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   set (oretaddr := align (ostkdata + b.(bound_stack_data)) w).
   assert (0 < w) by (unfold w; destruct Archi.ptr64; omega).
   replace (align_chunk Mptr) with w by (rewrite align_chunk_Mptr; auto).
-  split. apply Z.divide_0_r.
+  split. exists (fe_ofs_arg / 8). unfold fe_ofs_arg; destruct Archi.win64; reflexivity.
   split. apply align_divides; omega.
   split. apply align_divides; omega.
   split. apply align_divides; omega.

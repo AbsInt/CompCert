@@ -39,13 +39,13 @@
 // Conversion float -> unsigned long
 
 FUNCTION(__compcert_i64_dtou)
-        ucomisd .LC1(%rip), %xmm0
+        ucomisd .LC1(%rip), FP_ARG_1
         jnb 1f
-        cvttsd2siq %xmm0, %rax
+        cvttsd2siq FP_ARG_1, INT_RES
         ret
-1:      subsd .LC1(%rip), %xmm0
-        cvttsd2siq %xmm0, %rax
-        addq .LC2(%rip), %rax
+1:      subsd .LC1(%rip), FP_ARG_1
+        cvttsd2siq FP_ARG_1, INT_RES
+        addq .LC2(%rip), INT_RES
         ret
 
         .p2align 3

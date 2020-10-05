@@ -58,6 +58,9 @@ Definition fma_invalid_mul_is_nan := false.
 
 Definition float_of_single_preserves_sNaN := false.
 
+(** Which ABI to use. *)
+Parameter win64: bool.
+
 Global Opaque ptr64 big_endian splitlong
               default_nan_64 choose_nan_64
               default_nan_32 choose_nan_32

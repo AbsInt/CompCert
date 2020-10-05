@@ -17,10 +17,9 @@ Require Import Coqlib Compopts.
 Require Import AST Integers Floats.
 Require Import Op Registers.
 Require Import ValueDomain ValueAOp.
+Require SelectOp.
 
 (** * Converting known values to constants *)
-
-Parameter symbol_is_external: ident -> bool.  (**r See [SelectOp] *)
 
 Definition Olea_ptr (a: addressing) := if Archi.ptr64 then Oleal a else Olea a.
 
@@ -31,7 +30,7 @@ Definition const_for_result (a: aval) : option operation :=
   | F n => if Compopts.generate_float_constants tt then Some(Ofloatconst n) else None
   | FS n => if Compopts.generate_float_constants tt then Some(Osingleconst n) else None
   | Ptr(Gl id ofs) =>
-      if symbol_is_external id then
+      if SelectOp.symbol_is_external id then
         if Ptrofs.eq ofs Ptrofs.zero then Some (Oindirectsymbol id) else None
       else
         Some (Olea_ptr (Aglobal id ofs))
