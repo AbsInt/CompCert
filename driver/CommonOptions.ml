@@ -25,26 +25,9 @@ let version_string tool_name =
 let print_version_and_exit tool_name () =
   Printf.printf "%s" (version_string tool_name); exit 0
 
-let version_file_string tool_name =
-  if Version.buildnr <> "" && Version.tag <> "" then
-    Printf.sprintf "This is CompCert %s\nVersion: %s\nBuild: %s\nTag: %s\nBranch: %s\n"
-      tool_name Version.version Version.buildnr Version.tag Version.branch
-  else
-    Printf.sprintf "The CompCert %s,\nversion %s\n" tool_name Version.version
-
-(* Print the version string to a file and exit the program *)
-let print_version_file_and_exit tool_name file =
-  let oc = open_out_bin file in
-  output_string oc (version_file_string tool_name);
-  close_out_noerr oc;
-  exit 0
-
 let version_options tool_name =
   [ Exact "-version", Unit (print_version_and_exit tool_name);
-    Exact "--version", Unit (print_version_and_exit tool_name);
-    Exact "-version-file", String (print_version_file_and_exit tool_name);
-    Exact "--version-file", String (print_version_file_and_exit tool_name);
-  ]
+    Exact "--version", Unit (print_version_and_exit tool_name) ]
 
 (* Language support options *)
 
@@ -105,4 +88,4 @@ let general_options =
     Exact "-target", Ignore;(* Ignore option since it is already handled *)
     Exact "-v", Set option_v;
     Exact "-stdlib", String(fun s -> stdlib_path := s);
-    Exact "-timings", Set option_timings;]
+    Exact "-timings", Set option_timings ]
