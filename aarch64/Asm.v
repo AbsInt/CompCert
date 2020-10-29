@@ -283,6 +283,8 @@ Inductive instruction: Type :=
   | Pfmsub (sz: fsize) (rd r1 r2 r3: freg)                            (**r [rd = r3 - r1 * r2] *)
   | Pfnmadd (sz: fsize) (rd r1 r2 r3: freg)                           (**r [rd = - r3 - r1 * r2] *)
   | Pfnmsub (sz: fsize) (rd r1 r2 r3: freg)                           (**r [rd = - r3 + r1 * r2] *)
+  | Pfmax (sz: fsize) (rd r1 r2: freg)                                (**r maximum *)
+  | Pfmin (sz: fsize) (rd r1 r2: freg)                                (**r minimum *)
   (** Floating-point comparison *)
   | Pfcmp (sz: fsize) (r1 r2: freg)                                   (**r compare [r1] and [r2] *)
   | Pfcmp0 (sz: fsize) (r1: freg)                                     (**r compare [r1] and [+0.0] *)
@@ -1114,6 +1116,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfmsub _ _ _ _ _
   | Pfnmadd _ _ _ _ _
   | Pfnmsub _ _ _ _ _
+  | Pfmax _ _ _ _
+  | Pfmin _ _ _ _
   | Pnop
   | Pcfi_adjust _ 
   | Pcfi_rel_offset _ =>

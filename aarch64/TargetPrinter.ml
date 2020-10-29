@@ -467,6 +467,10 @@ module Target : TARGET =
         fprintf oc "	fnmadd	%a, %a, %a, %a\n" freg (sz, rd) freg (sz, r1) freg (sz, r2) freg (sz, r3)
     | Pfnmsub(sz, rd, r1, r2, r3) ->
         fprintf oc "	fnmsub	%a, %a, %a, %a\n" freg (sz, rd) freg (sz, r1) freg (sz, r2) freg (sz, r3)
+    | Pfmax (sz, rd, r1, r2) ->
+        fprintf oc "	fmax	%a, %a, %a\n" freg (sz, rd) freg (sz, r1) freg (sz, r2)
+    | Pfmin (sz, rd, r1, r2) ->
+        fprintf oc "	fmin	%a, %a, %a\n" freg (sz, rd) freg (sz, r1) freg (sz, r2)
     (* Floating-point comparison *)
     | Pfcmp(sz, r1, r2) ->
         fprintf oc "	fcmp	%a, %a\n" freg (sz, r1) freg (sz, r2)

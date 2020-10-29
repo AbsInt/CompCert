@@ -363,6 +363,10 @@ let expand_builtin_inline name args res =
       emit (Pfnmadd(D, res, a1, a2, a3))
   | "__builtin_fnmsub", [BA(FR a1); BA(FR a2); BA(FR a3)], BR(FR res) ->
       emit (Pfnmsub(D, res, a1, a2, a3))
+  | "__builtin_fmax", [BA (FR a1); BA (FR a2)], BR (FR res) ->
+      emit (Pfmax (D, res, a1, a2))
+  | "__builtin_fmin", [BA (FR a1); BA (FR a2)], BR (FR res) ->
+      emit (Pfmin (D, res, a1, a2))
   (* Vararg *)
   | "__builtin_va_start", [BA(IR a)], _ ->
       expand_builtin_va_start a
