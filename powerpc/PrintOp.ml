@@ -42,6 +42,14 @@ let print_condition reg pp = function
       fprintf pp "%a & 0x%lx == 0" reg r1 (camlint_of_coqint n)
   | (Cmasknotzero n, [r1]) ->
       fprintf pp "%a & 0x%lx != 0" reg r1 (camlint_of_coqint n)
+  | (Ccompl c, [r1;r2]) ->
+      fprintf pp "%a %sls %a" reg r1 (comparison_name c) reg r2
+  | (Ccomplu c, [r1;r2]) ->
+      fprintf pp "%a %slu %a" reg r1 (comparison_name c) reg r2
+  | (Ccomplimm(c, n), [r1]) ->
+      fprintf pp "%a %sls %Ld" reg r1 (comparison_name c) (camlint64_of_coqint n)
+  | (Ccompluimm(c, n), [r1]) ->
+      fprintf pp "%a %slu %Ld" reg r1 (comparison_name c) (camlint64_of_coqint n)
   | _ ->
       fprintf pp "<bad condition>"
 
