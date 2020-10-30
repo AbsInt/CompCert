@@ -587,41 +587,60 @@ let world_program prog =
 
 (* Massaging the program to get a suitable "main" function *)
 
-let change_main_function p old_main old_main_ty =
-  let old_main = Evalof(Evar(old_main, old_main_ty), old_main_ty) in
+let change_main_function p new_main_fn =
+  let new_main_id = intern_string "%main%" in
+  { p with
+    Ctypes.prog_main = new_main_id;
+    Ctypes.prog_defs =
+      (new_main_id, Gfun(Internal new_main_fn)) :: p.Ctypes.prog_defs }
+
+let call_main3_function main_id main_ty =
+  let main_var = Evalof(Evar(main_id, main_ty), main_ty) in
   let arg1 = Eval(Vint(coqint_of_camlint 0l), type_int32s) in
   let arg2 = arg1 in
   let body =
-    Sreturn(Some(Ecall(old_main, Econs(arg1, Econs(arg2, Enil)), type_int32s))) in
-  let new_main_fn =
-    { fn_return = type_int32s; fn_callconv = cc_default;
-      fn_params = []; fn_vars = []; fn_body = body } in
-  let new_main_id = intern_string "___main" in
-  { prog_main = new_main_id;
-    Ctypes.prog_defs = (new_main_id, Gfun(Ctypes.Internal new_main_fn)) :: p.Ctypes.prog_defs;
-    Ctypes.prog_public = p.Ctypes.prog_public;
-    prog_types = p.prog_types;
-    prog_comp_env = p.prog_comp_env }
+    Sreturn(Some(Ecall(main_var, Econs(arg1, Econs(arg2, Enil)), type_int32s)))
+  in
+  { fn_return = type_int32s; fn_callconv = cc_default;
+    fn_params = []; fn_vars = []; fn_body = body }
+
+let call_other_main_function main_id main_ty main_ty_res =
+  let main_var = Evalof(Evar(main_id, main_ty), main_ty) in
+  let body =
+    Ssequence(Sdo(Ecall(main_var, Enil, main_ty_res)),
+              Sreturn(Some(Eval(Vint(coqint_of_camlint 0l), type_int32s)))) in
+  { fn_return = type_int32s; fn_callconv = cc_default;
+    fn_params = []; fn_vars = []; fn_body = body }
 
 let rec find_main_function name = function
   | [] -> None
-  | (id, Gfun fd) :: gdl -> if id = name then Some fd else find_main_function name gdl
-  | (id, Gvar v) :: gdl -> find_main_function name gdl
+  | (id, Gfun fd) :: gdl ->
+       if id = name then Some fd else find_main_function name gdl
+  | (id, Gvar v) :: gdl ->
+       find_main_function name gdl
 
 let fixup_main p =
   match find_main_function p.Ctypes.prog_main p.Ctypes.prog_defs with
   | None ->
-      fprintf err_formatter "ERROR: no main() function@.";
+      fprintf err_formatter "ERROR: no entry function %s()@."
+                            (extern_atom p.Ctypes.prog_main);
       None
   | Some main_fd ->
       match type_of_fundef main_fd with
       | Tfunction(Tnil, Ctypes.Tint(I32, Signed, _), _) ->
           Some p
-      | Tfunction(Tcons(Ctypes.Tint _, Tcons(Tpointer(Tpointer(Ctypes.Tint(I8,_,_),_),_), Tnil)),
+      | Tfunction(Tcons(Ctypes.Tint _,
+                  Tcons(Tpointer(Tpointer(Ctypes.Tint(I8,_,_),_),_), Tnil)),
                   Ctypes.Tint _, _) as ty ->
-          Some (change_main_function p p.Ctypes.prog_main ty)
+          Some (change_main_function p
+                   (call_main3_function p.Ctypes.prog_main ty))
+      | Tfunction(Tnil, ty_res, _) as ty ->
+          Some (change_main_function p
+                   (call_other_main_function p.Ctypes.prog_main ty ty_res))
       | _ ->
-          fprintf err_formatter "ERROR: wrong type for main() function@.";
+          fprintf err_formatter
+             "ERROR: wrong type for entry function %s()@."
+             (extern_atom p.Ctypes.prog_main);
           None
 
 (* Execution of a whole program *)
