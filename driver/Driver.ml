@@ -233,6 +233,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -trace         Have the interpreter produce a detailed trace of reductions
   -random        Randomize execution order
   -all           Simulate all possible execution orders
+  -main <name>   Start executing at function <name> instead of main()
 |}
 
 let print_usage_and_exit () =
@@ -355,7 +356,8 @@ let cmdline_actions =
   Exact "-quiet", Unit (fun () -> Interp.trace := 0);
   Exact "-trace", Unit (fun () -> Interp.trace := 2);
   Exact "-random", Unit (fun () -> Interp.mode := Interp.Random);
-  Exact "-all", Unit (fun () -> Interp.mode := Interp.All)
+  Exact "-all", Unit (fun () -> Interp.mode := Interp.All);
+  Exact "-main", String (fun s -> main_function_name := s)
  ]
 (* Optimization options *)
 (* -f options: come in -f and -fno- variants *)

@@ -1495,7 +1495,7 @@ let convertProgram p =
         let p' =
           { prog_defs = gl2;
             prog_public = public_globals gl2;
-            prog_main = intern_string "main";
+            prog_main = intern_string !Clflags.main_function_name;
             prog_types = typs;
             prog_comp_env = ce } in
         Diagnostics.check_errors ();
