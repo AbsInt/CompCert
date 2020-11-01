@@ -53,4 +53,4 @@ test:
 .SECONDARY: $(SRC:.c=.v)
 
 clean:
-	rm -f *.v *.vo .*.aux
+	rm -f *.v *.vo* .*.aux
