@@ -1,3 +1,51 @@
+New features:
+- Support `_Static_assert` from ISO C11.
+- Support `__builtin_constant_p` from GCC and Clang.
+- New port: x86 64 bits Windows with the Cygwin 64 environment.
+  (configure with target `x86_64-cygwin`).
+- The following built-in functions are now available for all ports:
+  `__builtin_sqrt`, `__builtin_fabsf`, and all variants of
+  `__builtin_clz` and `__builtin_ctz`.
+- Added `__builtin_fmin` and `__builtin_fmax` for AArch64.
+
+Removed features:
+- The x86 32 bits port is no longer supported under macOS.
+
+Compiler internals:
+- Simpler translation of CompCert C casts used for their effects but
+  not for their values.
+- Known builtins whose results are unused are eliminated earlier.
+- Improved error reporting for `++` and `--` applied to pointers to
+  incomplete types.
+- Improved error reporting for redefinitions and implicit definitions
+  of built-in functions.
+- Added formal semantics for some PowerPC built-ins.
+
+The clightgen tool:
+- New `-canonical-idents` mode, selected by default, to change the way
+  C identifiers are encoded as CompCert idents (positive numbers).
+  In `-canonical-idents` mode, a fixed one-to-one encoding is used
+  so that the same identifier occurring in different compilation units
+  encodes to the same number.
+- The `-short-idents` flag restores the previous encoding where
+  C identifiers are consecutively numbered in order of appearance,
+  causing the same identifier to have different numbers in different
+  compilation units.
+- Removed the automatic translation of annotation builtins to Coq
+  logical assertions, which was never used and possibly confusing.
+
+Coq and OCaml development:
+- Compatibility with Coq 8.12.0, 8.11.2, 8.11.1.
+- Can use already-installed Flocq and MenhirLib libraries instead of their
+  local copies (options `-use-external-Flocq` and `-use-external-MenhirLib`
+  to the `configure` script).
+- Automatically build to OCaml bytecode on platforms where OCaml
+  native-code compilation is not available.
+- Install the `compcert.config` summary of configuration choices
+  in the same directory as the Coq development.
+- Updated the list of dual-licensed source files.
+
+
 Release 3.7, 2020-03-31
 =======================
 
