@@ -114,11 +114,17 @@ let pp_program pp pp_inst prog =
   let prog_vars,prog_funs = List.fold_left (fun (vars,funs) (ident,def) ->
       match def with
       | Gfun (Internal f) ->
+        (* No assembly is generated for non static inline functions *)
         if not (atom_is_iso_inline_definition ident) then
           vars,(ident,f)::funs
         else
           vars,funs
-      | Gvar v -> (ident,v)::vars,funs
+      | Gvar v ->
+        (* No assembly is generated for variables without init *)
+        if v.gvar_init <> [] then
+          (ident,v)::vars,funs
+        else
+          vars, funs
       | _ -> vars,funs) ([],[]) prog.prog_defs in
   pp_jobject_start pp;
   pp_jmember ~first:true pp "Global Variables" (pp_jarray pp_vardef) prog_vars;
