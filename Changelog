@@ -35,7 +35,7 @@ The clightgen tool:
   logical assertions, which was never used and possibly confusing.
 
 Coq and OCaml development:
-- Compatibility with Coq 8.12.0, 8.11.2, 8.11.1.
+- Compatibility with Coq 8.12.1, 8.12.0, 8.11.2, 8.11.1.
 - Can use already-installed Flocq and MenhirLib libraries instead of their
   local copies (options `-use-external-Flocq` and `-use-external-MenhirLib`
   to the `configure` script).
