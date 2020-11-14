@@ -50,13 +50,20 @@ INCLUDES=$(patsubst %,-I %, $(DIRS))
 
 # Control of warnings:
 
-WARNINGS=-w +a-4-9-27 -strict-sequence -safe-string -warn-error +a #Deprication returns with ocaml 4.03
+WARNINGS=-w +a-4-9-27
 extraction/%.cmx: WARNINGS +=-w -20-27-32..34-39-41-44..45-60-67
 extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45-60-67
 cparser/pre_parser.cmx: WARNINGS += -w -41
 cparser/pre_parser.cmo: WARNINGS += -w -41
 
-COMPFLAGS+=-g $(INCLUDES) -I "$(MENHIR_DIR)" $(WARNINGS)
+# Turn warnings into errors, but not for released tarballs
+ifeq ($(wildcard .git),.git)
+WARN_ERRORS=-warn-error +a
+else
+WARN_ERRORS=
+endif
+
+COMPFLAGS+=-g -strict-sequence -safe-string $(INCLUDES) -I "$(MENHIR_DIR)" $(WARNINGS) $(WARN_ERRORS)
 
 # Using .opt compilers if available
 
