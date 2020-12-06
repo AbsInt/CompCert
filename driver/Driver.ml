@@ -412,6 +412,8 @@ let _ =
       fatal_error no_loc "ambiguous '-o' option (multiple source files)";
     if !num_input_files = 0 then
       fatal_error no_loc "no input file";
+    if not !option_interp && !main_function_name <> "main" then
+      fatal_error no_loc "option '-main' requires option '-interp'";
     let linker_args = time "Total compilation time" perform_actions () in
     if not (nolink ()) && linker_args <> [] then begin
       linker (output_filename_default "a.out") linker_args
