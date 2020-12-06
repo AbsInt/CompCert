@@ -200,12 +200,9 @@ Inductive instruction : Type :=
   | Pfadd: freg -> freg -> freg -> instruction                (**r float addition *)
   | Pfadds: freg -> freg -> freg -> instruction               (**r float addition *)
   | Pfcmpu: freg -> freg -> instruction                       (**r float comparison *)
-  | Pfcfi: freg -> ireg -> instruction                        (**r signed-int-to-float conversion (pseudo, PPC64) *)
   | Pfcfl: freg -> ireg -> instruction                        (**r signed-long-to-float conversion (pseudo, PPC64) *)
-  | Pfcfiu: freg -> ireg -> instruction                       (**r unsigned-int-to-float conversion (pseudo, PPC64) *)
   | Pfcfid: freg -> freg -> instruction                       (**r signed-long-to-float conversion (PPC64) *)
   | Pfcti: ireg -> freg -> instruction                        (**r float-to-signed-int conversion, round towards 0 (pseudo) *)
-  | Pfctiu: ireg -> freg -> instruction                       (**r float-to-unsigned-int conversion, round towards 0 (pseudo, PPC64) *)
   | Pfctid: ireg -> freg -> instruction                       (**r float-to-signed-int conversion, round towards 0 (pseudo, PPC64) *)
   | Pfctidz: freg -> freg -> instruction                      (**r float-to-signed-long conversion, round towards 0 (PPC64) *)
   | Pfctiw: freg -> freg -> instruction                       (**r float-to-signed-int conversion, round by default *)
@@ -825,16 +822,10 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#rd <- (Val.addfs rs#r1 rs#r2))) m
   | Pfcmpu r1 r2 =>
       Next (nextinstr (compare_float rs rs#r1 rs#r2)) m
-  | Pfcfi rd r1 =>
-      Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofint rs#r1)))) m
   | Pfcfl rd r1 =>
       Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatoflong rs#r1)))) m
-  | Pfcfiu rd r1 =>
-      Next (nextinstr (rs#rd <- (Val.maketotal (Val.floatofintu rs#r1)))) m
   | Pfcti rd r1 =>
       Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intoffloat rs#r1)))) m
-  | Pfctiu rd r1 =>
-      Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.intuoffloat rs#r1)))) m
   | Pfctid rd r1 =>
       Next (nextinstr (rs#FPR13 <- Vundef #rd <- (Val.maketotal (Val.longoffloat rs#r1)))) m
   | Pfdiv rd r1 r2 =>

@@ -611,15 +611,6 @@ Definition transl_op
   | Ointoffloat, a1 :: nil =>
       do r1 <- freg_of a1; do r <- ireg_of res;
       OK (Pfcti r r1 :: k)
-  | Ointuoffloat, a1 :: nil =>
-      do r1 <- freg_of a1; do r <- ireg_of res;
-      OK (Pfctiu r r1 :: k)
-  | Ofloatofint, a1 :: nil =>
-      do r1 <- ireg_of a1; do r <- freg_of res;
-      OK (Pfcfi r r1 :: k)
-  | Ofloatofintu, a1 :: nil =>
-      do r1 <- ireg_of a1; do r <- freg_of res;
-      OK (Pfcfiu r r1 :: k)
   | Ofloatofwords, a1 :: a2 :: nil =>
       do r1 <- ireg_of a1; do r2 <- ireg_of a2; do r <- freg_of res;
       OK (Pfmake r r1 r2 :: k)

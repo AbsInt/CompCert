@@ -553,22 +553,16 @@ module Target (System : SYSTEM):TARGET =
           fprintf oc "	fadds	%a, %a, %a\n" freg r1 freg r2 freg r3
       | Pfcmpu(r1, r2) ->
           fprintf oc "	fcmpu	%a, %a, %a\n" creg 0 freg r1 freg r2
-      | Pfcfi(r1, r2) ->
-          assert false
       | Pfcfl(r1, r2) ->
           assert false
       | Pfcfid(r1, r2) ->
           fprintf oc "	fcfid	%a, %a\n" freg r1 freg r2
-      | Pfcfiu(r1, r2) ->
-          assert false
       | Pfcti(r1, r2) ->
           assert false
       | Pfctid(r1, r2) ->
           assert false
       | Pfctidz(r1, r2) ->
           fprintf oc "	fctidz	%a, %a\n" freg r1 freg r2
-      | Pfctiu(r1, r2) ->
-          assert false
       | Pfctiw(r1, r2) ->
           fprintf oc "	fctiw	%a, %a\n" freg r1 freg r2
       | Pfctiwz(r1, r2) ->

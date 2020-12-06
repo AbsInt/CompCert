@@ -851,8 +851,13 @@ Proof.
   destruct (Float.to_intu f) as [n|] eqn:?; simpl in H0; inv H0.
   exists (Vint n); split; auto. unfold intuoffloat.
   destruct Archi.ppc64.
-  econstructor. constructor; eauto. constructor. simpl; rewrite Heqo; auto.
-  set (im := Int.repr Int.half_modulus).
+- apply Float.to_intu_to_long in Heqo.
+  econstructor. constructor. econstructor. econstructor; eauto. constructor.
+  simpl; rewrite Heqo; simpl; eauto. constructor.
+  simpl. unfold Int64.loword. rewrite Int64.unsigned_repr, Int.repr_unsigned. auto.
+  assert (Int.modulus < Int64.max_unsigned) by (compute; auto).
+  generalize (Int.unsigned_range n). omega.  
+- set (im := Int.repr Int.half_modulus).
   set (fm := Float.of_intu im).
   assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f)).
     constructor. auto.
@@ -889,11 +894,12 @@ Theorem eval_floatofint:
 Proof.
   intros until y. unfold floatofint. destruct (floatofint_match a); intros.
   InvEval. TrivialExists.
-  destruct Archi.ppc64.
-  TrivialExists.
   rename e0 into a. destruct x; simpl in H0; inv H0.
   exists (Vfloat (Float.of_int i)); split; auto.
-  set (t1 := addimm Float.ox8000_0000 a).
+  destruct Archi.ppc64.
+- rewrite Float.of_int_of_long.
+  EvalOp. constructor. EvalOp. simpl; eauto. constructor. auto.
+- set (t1 := addimm Float.ox8000_0000 a).
   set (t2 := Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: t1 ::: Enil)).
   set (t3 := Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Float.ox8000_0000)) Enil).
   exploit (eval_addimm Float.ox8000_0000 le a). eauto. fold t1.
@@ -913,12 +919,12 @@ Theorem eval_floatofintu:
 Proof.
   intros until y. unfold floatofintu. destruct (floatofintu_match a); intros.
   InvEval. TrivialExists.
-  destruct Archi.ppc64.
-  TrivialExists.
   rename e0 into a. destruct x; simpl in H0; inv H0.
   exists (Vfloat (Float.of_intu i)); split; auto.
-  unfold floatofintu.
-  set (t2 := Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: a ::: Enil)).
+  destruct Archi.ppc64.
+- rewrite Float.of_intu_of_long.
+  EvalOp. constructor. EvalOp. simpl; eauto. constructor. auto.
+- set (t2 := Eop Ofloatofwords (Eop (Ointconst Float.ox4330_0000) Enil ::: a ::: Enil)).
   set (t3 := Eop (Ofloatconst (Float.from_words Float.ox4330_0000 Int.zero)) Enil).
   exploit (eval_subf le t2).
   unfold t2. EvalOp. constructor. EvalOp. simpl; eauto. constructor. eauto. constructor.

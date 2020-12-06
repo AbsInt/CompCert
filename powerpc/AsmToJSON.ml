@@ -198,12 +198,9 @@ let pp_instructions pp ic =
   | Pfadd (fr1,fr2,fr3) -> instruction pp "Pfadd" [Freg fr1; Freg fr2; Freg fr3]
   | Pfadds (fr1,fr2,fr3) -> instruction pp "Pfadds" [Freg fr1; Freg fr2; Freg fr3]
   | Pfcmpu (fr1,fr2) -> instruction pp "Pfcmpu" [Freg fr1; Freg fr2]
-  | Pfcfi (ir,fr)
   | Pfcfl (ir,fr) -> assert false (* Should not occur *)
   | Pfcfid (fr1,fr2) -> instruction pp "Pfcfid" [Freg fr1; Freg fr2]
-  | Pfcfiu _ (* Should not occur *)
   | Pfcti _ (* Should not occur *)
-  | Pfctiu _ (* Should not occur *)
   | Pfctid _ -> assert false (* Should not occur *)
   | Pfctidz (fr1,fr2) -> instruction pp "Pfctidz" [Freg fr1; Freg fr2]
   | Pfctiw (fr1,fr2) -> instruction pp "Pfctiw" [Freg fr1; Freg fr2]

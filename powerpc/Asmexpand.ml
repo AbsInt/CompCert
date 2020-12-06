@@ -875,15 +875,6 @@ let expand_instruction instr =
         emit (Paddi(GPR1, GPR1, Cint(coqint_of_camlint sz)))
       else
         emit (Plwz(GPR1, Cint ofs, GPR1))
-  | Pfcfi(r1, r2) ->
-      assert (Archi.ppc64);
-      emit (Pextsw(GPR0, r2));
-      emit (Pstdu(GPR0, Cint _m8, GPR1));
-      emit (Pcfi_adjust _8);
-      emit (Plfd(r1, Cint _0, GPR1));
-      emit (Pfcfid(r1, r1));
-      emit (Paddi(GPR1, GPR1, Cint _8));
-      emit (Pcfi_adjust _m8)
   | Pfcfl(r1, r2) ->
       assert (Archi.ppc64);
       emit (Pstdu(r2, Cint _m8, GPR1));
@@ -892,25 +883,8 @@ let expand_instruction instr =
       emit (Pfcfid(r1, r1));
       emit (Paddi(GPR1, GPR1, Cint _8));
       emit (Pcfi_adjust _m8)
-  | Pfcfiu(r1, r2) ->
-      assert (Archi.ppc64);
-      emit (Prldicl(GPR0, r2, _0, _32));
-      emit (Pstdu(GPR0, Cint _m8, GPR1));
-      emit (Pcfi_adjust _8);
-      emit (Plfd(r1, Cint _0, GPR1));
-      emit (Pfcfid(r1, r1));
-      emit (Paddi(GPR1, GPR1, Cint _8));
-      emit (Pcfi_adjust _m8)
   | Pfcti(r1, r2) ->
       emit (Pfctiwz(FPR13, r2));
-      emit (Pstfdu(FPR13, Cint _m8, GPR1));
-      emit (Pcfi_adjust _8);
-      emit (Plwz(r1, Cint _4, GPR1));
-      emit (Paddi(GPR1, GPR1, Cint _8));
-      emit (Pcfi_adjust _m8)
-  | Pfctiu(r1, r2) ->
-      assert (Archi.ppc64);
-      emit (Pfctidz(FPR13, r2));
       emit (Pstfdu(FPR13, Cint _m8, GPR1));
       emit (Pcfi_adjust _8);
       emit (Plwz(r1, Cint _4, GPR1));
