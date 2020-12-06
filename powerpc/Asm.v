@@ -1195,7 +1195,7 @@ Inductive step: state -> trace -> state -> Prop :=
       external_call ef ge vargs m t vres m' ->
       rs' = nextinstr
               (set_res res vres
-                (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
+                (undef_regs (IR GPR0 :: map preg_of (destroyed_by_builtin ef)) rs)) ->
       step (State rs m) t (State rs' m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
