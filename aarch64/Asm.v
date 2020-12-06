@@ -970,9 +970,9 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pfmov rd r1 =>
       Next (nextinstr (rs#rd <- (rs#r1))) m
   | Pfmovimms rd f =>
-      Next (nextinstr (rs#rd <- (Vsingle f))) m
+      Next (nextinstr (rs#X16 <- Vundef #rd <- (Vsingle f))) m
   | Pfmovimmd rd f =>
-      Next (nextinstr (rs#rd <- (Vfloat f))) m
+      Next (nextinstr (rs#X16 <- Vundef #rd <- (Vfloat f))) m
   | Pfmovi S rd r1 =>
       Next (nextinstr (rs#rd <- (float32_of_bits rs##r1))) m
   | Pfmovi D rd r1 =>
@@ -1097,7 +1097,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       | Vint n =>
           match list_nth_z tbl (Int.unsigned n) with
           | None => Stuck
-          | Some lbl => goto_label f lbl (rs#X16 <- Vundef #X17 <- Vundef) m
+          | Some lbl => goto_label f lbl (rs#X16 <- Vundef) m
           end
       | _ => Stuck
       end
@@ -1212,7 +1212,7 @@ Inductive step: state -> trace -> state -> Prop :=
       external_call ef ge vargs m t vres m' ->
       rs' = nextinstr
               (set_res res vres
-                (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
+                (undef_regs (IR X16 :: IR X30 :: map preg_of (destroyed_by_builtin ef)) rs)) ->
       step (State rs m) t (State rs' m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
