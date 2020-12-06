@@ -754,13 +754,15 @@ Opaque loadind.
   econstructor; eauto.
   instantiate (2 := tf); instantiate (1 := x).
   unfold nextinstr. rewrite Pregmap.gss.
-  rewrite set_res_other. rewrite undef_regs_other_2.
+  rewrite set_res_other. simpl. rewrite undef_regs_other_2.
+  rewrite Pregmap.gso by auto with asmgen.
   rewrite <- H1. simpl. econstructor; eauto.
   eapply code_tail_next_int; eauto.
   rewrite preg_notin_charact. intros. auto with asmgen.
   auto with asmgen.
   apply agree_nextinstr. eapply agree_set_res; auto.
-  eapply agree_undef_regs; eauto. intros; apply undef_regs_other_2; auto.
+  eapply agree_undef_regs; eauto.
+  intros. simpl. rewrite undef_regs_other_2; auto. apply Pregmap.gso. auto with asmgen.
   congruence.
 
 - (* Mgoto *)
