@@ -733,7 +733,7 @@ module Target(System: SYSTEM):TARGET =
       | Pret ->
           if (not Archi.ptr64)
           && (!current_function_sig).sig_cc.cc_structret then begin
-            fprintf oc "	movl	0(%%esp), %%eax\n";
+            fprintf oc "	movl	4(%%esp), %%eax\n";
             fprintf oc "	ret	$4\n"
           end else begin
             fprintf oc "	ret\n"
