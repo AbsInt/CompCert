@@ -29,96 +29,59 @@ Qed.
 
 (** * Properties of the branch map computed using union-find. *)
 
-(** A variant of [record_goto] that also incrementally computes a measure [f: node -> nat]
-  counting the number of [Lnop] instructions starting at a given [pc] that were eliminated. *)
-
 Definition measure_edge (u: U.t) (pc s: node) (f: node -> nat) : node -> nat :=
   fun x => if peq (U.repr u s) pc then f x
            else if peq (U.repr u x) pc then (f x + f s + 1)%nat
            else f x.
 
-Definition record_goto' (uf: U.t * (node -> nat)) (pc: node) (b: bblock) : U.t * (node -> nat) :=
-  match b with
-  | Lbranch s :: b' => let (u, f) := uf in (U.union u pc s, measure_edge u pc s f)
-  | _ => uf
-  end.
-
-Definition branch_map_correct (c: code) (uf: U.t * (node -> nat)): Prop :=
+Definition branch_map_correct (c: code) (u: U.t) (f: node -> nat): Prop :=
   forall pc,
   match c!pc with
   | Some(Lbranch s :: b) =>
-      U.repr (fst uf) pc = pc \/ (U.repr (fst uf) pc = U.repr (fst uf) s /\ snd uf s < snd uf pc)%nat
+      U.repr u pc = pc \/ (U.repr u pc = U.repr u s /\ f s < f pc)%nat
   | _ =>
-      U.repr (fst uf) pc = pc
+      U.repr u pc = pc
   end.
 
-Lemma record_gotos'_correct:
-  forall c,
-  branch_map_correct c (PTree.fold record_goto' c (U.empty, fun (x: node) => O)).
+Lemma record_gotos_correct_1:
+  forall fn, { f | branch_map_correct fn.(fn_code) (record_gotos fn) f }.
 Proof.
   intros.
-  apply PTree_Properties.fold_rec with (P := fun c uf => branch_map_correct c uf).
-
-- (* extensionality *)
-  intros. red; intros. rewrite <- H. apply H0.
+  unfold record_gotos. apply PTree_Properties.fold_ind.
 
 - (* base case *)
-  red; intros; simpl. rewrite PTree.gempty. apply U.repr_empty.
+  intros m EMPTY. exists (fun _ => O). 
+  red; intros. rewrite EMPTY. apply U.repr_empty.
 
 - (* inductive case *)
-  intros m uf pc bb; intros. destruct uf as [u f].
+  intros m u pc bb GET1 GET2 [f BMC].
   assert (PC: U.repr u pc = pc).
-    generalize (H1 pc). rewrite H. auto.
-  assert (record_goto' (u, f) pc bb = (u, f)
-          \/ exists s, exists bb', bb = Lbranch s :: bb' /\ record_goto' (u, f) pc bb = (U.union u pc s, measure_edge u pc s f)).
-    unfold record_goto'; simpl. destruct bb; auto. destruct i; auto. right. exists s; exists bb; auto.
-  destruct H2 as [B | [s [bb' [EQ B]]]].
-
-+ (* u and f are unchanged *)
-  rewrite B.
-  red. intro pc'. simpl. rewrite PTree.gsspec. destruct (peq pc' pc). subst pc'.
-  destruct bb; auto. destruct i; auto.
-  apply H1.
-
-+ (* b is Lbranch s, u becomes union u pc s, f becomes measure_edge u pc s f *)
-  rewrite B.
-  red. intro pc'. simpl. rewrite PTree.gsspec. destruct (peq pc' pc). subst pc'. rewrite EQ.
-
-* (* The new instruction *)
+  { specialize (BMC pc). rewrite PTree.grs in BMC. auto. }
+  assert (DFL: { f | branch_map_correct m u f }).
+  { exists f. intros p. destruct (peq p pc).
+  - subst p. rewrite GET1. destruct bb as [ | [] bb ]; auto.
+  - specialize (BMC p). rewrite PTree.gro in BMC by auto. exact BMC.
+  }
+  unfold record_goto. destruct bb as [ | [] bb ]; auto.
+  exists (measure_edge u pc s f). intros p. destruct (peq p pc).
++ subst p. rewrite GET1. unfold measure_edge.
   rewrite (U.repr_union_2 u pc s); auto. rewrite U.repr_union_3.
-  unfold measure_edge. destruct (peq (U.repr u s) pc). auto. right. split. auto.
-  rewrite PC. rewrite peq_true. lia.
-
-* (* An old instruction *)
-  assert (U.repr u pc' = pc' -> U.repr (U.union u pc s) pc' = pc').
-  { intro. rewrite <- H2 at 2. apply U.repr_union_1. congruence. }
-  generalize (H1 pc'). simpl. destruct (m!pc'); auto. destruct b; auto. destruct i; auto.
-  intros [P | [P Q]]. left; auto. right.
-  split. apply U.sameclass_union_2. auto.
+  destruct (peq (U.repr u s) pc); auto. rewrite PC, peq_true. right; split; auto. lia.
++ specialize (BMC p). rewrite PTree.gro in BMC by auto.
+  assert (U.repr u p = p -> U.repr (U.union u pc s) p = p).
+  { intro. rewrite <- H at 2. apply U.repr_union_1. congruence. }
+  destruct (m!p) as [ [ | [] b ] | ]; auto.
+  destruct BMC as [A | [A B]]. auto.
+  right; split. apply U.sameclass_union_2; auto.
   unfold measure_edge. destruct (peq (U.repr u s) pc). auto.
-  rewrite P. destruct (peq (U.repr u s0) pc). lia. auto.
-Qed.
-
-Definition record_gotos' (f: function) :=
-  PTree.fold record_goto' f.(fn_code) (U.empty, fun (x: node) => O).
-
-Lemma record_gotos_gotos':
-  forall f, fst (record_gotos' f) = record_gotos f.
-Proof.
-  intros. unfold record_gotos', record_gotos.
-  repeat rewrite PTree.fold_spec.
-  generalize (PTree.elements (fn_code f)) (U.empty) (fun _ : node => O).
-  induction l; intros; simpl.
-  auto.
-  unfold record_goto' at 2. unfold record_goto at 2.
-  destruct (snd a). apply IHl. destruct i; apply IHl.
+  rewrite A. destruct (peq (U.repr u s0) pc); lia.
 Qed.
 
 Definition branch_target (f: function) (pc: node) : node :=
   U.repr (record_gotos f) pc.
 
 Definition count_gotos (f: function) (pc: node) : nat :=
-  snd (record_gotos' f) pc.
+  proj1_sig (record_gotos_correct_1 f) pc.
 
 Theorem record_gotos_correct:
   forall f pc,
@@ -129,10 +92,8 @@ Theorem record_gotos_correct:
   | _ => branch_target f pc = pc
   end.
 Proof.
-  intros.
-  generalize (record_gotos'_correct f.(fn_code) pc). simpl.
-  fold (record_gotos' f). unfold branch_map_correct, branch_target, count_gotos.
-  rewrite record_gotos_gotos'. auto.
+  intros. unfold count_gotos. destruct (record_gotos_correct_1 f) as [m P]; simpl.
+  apply P.
 Qed.
 
 (** * Preservation of semantics *)
