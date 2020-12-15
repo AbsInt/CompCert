@@ -1285,9 +1285,90 @@ Module ZTree := ITree(ZIndexed).
 
 Module Tree_Properties(T: TREE).
 
-(** An induction principle over [fold]. *)
+(** Two induction principles over [fold]. *)
 
 Section TREE_FOLD_IND.
+
+Variables V A: Type.
+Variable f: A -> T.elt -> V -> A.
+Variable P: T.t V -> A -> Type.
+Variable init: A.
+Variable m_final: T.t V.
+
+Hypothesis H_base:
+  forall m,
+  (forall k, T.get k m = None) ->
+  P m init.
+
+Hypothesis H_rec:
+  forall m a k v,
+  T.get k m = Some v -> T.get k m_final = Some v ->
+  P (T.remove k m) a -> P m (f a k v).
+
+Let f' (p : T.elt * V) (a: A) := f a (fst p) (snd p).
+
+Let P' (l: list (T.elt * V)) (a: A) : Type :=
+  forall m, (forall k v, In (k, v) l <-> T.get k m = Some v) -> P m a.
+
+Let H_base':
+  P' nil init.
+Proof.
+  intros m EQV. apply H_base.
+  intros. destruct (T.get k m) as [v|] eqn:G; auto.
+  apply EQV in G. contradiction.
+Qed.
+
+Let H_rec':
+  forall k v l a,
+  ~In k (List.map fst l) ->
+  T.get k m_final = Some v ->
+  P' l a ->
+  P' ((k, v) :: l) (f a k v).
+Proof.
+  unfold P'; intros k v l a NOTIN FINAL HR m EQV.
+  set (m0 := T.remove k m).
+  apply H_rec.
+- apply EQV. simpl; auto.
+- auto.
+- apply HR. intros k' v'. rewrite T.grspec. split; intros; destruct (T.elt_eq k' k).
+  + subst k'. elim NOTIN. change k with (fst (k, v')). apply List.in_map; auto.
+  + apply EQV. simpl; auto.
+  + congruence.
+  + apply EQV in H. simpl in H. intuition congruence.
+Qed.
+
+Lemma fold_ind_aux:
+  forall l,
+  (forall k v, In (k, v) l -> T.get k m_final = Some v) ->
+  list_norepet (List.map fst l) ->
+  P' l (List.fold_right f' init l).
+Proof.
+  induction l as [ | [k v] l ]; simpl; intros FINAL NOREPET.
+- apply H_base'.
+- apply H_rec'.
+  + inv NOREPET. auto.
+  + apply FINAL. auto.
+  + apply IHl. auto. inv NOREPET; auto.
+Qed.
+
+Theorem fold_ind:
+  P m_final (T.fold f m_final init).
+Proof.
+  intros.
+  set (l' := List.rev (T.elements m_final)).
+  assert (P' l' (List.fold_right f' init l')).
+  { apply fold_ind_aux.
+    intros. apply T.elements_complete. apply List.in_rev. auto.
+    unfold l'; rewrite List.map_rev. apply list_norepet_rev. apply T.elements_keys_norepet. }
+  unfold l', f' in X; rewrite fold_left_rev_right in X.
+  rewrite T.fold_spec. apply X.
+  intros; simpl. rewrite <- List.in_rev.
+  split. apply T.elements_complete. apply T.elements_correct.
+Qed.
+
+End TREE_FOLD_IND.
+
+Section TREE_FOLD_REC.
 
 Variables V A: Type.
 Variable f: A -> T.elt -> V -> A.
@@ -1307,80 +1388,18 @@ Hypothesis H_rec:
   forall m a k v,
   T.get k m = None -> T.get k m_final = Some v -> P m a -> P (T.set k v m) (f a k v).
 
-Let f' (a: A) (p : T.elt * V) := f a (fst p) (snd p).
-
-Let P' (l: list (T.elt * V)) (a: A) : Prop :=
-  forall m, list_equiv l (T.elements m) -> P m a.
-
-Remark H_base':
-  P' nil init.
-Proof.
-  red; intros. apply P_compat with (T.empty _); auto.
-  intros. rewrite T.gempty. symmetry. case_eq (T.get x m); intros; auto.
-  assert (In (x, v) nil). rewrite (H (x, v)). apply T.elements_correct. auto.
-  contradiction.
-Qed.
-
-Remark H_rec':
-  forall k v l a,
-  ~In k (List.map (@fst T.elt V) l) ->
-  In (k, v) (T.elements m_final) ->
-  P' l a ->
-  P' (l ++ (k, v) :: nil) (f a k v).
-Proof.
-  unfold P'; intros.
-  set (m0 := T.remove k m).
-  apply P_compat with (T.set k v m0).
-    intros. unfold m0. rewrite T.gsspec. destruct (T.elt_eq x k).
-    symmetry. apply T.elements_complete. rewrite <- (H2 (x, v)).
-    apply in_or_app. simpl. intuition congruence.
-    apply T.gro. auto.
-  apply H_rec. unfold m0. apply T.grs. apply T.elements_complete. auto.
-  apply H1. red. intros [k' v'].
-  split; intros.
-  apply T.elements_correct. unfold m0. rewrite T.gro. apply T.elements_complete.
-  rewrite <- (H2 (k', v')). apply in_or_app. auto.
-  red; intro; subst k'. elim H. change k with (fst (k, v')). apply in_map. auto.
-  assert (T.get k' m0 = Some v'). apply T.elements_complete. auto.
-  unfold m0 in H4. rewrite T.grspec in H4. destruct (T.elt_eq k' k). congruence.
-  assert (In (k', v') (T.elements m)). apply T.elements_correct; auto.
-  rewrite <- (H2 (k', v')) in H5. destruct (in_app_or _ _ _ H5). auto.
-  simpl in H6. intuition congruence.
-Qed.
-
-Lemma fold_rec_aux:
-  forall l1 l2 a,
-  list_equiv (l2 ++ l1) (T.elements m_final) ->
-  list_disjoint (List.map (@fst T.elt V) l1) (List.map (@fst T.elt V) l2) ->
-  list_norepet (List.map (@fst T.elt V) l1) ->
-  P' l2 a -> P' (l2 ++ l1) (List.fold_left f' l1 a).
-Proof.
-  induction l1; intros; simpl.
-  rewrite <- List.app_nil_end. auto.
-  destruct a as [k v]; simpl in *. inv H1.
-  change ((k, v) :: l1) with (((k, v) :: nil) ++ l1). rewrite <- List.app_ass. apply IHl1.
-  rewrite app_ass. auto.
-  red; intros. rewrite map_app in H3. destruct (in_app_or _ _ _ H3). apply H0; auto with coqlib.
-  simpl in H4. intuition congruence.
-  auto.
-  unfold f'. simpl. apply H_rec'; auto. eapply list_disjoint_notin; eauto with coqlib.
-  rewrite <- (H (k, v)). apply in_or_app. simpl. auto.
-Qed.
-
 Theorem fold_rec:
   P m_final (T.fold f m_final init).
 Proof.
-  intros. rewrite T.fold_spec. fold f'.
-  assert (P' (nil ++ T.elements m_final) (List.fold_left f' (T.elements m_final) init)).
-    apply fold_rec_aux.
-    simpl. red; intros; tauto.
-    simpl. red; intros. elim H0.
-    apply T.elements_keys_norepet.
-    apply H_base'.
-  simpl in H. red in H. apply H. red; intros. tauto.
+  apply fold_ind. 
+- intros. apply P_compat with (T.empty V); auto.
+  + intros. rewrite T.gempty. auto.
+- intros. apply P_compat with (T.set k v (T.remove k m)).
+  + intros. rewrite T.gsspec, T.grspec. destruct (T.elt_eq x k); auto. congruence.
+  + apply H_rec; auto. apply T.grs.
 Qed.
 
-End TREE_FOLD_IND.
+End TREE_FOLD_REC.
 
 (** A nonnegative measure over trees *)
 
