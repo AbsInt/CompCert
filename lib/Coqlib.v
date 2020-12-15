@@ -1011,6 +1011,14 @@ Proof.
   generalize list_norepet_app; firstorder.
 Qed.
 
+Lemma list_norepet_rev:
+  forall (A: Type) (l: list A), list_norepet l -> list_norepet (List.rev l).
+Proof.
+  induction 1; simpl.
+- constructor.
+- apply list_norepet_append_commut. simpl. constructor; auto. rewrite <- List.in_rev; auto.
+Qed.
+
 (** [is_tail l1 l2] holds iff [l2] is of the form [l ++ l1] for some [l]. *)
 
 Inductive is_tail (A: Type): list A -> list A -> Prop :=
