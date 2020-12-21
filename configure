@@ -237,6 +237,7 @@ if test "$arch" = "arm"; then
   clinker="${toolprefix}gcc"
   cprepro="${toolprefix}gcc"
   cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
+  archiver="${toolprefix}ar"
   libmath="-lm"
   system="linux"
 fi
@@ -275,6 +276,7 @@ if test "$arch" = "powerpc"; then
         clinker="${toolprefix}dcc"
         cprepro="${toolprefix}dcc"
         cprepro_options="-E -D__GNUC__"
+        archiver="${toolprefix}ar"
         libmath="-lm"
         system="diab"
         responsefile="diab"
@@ -287,6 +289,7 @@ if test "$arch" = "powerpc"; then
         clinker="${toolprefix}gcc"
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -U__GNUC__ -E"
+        archiver="${toolprefix}ar"
         libmath="-lm"
         system="linux"
         ;;
@@ -309,6 +312,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         clinker_options="-m32"
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+        archiver="${toolprefix}ar"
         libmath="-lm"
         system="bsd"
         ;;
@@ -321,6 +325,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         clinker_options="-m32"
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ '-D__attribute__(x)=' -E"
+        archiver="${toolprefix}ar"
         libmath="-lm"
         system="cygwin"
         ;;
@@ -333,6 +338,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         clinker_options="-m32"
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+        archiver="${toolprefix}ar"
         libmath="-lm"
         system="linux"
         ;;
@@ -358,6 +364,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         clinker_options="-m64"
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
+        archiver="${toolprefix}ar"
         libmath="-lm"
         system="bsd"
         ;;
@@ -370,6 +377,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         clinker_options="-m64"
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
+        archiver="${toolprefix}ar"
         libmath="-lm"
         system="linux"
         ;;
@@ -385,6 +393,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         clinker_needs_no_pie=false
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
+        archiver="${toolprefix}ar"
         libmath=""
         system="macosx"
         ;;
@@ -397,6 +406,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         clinker_options="-m64"
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ '-D__attribute__(x)=' -E"
+        archiver="${toolprefix}ar"
         libmath="-lm"
         system="cygwin"
         ;;
@@ -425,6 +435,7 @@ if test "$arch" = "riscV"; then
   clinker_options="$model_options"
   cprepro="${toolprefix}gcc"
   cprepro_options="$model_options -std=c99 -U__GNUC__ -E"
+  archiver="${toolprefix}ar"
   libmath="-lm"
   system="linux"
 fi
@@ -443,6 +454,7 @@ if test "$arch" = "aarch64"; then
         clinker_options=""
         cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -U__GNUC__ -E"
+        archiver="${toolprefix}ar"
         libmath="-lm"
         system="linux";;
     *)
@@ -666,6 +678,7 @@ CLINKER=$clinker
 CLINKER_OPTIONS=$clinker_options
 CPREPRO=$cprepro
 CPREPRO_OPTIONS=$cprepro_options
+ARCHIVER=$archiver
 ENDIANNESS=$endianness
 HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
@@ -749,6 +762,9 @@ CASMRUNTIME=gcc -c
 
 # Linker
 CLINKER=gcc
+
+# Archiver
+ARCHIVER=ar
 
 # Math library. Set to empty under MacOS X
 LIBMATH=-lm
@@ -839,6 +855,7 @@ CompCert configuration:
     Assembler for runtime lib..... $casmruntime
     Linker........................ $clinker
     Linker needs '-no-pie'........ $clinker_needs_no_pie
+    Archiver...................... $archiver
     Math library.................. $libmath
     Build command to use.......... $make
     Menhir API library............ $menhir_dir
