@@ -172,25 +172,28 @@ Qed.
 (** ** Location of function arguments *)
 
 (** The RISC-V ABI states the following conventions for passing arguments
-  to a function:
+  to a function.  First for non-variadic functions:
 
-- RV64, not variadic: pass the first 8 integer arguments in
-  integer registers (a1...a8: int_param_regs), the first 8 FP arguments
-  in FP registers (fa1...fa8: float_param_regs), and the remaining
-  arguments on the stack, in 8-byte slots.
+- RV64: pass the first 8 integer arguments in integer registers
+  (a1...a8: int_param_regs), the first 8 FP arguments in FP registers
+  (fa1...fa8: float_param_regs), and the remaining arguments on the
+  stack, in 8-byte slots.
 
-- RV32, not variadic: same, but arguments of 64-bit integer type
-  are passed in two consecutive integer registers (a(i), a(i+1))
-  or in a(8) and on a 32-bit word on the stack.  Stack-allocated
-  arguments are aligned to their natural alignment.
+- RV32: same, but arguments of 64-bit integer type are passed in two
+  consecutive integer registers (a(i), a(i+1)) or in a(8) and on a
+  32-bit word on the stack.  Stack-allocated arguments are aligned to
+  their natural alignment.
 
-- RV64, variadic: pass the first 8 arguments in integer registers
-  (a1...a8), including FP arguments; pass the remaining arguments on
-  the stack, in 8-byte slots.
+For variadic functions, the fixed arguments are passed as described
+above, then the variadic arguments receive special treatment:
 
-- RV32, variadic: same, but arguments of 64-bit types (integers as well
+- RV64: all variadic arguments, including FP arguments,
+  are passed in the remaining integer registers (a1...a8),
+  then on the stack, in 8-byte slots.
+
+- RV32: likewise, but arguments of 64-bit types (integers as well
   as floats) are passed in two consecutive aligned integer registers
-  (a(2i), a(2i+1)).  
+  (a(2i), a(2i+1)), or on the stack, in aligned 8-byte slots.
 
 The passing of FP arguments to variadic functions in integer registers
 doesn't quite fit CompCert's model.  We do our best by passing the FP
@@ -253,36 +256,43 @@ Definition split_long_arg (va: bool) (ri rf ofs: Z)
       rec ri rf (ofs + 2)
   end.
 
-Fixpoint loc_arguments_rec (va: bool)
-    (tyl: list typ) (ri rf ofs: Z) {struct tyl} : list (rpair loc) :=
+Fixpoint loc_arguments_rec
+    (tyl: list typ) (fixed ri rf ofs: Z) {struct tyl} : list (rpair loc) :=
   match tyl with
   | nil => nil
   | (Tint | Tany32) as ty :: tys =>
       (* pass in one integer register or on stack *)
-      int_arg ri rf ofs ty (loc_arguments_rec va tys)
+      int_arg ri rf ofs ty (loc_arguments_rec tys (fixed - 1))
   | Tsingle as ty :: tys =>
       (* pass in one FP register or on stack.
          If vararg, reserve 1 integer register. *)
-      float_arg va ri rf ofs ty (loc_arguments_rec va tys)
+      float_arg (zle fixed 0) ri rf ofs ty (loc_arguments_rec tys (fixed - 1))
   | Tlong as ty :: tys =>
       if Archi.ptr64 then
         (* pass in one integer register or on stack *)
-        int_arg ri rf ofs ty (loc_arguments_rec va tys)
+        int_arg ri rf ofs ty (loc_arguments_rec tys (fixed - 1))
       else
         (* pass in register pair or on stack; align register pair if vararg *)
-        split_long_arg va ri rf ofs(loc_arguments_rec va tys)
+        split_long_arg (zle fixed 0) ri rf ofs(loc_arguments_rec tys (fixed - 1))
   | (Tfloat | Tany64) as ty :: tys =>
       (* pass in one FP register or on stack.
          If vararg, reserve 1 or 2 integer registers. *)
-      float_arg va ri rf ofs ty (loc_arguments_rec va tys)
+      float_arg (zle fixed 0) ri rf ofs ty (loc_arguments_rec tys (fixed - 1))
+  end.
+
+(** Number of fixed arguments for a function with signature [s]. *)
+
+Definition fixed_arguments (s: signature) : Z :=
+  match s.(sig_cc).(cc_vararg) with
+  | Some n => n
+  | None => list_length_z s.(sig_args)
   end.
 
 (** [loc_arguments s] returns the list of locations where to store arguments
   when calling a function with signature [s].  *)
 
 Definition loc_arguments (s: signature) : list (rpair loc) :=
-  let va := match s.(sig_cc).(cc_vararg) with Some _ => true | None => false end in
-  loc_arguments_rec va s.(sig_args) 0 0 0.
+  loc_arguments_rec s.(sig_args) (fixed_arguments s) 0 0 0.
 
 (** Argument locations are either non-temporary registers or [Outgoing]
   stack slots at nonnegative offsets. *)
@@ -362,20 +372,20 @@ Proof.
     + subst p; repeat split; auto using Z.divide_1_l. omega. 
     + eapply OF; [idtac|eauto]. omega.
   }
-  cut (forall va tyl ri rf ofs, ofs >= 0 -> OK (loc_arguments_rec va tyl ri rf ofs)).
+  cut (forall tyl fixed ri rf ofs, ofs >= 0 -> OK (loc_arguments_rec tyl fixed ri rf ofs)).
   unfold OK. eauto.
   induction tyl as [ | ty1 tyl]; intros until ofs; intros OO; simpl.
 - red; simpl; tauto.
 - destruct ty1.
-+ (* int *) apply A; auto.
-+ (* float *) apply B; auto.
++ (* int *) apply A; unfold OKF; auto.
++ (* float *) apply B; unfold OKF; auto.
 + (* long *)
   destruct Archi.ptr64.
-  apply A; auto.
-  apply C; auto.
-+ (* single *) apply B; auto.
-+ (* any32 *) apply A; auto.
-+ (* any64 *) apply B; auto.
+  apply A; unfold OKF; auto.
+  apply C; unfold OKF; auto.
++ (* single *) apply B; unfold OKF; auto.
++ (* any32 *) apply A; unfold OKF; auto.
++ (* any64 *) apply B; unfold OKF; auto.
 Qed.
 
 Lemma loc_arguments_acceptable:
