@@ -1029,7 +1029,13 @@ Theorem eval_addressing:
 Proof.
   intros until v. unfold addressing; case (addressing_match a); intros; InvEval.
 - econstructor; split. EvalOp. simpl; auto.
-- econstructor; split. EvalOp. simpl; auto.
+- destruct (symbol_is_relocatable id).
+  + exists (Genv.symbol_address ge id Ptrofs.zero :: nil); split.
+    constructor. EvalOp. constructor.
+    simpl. rewrite <- Genv.shift_symbol_address_64 by auto.
+    rewrite Ptrofs.of_int64_to_int64, Ptrofs.add_zero_l by auto.
+    auto.
+  + econstructor; split. EvalOp. simpl; auto.
 - econstructor; split. EvalOp. simpl. 
   destruct v1; try discriminate. rewrite <- H; auto.
 - econstructor; split. EvalOp. simpl. congruence.

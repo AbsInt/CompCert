@@ -34,6 +34,25 @@
 
 // System dependencies
 
+#if defined(SYS_macosx)
+
+#define GLOB(x) _##x
+
+#define FUNCTION(f) FUNCTION f
+
+.macro FUNCTION name
+	.text
+	.globl _\name
+	.align 4
+_\name:
+.endm
+
+#define ENDFUNCTION(f)
+
+#else
+
+#define GLOB(x) x
+
 #define FUNCTION(f) \
 	.text; \
         .balign 16; \
@@ -43,3 +62,4 @@ f:
 #define ENDFUNCTION(f) \
 	.type f, @function; .size f, . - f
 
+#endif

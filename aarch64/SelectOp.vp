@@ -536,10 +536,18 @@ Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
 
 (** ** Recognition of addressing modes for load and store operations *)
 
+(** Some symbols are relocatable (e.g. external symbols in macOS)
+    and cannot be used with [Aglobal] addressing mode. *)
+
+Parameter symbol_is_relocatable: ident -> bool.
+
 Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   match e with
   | Eop (Oaddrstack n) Enil => (Ainstack n, Enil)
-  | Eop (Oaddrsymbol id ofs) Enil => (Aglobal id ofs, Enil)
+  | Eop (Oaddrsymbol id ofs) Enil =>
+      if symbol_is_relocatable id
+      then (Aindexed (Ptrofs.to_int64 ofs), Eop (Oaddrsymbol id Ptrofs.zero) Enil ::: Enil)
+      else (Aglobal id ofs, Enil)
   | Eop (Oaddlimm n) (e1:::Enil) => (Aindexed n, e1:::Enil)
   | Eop (Oaddlshift Slsl a) (e1:::e2:::Enil) => (Aindexed2shift a, e1:::e2:::Enil)
   | Eop (Oaddlext x a) (e1:::e2:::Enil) => (Aindexed2ext x a, e1:::e2:::Enil)

@@ -36,7 +36,8 @@
 
 #include "sysdeps.h"	
 
-// typedef struct __va_list {
+// For the standard ABI:
+// struct __va_list {
 //   void *__stack;             // next stack parameter
 //   void *__gr_top;            // top of the save area for int regs
 //   void *__vr_top;            // top of the save area for float regs
@@ -44,9 +45,17 @@
 //   int__vr_offs;              // offset from gr_top to next FP reg
 // }
 // typedef struct __va_list va_list;   // struct passed by reference
+
+// For the Apple ABI:
+// typedef char * va_list;     // a single pointer passed by reference
+//                             // points to the next parameter, always on stack
+
+// In both cases:
 // unsigned int __compcert_va_int32(va_list * ap);
 // unsigned long long __compcert_va_int64(va_list * ap);
 // double __compcert_va_float64(va_list * ap);
+
+#ifdef ABI_standard
 
 FUNCTION(__compcert_va_int32)
         ldr     w1, [x0, #24]   // w1 = gr_offs
@@ -72,14 +81,14 @@ FUNCTION(__compcert_va_int64)
         cbz     w1, 1f
   // gr_offs is not zero: load from int save area and update gr_offs
         ldr     x2, [x0, #8]    // x2 = gr_top
-        ldr     x2, [x2, w1, sxtw] // w2 = the next long integer
+        ldr     x2, [x2, w1, sxtw] // x2 = the next long integer
         add     w1, w1, #8
         str     w1, [x0, #24]   // update gr_offs
         mov     x0, x2
 	ret
   // gr_offs is zero: load from stack save area and update stack pointer
 1:      ldr     x1, [x0, #0]    // x1 = stack
-        ldr     x2, [x1, #0]    // w2 = the next long integer
+        ldr     x2, [x1, #0]    // x2 = the next long integer
         add     x1, x1, #8
         str     x1, [x0, #0]    // update stack
         mov     x0, x2
@@ -103,7 +112,40 @@ FUNCTION(__compcert_va_float64)
 	ret
 ENDFUNCTION(__compcert_va_float64)
 
+#endif
+
+#ifdef ABI_apple
+
+FUNCTION(__compcert_va_int32)
+        ldr     x1, [x0, #0]    // x1 = stack pointer
+        ldr     w2, [x1, #0]    // w2 = the next integer
+        add     x1, x1, #8
+        str     x1, [x0, #0]    // update stack
+        mov     w0, w2
+	ret
+ENDFUNCTION(__compcert_va_int32)
+
+FUNCTION(__compcert_va_int64)
+        ldr     x1, [x0, #0]    // x1 = stack pointer
+        ldr     x2, [x1, #0]    // x2 = the next long integer
+        add     x1, x1, #8
+        str     x1, [x0, #0]    // update stack
+        mov     x0, x2
+	ret
+ENDFUNCTION(__compcert_va_int64)
+
+FUNCTION(__compcert_va_float64)
+        ldr     x1, [x0, #0]    // x1 = stack pointer
+        ldr     d0, [x1, #0]    // d0 = the next float
+        add     x1, x1, #8
+        str     x1, [x0, #0]    // update stack
+	ret
+ENDFUNCTION(__compcert_va_float64)
+
+#endif
+
 // Right now we pass structs by reference.  This is not ABI conformant.
 FUNCTION(__compcert_va_composite)
-	b	__compcert_va_int64
+	b	GLOB(__compcert_va_int64)
 ENDFUNCTION(__compcert_va_composite)
+

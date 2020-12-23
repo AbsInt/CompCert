@@ -47,17 +47,28 @@ let expand_storeptr (src: ireg) (base: iregsp) ofs =
 (* Determine the number of int registers, FP registers, and stack locations
    used to pass the fixed parameters. *)
 
+let align n a = (n + a - 1) land (-a)
+
+let typesize = function
+  | Tint | Tany32 | Tsingle -> 4
+  | Tlong | Tany64 | Tfloat -> 8
+
+let reserve_stack stk ty =
+  match Archi.abi with
+  | Archi.AAPCS64 -> stk + 8
+  | Archi.Apple -> align stk (typesize ty) + typesize ty
+
 let rec next_arg_locations ir fr stk = function
   | [] ->
       (ir, fr, stk)
-  | (Tint | Tlong | Tany32 | Tany64) :: l ->
+  | (Tint | Tlong | Tany32 | Tany64 as ty) :: l ->
       if ir < 8
       then next_arg_locations (ir + 1) fr stk l
-      else next_arg_locations ir fr (stk + 8) l
-  | (Tfloat | Tsingle) :: l ->
+      else next_arg_locations ir fr (reserve_stack stk ty) l
+  | (Tfloat | Tsingle as ty) :: l ->
       if fr < 8
       then next_arg_locations ir (fr + 1) stk l
-      else next_arg_locations ir fr (stk + 8) l
+      else next_arg_locations ir fr (reserve_stack stk ty) l
 
 (* Allocate memory on the stack and use it to save the registers
    used for parameter passing.  As an optimization, do not save
@@ -86,6 +97,8 @@ let save_parameter_registers ir fr =
     emit (Pstrd(float_param_regs.(i), ADimm(XSP, Z.of_uint pos)))
   done
 
+let current_function_stacksize = ref 0L
+
 (* Initialize a va_list as per va_start.
    Register r points to the following struct:
 
@@ -98,11 +111,7 @@ let save_parameter_registers ir fr =
    }
 *)
 
-let current_function_stacksize = ref 0L
-
-let expand_builtin_va_start r =
-  if not (is_current_function_variadic ()) then
-    invalid_arg "Fatal error: va_start used in non-vararg function";
+let expand_builtin_va_start_aapcs64 r =
   let (ir, fr, stk) =
     next_arg_locations 0 0 0 (get_current_function_args ()) in
   let stack_ofs = Int64.(add !current_function_stacksize (of_int stk))
@@ -126,6 +135,25 @@ let expand_builtin_va_start r =
   (* va->__vr_offs = vr_offs *)
   expand_loadimm32 X16 (coqint_of_camlint (Int32.of_int vr_offs));
   emit (Pstrw(X16, ADimm(RR1 r, coqint_of_camlint64 28L)))
+
+(* In macOS, va_list is just a pointer (char * ) and all variadic arguments
+   are passed on the stack. *)
+
+let expand_builtin_va_start_apple r =
+  let (ir, fr, stk) =
+    next_arg_locations 0 0 0 (get_current_function_args ()) in
+  let stk = align stk 8 in
+  let stack_ofs = Int64.(add !current_function_stacksize (of_int stk)) in
+  (* *va = sp + stack_ofs *)
+  expand_addimm64 (RR1 X16) XSP (coqint_of_camlint64 stack_ofs);
+  emit (Pstrx(X16, ADimm(RR1 r, coqint_of_camlint64 0L)))
+
+let expand_builtin_va_start r =
+  if not (is_current_function_variadic ()) then
+    invalid_arg "Fatal error: va_start used in non-vararg function";
+  match Archi.abi with
+  | Archi.AAPCS64 -> expand_builtin_va_start_aapcs64 r
+  | Archi.Apple   -> expand_builtin_va_start_apple r
 
 (* Handling of annotations *)
 
@@ -380,7 +408,7 @@ let expand_instruction instr =
   match instr with
   | Pallocframe (sz, ofs) ->
       emit (Pmov (RR1 X29, XSP));
-      if is_current_function_variadic() then begin
+      if is_current_function_variadic() && Archi.abi = Archi.AAPCS64 then begin
         let (ir, fr, _) =
           next_arg_locations 0 0 0 (get_current_function_args ()) in
         save_parameter_registers ir fr;

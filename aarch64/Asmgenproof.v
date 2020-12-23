@@ -208,7 +208,7 @@ Qed.
 Remark loadsymbol_label: forall r id ofs k, tail_nolabel k (loadsymbol r id ofs k).
 Proof.
   intros; unfold loadsymbol.
-  destruct (Archi.pic_code tt); TailNoLabel. destruct Ptrofs.eq; TailNoLabel.
+  destruct (SelectOp.symbol_is_relocatable id); TailNoLabel. destruct Ptrofs.eq; TailNoLabel.
 Qed. 
 Hint Resolve loadsymbol_label: labels.
 

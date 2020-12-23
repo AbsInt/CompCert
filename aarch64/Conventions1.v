@@ -24,7 +24,12 @@ Require Archi.
 - Caller-save registers that can be modified during a function call.
 
   We follow the Procedure Call Standard for the ARM 64-bit Architecture
-  (AArch64) document: R19-R28 and F8-F15 are callee-save. *)
+  (AArch64) document: R19-R28 and F8-F15 are callee-save.
+
+  X16 is reserved as a temporary for asm generation.
+  X18 is reserved as the platform register.
+  X29 is reserved as the frame pointer register.
+  X30 is reserved as the return address register. *)
 
 Definition is_callee_save (r: mreg): bool :=
   match r with
@@ -154,9 +159,23 @@ Qed.
 (**
 - The first 8 integer arguments are passed in registers [R0...R7].
 - The first 8 FP arguments are passed in registers [F0...F7].
-- Extra arguments are passed on the stack, in [Outgoing] slots of size
-  64 bits (2 words), consecutively assigned, starting at word offset 0.
-**)
+- Extra arguments are passed on the stack, in [Outgoing] slots,
+  consecutively assigned, starting at word offset 0.
+
+In the standard AAPCS64, all stack slots are 8-byte wide (2 words).
+
+In the Apple variant, a stack slot has the size of the type of the
+corresponding argument, and is aligned accordingly.  We use 8-byte
+slots (2 words) for C types [long] and [double], and 4-byte slots
+(1 word) for C types [int] and [float].  For full conformance, we should
+use 1-byte slots for [char] types and 2-byte slots for [short] types,
+but this cannot be expressed in CompCert's type algebra, so we
+incorrectly use 4-byte slots.
+
+Concerning variable arguments to vararg functions:
+- In the AAPCS64 standard, they are passed like regular, fixed arguments.
+- In the Apple variant, they are always passed on stack, in 8-byte slots.
+*)
 
 Definition int_param_regs :=
   R0  :: R1  :: R2  :: R3  :: R4  :: R5  :: R6  :: R7 :: nil.
@@ -164,31 +183,70 @@ Definition int_param_regs :=
 Definition float_param_regs :=
   F0  :: F1  :: F2  :: F3  :: F4  :: F5  :: F6  :: F7 :: nil.
 
-Fixpoint loc_arguments_rec
-     (tyl: list typ) (ir fr ofs: Z) {struct tyl} : list (rpair loc) :=
+Definition stack_arg (ty: typ) (ir fr ofs: Z)
+                     (rec: Z -> Z -> Z -> list (rpair loc)) :=
+  match Archi.abi with
+  | Archi.AAPCS64 =>
+      let ofs := align ofs 2 in
+      One (S Outgoing ofs ty) :: rec ir fr (ofs + 2)
+  | Archi.Apple =>
+      let ofs := align ofs (typesize ty) in
+      One (S Outgoing ofs ty) :: rec ir fr (ofs + typesize ty)
+  end.
+
+Definition int_arg (ty: typ) (ir fr ofs: Z)
+                   (rec: Z -> Z -> Z -> list (rpair loc)) :=
+  match list_nth_z int_param_regs ir with
+  | None =>
+      stack_arg ty ir fr ofs rec
+  | Some ireg =>
+      One (R ireg) :: rec (ir + 1) fr ofs
+  end.
+
+Definition float_arg (ty: typ) (ir fr ofs: Z)
+                     (rec: Z -> Z -> Z -> list (rpair loc)) :=
+  match list_nth_z float_param_regs fr with
+  | None =>
+      stack_arg ty ir fr ofs rec
+  | Some freg =>
+      One (R freg) :: rec ir (fr + 1) ofs
+  end.
+
+Fixpoint loc_arguments_stack (tyl: list typ) (ofs: Z) {struct tyl} : list (rpair loc) :=
   match tyl with
   | nil => nil
-  | (Tint | Tlong | Tany32 | Tany64) as ty :: tys =>
-      match list_nth_z int_param_regs ir with
-      | None =>
-          One (S Outgoing ofs ty) :: loc_arguments_rec tys ir fr (ofs + 2)
-      | Some ireg =>
-          One (R ireg) :: loc_arguments_rec tys (ir + 1) fr ofs
+  | ty :: tys => One (S Outgoing ofs Tany64) :: loc_arguments_stack tys (ofs + 2)
+  end.
+
+Fixpoint loc_arguments_rec
+     (tyl: list typ) (fixed ir fr ofs: Z) {struct tyl} : list (rpair loc) :=
+  match tyl with
+  | nil => nil
+  | ty :: tys =>
+      if zle fixed 0 then loc_arguments_stack tyl (align ofs 2) else
+      match ty with
+      | Tint | Tlong | Tany32 | Tany64 =>
+          int_arg ty ir fr ofs (loc_arguments_rec tys (fixed - 1))
+      | Tfloat | Tsingle =>
+          float_arg ty ir fr ofs (loc_arguments_rec tys (fixed - 1))
       end
-  | (Tfloat | Tsingle) as ty :: tys =>
-      match list_nth_z float_param_regs fr with
-      | None =>
-          One (S Outgoing ofs ty) :: loc_arguments_rec tys ir fr (ofs + 2)
-      | Some freg =>
-          One (R freg) :: loc_arguments_rec tys ir (fr + 1) ofs
-      end
+  end.
+
+(** Number of fixed arguments for a function with signature [s].
+    For AAPCS64, all arguments are treated as fixed, even for a vararg
+    function. *)
+
+Definition fixed_arguments (s: signature) : Z :=
+  match Archi.abi, s.(sig_cc).(cc_vararg) with
+  | Archi.Apple, Some n => n
+  | _, _ => list_length_z s.(sig_args)
   end.
 
 (** [loc_arguments s] returns the list of locations where to store arguments
   when calling a function with signature [s].  *)
 
 Definition loc_arguments (s: signature) : list (rpair loc) :=
-  loc_arguments_rec s.(sig_args) 0 0 0.
+  loc_arguments_rec s.(sig_args) (fixed_arguments s) 0 0 0.
 
 (** Argument locations are either caller-save registers or [Outgoing]
   stack slots at nonnegative offsets. *)
@@ -200,49 +258,73 @@ Definition loc_argument_acceptable (l: loc) : Prop :=
   | _ => False
   end.
 
-Definition loc_argument_charact (ofs: Z) (l: loc) : Prop :=
-  match l with
-  | R r => In r int_param_regs \/ In r float_param_regs
-  | S Outgoing ofs' ty => ofs' >= ofs /\ (2 | ofs')
-  | _ => False
-  end.
-
-Remark loc_arguments_rec_charact:
-  forall tyl ir fr ofs p,
-  In p (loc_arguments_rec tyl ir fr ofs) -> (2 | ofs) -> forall_rpair (loc_argument_charact ofs) p.
+Lemma loc_arguments_rec_charact:
+  forall tyl fixed ri rf ofs p,
+  ofs >= 0 ->
+  In p (loc_arguments_rec tyl fixed ri rf ofs) -> forall_rpair loc_argument_acceptable p.
 Proof.
-  assert (X: forall ofs1 ofs2 l, loc_argument_charact ofs2 l -> ofs1 <= ofs2 -> loc_argument_charact ofs1 l).
-  { destruct l; simpl; intros; auto. destruct sl; auto. intuition omega. }
-  assert (Y: forall ofs1 ofs2 p, forall_rpair (loc_argument_charact ofs2) p -> ofs1 <= ofs2 -> forall_rpair (loc_argument_charact ofs1) p).
-  { destruct p; simpl; intuition eauto. }
-  assert (Z: forall ofs, (2 | ofs) -> (2 | ofs + 2)).
-  { intros. apply Z.divide_add_r; auto. apply Z.divide_refl. }
-Opaque list_nth_z.
-  induction tyl; simpl loc_arguments_rec; intros.
-- contradiction.
-- assert (A: forall ty, In p
-      match list_nth_z int_param_regs ir with
-      | Some ireg => One (R ireg) :: loc_arguments_rec tyl (ir + 1) fr ofs
-      | None => One (S Outgoing ofs ty) :: loc_arguments_rec tyl ir fr (ofs + 2)
-      end ->
-      forall_rpair (loc_argument_charact ofs) p).
-  { intros. destruct (list_nth_z int_param_regs ir) as [r|] eqn:E; destruct H1.
-    subst. left. eapply list_nth_z_in; eauto.
-    eapply IHtyl; eauto.
-    subst. split. omega. assumption.
-    eapply Y; eauto. omega. }
-  assert (B: forall ty, In p
-      match list_nth_z float_param_regs fr with
-      | Some ireg => One (R ireg) :: loc_arguments_rec tyl ir (fr + 1) ofs
-      | None => One (S Outgoing ofs ty) :: loc_arguments_rec tyl ir fr (ofs + 2)
-      end ->
-      forall_rpair (loc_argument_charact ofs) p).
-  { intros. destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H1.
-    subst. right. eapply list_nth_z_in; eauto.
-    eapply IHtyl; eauto.
-    subst. split. omega. assumption.
-    eapply Y; eauto. omega. }
-  destruct a; eauto.
+  set (OK := fun (l: list (rpair loc)) =>
+             forall p, In p l -> forall_rpair loc_argument_acceptable p).
+  set (OKF := fun (f: Z -> Z -> Z -> list (rpair loc)) =>
+              forall ri rf ofs, ofs >= 0 -> OK (f ri rf ofs)).
+  assert (CSI: forall r, In r int_param_regs -> is_callee_save r = false).
+  { decide_goal. }
+  assert (CSF: forall r, In r float_param_regs -> is_callee_save r = false).
+  { decide_goal. }
+  assert (ALP: forall ofs ty, ofs >= 0 -> align ofs (typesize ty) >= 0).
+  { intros. 
+    assert (ofs <= align ofs (typesize ty)) by (apply align_le; apply typesize_pos).
+    omega. }
+  assert (ALD: forall ofs ty, ofs >= 0 -> (typealign ty | align ofs (typesize ty))).
+  { intros. apply Z.divide_trans with (typesize ty). apply typealign_typesize. apply align_divides. apply typesize_pos. }
+  assert (ALP2: forall ofs, ofs >= 0 -> align ofs 2 >= 0).
+  { intros. 
+    assert (ofs <= align ofs 2) by (apply align_le; omega).
+    omega. }
+  assert (ALD2: forall ofs ty, ofs >= 0 -> (typealign ty | align ofs 2)).
+  { intros. eapply Z.divide_trans with 2.
+    exists (2 / typealign ty). destruct ty; reflexivity.
+    apply align_divides. omega. }
+  assert (STK: forall tyl ofs,
+               ofs >= 0 -> OK (loc_arguments_stack tyl ofs)).
+  { induction tyl as [ | ty tyl]; intros ofs OO; red; simpl; intros.
+  - contradiction.
+  - destruct H.
+    + subst p. split. auto. simpl. apply Z.divide_1_l.
+    + apply IHtyl with (ofs := ofs + 2). omega. auto.
+  }  
+  assert (A: forall ty ri rf ofs f,
+             OKF f -> ofs >= 0 -> OK (stack_arg ty ri rf ofs f)).
+  { intros until f; intros OF OO; red; unfold stack_arg; intros.
+    destruct Archi.abi; destruct H.
+  - subst p; simpl; auto.
+  - eapply OF; [|eauto]. apply ALP2 in OO. omega.
+  - subst p; simpl; auto.  
+  - eapply OF; [|eauto]. apply (ALP ofs ty) in OO. generalize (typesize_pos ty). omega.
+  }
+  assert (B: forall ty ri rf ofs f,
+             OKF f -> ofs >= 0 -> OK (int_arg ty ri rf ofs f)).
+  { intros until f; intros OF OO; red; unfold int_arg; intros.
+    destruct (list_nth_z int_param_regs ri) as [r|] eqn:NTH; [destruct H|].
+  - subst p; simpl. apply CSI. eapply list_nth_z_in; eauto. 
+  - eapply OF; eauto. 
+  - eapply A; eauto.
+  }
+  assert (C: forall ty ri rf ofs f,
+             OKF f -> ofs >= 0 -> OK (float_arg ty ri rf ofs f)).
+  { intros until f; intros OF OO; red; unfold float_arg; intros.
+    destruct (list_nth_z float_param_regs rf) as [r|] eqn:NTH; [destruct H|].
+  - subst p; simpl. apply CSF. eapply list_nth_z_in; eauto.
+  - eapply OF; eauto.
+  - eapply A; eauto.
+  }
+  cut (forall tyl fixed ri rf ofs, ofs >= 0 -> OK (loc_arguments_rec tyl fixed ri rf ofs)).
+  unfold OK. eauto.
+  induction tyl as [ | ty1 tyl]; intros until ofs; intros OO; simpl.
+- red; simpl; tauto.
+- destruct (zle fixed  0).
+  + apply (STK (ty1 :: tyl)); auto. 
+  + unfold OKF in *; destruct ty1; eauto.
 Qed.
 
 Lemma loc_arguments_acceptable:
@@ -250,16 +332,7 @@ Lemma loc_arguments_acceptable:
   In p (loc_arguments s) -> forall_rpair loc_argument_acceptable p.
 Proof.
   unfold loc_arguments; intros.
-  assert (A: forall r, In r int_param_regs -> is_callee_save r = false) by decide_goal.
-  assert (B: forall r, In r float_param_regs -> is_callee_save r = false) by decide_goal.
-  assert (X: forall l, loc_argument_charact 0 l -> loc_argument_acceptable l).
-  { unfold loc_argument_charact, loc_argument_acceptable.
-    destruct l as [r | [] ofs ty]; auto.  intros [C|C]; auto.
-    intros [C D]. split; auto. apply Z.divide_trans with 2; auto.
-    exists (2 / typealign ty); destruct ty; reflexivity.
-  }
-  exploit loc_arguments_rec_charact; eauto using Z.divide_0_r.
-  unfold forall_rpair; destruct p; intuition auto.
+  eapply loc_arguments_rec_charact; eauto. omega.
 Qed.
 
 Hint Resolve loc_arguments_acceptable: locs.
@@ -276,10 +349,19 @@ Qed.
     value of a function have unpredictable values and must be ignored.
     Consequently, we force normalization of return values of small integer
     types (8- and 16-bit integers), so that the top bits (the "padding bits")
-    are proper sign- or zero-extensions of the small integer value. *)
+    are proper sign- or zero-extensions of the small integer value.
+
+    The Apple variant of the AAPCS64 requires the callee to return a normalized
+    value, hence no normalization is needed in the caller.
+ *)
 
 Definition return_value_needs_normalization (t: rettype) : bool :=
-  match t with
-  | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => true
-  | _ => false
+  match Archi.abi with
+  | Archi.Apple => false
+  | Archi.AAPCS64 =>
+      match t with
+      | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => true
+      | _ => false
+      end
   end.
+

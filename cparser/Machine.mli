@@ -87,6 +87,7 @@ val arm_bigendian : t
 val rv32 : t
 val rv64 : t
 val aarch64 : t
+val aarch64_apple : t
 
 val gcc_extensions : t -> t
 val compcert_interpreter : t -> t

@@ -15,13 +15,27 @@
 
 (* Additional extraction directives specific to the AArch64 port *)
 
-Require Archi Asm.
+Require Archi Asm Asmgen SelectOp.
 
 (* Archi *)
 
-Extract Constant Archi.pic_code => "fun () -> false".  (* for the time being *)
+Extract Constant Archi.abi =>
+  "match Configuration.abi with
+    | ""apple"" -> Apple
+    | _ -> AAPCS64".
+  
+(* SelectOp *)
+
+Extract Constant SelectOp.symbol_is_relocatable =>
+  "match Configuration.system with
+    | ""macosx"" -> C2C.atom_is_extern
+    | _ -> (fun _ -> false)".
 
 (* Asm *)
+
 Extract Constant Asm.symbol_low => "fun _ _ _ -> assert false".
 Extract Constant Asm.symbol_high => "fun _ _ _ -> assert false".
+
+(* Asmgen *)
+
 Extract Constant Asmgen.symbol_is_aligned => "C2C.atom_is_aligned".

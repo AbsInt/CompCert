@@ -57,6 +57,7 @@ Supported targets:
   rv32-linux           (RISC-V 32 bits, Linux)
   rv64-linux           (RISC-V 64 bits, Linux)
   aarch64-linux        (AArch64, i.e. ARMv8 in 64-bit mode, Linux)
+  aarch64-macosx       (AArch64, i.e. Apple silicon, MacOS)
   manual               (edit configuration file by hand)
 
 For x86 targets, the "x86_32-" prefix can also be written "ia32-" or "i386-".
@@ -404,6 +405,18 @@ if test "$arch" = "aarch64"; then
         abi="standard"
         cprepro_options="-std=c99 -U__GNUC__ -E"
         system="linux";;
+    macosx)
+        abi="apple"
+        casm="${toolprefix}cc"
+        casm_options="-c -arch arm64"
+        cc="${toolprefix}cc -arch arm64"
+        clinker="${toolprefix}cc"
+        clinker_needs_no_pie=false
+        cprepro="${toolprefix}cc"
+        cprepro_options="-std=c99 -arch arm64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
+        libmath=""
+        system="macosx"
+        ;;
     *)
         echo "Error: invalid eabi/system '$target' for architecture AArch64." 1>&2
         echo "$usage" 1>&2

@@ -13,11 +13,11 @@
 (** Strength reduction for operators and conditions.
     This is the machine-dependent part of [Constprop]. *)
 
-Require Archi.
 Require Import Coqlib Compopts.
 Require Import AST Integers Floats.
 Require Import Op Registers.
 Require Import ValueDomain ValueAOp.
+Require SelectOp.
 
 (** * Converting known values to constants *)
 
@@ -375,7 +375,7 @@ Nondetfunction op_strength_reduction
 Nondetfunction addr_strength_reduction
                 (addr: addressing) (args: list reg) (vl: list aval) :=
   match addr, args, vl with
-  | Aindexed n, r1 :: nil, Ptr(Gl symb n1) :: nil =>
+  | Aindexed n, r1 :: nil, Ptr(Gl symb n1) :: nil ?? negb (SelectOp.symbol_is_relocatable symb) =>
       (Aglobal symb (Ptrofs.add n1 (Ptrofs.of_int64 n)), nil)
   | Aindexed n, r1 :: nil, Ptr(Stk n1) :: nil =>
       (Ainstack (Ptrofs.add n1 (Ptrofs.of_int64 n)), nil)

@@ -594,13 +594,13 @@ Qed.
 (** Load address of symbol *)
 
 Lemma exec_loadsymbol: forall rd s ofs k rs m,
-  rd <> X16 \/ Archi.pic_code tt = false ->
+  rd <> X16 \/ SelectOp.symbol_is_relocatable s = false ->
   exists rs',
      exec_straight ge fn (loadsymbol rd s ofs k) rs m k rs' m
   /\ rs'#rd = Genv.symbol_address ge s ofs
   /\ forall r, data_preg r = true -> r <> rd -> rs'#r = rs#r.
 Proof.
-  unfold loadsymbol; intros. destruct (Archi.pic_code tt).
+  unfold loadsymbol; intros. destruct (SelectOp.symbol_is_relocatable s).
 - predSpec Ptrofs.eq Ptrofs.eq_spec ofs Ptrofs.zero.
 + subst ofs. econstructor; split.
   apply exec_straight_one; [simpl; eauto | reflexivity].

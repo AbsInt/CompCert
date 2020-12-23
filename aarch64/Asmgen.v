@@ -15,6 +15,7 @@
 Require Import Recdef Coqlib Zwf Zbits.
 Require Import Errors AST Integers Floats Op.
 Require Import Locations Mach Asm.
+Require SelectOp.
 
 Local Open Scope string_scope.
 Local Open Scope list_scope.
@@ -284,7 +285,7 @@ Definition shrx64 (rd r1: ireg) (n: int) (k: code) : code :=
 (** Load the address [id + ofs] in [rd] *)
 
 Definition loadsymbol (rd: ireg) (id: ident) (ofs: ptrofs) (k: code) : code :=
-  if Archi.pic_code tt then
+  if SelectOp.symbol_is_relocatable id then
     if Ptrofs.eq ofs Ptrofs.zero then
       Ploadsymbol rd id :: k
     else
@@ -946,7 +947,7 @@ Definition transl_addressing (sz: Z) (addr: Op.addressing) (args: list mreg)
         OK (arith_extended Paddext (Padd X) X16 r1 r2 x a
                            (insn (ADimm X16 Int64.zero) :: k))
   | Aglobal id ofs, nil =>
-      assertion (negb (Archi.pic_code tt));
+      assertion (negb (SelectOp.symbol_is_relocatable id));
       if Ptrofs.eq (Ptrofs.modu ofs (Ptrofs.repr sz)) Ptrofs.zero && symbol_is_aligned id sz
       then OK (Padrp X16 id ofs :: insn (ADadr X16 id ofs) :: k)
       else OK (loadsymbol X16 id ofs (insn (ADimm X16 Int64.zero) :: k))

@@ -242,6 +242,9 @@ let aarch64 =
                    struct_passing_style = SP_ref_callee; (* Wrong *)
                    struct_return_style = SR_ref } (* Wrong *)
 
+let aarch64_apple =
+  { aarch64 with char_signed = true }
+
 (* Add GCC extensions re: sizeof and alignof *)
 
 let gcc_extensions c =
