@@ -587,7 +587,7 @@ module Target : TARGET =
         section oc Section_text;
       end
 
-    let default_falignment = 2
+    let default_falignment = 4
 
     let cfi_startproc oc = ()
     let cfi_endproc oc = ()
