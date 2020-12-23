@@ -217,15 +217,15 @@ module Target : TARGET =
     | SOasr n -> fprintf oc ", asr #%a" coqint n
     | SOror n -> fprintf oc ", ror #%a" coqint n
 
-(* Print a sign- or zero-extended operand *)
-    let extendop oc = function
-    | EOsxtb n -> fprintf oc ", sxtb #%a" coqint n
-    | EOsxth n -> fprintf oc ", sxth #%a" coqint n
-    | EOsxtw n -> fprintf oc ", sxtw #%a" coqint n
-    | EOuxtb n -> fprintf oc ", uxtb #%a" coqint n
-    | EOuxth n -> fprintf oc ", uxth #%a" coqint n
-    | EOuxtw n -> fprintf oc ", uxtw #%a" coqint n
-    | EOuxtx n -> fprintf oc ", uxtx #%a" coqint n
+(* Print a sign- or zero-extended register operand *)
+    let regextend oc = function
+    | (r, EOsxtb n) -> fprintf oc "%a, sxtb #%a" wreg r coqint n
+    | (r, EOsxth n) -> fprintf oc "%a, sxth #%a" wreg r coqint n
+    | (r, EOsxtw n) -> fprintf oc "%a, sxtw #%a" wreg r coqint n
+    | (r, EOuxtb n) -> fprintf oc "%a, uxtb #%a" wreg r coqint n
+    | (r, EOuxth n) -> fprintf oc "%a, uxth #%a" wreg r coqint n
+    | (r, EOuxtw n) -> fprintf oc "%a, uxtw #%a" wreg r coqint n
+    | (r, EOuxtx n) -> fprintf oc "%a, uxtx #%a" xreg r coqint n
 
 (* Printing of instructions *)
     let print_instruction oc = function
@@ -335,13 +335,13 @@ module Target : TARGET =
         fprintf oc "	cmn	%a, %a%a\n" ireg0 (sz, r1) ireg (sz, r2) shiftop s
     (* Integer arithmetic, extending register *)
     | Paddext(rd, r1, r2, x) ->
-        fprintf oc "	add	%a, %a, %a%a\n" xregsp rd xregsp r1 wreg r2 extendop x
+        fprintf oc "	add	%a, %a, %a\n" xregsp rd xregsp r1 regextend (r2, x)
     | Psubext(rd, r1, r2, x) ->
-        fprintf oc "	sub	%a, %a, %a%a\n" xregsp rd xregsp r1 wreg r2 extendop x
+        fprintf oc "	sub	%a, %a, %a\n" xregsp rd xregsp r1 regextend (r2, x)
     | Pcmpext(r1, r2, x) ->
-        fprintf oc "	cmp	%a, %a%a\n" xreg r1 wreg r2 extendop x
+        fprintf oc "	cmp	%a, %a\n" xreg r1 regextend (r2, x)
     | Pcmnext(r1, r2, x) ->
-        fprintf oc "	cmn	%a, %a%a\n" xreg r1 wreg r2 extendop x
+        fprintf oc "	cmn	%a, %a\n" xreg r1 regextend (r2, x)
     (* Logical, shifted register *)
     | Pand(sz, rd, r1, r2, s) ->
         fprintf oc "	and	%a, %a, %a%a\n" ireg (sz, rd) ireg0 (sz, r1) ireg (sz, r2) shiftop s
