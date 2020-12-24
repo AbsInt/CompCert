@@ -25,7 +25,6 @@ has_runtime_lib=true
 has_standard_headers=true
 clightgen=false
 install_coqdev=false
-responsefile="gnu"
 ignore_coq_version=false
 library_Flocq=local
 library_MenhirLib=local
@@ -205,13 +204,24 @@ target=${target#[a-zA-Z0-9]*-}
 
 
 # Per-target configuration
+# We start with reasonable defaults,
+# then redefine the required parameters for each target,
+# then check for missing parameters and derive values for them.
+
 asm_supports_cfi=""
-casm_options=""
+cc="${toolprefix}gcc"
+cc_options=""
+casm="${toolprefix}gcc"
+casm_options="-c"
 casmruntime=""
-clinker_needs_no_pie=true
+clinker="${toolprefix}gcc"
 clinker_options=""
-cprepro_options=""
+clinker_needs_no_pie=true
+cprepro="${toolprefix}gcc"
+cprepro_options="-E"
 archiver="${toolprefix}ar rcs"
+libmath="-lm"
+responsefile="gnu"
 
 #
 # ARM Target Configuration
@@ -231,13 +241,7 @@ if test "$arch" = "arm"; then
         exit 2;;
   esac
 
-  casm="${toolprefix}gcc"
-  casm_options="-c"
-  cc="${toolprefix}gcc"
-  clinker="${toolprefix}gcc"
-  cprepro="${toolprefix}gcc"
   cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
-  libmath="-lm"
   system="linux"
 fi
 
@@ -281,14 +285,8 @@ if test "$arch" = "powerpc"; then
         responsefile="diab"
         ;;
     *)
-        casm="${toolprefix}gcc"
-        casm_options="-c"
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
-        cc="${toolprefix}gcc"
-        clinker="${toolprefix}gcc"
-        cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -U__GNUC__ -E"
-        libmath="-lm"
         system="linux"
         ;;
   esac
@@ -303,38 +301,26 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
   case "$target" in
     bsd)
         abi="standard"
-        casm="${toolprefix}gcc"
+        cc_options="-m32"
         casm_options="-m32 -c"
-        cc="${toolprefix}gcc -m32"
-        clinker="${toolprefix}gcc"
         clinker_options="-m32"
-        cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
-        libmath="-lm"
         system="bsd"
         ;;
     cygwin)
         abi="standard"
-        casm="${toolprefix}gcc"
+        cc_options="-m32"
         casm_options="-m32 -c"
-        cc="${toolprefix}gcc -m32"
-        clinker="${toolprefix}gcc"
         clinker_options="-m32"
-        cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ '-D__attribute__(x)=' -E"
-        libmath="-lm"
         system="cygwin"
         ;;
     linux)
         abi="standard"
-        casm="${toolprefix}gcc"
+        cc_options="-m32"
         casm_options="-m32 -c"
-        cc="${toolprefix}gcc -m32"
-        clinker="${toolprefix}gcc"
         clinker_options="-m32"
-        cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
-        libmath="-lm"
         system="linux"
         ;;
     *)
@@ -352,53 +338,36 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
   case "$target" in
     bsd)
         abi="standard"
-        casm="${toolprefix}gcc"
+        cc_options="-m64"
         casm_options="-m64 -c"
-        cc="${toolprefix}gcc -m64"
-        clinker="${toolprefix}gcc"
         clinker_options="-m64"
-        cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
-        libmath="-lm"
         system="bsd"
         ;;
     linux)
         abi="standard"
-        casm="${toolprefix}gcc"
+        cc_options="-m64"
         casm_options="-m64 -c"
-        cc="${toolprefix}gcc -m64"
-        clinker="${toolprefix}gcc"
         clinker_options="-m64"
-        cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
-        libmath="-lm"
         system="linux"
         ;;
     macosx)
-        # kernel major versions count upwards from 4 for OSX 10.0 to 15 for OSX 10.11
-        kernel_major=`uname -r | cut -d "." -f 1`
-
         abi="macosx"
-        casm="${toolprefix}gcc"
+        cc_options="-arch x86_64"
         casm_options="-arch x86_64 -c"
-        cc="${toolprefix}gcc -arch x86_64"
-        clinker="${toolprefix}gcc"
+        clinker_options="-arch x86_64"
         clinker_needs_no_pie=false
-        cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -E"
         libmath=""
         system="macosx"
         ;;
     cygwin)
         abi="standard"
-        casm="${toolprefix}gcc"
+        cc_options="-m64"
         casm_options="-m64 -c"
-        cc="${toolprefix}gcc -m64"
-        clinker="${toolprefix}gcc"
         clinker_options="-m64"
-        cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -m64 -U__GNUC__ '-D__attribute__(x)=' -E"
-        libmath="-lm"
         system="cygwin"
         ;;
     *)
@@ -419,14 +388,10 @@ if test "$arch" = "riscV"; then
     model_options="-march=rv32imafd -mabi=ilp32d"
   fi
   abi="standard"
-  casm="${toolprefix}gcc"
+  cc_options="$model_options"
   casm_options="$model_options -c"
-  cc="${toolprefix}gcc $model_options"
-  clinker="${toolprefix}gcc"
   clinker_options="$model_options"
-  cprepro="${toolprefix}gcc"
   cprepro_options="$model_options -std=c99 -U__GNUC__ -E"
-  libmath="-lm"
   system="linux"
 fi
 
@@ -437,14 +402,7 @@ if test "$arch" = "aarch64"; then
   case "$target" in
     linux)
         abi="standard"
-        casm="${toolprefix}gcc"
-        casm_options="-c"
-        cc="${toolprefix}gcc"
-        clinker="${toolprefix}gcc"
-        clinker_options=""
-        cprepro="${toolprefix}gcc"
         cprepro_options="-std=c99 -U__GNUC__ -E"
-        libmath="-lm"
         system="linux";;
     *)
         echo "Error: invalid eabi/system '$target' for architecture AArch64." 1>&2
@@ -661,7 +619,7 @@ BITSIZE=$bitsize
 CASM=$casm
 CASM_OPTIONS=$casm_options
 CASMRUNTIME=$casmruntime
-CC=$cc
+CC=$cc $cc_options
 CLIGHTGEN=$clightgen
 CLINKER=$clinker
 CLINKER_OPTIONS=$clinker_options
@@ -737,25 +695,28 @@ ENDIANNESS=
 # SYSTEM=cygwin
 SYSTEM=
 
-# C compiler for compiling runtime library files and some tests
-CC=gcc
+# C compiler (for testing only)
+CC=cc
 
-# Preprocessor for .c files
-CPREPRO=gcc -U__GNUC__ -E
-
-# Assembler for assembling .s files
-CASM=gcc -c
+# Assembler for assembling compiled files
+CASM=cc
+CASM_OPTIONS=-c
 
 # Assembler for assembling runtime library files
-CASMRUNTIME=gcc -c
+CASMRUNTIME=$(CASM) $(CASM_OPTIONS)
 
 # Linker
-CLINKER=gcc
+CLINKER=cc
+CLINKER_OPTIONS=-no-pie
+
+# Preprocessor for .c files
+CPREPRO=cc
+CPREPRO_OPTIONS=-std c99 -U__GNUC__ -E
 
 # Archiver to build .a libraries
 ARCHIVER=ar rcs
 
-# Math library. Set to empty under MacOS X
+# Math library. Set to empty under macOS
 LIBMATH=-lm
 
 # Turn on/off the installation and use of the runtime support library
@@ -771,8 +732,8 @@ ASM_SUPPORTS_CFI=false
 # Turn on/off compilation of clightgen
 CLIGHTGEN=false
 
-# Whether the other tools support responsefiles in gnu syntax
-RESPONSEFILE="none"
+# Whether the other tools support responsefiles in GNU syntax or Diab syntax
+RESPONSEFILE=gnu  # diab
 
 # Whether to use the local copies of Flocq and MenhirLib
 LIBRARY_FLOCQ=local      # external
@@ -837,13 +798,12 @@ CompCert configuration:
     Application binary interface.. $abi
     Endianness.................... $endianness
     OS and development env........ $system
-    C compiler.................... $cc
-    C preprocessor................ $cprepro
-    Assembler..................... $casm
+    C compiler.................... $cc $cc_options
+    C preprocessor................ $cprepro $cprepro_options
+    Assembler..................... $casm $casm_options
     Assembler supports CFI........ $asm_supports_cfi
     Assembler for runtime lib..... $casmruntime
-    Linker........................ $clinker
-    Linker needs '-no-pie'........ $clinker_needs_no_pie
+    Linker........................ $clinker $clinker_options
     Archiver...................... $archiver
     Math library.................. $libmath
     Build command to use.......... $make
