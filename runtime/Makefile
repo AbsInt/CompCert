@@ -48,7 +48,7 @@ endif
 
 $(LIB): $(OBJS)
 	rm -f $(LIB)
-	ar rcs $(LIB) $(OBJS)
+	$(ARCHIVER) $(LIB) $(OBJS)
 
 %.o: %.s
 	$(CASMRUNTIME) -o $@ $^

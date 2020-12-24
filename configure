@@ -211,7 +211,7 @@ casmruntime=""
 clinker_needs_no_pie=true
 clinker_options=""
 cprepro_options=""
-
+archiver="${toolprefix}ar rcs"
 
 #
 # ARM Target Configuration
@@ -275,6 +275,7 @@ if test "$arch" = "powerpc"; then
         clinker="${toolprefix}dcc"
         cprepro="${toolprefix}dcc"
         cprepro_options="-E -D__GNUC__"
+        archiver="${toolprefix}dar -q"
         libmath="-lm"
         system="diab"
         responsefile="diab"
@@ -666,6 +667,7 @@ CLINKER=$clinker
 CLINKER_OPTIONS=$clinker_options
 CPREPRO=$cprepro
 CPREPRO_OPTIONS=$cprepro_options
+ARCHIVER=$archiver
 ENDIANNESS=$endianness
 HAS_RUNTIME_LIB=$has_runtime_lib
 HAS_STANDARD_HEADERS=$has_standard_headers
@@ -749,6 +751,9 @@ CASMRUNTIME=gcc -c
 
 # Linker
 CLINKER=gcc
+
+# Archiver to build .a libraries
+ARCHIVER=ar rcs
 
 # Math library. Set to empty under MacOS X
 LIBMATH=-lm
@@ -839,6 +844,7 @@ CompCert configuration:
     Assembler for runtime lib..... $casmruntime
     Linker........................ $clinker
     Linker needs '-no-pie'........ $clinker_needs_no_pie
+    Archiver...................... $archiver
     Math library.................. $libmath
     Build command to use.......... $make
     Menhir API library............ $menhir_dir
