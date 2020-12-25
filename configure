@@ -768,7 +768,7 @@ B cparser
 B extraction
 EOF
 
-make CoqProject
+$make CoqProject
 
 #
 # Clean up target-dependent files to force their recompilation
