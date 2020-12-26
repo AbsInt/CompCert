@@ -226,7 +226,7 @@ module MacOS_System : SYSTEM =
       | Section_data i | Section_small_data i ->
           if i || (not !Clflags.option_fcommon) then ".data" else "COMM"
       | Section_const i  | Section_small_const i ->
-          if i || (not !Clflags.option_fcommon) then ".const" else "COMM"
+          if i || (not !Clflags.option_fcommon) then ".section	__DATA,__CONST" else "COMM"
       | Section_string -> ".const"
       | Section_literal -> ".const"
       | Section_jumptable -> ".text"
