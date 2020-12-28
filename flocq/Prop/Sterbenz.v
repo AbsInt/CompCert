@@ -67,7 +67,7 @@ rewrite <- F2R_plus.
 apply generic_format_F2R.
 intros _.
 case_eq (Fplus fx fy).
-intros mxy exy Pxy.
+intros mxy exy Pxy; simpl.
 rewrite <- Pxy, F2R_plus, <- Hx, <- Hy.
 unfold cexp.
 replace exy with (fexp (Z.min ex ey)).

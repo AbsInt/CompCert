@@ -57,6 +57,7 @@ GPATH=$(DIRS)
 
 ifeq ($(LIBRARY_FLOCQ),local)
 FLOCQ=\
+  SpecFloatCompat.v \
   Raux.v Zaux.v Defs.v Digits.v Float_prop.v FIX.v FLT.v FLX.v FTZ.v \
   Generic_fmt.v Round_pred.v Round_NE.v Ulp.v Core.v \
   Bracket.v Div.v Operations.v Round.v Sqrt.v \

@@ -18,6 +18,8 @@ COPYING file for more details.
 *)
 
 (** * Floating-point format with abrupt underflow *)
+
+From Coq Require Import Lia.
 Require Import Raux Defs Round_pred Generic_fmt.
 Require Import Float_prop Ulp FLX.
 
@@ -48,22 +50,22 @@ unfold FTZ_exp.
 generalize (Zlt_cases (k - prec) emin).
 case (Zlt_bool (k - prec) emin) ; intros H1.
 split ; intros H2.
-omega.
+lia.
 split.
 generalize (Zlt_cases (emin + prec + 1 - prec) emin).
 case (Zlt_bool (emin + prec + 1 - prec) emin) ; intros H3.
-omega.
+lia.
 generalize (Zlt_cases (emin + prec - 1 + 1 - prec) emin).
 generalize (prec_gt_0 prec).
-case (Zlt_bool (emin + prec - 1 + 1 - prec) emin) ; omega.
+case (Zlt_bool (emin + prec - 1 + 1 - prec) emin) ; lia.
 intros l H3.
 generalize (Zlt_cases (l - prec) emin).
-case (Zlt_bool (l - prec) emin) ; omega.
+case (Zlt_bool (l - prec) emin) ; lia.
 split ; intros H2.
 generalize (Zlt_cases (k + 1 - prec) emin).
-case (Zlt_bool (k + 1 - prec) emin) ; omega.
+case (Zlt_bool (k + 1 - prec) emin) ; lia.
 generalize (prec_gt_0 prec).
-split ; intros ; omega.
+split ; intros ; lia.
 Qed.
 
 Theorem FLXN_format_FTZ :
@@ -94,7 +96,7 @@ rewrite Zlt_bool_false.
 apply Z.le_refl.
 rewrite Hx1, mag_F2R with (1 := Zxm).
 cut (prec - 1 < mag beta (IZR xm))%Z.
-clear -Hx3 ; omega.
+clear -Hx3 ; lia.
 apply mag_gt_Zpower with (1 := Zxm).
 apply Hx2.
 apply generic_format_FLXN.
@@ -135,7 +137,7 @@ change (0 < F2R (Float beta (Z.abs (Ztrunc (x * bpow (- (emin + prec - 1))))) (e
 rewrite F2R_Zabs, <- Hx2.
 now apply Rabs_pos_lt.
 apply bpow_le.
-omega.
+lia.
 rewrite Hx2.
 eexists ; repeat split ; simpl.
 apply le_IZR.
@@ -186,7 +188,7 @@ intros e He.
 unfold FTZ_exp.
 rewrite Zlt_bool_false.
 apply Z.le_refl.
-omega.
+lia.
 Qed.
 
 Theorem ulp_FTZ_0 :
@@ -196,12 +198,12 @@ unfold ulp; rewrite Req_bool_true; trivial.
 case (negligible_exp_spec FTZ_exp).
 intros T; specialize (T (emin-1)%Z); contradict T.
 apply Zle_not_lt; unfold FTZ_exp; unfold Prec_gt_0 in prec_gt_0_.
-rewrite Zlt_bool_true; omega.
+rewrite Zlt_bool_true; lia.
 assert (V:(FTZ_exp (emin+prec-1) = emin+prec-1)%Z).
-unfold FTZ_exp; rewrite Zlt_bool_true; omega.
+unfold FTZ_exp; rewrite Zlt_bool_true; lia.
 intros n H2; rewrite <-V.
 apply f_equal, fexp_negligible_exp_eq...
-omega.
+lia.
 Qed.
 
 
@@ -290,12 +292,12 @@ apply Rle_trans with (2 := proj1 He).
 apply bpow_le.
 unfold FLX_exp.
 generalize (prec_gt_0 prec).
-clear -He' ; omega.
+clear -He' ; lia.
 apply bpow_ge_0.
 unfold FLX_exp, FTZ_exp.
 rewrite Zlt_bool_false.
 apply refl_equal.
-clear -He' ; omega.
+clear -He' ; lia.
 Qed.
 
 Theorem round_FTZ_small :
@@ -331,7 +333,7 @@ intros He'.
 elim Rlt_not_le with (1 := Hx).
 apply Rle_trans with (2 := proj1 He).
 apply bpow_le.
-omega.
+lia.
 apply bpow_ge_0.
 Qed.
 

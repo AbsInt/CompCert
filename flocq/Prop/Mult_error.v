@@ -18,6 +18,8 @@ COPYING file for more details.
 *)
 
 (** * Error of the multiplication is in the FLX/FLT format *)
+
+From Coq Require Import Lia.
 Require Import Core Operations Plus_error.
 
 Section Fprop_mult_error.
@@ -71,7 +73,7 @@ unfold cexp, FLX_exp.
 rewrite mag_unique with (1 := Hex).
 rewrite mag_unique with (1 := Hey).
 rewrite mag_unique with (1 := Hexy).
-cut (exy - 1 < ex + ey)%Z. omega.
+cut (exy - 1 < ex + ey)%Z. lia.
 apply (lt_bpow beta).
 apply Rle_lt_trans with (1 := proj1 Hexy).
 rewrite Rabs_mult.
@@ -89,7 +91,7 @@ rewrite mag_unique with (1 := Hey).
 rewrite mag_unique with (1 := Hexy).
 cut ((ex - 1) + (ey - 1) < exy)%Z.
 generalize (prec_gt_0 prec).
-clear ; omega.
+clear ; lia.
 apply (lt_bpow beta).
 apply Rle_lt_trans with (2 := proj2 Hexy).
 rewrite Rabs_mult.
@@ -163,7 +165,7 @@ apply (generic_format_F2R' _ _ _ f).
 { now unfold F2R; simpl; rewrite bpow_plus, Rmult_assoc. }
 intro Nzmx; unfold mx, ex; rewrite <- Fx.
 unfold f, ex; simpl; unfold cexp; rewrite (mag_mult_bpow _ _ _ Nzx).
-unfold FLX_exp; omega.
+unfold FLX_exp; lia.
 Qed.
 
 End Fprop_mult_error.
@@ -209,10 +211,10 @@ assumption.
 apply Rle_trans with (2:=Hxy).
 apply bpow_le.
 generalize (prec_gt_0 prec).
-clear ; omega.
+clear ; lia.
 rewrite <- (round_FLT_FLX beta emin) in H1.
 2:apply Rle_trans with (2:=Hxy).
-2:apply bpow_le ; generalize (prec_gt_0 prec) ; clear ; omega.
+2:apply bpow_le ; generalize (prec_gt_0 prec) ; clear ; lia.
 unfold f; rewrite <- H1.
 apply generic_format_F2R.
 intros _.
@@ -242,7 +244,7 @@ specialize (Ex Hx0).
 destruct (mag beta y) as (ey,Ey) ; simpl.
 specialize (Ey Hy0).
 assert (emin + 2 * prec -1 < ex + ey)%Z.
-2: omega.
+2: lia.
 apply (lt_bpow beta).
 apply Rle_lt_trans with (1:=Hxy).
 rewrite Rabs_mult, bpow_plus.
@@ -262,7 +264,7 @@ intros Hy _.
 rewrite <- (Rmult_1_l (bpow _)) at 1.
 apply Rmult_le_compat_r.
 apply bpow_ge_0.
-apply IZR_le; omega.
+apply IZR_le; lia.
 intros H1 H2; contradict H2.
 replace ny with 0%Z.
 simpl; ring.
@@ -296,7 +298,7 @@ destruct (mag beta x) as (ex,Hx).
 destruct (mag beta y) as (ey,Hy).
 simpl; apply Z.le_trans with ((ex-prec)+(ey-prec))%Z.
 2: apply Zplus_le_compat; apply Z.le_max_l.
-assert (e + 2*prec -1< ex+ey)%Z;[idtac|omega].
+assert (e + 2*prec -1< ex+ey)%Z;[idtac|lia].
 apply lt_bpow with beta.
 apply Rle_lt_trans with (1:=H1).
 rewrite Rabs_mult, bpow_plus.
@@ -327,9 +329,30 @@ apply (generic_format_F2R' _ _ _ f).
 { now unfold F2R; simpl; rewrite bpow_plus, Rmult_assoc. }
 intro Nzmx; unfold mx, ex; rewrite <- Fx.
 unfold f, ex; simpl; unfold cexp; rewrite (mag_mult_bpow _ _ _ Nzx).
-unfold FLT_exp; rewrite Z.max_l; [|omega]; rewrite <- Z.add_max_distr_r.
-set (n := (_ - _ + _)%Z); apply (Z.le_trans _ n); [unfold n; omega|].
+unfold FLT_exp; rewrite Z.max_l; [|lia]; rewrite <- Z.add_max_distr_r.
+set (n := (_ - _ + _)%Z); apply (Z.le_trans _ n); [unfold n; lia|].
 apply Z.le_max_l.
+Qed.
+
+Lemma mult_bpow_pos_exact_FLT :
+  forall x e,
+  format x ->
+  (0 <= e)%Z ->
+  format (x * bpow e)%R.
+Proof.
+intros x e Fx He.
+destruct (Req_dec x 0) as [Zx|Nzx].
+{ rewrite Zx, Rmult_0_l; apply generic_format_0. }
+rewrite Fx.
+set (mx := Ztrunc _); set (ex := cexp _).
+pose (f := {| Fnum := mx; Fexp := ex + e |} : float beta).
+apply (generic_format_F2R' _ _ _ f).
+{ now unfold F2R; simpl; rewrite bpow_plus, Rmult_assoc. }
+intro Nzmx; unfold mx, ex; rewrite <- Fx.
+unfold f, ex; simpl; unfold cexp; rewrite (mag_mult_bpow _ _ _ Nzx).
+unfold FLT_exp; rewrite <-Z.add_max_distr_r.
+replace (_ - _ + e)%Z with (mag beta x + e - prec)%Z; [ |ring].
+apply Z.max_le_compat_l; lia.
 Qed.
 
 End Fprop_mult_error_FLT.
