@@ -18,6 +18,7 @@
 prefix='/usr/local'
 bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
+mandir='$(PREFIX)/share/man'
 coqdevdir='$(PREFIX)/lib/compcert/coq'
 toolprefix=''
 target=''
@@ -85,6 +86,7 @@ Options:
   -prefix <dir>        Install in <dir>/bin and <dir>/lib/compcert
   -bindir <dir>        Install binaries in <dir>
   -libdir <dir>        Install libraries in <dir>
+  -mandir <dir>        Install man pages in <dir>
   -coqdevdir <dir>     Install Coq development (.vo files) in <dir>
   -toolprefix <pref>   Prefix names of tools ("gcc", etc) with <pref>
   -use-external-Flocq  Use an already-installed Flocq library
@@ -114,6 +116,8 @@ while : ; do
         bindir="$2"; shift;;
     -libdir|--libdir)
         libdir="$2"; shift;;
+    -mandir|--mandir)
+        mandir="$2"; shift;;
     -coqdevdir|--coqdevdir)
         coqdevdir="$2"; install_coqdev=true; shift;;
     -toolprefix|--toolprefix)
@@ -614,7 +618,7 @@ cat > Makefile.config <<EOF
 PREFIX=$prefix
 BINDIR=$bindir
 LIBDIR=$libdir
-MANDIR=$sharedir/man
+MANDIR=$mandir
 SHAREDIR=$sharedir
 COQDEVDIR=$coqdevdir
 OCAML_NATIVE_COMP=$ocaml_native_comp
@@ -801,6 +805,7 @@ else
 
 bindirexp=`echo "$bindir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
 libdirexp=`echo "$libdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
+mandirexp=`echo "$mandir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
 coqdevdirexp=`echo "$coqdevdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
 
 cat <<EOF
@@ -826,6 +831,7 @@ CompCert configuration:
     Binaries installed in......... $bindirexp
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $libdirexp
+    Man pages installed in........ $mandirexp
     Standard headers provided..... $has_standard_headers
     Standard headers installed in. $libdirexp/include
 EOF
