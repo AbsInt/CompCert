@@ -57,7 +57,7 @@ Proof.
 unfold negligible_exp; destruct LPO_Z as [(n,Hn)|Hn].
 now apply negligible_Some.
 apply negligible_None.
-intros n; specialize (Hn n); omega.
+intros n; specialize (Hn n); lia.
 Qed.
 
 Lemma negligible_exp_spec': (negligible_exp = None /\ forall n, (fexp n < n)%Z)
@@ -66,7 +66,7 @@ Proof.
 unfold negligible_exp; destruct LPO_Z as [(n,Hn)|Hn].
 right; simpl; exists n; now split.
 left; split; trivial.
-intros n; specialize (Hn n); omega.
+intros n; specialize (Hn n); lia.
 Qed.
 
 Context { valid_exp : Valid_exp fexp }.
@@ -75,8 +75,8 @@ Lemma fexp_negligible_exp_eq: forall n m, (n <= fexp n)%Z -> (m <= fexp m)%Z -> 
 Proof.
 intros n m Hn Hm.
 case (Zle_or_lt n m); intros H.
-apply valid_exp; omega.
-apply sym_eq, valid_exp; omega.
+apply valid_exp; lia.
+apply sym_eq, valid_exp; lia.
 Qed.
 
 
@@ -198,6 +198,17 @@ rewrite V.
 apply generic_format_0.
 Qed.
 
+Theorem ulp_canonical :
+  forall m e,
+  m <> 0%Z ->
+  canonical beta fexp (Float beta m e) ->
+  ulp (F2R (Float beta m e)) = bpow e.
+Proof.
+intros m e Hm Hc.
+rewrite ulp_neq_0 by now apply F2R_neq_0.
+apply f_equal.
+now apply sym_eq.
+Qed.
 
 Theorem ulp_bpow :
   forall e, ulp (bpow e) = bpow (fexp (e + 1)).
@@ -215,7 +226,6 @@ apply Zlt_succ.
 apply bpow_ge_0.
 apply Rgt_not_eq, Rlt_gt, bpow_gt_0.
 Qed.
-
 
 Lemma generic_format_ulp_0 :
   F (ulp 0).
@@ -238,17 +248,17 @@ rewrite Req_bool_true; trivial.
 case negligible_exp_spec.
 intros H1 _.
 apply generic_format_bpow.
-specialize (H1 (e+1)%Z); omega.
+specialize (H1 (e+1)%Z); lia.
 intros n H1 H2.
 apply generic_format_bpow.
 case (Zle_or_lt (e+1) (fexp (e+1))); intros H4.
 absurd (e+1 <= e)%Z.
-omega.
+lia.
 apply Z.le_trans with (1:=H4).
 replace (fexp (e+1)) with (fexp n).
 now apply le_bpow with beta.
 now apply fexp_negligible_exp_eq.
-omega.
+lia.
 Qed.
 
 (** The three following properties are equivalent:
@@ -300,10 +310,10 @@ case (Zle_or_lt l (fexp l)); intros Hl.
 rewrite (fexp_negligible_exp_eq n l); trivial; apply Z.le_refl.
 case (Zle_or_lt (fexp n) (fexp l)); trivial; intros K.
 absurd (fexp n <= fexp l)%Z.
-omega.
+lia.
 apply Z.le_trans with (2:= H _).
 apply Zeq_le, sym_eq, valid_exp; trivial.
-omega.
+lia.
 Qed.
 
 Lemma not_FTZ_ulp_ge_ulp_0:
@@ -374,8 +384,6 @@ rewrite Hn1 in H; discriminate.
 now apply bpow_mag_le.
 Qed.
 
-
-
 (** Definition and properties of pred and succ *)
 
 Definition pred_pos x :=
@@ -432,6 +440,17 @@ unfold pred.
 now rewrite Ropp_involutive.
 Qed.
 
+Theorem pred_bpow :
+  forall e, pred (bpow e) = (bpow e - bpow (fexp e))%R.
+Proof.
+intros e.
+rewrite pred_eq_pos by apply bpow_ge_0.
+unfold pred_pos.
+rewrite mag_bpow.
+replace (e + 1 - 1)%Z with e by ring.
+now rewrite Req_bool_true.
+Qed.
+
 (** pred and succ are in the format *)
 
 (* cannont be x <> ulp 0, due to the counter-example 1-bit FP format fexp: e -> e-1 *)
@@ -450,7 +469,7 @@ apply gt_0_F2R with beta (cexp beta fexp x).
 rewrite <- Fx.
 apply Rle_lt_trans with (2:=Hx).
 apply bpow_ge_0.
-omega.
+lia.
 case (Zle_lt_or_eq _ _ H); intros Hm.
 (* *)
 pattern x at 1 ; rewrite Fx.
@@ -533,7 +552,7 @@ rewrite ulp_neq_0.
 intro H.
 assert (ex-1 < cexp beta fexp x  < ex)%Z.
 split ; apply (lt_bpow beta) ; rewrite <- H ; easy.
-clear -H0. omega.
+clear -H0. lia.
 now apply Rgt_not_eq.
 apply Ex'.
 apply Rle_lt_trans with (2 := proj2 Ex').
@@ -555,7 +574,7 @@ apply gt_0_F2R with beta (cexp beta fexp x).
 rewrite <- Fx.
 apply Rle_lt_trans with (2:=proj1 Ex').
 apply bpow_ge_0.
-omega.
+lia.
 now apply Rgt_not_eq.
 Qed.
 
@@ -579,7 +598,7 @@ rewrite minus_IZR, IZR_Zpower.
 rewrite Rmult_minus_distr_r, Rmult_1_l.
 rewrite <- bpow_plus.
 now replace (e - 1 - fexp (e - 1) + fexp (e - 1))%Z with (e-1)%Z by ring.
-omega.
+lia.
 rewrite H.
 apply generic_format_F2R.
 intros _.
@@ -592,7 +611,7 @@ split.
 apply Rplus_le_reg_l with (bpow (fexp (e-1))).
 ring_simplify.
 apply Rle_trans with (bpow (e - 2) + bpow (e - 2))%R.
-apply Rplus_le_compat ; apply bpow_le ; omega.
+apply Rplus_le_compat ; apply bpow_le ; lia.
 apply Rle_trans with (2*bpow (e - 2))%R;[right; ring|idtac].
 apply Rle_trans with (bpow 1*bpow (e - 2))%R.
 apply Rmult_le_compat_r.
@@ -614,7 +633,7 @@ apply Ropp_lt_contravar.
 apply bpow_gt_0.
 apply Rle_ge; apply Rle_0_minus.
 apply bpow_le.
-omega.
+lia.
 replace f with 0%R.
 apply generic_format_0.
 unfold f.
@@ -842,7 +861,7 @@ assert (ex - 1 < fexp ex < ex)%Z.
   split ; apply (lt_bpow beta) ; rewrite <- M by easy.
   lra.
   apply Hex.
-omega.
+lia.
 rewrite 2!ulp_neq_0 by lra.
 apply f_equal.
 unfold cexp ; apply f_equal.
@@ -907,7 +926,7 @@ split.
 apply Rplus_le_reg_l with (bpow (fexp (e-1))).
 ring_simplify.
 apply Rle_trans with (bpow (e - 2) + bpow (e - 2))%R.
-apply Rplus_le_compat; apply bpow_le; omega.
+apply Rplus_le_compat; apply bpow_le; lia.
 apply Rle_trans with (2*bpow (e - 2))%R;[right; ring|idtac].
 apply Rle_trans with (bpow 1*bpow (e - 2))%R.
 apply Rmult_le_compat_r.
@@ -930,7 +949,7 @@ apply bpow_gt_0.
 apply Rle_ge; apply Rle_0_minus.
 rewrite Hxe.
 apply bpow_le.
-omega.
+lia.
 (* *)
 contradict Zp.
 rewrite Hxe, He; ring.
@@ -953,12 +972,12 @@ unfold ulp; rewrite Req_bool_true; trivial.
 case negligible_exp_spec.
 intros K.
 specialize (K (e-1)%Z).
-contradict K; omega.
+contradict K; lia.
 intros n Hn.
 rewrite H3; apply f_equal.
 case (Zle_or_lt n (e-1)); intros H6.
-apply valid_exp; omega.
-apply sym_eq, valid_exp; omega.
+apply valid_exp; lia.
+apply sym_eq, valid_exp; lia.
 Qed.
 
 (** The following one is false for x = 0 in FTZ *)
@@ -1081,7 +1100,7 @@ exfalso ; lra.
 intros n Hn H.
 assert (fexp (mag beta eps) = fexp n).
 apply valid_exp; try assumption.
-assert(mag beta eps-1 < fexp n)%Z;[idtac|omega].
+assert(mag beta eps-1 < fexp n)%Z;[idtac|lia].
 apply lt_bpow with beta.
 apply Rle_lt_trans with (2:=proj2 H).
 destruct (mag beta eps) as (e,He).
@@ -1104,7 +1123,6 @@ apply H.
 rewrite <- P, round_0; trivial.
 apply valid_rnd_DN.
 Qed.
-
 
 Theorem round_UP_plus_eps_pos :
   forall x, (0 <= x)%R -> F x ->
@@ -1147,7 +1165,7 @@ lra.
 intros n Hn H.
 assert (fexp (mag beta eps) = fexp n).
 apply valid_exp; try assumption.
-assert(mag beta eps-1 < fexp n)%Z;[idtac|omega].
+assert(mag beta eps-1 < fexp n)%Z;[idtac|lia].
 apply lt_bpow with beta.
 apply Rle_lt_trans with (2:=H).
 destruct (mag beta eps) as (e,He).
@@ -1171,7 +1189,6 @@ intros P; rewrite P.
 apply round_generic...
 apply generic_format_ulp_0.
 Qed.
-
 
 Theorem round_UP_pred_plus_eps_pos :
   forall x, (0 < x)%R -> F x ->
@@ -1210,7 +1227,6 @@ apply Ropp_lt_contravar.
 now apply Heps.
 Qed.
 
-
 Theorem round_DN_plus_eps:
   forall x, F x ->
   forall eps, (0 <= eps < if (Rle_bool 0 x) then (ulp x)
@@ -1247,7 +1263,6 @@ ring.
 now apply Ropp_0_gt_lt_contravar.
 now apply generic_format_opp.
 Qed.
-
 
 Theorem round_UP_plus_eps :
   forall x, F x ->
@@ -1334,11 +1349,11 @@ now apply Rgt_not_eq.
 case (Zle_lt_or_eq _ _ H2); intros Hexy.
 assert (fexp ex = fexp (ey-1))%Z.
 apply valid_exp.
-omega.
+lia.
 rewrite <- H1.
-omega.
+lia.
 absurd (0 < Ztrunc (scaled_mantissa beta fexp x) < 1)%Z.
-omega.
+lia.
 split.
 apply gt_0_F2R with beta (cexp beta fexp x).
 now rewrite <- Fx.
@@ -1380,9 +1395,9 @@ apply sym_eq; apply mag_unique.
 rewrite H1, Rabs_right.
 split.
 apply bpow_le.
-omega.
+lia.
 apply bpow_lt.
-omega.
+lia.
 apply Rle_ge; apply bpow_ge_0.
 apply mag_unique.
 apply Hey.
@@ -1527,7 +1542,7 @@ rewrite mag_bpow.
 replace (fexp n + 1 - 1)%Z with (fexp n) by ring.
 rewrite Req_bool_true; trivial.
 apply Rminus_diag_eq, f_equal.
-apply sym_eq, valid_exp; omega.
+apply sym_eq, valid_exp; lia.
 Qed.
 
 Theorem succ_0 :
@@ -1904,7 +1919,7 @@ rewrite ulp_neq_0; trivial.
 apply f_equal.
 unfold cexp.
 apply valid_exp; trivial.
-assert (mag beta x -1 < fexp n)%Z;[idtac|omega].
+assert (mag beta x -1 < fexp n)%Z;[idtac|lia].
 apply lt_bpow with beta.
 destruct (mag beta x) as (e,He).
 simpl.
@@ -2252,9 +2267,9 @@ rewrite Hn1; easy.
 now apply ulp_ge_ulp_0.
 Qed.
 
-
-Lemma ulp_succ_pos : forall x, F x -> (0 < x)%R ->
-   ulp (succ x) = ulp x \/ succ x = bpow (mag beta x).
+Lemma ulp_succ_pos :
+  forall x, F x -> (0 < x)%R ->
+  ulp (succ x) = ulp x \/ succ x = bpow (mag beta x).
 Proof with auto with typeclass_instances.
 intros x Fx Hx.
 generalize (Rlt_le _ _ Hx); intros Hx'.
@@ -2281,6 +2296,39 @@ apply ulp_ge_0.
 now apply sym_eq, mag_unique_pos.
 Qed.
 
+Theorem ulp_pred_pos :
+  forall x, F x -> (0 < pred x)%R ->
+  ulp (pred x) = ulp x \/ x = bpow (mag beta x - 1).
+Proof.
+intros x Fx Hx.
+assert (Hx': (0 < x)%R).
+  apply Rlt_le_trans with (1 := Hx).
+  apply pred_le_id.
+assert (Zx : x <> 0%R).
+  now apply Rgt_not_eq.
+rewrite (ulp_neq_0 x) by easy.
+unfold cexp.
+destruct (mag beta x) as [e He].
+simpl.
+assert (bpow (e - 1) <= x < bpow e)%R.
+  rewrite <- (Rabs_pos_eq x) by now apply Rlt_le.
+  now apply He.
+destruct (proj1 H) as [H1|H1].
+2: now right.
+left.
+apply pred_ge_gt with (2 := Fx) in H1.
+rewrite ulp_neq_0 by now apply Rgt_not_eq.
+apply (f_equal (fun e => bpow (fexp e))).
+apply mag_unique_pos.
+apply (conj H1).
+apply Rle_lt_trans with (2 := proj2 H).
+apply pred_le_id.
+apply generic_format_bpow.
+apply Z.lt_le_pred.
+replace (_ + 1)%Z with e by ring.
+rewrite <- (mag_unique_pos _ _ _ H).
+now apply mag_generic_gt.
+Qed.
 
 Lemma ulp_round_pos :
   forall { Not_FTZ_ : Exp_not_FTZ fexp},
@@ -2333,7 +2381,6 @@ replace (fexp n) with (fexp e); try assumption.
 now apply fexp_negligible_exp_eq.
 Qed.
 
-
 Theorem ulp_round : forall { Not_FTZ_ : Exp_not_FTZ fexp},
    forall rnd { Zrnd : Valid_rnd rnd } x,
      ulp (round beta fexp rnd x) = ulp x
@@ -2371,6 +2418,18 @@ apply (Rle_trans _ (round beta fexp Raux.Zceil x)).
 destruct (round_DN_or_UP beta fexp rnd x) as [Hr|Hr]; rewrite Hr.
 { now apply UP_le_succ_DN. }
 apply succ_ge_id.
+Qed.
+
+Lemma pred_round_le_id :
+  forall rnd { Zrnd : Valid_rnd rnd } x,
+  (pred (round beta fexp rnd x) <= x)%R.
+Proof.
+intros rnd Vrnd x.
+apply (Rle_trans _ (round beta fexp Raux.Zfloor x)).
+2: now apply round_DN_pt.
+destruct (round_DN_or_UP beta fexp rnd x) as [Hr|Hr]; rewrite Hr.
+2: now apply pred_UP_le_DN.
+apply pred_le_id.
 Qed.
 
 (** Properties of rounding to nearest and ulp *)
@@ -2430,6 +2489,73 @@ rewrite Ropp_involutive.
 apply Rle_lt_trans with (2:=H).
 unfold pred.
 right; field.
+Qed.
+
+Lemma round_N_ge_ge_midp : forall choice u v,
+       F u ->
+       (u <= round beta fexp (Znearest choice) v)%R ->
+       ((u + pred u) / 2 <= v)%R.
+Proof with auto with typeclass_instances.
+intros choice u v Hu H2.
+assert (K: ((u=0)%R /\ negligible_exp = None) \/ (pred u < u)%R).
+case (Req_dec u 0); intros Zu.
+case_eq (negligible_exp).
+intros n Hn; right.
+rewrite Zu, pred_0.
+unfold ulp; rewrite Req_bool_true, Hn; try easy.
+rewrite <- Ropp_0.
+apply Ropp_lt_contravar, bpow_gt_0.
+intros _; left; split; easy.
+right.
+apply pred_lt_id...
+(* *)
+case K.
+intros (K1,K2).
+(* . *)
+rewrite K1, pred_0.
+unfold ulp; rewrite Req_bool_true, K2; try easy.
+replace ((0+-0)/2)%R with 0%R by field.
+case (Rle_or_lt 0 v); try easy.
+intros H3; contradict H2.
+rewrite K1; apply Rlt_not_le.
+assert (H4: (round beta fexp (Znearest choice) v <= 0)%R).
+apply round_le_generic...
+apply generic_format_0...
+now left.
+case H4; try easy.
+intros H5.
+absurd (v=0)%R; try auto with real.
+apply eq_0_round_0_negligible_exp with (Znearest choice)...
+(* . *)
+intros K1.
+case (Rle_or_lt ((u + pred u) / 2) v); try easy.
+intros H3.
+absurd (u <= round beta fexp (Znearest choice) v)%R; try easy.
+apply Rlt_not_le.
+apply Rle_lt_trans with (2:=K1).
+apply round_N_le_midp...
+apply generic_format_pred...
+rewrite succ_pred...
+apply Rlt_le_trans with (1:=H3).
+right; f_equal; ring.
+Qed.
+
+
+Lemma round_N_le_le_midp : forall choice u v,
+       F u ->
+       (round beta fexp (Znearest choice) v <= u)%R ->
+       (v <= (u + succ u) / 2)%R.
+Proof with auto with typeclass_instances.
+intros choice u v Hu H2.
+apply Ropp_le_cancel.
+apply Rle_trans with (((-u)+pred (-u))/2)%R.
+rewrite pred_opp; right; field.
+apply round_N_ge_ge_midp with
+   (choice := fun t:Z => negb (choice (- (t + 1))%Z))...
+apply generic_format_opp...
+rewrite <- (Ropp_involutive (round _ _ _ _)).
+rewrite <- round_N_opp, Ropp_involutive.
+apply Ropp_le_contravar; easy.
 Qed.
 
 
@@ -2516,6 +2642,20 @@ assert (Vrnd2 : Valid_rnd (Znearest choice2)) by now apply valid_rnd_N.
 apply (Rle_trans _ (succ rx)); [now apply succ_round_ge_id|].
 rewrite round_generic; [now apply succ_le_plus_ulp|now simpl|].
 now apply generic_format_plus_ulp, generic_format_round.
+Qed.
+
+
+Lemma round_N_eq_ties: forall c1 c2 x,
+   (x - round beta fexp Zfloor x <> round beta fexp Zceil x - x)%R ->
+   (round beta fexp (Znearest c1) x = round beta fexp (Znearest c2) x)%R.
+Proof with auto with typeclass_instances.
+intros c1 c2 x.
+pose (d:=round beta fexp Zfloor x); pose (u:=round beta fexp Zceil x); fold d; fold u; intros H.
+case (Rle_or_lt ((d+u)/2) x); intros L.
+2:rewrite 2!round_N_eq_DN...
+destruct L as [L|L].
+rewrite 2!round_N_eq_UP...
+contradict H; rewrite <- L; field.
 Qed.
 
 End Fcore_ulp.

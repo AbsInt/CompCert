@@ -907,6 +907,18 @@ rewrite Ropp_involutive.
 apply Zfloor_lb.
 Qed.
 
+Theorem Zceil_lb :
+  forall x : R,
+  (IZR (Zceil x) < x + 1)%R.
+Proof.
+intros x.
+unfold Zceil.
+rewrite opp_IZR.
+rewrite <-(Ropp_involutive (x + 1)), Ropp_plus_distr.
+apply Ropp_lt_contravar, (Rplus_lt_reg_r 1); ring_simplify.
+apply Zfloor_ub.
+Qed.
+
 Theorem Zceil_glb :
   forall n x,
   (x <= IZR n)%R ->
@@ -1305,9 +1317,9 @@ rewrite Ropp_inv_permute with (1 := Zy').
 rewrite <- 2!opp_IZR.
 rewrite <- Zmod_opp_opp.
 apply H.
-clear -Hy. omega.
+clear -Hy. lia.
 apply H.
-clear -Zy Hy. omega.
+clear -Zy Hy. lia.
 (* *)
 split.
 pattern (IZR (x / y)) at 1 ; rewrite <- Rplus_0_r.
@@ -1454,7 +1466,7 @@ rewrite <- (Rmult_1_r (bpow e1)).
 rewrite bpow_plus.
 apply Rmult_lt_compat_l.
 apply bpow_gt_0.
-assert (0 < e2 - e1)%Z by omega.
+assert (0 < e2 - e1)%Z by lia.
 destruct (e2 - e1)%Z ; try discriminate H0.
 clear.
 rewrite <- IZR_Zpower by easy.
@@ -1756,7 +1768,7 @@ rewrite Rabs_right in Hex; [|now apply Rle_ge; apply Rlt_le].
 rewrite Rabs_right in Hey; [|now apply Rle_ge; apply Rlt_le].
 apply (Rlt_le_trans _ _ _ Hex).
 apply Rle_trans with (bpow (ey - 1)); [|exact Hey].
-now apply bpow_le; omega.
+now apply bpow_le; lia.
 Qed.
 
 Theorem mag_bpow :
@@ -1900,7 +1912,7 @@ apply bpow_le.
 now apply Zlt_le_weak.
 apply IZR_le.
 clear -Zm.
-zify ; omega.
+zify ; lia.
 Qed.
 
 Lemma mag_mult :
@@ -1999,7 +2011,7 @@ assert (Hbeta : (2 <= r)%Z).
 { destruct r as (beta_val,beta_prop).
   now apply Zle_bool_imp_le. }
 intros x y Px Py Hln.
-assert (Oxy : (y < x)%R); [apply lt_mag;[assumption|omega]|].
+assert (Oxy : (y < x)%R); [apply lt_mag;[assumption|lia]|].
 destruct (mag x) as (ex,Hex).
 destruct (mag y) as (ey,Hey).
 simpl in Hln |- *.
@@ -2096,7 +2108,7 @@ split.
   unfold Rsqr ; rewrite <- bpow_plus.
   apply bpow_le.
   generalize (Zdiv2_odd_eqn (e + 1)).
-  destruct Z.odd ; intros ; omega.
+  destruct Z.odd ; intros ; lia.
 - rewrite <- (Rabs_pos_eq (bpow _)) by apply bpow_ge_0.
   apply Rsqr_lt_abs_0.
   rewrite Rsqr_sqrt by now apply Rlt_le.
@@ -2104,7 +2116,7 @@ split.
   unfold Rsqr ; rewrite <- bpow_plus.
   apply bpow_le.
   generalize (Zdiv2_odd_eqn (e + 1)).
-  destruct Z.odd ; intros ; omega.
+  destruct Z.odd ; intros ; lia.
 Qed.
 
 Lemma mag_1 : mag 1 = 1%Z :> Z.
@@ -2324,7 +2336,7 @@ refine (Rle_not_lt _ _ (lub (/ (INR (S N) + 1))%R _) _).
   refine (H _ _ Py).
   apply INR_lt in Hy.
   clear -Hy HyN.
-  omega.
+  lia.
   now apply Rlt_le, Rinv_0_lt_compat.
 rewrite S_INR, HN.
 ring_simplify (IZR (up (/ l)) - 1 + 1)%R.
@@ -2369,7 +2381,7 @@ rewrite <- (Z.opp_involutive n).
 rewrite <- (Z.abs_neq n).
 rewrite <- Zabs2Nat.id_abs.
 apply K.
-omega.
+lia.
 Qed.
 
 

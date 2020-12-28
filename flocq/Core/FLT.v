@@ -46,7 +46,7 @@ intros k.
 unfold FLT_exp.
 generalize (prec_gt_0 prec).
 repeat split ;
-  intros ; zify ; omega.
+  intros ; zify ; lia.
 Qed.
 
 Theorem generic_format_FLT :
@@ -93,24 +93,28 @@ simpl in ex.
 specialize (He Hx0).
 apply Rlt_le_trans with (1 := proj2 He).
 apply bpow_le.
-cut (ex' - prec <= ex)%Z. omega.
+cut (ex' - prec <= ex)%Z. lia.
 unfold ex, FLT_exp.
 apply Z.le_max_l.
 apply Z.le_max_r.
 Qed.
 
-
-Theorem FLT_format_bpow :
+Theorem generic_format_FLT_bpow :
   forall e, (emin <= e)%Z -> generic_format beta FLT_exp (bpow e).
 Proof.
 intros e He.
 apply generic_format_bpow; unfold FLT_exp.
 apply Z.max_case; try assumption.
-unfold Prec_gt_0 in prec_gt_0_; omega.
+unfold Prec_gt_0 in prec_gt_0_; lia.
 Qed.
 
-
-
+Theorem FLT_format_bpow :
+  forall e, (emin <= e)%Z -> FLT_format (bpow e).
+Proof.
+intros e He.
+apply FLT_format_generic.
+now apply generic_format_FLT_bpow.
+Qed.
 
 Theorem FLT_format_satisfies_any :
   satisfies_any FLT_format.
@@ -136,10 +140,38 @@ apply Zmax_left.
 destruct (mag beta x) as (ex, He).
 unfold FLX_exp. simpl.
 specialize (He Hx0).
-cut (emin + prec - 1 < ex)%Z. omega.
+cut (emin + prec - 1 < ex)%Z. lia.
 apply (lt_bpow beta).
 apply Rle_lt_trans with (1 := Hx).
 apply He.
+Qed.
+
+(** FLT is a nice format: it has a monotone exponent... *)
+Global Instance FLT_exp_monotone : Monotone_exp FLT_exp.
+Proof.
+intros ex ey.
+unfold FLT_exp.
+zify ; lia.
+Qed.
+
+(** and it allows a rounding to nearest, ties to even. *)
+Global Instance exists_NE_FLT :
+  (Z.even beta = false \/ (1 < prec)%Z) ->
+  Exists_NE beta FLT_exp.
+Proof.
+intros [H|H].
+now left.
+right.
+intros e.
+unfold FLT_exp.
+destruct (Zmax_spec (e - prec) emin) as [(H1,H2)|(H1,H2)] ;
+  rewrite H2 ; clear H2.
+generalize (Zmax_spec (e + 1 - prec) emin).
+generalize (Zmax_spec (e - prec + 1 - prec) emin).
+lia.
+generalize (Zmax_spec (e + 1 - prec) emin).
+generalize (Zmax_spec (emin + 1 - prec) emin).
+lia.
 Qed.
 
 (** Links between FLT and FLX *)
@@ -192,7 +224,7 @@ apply Zmax_right.
 unfold FIX_exp.
 destruct (mag beta x) as (ex, Hex).
 simpl.
-cut (ex - 1 < emin + prec)%Z. omega.
+cut (ex - 1 < emin + prec)%Z. lia.
 apply (lt_bpow beta).
 apply Rle_lt_trans with (2 := Hx).
 now apply Hex.
@@ -222,7 +254,7 @@ apply generic_inclusion_le...
 intros e He.
 unfold FIX_exp.
 apply Z.max_lub.
-omega.
+lia.
 apply Z.le_refl.
 Qed.
 
@@ -238,45 +270,53 @@ destruct (Z.max_spec (n - prec) emin) as [(Hm, Hm')|(Hm, Hm')].
 revert Hn prec_gt_0_; unfold FLT_exp, Prec_gt_0; rewrite Hm'; lia.
 Qed.
 
-Theorem generic_format_FLT_1 (Hemin : (emin <= 0)%Z) :
+Theorem generic_format_FLT_1 :
+  (emin <= 0)%Z ->
   generic_format beta FLT_exp 1.
 Proof.
-unfold generic_format, scaled_mantissa, cexp, F2R; simpl.
-rewrite Rmult_1_l, (mag_unique beta 1 1).
-{ unfold FLT_exp.
-  destruct (Z.max_spec_le (1 - prec) emin) as [(H,Hm)|(H,Hm)]; rewrite Hm;
-    (rewrite <- IZR_Zpower; [|unfold Prec_gt_0 in prec_gt_0_; omega]);
-    (rewrite Ztrunc_IZR, IZR_Zpower, <-bpow_plus;
-     [|unfold Prec_gt_0 in prec_gt_0_; omega]);
-    now replace (_ + _)%Z with Z0 by ring. }
-rewrite Rabs_R1; simpl; split; [now right|].
-rewrite IZR_Zpower_pos; simpl; rewrite Rmult_1_r; apply IZR_lt.
-apply (Z.lt_le_trans _ 2); [omega|]; apply Zle_bool_imp_le, beta.
+intros Hemin.
+now apply (generic_format_FLT_bpow 0).
 Qed.
 
-Theorem ulp_FLT_small: forall x, (Rabs x < bpow (emin+prec))%R ->
-    ulp beta FLT_exp x = bpow emin.
-Proof with auto with typeclass_instances.
+Theorem ulp_FLT_0 :
+  ulp beta FLT_exp 0 = bpow emin.
+Proof.
+unfold ulp.
+rewrite Req_bool_true by easy.
+case negligible_exp_spec.
+- intros T.
+  elim Zle_not_lt with (2 := T emin).
+  apply Z.le_max_r.
+- intros n Hn.
+  apply f_equal.
+  assert (H: FLT_exp emin = emin).
+    apply Z.max_r.
+    generalize (prec_gt_0 prec).
+    clear ; lia.
+  rewrite <- H.
+  apply fexp_negligible_exp_eq.
+  apply FLT_exp_valid.
+  exact Hn.
+  rewrite H.
+  apply Z.le_refl.
+Qed.
+
+Theorem ulp_FLT_small :
+  forall x, (Rabs x < bpow (emin + prec))%R ->
+  ulp beta FLT_exp x = bpow emin.
+Proof.
 intros x Hx.
-unfold ulp; case Req_bool_spec; intros Hx2.
-(* x = 0 *)
-case (negligible_exp_spec FLT_exp).
-intros T; specialize (T (emin-1)%Z); contradict T.
-apply Zle_not_lt; unfold FLT_exp.
-apply Z.le_trans with (2:=Z.le_max_r _ _); omega.
-assert (V:FLT_exp emin = emin).
-unfold FLT_exp; apply Z.max_r.
-unfold Prec_gt_0 in prec_gt_0_; omega.
-intros n H2; rewrite <-V.
-apply f_equal, fexp_negligible_exp_eq...
-omega.
-(* x <> 0 *)
-apply f_equal; unfold cexp, FLT_exp.
+destruct (Req_dec x 0%R) as [Zx|Zx].
+{ rewrite Zx.
+  apply ulp_FLT_0. }
+rewrite ulp_neq_0 by easy.
+apply f_equal.
 apply Z.max_r.
-assert (mag beta x-1 < emin+prec)%Z;[idtac|omega].
-destruct (mag beta x) as (e,He); simpl.
+destruct (mag beta x) as [e He].
+simpl.
+cut (e - 1 < emin + prec)%Z. lia.
 apply lt_bpow with beta.
-apply Rle_lt_trans with (2:=Hx).
+apply Rle_lt_trans with (2 := Hx).
 now apply He.
 Qed.
 
@@ -295,8 +335,8 @@ apply Rle_trans with (bpow (e-1)*bpow (1-prec))%R.
 rewrite <- bpow_plus.
 right; apply f_equal.
 replace (e - 1 + (1 - prec))%Z with (e - prec)%Z by ring.
-apply Z.max_l.
-assert (emin+prec-1 < e)%Z; try omega.
+apply Z.max_l; simpl.
+assert (emin+prec-1 < e)%Z; try lia.
 apply lt_bpow with beta.
 apply Rle_lt_trans with (1:=Hx).
 now apply He.
@@ -334,7 +374,7 @@ unfold ulp; rewrite Req_bool_false;
   [|now intro H; apply Nzx, (Rmult_eq_reg_r (bpow e));
     [rewrite Rmult_0_l|apply Rgt_not_eq, Rlt_gt, bpow_gt_0]].
 rewrite (Req_bool_false _ _ Nzx), <- bpow_plus; f_equal; unfold cexp, FLT_exp.
-rewrite (mag_mult_bpow _ _ _ Nzx), !Z.max_l; omega.
+rewrite (mag_mult_bpow _ _ _ Nzx), !Z.max_l; lia.
 Qed.
 
 Lemma succ_FLT_exact_shift_pos :
@@ -375,32 +415,106 @@ fold (Req_bool (-x) (bpow (mag beta (-x) - 1))); case Req_bool.
 rewrite ulp_FLT_exact_shift; [ring|lra| |]; rewrite mag_opp; lia.
 Qed.
 
-(** FLT is a nice format: it has a monotone exponent... *)
-Global Instance FLT_exp_monotone : Monotone_exp FLT_exp.
+Theorem ulp_FLT_pred_pos :
+  forall x,
+  generic_format beta FLT_exp x ->
+  (0 <= x)%R ->
+  ulp beta FLT_exp (pred beta FLT_exp x) = ulp beta FLT_exp x \/
+  (x = bpow (mag beta x - 1) /\ ulp beta FLT_exp (pred beta FLT_exp x) = (ulp beta FLT_exp x / IZR beta)%R).
 Proof.
-intros ex ey.
-unfold FLT_exp.
-zify ; omega.
-Qed.
-
-(** and it allows a rounding to nearest, ties to even. *)
-Hypothesis NE_prop : Z.even beta = false \/ (1 < prec)%Z.
-
-Global Instance exists_NE_FLT : Exists_NE beta FLT_exp.
-Proof.
-destruct NE_prop as [H|H].
-now left.
-right.
-intros e.
-unfold FLT_exp.
-destruct (Zmax_spec (e - prec) emin) as [(H1,H2)|(H1,H2)] ;
-  rewrite H2 ; clear H2.
-generalize (Zmax_spec (e + 1 - prec) emin).
-generalize (Zmax_spec (e - prec + 1 - prec) emin).
-omega.
-generalize (Zmax_spec (e + 1 - prec) emin).
-generalize (Zmax_spec (emin + 1 - prec) emin).
-omega.
+intros x Fx [Hx|Hx] ; cycle 1.
+{ rewrite <- Hx.
+  rewrite pred_0.
+  rewrite ulp_opp.
+  left.
+  apply ulp_ulp_0.
+  apply FLT_exp_valid.
+  typeclasses eauto. }
+assert (Hp: (0 <= pred beta FLT_exp x)%R).
+{ apply pred_ge_gt ; try easy.
+  apply FLT_exp_valid.
+  apply generic_format_0. }
+destruct (Rle_or_lt (bpow (emin + prec)) x) as [Hs|Hs].
+- unfold ulp.
+  rewrite Req_bool_false ; cycle 1.
+  { intros Zp.
+    apply Rle_not_lt with (1 := Hs).
+    generalize (f_equal (succ beta FLT_exp) Zp).
+    rewrite succ_pred.
+    rewrite succ_0, ulp_FLT_0.
+    intros H.
+    rewrite H.
+    apply bpow_lt.
+    generalize (prec_gt_0 prec).
+    lia.
+    apply FLT_exp_valid.
+    exact Fx. }
+  rewrite Req_bool_false by now apply Rgt_not_eq.
+  unfold cexp.
+  destruct (mag beta x) as [e He].
+  simpl.
+  specialize (He (Rgt_not_eq _ _ Hx)).
+  rewrite Rabs_pos_eq in He by now apply Rlt_le.
+  destruct (proj1 He) as [Hb|Hb].
+  + left.
+    apply (f_equal (fun v => bpow (FLT_exp v))).
+    apply mag_unique.
+    rewrite Rabs_pos_eq by easy.
+    split.
+    * apply pred_ge_gt ; try easy.
+      apply FLT_exp_valid.
+      apply generic_format_FLT_bpow.
+      apply Z.lt_le_pred.
+      apply lt_bpow with beta.
+      apply Rle_lt_trans with (2 := proj2 He).
+      apply Rle_trans with (2 := Hs).
+      apply bpow_le.
+      generalize (prec_gt_0 prec).
+      lia.
+    * apply pred_lt_le.
+      now apply Rgt_not_eq.
+      now apply Rlt_le.
+  + right.
+    split.
+    easy.
+    replace (FLT_exp _) with (FLT_exp e + -1)%Z.
+    rewrite bpow_plus.
+    now rewrite <- (Zmult_1_r beta).
+    rewrite <- Hb.
+    unfold FLT_exp at 1 2.
+    replace (mag_val _ _ (mag _ _)) with (e - 1)%Z.
+    rewrite <- Hb in Hs.
+    apply le_bpow in Hs.
+    zify ; lia.
+    apply eq_sym, mag_unique.
+    rewrite Hb.
+    rewrite Rabs_pos_eq by easy.
+    split ; cycle 1.
+    { apply pred_lt_id.
+      now apply Rgt_not_eq. }
+    apply pred_ge_gt.
+    apply FLT_exp_valid.
+    apply generic_format_FLT_bpow.
+    cut (emin + 1 < e)%Z. lia.
+    apply lt_bpow with beta.
+    apply Rle_lt_trans with (2 := proj2 He).
+    apply Rle_trans with (2 := Hs).
+    apply bpow_le.
+    generalize (prec_gt_0 prec).
+    lia.
+    exact Fx.
+    apply Rlt_le_trans with (2 := proj1 He).
+    apply bpow_lt.
+    apply Z.lt_pred_l.
+- left.
+  rewrite (ulp_FLT_small x).
+  apply ulp_FLT_small.
+  rewrite Rabs_pos_eq by easy.
+  apply pred_lt_le.
+  now apply Rgt_not_eq.
+  now apply Rlt_le.
+  rewrite Rabs_pos_eq by now apply Rlt_le.
+  exact Hs.
 Qed.
 
 End RND_FLT.

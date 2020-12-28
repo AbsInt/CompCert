@@ -18,6 +18,8 @@ COPYING file for more details.
 *)
 
 (** * Fixed-point format *)
+
+From Coq Require Import Lia.
 Require Import Raux Defs Round_pred Generic_fmt Ulp Round_NE.
 
 Section RND_FIX.
@@ -86,9 +88,16 @@ intros x; unfold ulp.
 case Req_bool_spec; intros Zx.
 case (negligible_exp_spec FIX_exp).
 intros T; specialize (T (emin-1)%Z); contradict T.
-unfold FIX_exp; omega.
+unfold FIX_exp; lia.
 intros n _; reflexivity.
 reflexivity.
+Qed.
+
+Global Instance exists_NE_FIX :
+      Exists_NE beta FIX_exp.
+Proof.
+unfold Exists_NE, FIX_exp; simpl.
+right; split; auto.
 Qed.
 
 End RND_FIX.

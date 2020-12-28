@@ -50,19 +50,19 @@ destruct (Zle_or_lt e' e) as [He|He].
 exists m.
 unfold F2R at 2. simpl.
 rewrite Rmult_assoc, <- bpow_plus.
-rewrite <- IZR_Zpower. 2: omega.
+rewrite <- IZR_Zpower by lia.
 rewrite <- mult_IZR, Zrnd_IZR...
 unfold F2R. simpl.
 rewrite mult_IZR.
 rewrite Rmult_assoc.
-rewrite IZR_Zpower. 2: omega.
+rewrite IZR_Zpower by lia.
 rewrite <- bpow_plus.
 apply (f_equal (fun v => IZR m * bpow v)%R).
 ring.
 exists ((rnd (IZR m * bpow (e - e'))) * Zpower beta (e' - e))%Z.
 unfold F2R. simpl.
 rewrite mult_IZR.
-rewrite IZR_Zpower. 2: omega.
+rewrite IZR_Zpower by lia.
 rewrite 2!Rmult_assoc.
 rewrite <- 2!bpow_plus.
 apply (f_equal (fun v => _ * bpow v)%R).
@@ -326,8 +326,7 @@ exists (Ztrunc (scaled_mantissa beta fexp x)*Zpower beta (cexp x -e))%Z.
 rewrite Fx at 1; unfold F2R; simpl.
 rewrite mult_IZR, Rmult_assoc.
 f_equal.
-rewrite IZR_Zpower.
-2: omega.
+rewrite IZR_Zpower by lia.
 rewrite <- bpow_plus; f_equal; ring.
 Qed.
 
@@ -351,7 +350,7 @@ case (Zle_or_lt (mag beta (x/IZR beta)) (mag beta y)); intros H1.
 pose (e:=cexp (x / IZR beta)).
 destruct (ex_shift x e) as (nx, Hnx); try exact Fx.
 apply monotone_exp.
-rewrite <- (mag_minus1 x Zx); omega.
+rewrite <- (mag_minus1 x Zx); lia.
 destruct (ex_shift y e) as (ny, Hny); try assumption.
 apply monotone_exp...
 destruct (round_repr_same_exp beta fexp rnd (nx+ny) e) as (n,Hn).
@@ -406,11 +405,11 @@ apply V; left.
 apply lt_mag with beta.
 now apply Rabs_pos_lt.
 rewrite <- mag_minus1 in H1; try assumption.
-rewrite 2!mag_abs; omega.
+rewrite 2!mag_abs; lia.
 (* . *)
 destruct U as [U|U].
 rewrite U; apply Z.le_trans with (mag beta x).
-omega.
+lia.
 rewrite <- mag_abs.
 apply mag_le.
 now apply Rabs_pos_lt.
@@ -424,13 +423,13 @@ now apply Rabs_pos_lt.
 rewrite 2!mag_abs.
 assert (mag beta y < mag beta x - 1)%Z.
 now rewrite (mag_minus1 x Zx).
-omega.
+lia.
 apply cexp_round_ge...
 apply round_plus_neq_0...
 contradict H1; apply Zle_not_lt.
 rewrite <- (mag_minus1 x Zx).
 replace y with (-x)%R.
-rewrite mag_opp; omega.
+rewrite mag_opp; lia.
 lra.
 now exists n.
 Qed.
@@ -520,7 +519,7 @@ rewrite <- mag_minus1; try assumption.
 unfold FLT_exp; apply bpow_le.
 apply Z.le_trans with (2:=Z.le_max_l _ _).
 destruct (mag beta x) as (n,Hn); simpl.
-assert (e + prec < n)%Z; try omega.
+assert (e + prec < n)%Z; try lia.
 apply lt_bpow with beta.
 apply Rle_lt_trans with (1:=He).
 now apply Hn.
@@ -568,7 +567,7 @@ unfold cexp.
 rewrite <- mag_minus1 by easy.
 unfold FLX_exp; apply bpow_le.
 destruct (mag beta x) as (n,Hn); simpl.
-assert (e + prec < n)%Z; try omega.
+assert (e + prec < n)%Z; try lia.
 apply lt_bpow with beta.
 apply Rle_lt_trans with (1:=He).
 now apply Hn.
