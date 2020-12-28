@@ -803,10 +803,9 @@ Please finish the configuration by editing file ./Makefile.config.
 EOF
 else
 
-bindirexp=`echo "$bindir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
-libdirexp=`echo "$libdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
-mandirexp=`echo "$mandir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
-coqdevdirexp=`echo "$coqdevdir" | sed -e "s|\\\$(PREFIX)|$prefix|"`
+expandprefix() {
+  echo "$1" | sed -e "s|\\\$(PREFIX)|$prefix|"
+}
 
 cat <<EOF
 
@@ -828,17 +827,17 @@ CompCert configuration:
     Menhir API library............ $menhir_dir
     The Flocq library............. $library_Flocq
     The MenhirLib library......... $library_MenhirLib
-    Binaries installed in......... $bindirexp
+    Binaries installed in......... $(expandprefix $bindir)
     Runtime library provided...... $has_runtime_lib
-    Library files installed in.... $libdirexp
-    Man pages installed in........ $mandirexp
+    Library files installed in.... $(expandprefix $libdir)
+    Man pages installed in........ $(expandprefix $mandir)
     Standard headers provided..... $has_standard_headers
-    Standard headers installed in. $libdirexp/include
+    Standard headers installed in. $(expandprefix $libdir)/include
 EOF
 
 if $install_coqdev; then
 cat <<EOF
-    Coq development installed in.. $coqdevdirexp
+    Coq development installed in.. $(expandprefix $coqdevdir)
 EOF
 else
 cat <<EOF
