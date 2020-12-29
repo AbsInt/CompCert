@@ -894,7 +894,7 @@ Proof.
   }
   assert (EQ: Int64.signed n * 2 = int_round_odd (Int64.unsigned x) 1).
   {
-  symmetry. apply (int_round_odd_bits 53 1024). omega.
+  symmetry. apply int_round_odd_bits. omega.
   intros. rewrite NB2 by omega. replace i with 0 by omega. auto.
   rewrite NB2 by omega. rewrite dec_eq_false by omega. rewrite dec_eq_true.
   rewrite orb_comm. unfold Int64.testbit. change (2^1) with 2.
@@ -915,7 +915,7 @@ Proof.
   compute_this Int64.min_signed; compute_this Int64.max_signed;
   compute_this Int64.modulus; xomega.
 - assert (2^63 <= int_round_odd (Int64.unsigned x) 1).
-  { change (2^63) with (int_round_odd (2^63) 1). apply (int_round_odd_le 0 0); omega. }
+  { change (2^63) with (int_round_odd (2^63) 1). apply int_round_odd_le; omega. }
   rewrite <- EQ in H1. compute_this (2^63). compute_this (2^53). xomega.
 - omega.
 Qed.
@@ -1321,9 +1321,9 @@ Lemma of_long_round_odd:
 Proof.
   intros. rewrite <- (int_round_odd_plus 11) by omega.
   assert (-2^64 <= int_round_odd n 11).
-  { change (-2^64) with (int_round_odd (-2^64) 11). apply (int_round_odd_le 0 0); xomega. }
+  { change (-2^64) with (int_round_odd (-2^64) 11). apply int_round_odd_le; xomega. }
   assert (int_round_odd n 11 <= 2^64).
-  { change (2^64) with (int_round_odd (2^64) 11). apply (int_round_odd_le 0 0); xomega. }
+  { change (2^64) with (int_round_odd (2^64) 11). apply int_round_odd_le; xomega. }
   rewrite Bconv_BofZ.
   apply BofZ_round_odd with (p := 11).
   omega.
@@ -1363,10 +1363,10 @@ Proof.
   set (n' := Z.land (Z.lor (Int64.unsigned n) (Z.land (Int64.unsigned n) 2047 + 2047)) (-2048)).
   assert (int_round_odd (Int64.unsigned n) 11 = n') by (apply int_round_odd_plus; omega).
   assert (0 <= n').
-  { rewrite <- H1. change 0 with (int_round_odd 0 11). apply (int_round_odd_le 0 0); omega. }
+  { rewrite <- H1. change 0 with (int_round_odd 0 11). apply int_round_odd_le; omega. }
   assert (n' < Int64.modulus).
   { apply Z.le_lt_trans with (int_round_odd (Int64.modulus - 1) 11).
-    rewrite <- H1. apply (int_round_odd_le 0 0); omega.
+    rewrite <- H1. apply int_round_odd_le; omega.
     compute; auto. }
   rewrite <- (Int64.unsigned_repr n') by (unfold Int64.max_unsigned; omega).
   f_equal. Int64.bit_solve. rewrite Int64.testbit_repr by auto. unfold n'.
@@ -1409,10 +1409,10 @@ Proof.
   set (n' := Z.land (Z.lor (Int64.signed n) (Z.land (Int64.signed n) 2047 + 2047)) (-2048)).
   assert (int_round_odd (Int64.signed n) 11 = n') by (apply int_round_odd_plus; omega).
   assert (Int64.min_signed <= n').
-  { rewrite <- H1. change Int64.min_signed with (int_round_odd Int64.min_signed 11). apply (int_round_odd_le 0 0); omega. }
+  { rewrite <- H1. change Int64.min_signed with (int_round_odd Int64.min_signed 11). apply int_round_odd_le; omega. }
   assert (n' <= Int64.max_signed).
   { apply Z.le_trans with (int_round_odd Int64.max_signed 11).
-    rewrite <- H1. apply (int_round_odd_le 0 0); omega.
+    rewrite <- H1. apply int_round_odd_le; omega.
     compute; intuition congruence. }
   rewrite <- (Int64.signed_repr n') by omega.
   f_equal. Int64.bit_solve. rewrite Int64.testbit_repr by auto. unfold n'.
