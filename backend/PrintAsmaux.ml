@@ -303,11 +303,16 @@ let print_version_and_options oc comment =
     fprintf oc " %s" Commandline.argv.(i)
   done;
   fprintf oc "\n"
-(** Get the name of the common section if it is used otherwise the given section
-    name, with bss as default *)
 
-let common_section ?(sec = ".bss") () =
-  if !Clflags.option_fcommon then
-    "COMM"
-  else
-    sec
+(** Determine the name of the section to use for a variable.
+    [i] says whether the variable is initialized (true) or not (false).
+    [sec] is the name of the section to use if initialized or if
+    no other cases apply.
+    [bss] is the name of the section to use if uninitialized and
+    common declarations are not used.  If not provided, [sec] is used.
+*)
+
+let variable_section ~sec ?bss i =
+  if i then sec
+  else if !Clflags.option_fcommon then "COMM"
+  else match bss with None -> sec | Some b -> b

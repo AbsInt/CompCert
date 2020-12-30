@@ -148,9 +148,9 @@ struct
   let name_of_section = function
     | Section_text -> ".text"
     | Section_data i | Section_small_data i ->
-      if i then ".data" else common_section ()
+        variable_section ~sec:".data" ~bss:".bss" i
     | Section_const i | Section_small_const i ->
-      if i || (not !Clflags.option_fcommon) then ".section	.rodata" else "COMM"
+        variable_section ~sec:".section	.rodata" i
     | Section_string -> ".section	.rodata"
     | Section_literal -> ".text"
     | Section_jumptable -> ".text"

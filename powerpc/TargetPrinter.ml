@@ -118,22 +118,16 @@ module Linux_System : SYSTEM =
     let name_of_section = function
       | Section_text -> ".text"
       | Section_data i ->
-          if i then
-            ".data"
-          else
-            common_section ~sec:".section	.bss" ()
+          variable_section ~sec:".data" ~bss:".section	.bss" i
       | Section_small_data i ->
-          if i then
-            ".section	.sdata,\"aw\",@progbits"
-          else
-            common_section ~sec:".section	.sbss,\"aw\",@nobits" ()
+          variable_section
+            ~sec:".section	.sdata,\"aw\",@progbits"
+            ~bss:".section	.sbss,\"aw\",@nobits"
+            i
       | Section_const i ->
-          if i || (not !Clflags.option_fcommon) then ".rodata" else "COMM"
+          variable_section ~sec:".rodata" i
       | Section_small_const i ->
-          if i || (not !Clflags.option_fcommon) then
-            ".section	.sdata2,\"a\",@progbits"
-          else
-            "COMM"
+          variable_section ~sec:".section	.sdata2,\"a\",@progbits" i
       | Section_string -> ".rodata"
       | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
       | Section_jumptable -> ".text"
@@ -218,7 +212,7 @@ module Diab_System : SYSTEM =
 
     let name_of_section = function
       | Section_text -> ".text"
-      | Section_data i -> if i then ".data" else common_section ()
+      | Section_data i -> variable_section ~sec:".data" ~bss:".bss" i
       | Section_small_data i -> if i then ".sdata" else ".sbss"
       | Section_const _ -> ".text"
       | Section_small_const _ -> ".sdata2"

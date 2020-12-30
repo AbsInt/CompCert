@@ -162,9 +162,9 @@ module ELF_System : SYSTEM =
     let name_of_section = function
       | Section_text         -> ".text"
       | Section_data i | Section_small_data i ->
-          if i then ".data" else common_section ()
+          variable_section ~sec:".data" ~bss:".bss" i
       | Section_const i | Section_small_const i ->
-          if i || (not !Clflags.option_fcommon) then ".section	.rodata" else "COMM"
+          variable_section ~sec:".section	.rodata" i
       | Section_string       -> ".section	.rodata"
       | Section_literal      -> ".section	.rodata"
       | Section_jumptable    -> ".section	.rodata"
@@ -224,9 +224,9 @@ module MacOS_System : SYSTEM =
     let name_of_section = function
       | Section_text -> ".text"
       | Section_data i | Section_small_data i ->
-          if i || (not !Clflags.option_fcommon) then ".data" else "COMM"
+          variable_section ~sec:".data" i
       | Section_const i  | Section_small_const i ->
-          if i || (not !Clflags.option_fcommon) then ".section	__DATA,__CONST" else "COMM"
+          variable_section ~sec:".section	__DATA,__CONST" i
       | Section_string -> ".const"
       | Section_literal -> ".const"
       | Section_jumptable -> ".text"

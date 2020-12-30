@@ -134,9 +134,9 @@ module ELF_System : SYSTEM =
     let name_of_section = function
       | Section_text -> ".text"
       | Section_data i | Section_small_data i ->
-          if i then ".data" else common_section ()
+          variable_section ~sec:".data" ~bss:".bss" i
       | Section_const i | Section_small_const i ->
-          if i || (not !Clflags.option_fcommon) then ".section	.rodata" else "COMM"
+          variable_section ~sec:".section	.rodata" i
       | Section_string -> ".section	.rodata"
       | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
       | Section_jumptable -> ".text"
@@ -192,9 +192,9 @@ module MacOS_System : SYSTEM =
     let name_of_section = function
       | Section_text -> ".text"
       | Section_data i | Section_small_data i ->
-          if i || (not !Clflags.option_fcommon) then ".data" else "COMM"
+          variable_section ~sec:".data" i
       | Section_const i  | Section_small_const i ->
-          if i || (not !Clflags.option_fcommon) then ".const" else "COMM"
+          variable_section ~sec:".const" i
       | Section_string -> ".const"
       | Section_literal -> ".literal8"
       | Section_jumptable -> ".text"
@@ -254,9 +254,9 @@ module Cygwin_System : SYSTEM =
     let name_of_section = function
       | Section_text -> ".text"
       | Section_data i | Section_small_data i ->
-          if i then ".data" else common_section ()
+          variable_section ~sec:".data" ~bss:".bss" i
       | Section_const i | Section_small_const i ->
-          if i || (not !Clflags.option_fcommon) then ".section	.rdata,\"dr\"" else "COMM"
+          variable_section ~sec:".section	.rdata,\"dr\"" i
       | Section_string -> ".section	.rdata,\"dr\""
       | Section_literal -> ".section	.rdata,\"dr\""
       | Section_jumptable -> ".text"
