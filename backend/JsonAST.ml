@@ -21,14 +21,22 @@ open Sections
 let pp_storage pp static =
   pp_jstring pp (if static then "Static" else "Extern")
 
+let pp_init pp init =
+  pp_jstring pp
+    (match init with
+      | Uninit -> "Uninit"
+      | Init -> "Init"
+      | Init_reloc -> "Init_reloc")
+
 let pp_section pp sec =
   let pp_simple name =
     pp_jsingle_object pp "Section Name" pp_jstring name
   and pp_complex name init =
     pp_jobject_start pp;
     pp_jmember ~first:true pp "Section Name" pp_jstring name;
-    pp_jmember pp "Init" pp_jbool init;
+    pp_jmember pp "Init" pp_init init;
     pp_jobject_end pp in
+
   match sec with
   | Section_text -> pp_simple "Text"
   | Section_data init -> pp_complex "Data" init

@@ -15,12 +15,17 @@
 
 (* Handling of linker sections *)
 
+type initialized =
+  | Uninit       (* uninitialized data area *)
+  | Init         (* initialized with fixed, non-relocatable data *)
+  | Init_reloc   (* initialized with relocatable data (symbol addresses) *)
+
 type section_name =
   | Section_text
-  | Section_data of bool          (* true = init data, false = uninit data *)
-  | Section_small_data of bool
-  | Section_const of bool
-  | Section_small_const of bool
+  | Section_data of initialized
+  | Section_small_data of initialized
+  | Section_const of initialized
+  | Section_small_const of initialized
   | Section_string
   | Section_literal
   | Section_jumptable
@@ -40,6 +45,7 @@ type access_mode =
 
 type section_info = {
   sec_name_init: section_name;
+  sec_name_init_reloc: section_name;
   sec_name_uninit: section_name;
   sec_writable: bool;
   sec_executable: bool;
@@ -47,8 +53,9 @@ type section_info = {
 }
 
 let default_section_info = {
-  sec_name_init = Section_data true;
-  sec_name_uninit = Section_data false;
+  sec_name_init = Section_data Init;
+  sec_name_init_reloc = Section_data Init_reloc;
+  sec_name_uninit = Section_data Uninit;
   sec_writable = true;
   sec_executable = false;
   sec_access = Access_default
@@ -59,41 +66,49 @@ let default_section_info = {
 let builtin_sections = [
   "CODE",
      {sec_name_init = Section_text;
+      sec_name_init_reloc = Section_text;
       sec_name_uninit = Section_text;
       sec_writable = false; sec_executable = true;
       sec_access = Access_default};
   "DATA",
-     {sec_name_init = Section_data true;
-      sec_name_uninit = Section_data false;
+     {sec_name_init = Section_data Init;
+      sec_name_init_reloc = Section_data Init_reloc;
+      sec_name_uninit = Section_data Uninit;
       sec_writable = true; sec_executable = false;
       sec_access = Access_default};
   "SDATA",
-     {sec_name_init = Section_small_data true;
-      sec_name_uninit = Section_small_data false;
+     {sec_name_init = Section_small_data Init;
+      sec_name_init_reloc = Section_small_data Init_reloc;
+      sec_name_uninit = Section_small_data Uninit;
       sec_writable = true; sec_executable = false;
       sec_access = Access_near};
   "CONST",
-     {sec_name_init = Section_const true;
-      sec_name_uninit = Section_const false;
+     {sec_name_init = Section_const Init;
+      sec_name_init_reloc = Section_const Init_reloc;
+      sec_name_uninit = Section_const Uninit;
       sec_writable = false; sec_executable = false;
       sec_access = Access_default};
   "SCONST",
-     {sec_name_init = Section_small_const true;
-      sec_name_uninit = Section_small_const false;
+     {sec_name_init = Section_small_const Init;
+      sec_name_init_reloc = Section_small_const Init_reloc;
+      sec_name_uninit = Section_small_const Uninit;
       sec_writable = false; sec_executable = false;
       sec_access = Access_near};
   "STRING",
      {sec_name_init = Section_string;
+      sec_name_init_reloc = Section_string;
       sec_name_uninit = Section_string;
       sec_writable = false; sec_executable = false;
       sec_access = Access_default};
   "LITERAL",
      {sec_name_init = Section_literal;
+      sec_name_init_reloc = Section_literal;
       sec_name_uninit = Section_literal;
       sec_writable = false; sec_executable = false;
       sec_access = Access_default};
   "JUMPTABLE",
      {sec_name_init = Section_jumptable;
+      sec_name_init_reloc = Section_jumptable;
       sec_name_uninit = Section_jumptable;
       sec_writable = false; sec_executable = false;
       sec_access = Access_default}
@@ -128,15 +143,19 @@ let define_section name ?iname ?uname ?writable ?executable ?access () =
     match executable with Some b -> b | None -> si.sec_executable
   and access =
     match access with Some b -> b | None -> si.sec_access in
-  let iname =
+  let i =
     match iname with Some s -> Section_user(s, writable, executable)
                    | None -> si.sec_name_init in
-  let uname =
+  let ir =
+    match iname with Some s -> Section_user(s, writable, executable)
+                   | None -> si.sec_name_init_reloc in
+  let u =
     match uname with Some s -> Section_user(s, writable, executable)
                    | None -> si.sec_name_uninit in
   let new_si =
-    { sec_name_init = iname;
-      sec_name_uninit = uname;
+    { sec_name_init = i;
+      sec_name_init_reloc = ir;
+      sec_name_uninit = u;
       sec_writable = writable;
       sec_executable = executable;
       sec_access = access } in
@@ -156,7 +175,7 @@ let use_section_for id name =
 
 let gcc_section name readonly exec =
   let sn = Section_user(name, not readonly, exec) in
-  { sec_name_init = sn; sec_name_uninit = sn;
+  { sec_name_init = sn; sec_name_init_reloc = sn; sec_name_uninit = sn;
     sec_writable = not readonly; sec_executable = exec;
     sec_access = Access_default }
 
@@ -199,7 +218,12 @@ let for_variable env loc id ty init =
           Hashtbl.find current_section_table name
         with Not_found ->
           assert false in
-  ((if init then si.sec_name_init else si.sec_name_uninit), si.sec_access)
+  let secname =
+    match init with
+    | Uninit -> si.sec_name_uninit
+    | Init -> si.sec_name_init
+    | Init_reloc -> si.sec_name_init_reloc in
+  (secname, si.sec_access)
 
 (* Determine sections for a function definition *)
 
