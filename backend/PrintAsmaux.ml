@@ -305,14 +305,21 @@ let print_version_and_options oc comment =
   fprintf oc "\n"
 
 (** Determine the name of the section to use for a variable.
-    [i] says whether the variable is initialized (true) or not (false).
-    [sec] is the name of the section to use if initialized or if
-    no other cases apply.
-    [bss] is the name of the section to use if uninitialized and
+  - [i] is the initialization status of the variable.
+  - [sec] is the name of the section to use if initialized (with no
+    relocations) or if no other cases apply.
+  - [reloc] is the name of the section to use if initialized and
+    containing relocations.  If not provided, [sec] is used.
+  - [bss] is the name of the section to use if uninitialized and
     common declarations are not used.  If not provided, [sec] is used.
 *)
 
-let variable_section ~sec ?bss i =
-  if i then sec
-  else if !Clflags.option_fcommon then "COMM"
-  else match bss with None -> sec | Some b -> b
+let variable_section ~sec ?bss ?reloc i =
+  match i with
+  | Uninit ->
+      if !Clflags.option_fcommon
+      then "COMM"
+      else begin match bss with Some s -> s | None -> sec end
+  | Init -> sec
+  | Init_reloc ->
+      begin match reloc with Some s -> s | None -> sec end

@@ -213,7 +213,7 @@ module Diab_System : SYSTEM =
     let name_of_section = function
       | Section_text -> ".text"
       | Section_data i -> variable_section ~sec:".data" ~bss:".bss" i
-      | Section_small_data i -> if i then ".sdata" else ".sbss"
+      | Section_small_data i -> variable_section ~sec:".sdata" ~bss:".sbss" i
       | Section_const _ -> ".text"
       | Section_small_const _ -> ".sdata2"
       | Section_string -> ".text"

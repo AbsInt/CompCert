@@ -194,9 +194,9 @@ module MacOS_System : SYSTEM =
       | Section_data i | Section_small_data i ->
           variable_section ~sec:".data" i
       | Section_const i  | Section_small_const i ->
-          variable_section ~sec:".const" i
+          variable_section ~sec:".const" ~reloc:".const_data" i
       | Section_string -> ".const"
-      | Section_literal -> ".literal8"
+      | Section_literal -> ".const"
       | Section_jumptable -> ".text"
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\", %s, %s"
@@ -914,8 +914,7 @@ module Target(System: SYSTEM):TARGET =
 
     let print_epilogue oc =
       if !need_masks then begin
-        section oc (Section_const true);
-        (* not Section_literal because not 8-bytes *)
+        section oc Section_literal;
         print_align oc 16;
         fprintf oc "%a:	.quad   0x8000000000000000, 0\n"
           raw_symbol "__negd_mask";

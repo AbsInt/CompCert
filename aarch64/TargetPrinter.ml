@@ -226,7 +226,7 @@ module MacOS_System : SYSTEM =
       | Section_data i | Section_small_data i ->
           variable_section ~sec:".data" i
       | Section_const i  | Section_small_const i ->
-          variable_section ~sec:".section	__DATA,__CONST" i
+          variable_section ~sec:".const" ~reloc:".const_data" i
       | Section_string -> ".const"
       | Section_literal -> ".const"
       | Section_jumptable -> ".text"

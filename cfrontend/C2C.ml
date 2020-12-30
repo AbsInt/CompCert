@@ -1333,8 +1333,13 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
         if sto = C.Storage_extern then [] else [AST.Init_space sz]
     | Some i ->
         convertInitializer env ty i in
+  let initialized =
+    if optinit = None then Sections.Uninit else
+    if List.exists (function AST.Init_addrof _ -> true | _ -> false) init'
+    then Sections.Init_reloc
+    else Sections.Init in
   let (section, access) =
-    Sections.for_variable env loc id' ty (optinit <> None) in
+    Sections.for_variable env loc id' ty initialized in
   if Z.gt sz (Z.of_uint64 0xFFFF_FFFFL) then
     error "'%s' is too big (%s bytes)"
                    id.name (Z.to_string sz);

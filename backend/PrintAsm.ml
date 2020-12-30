@@ -121,7 +121,7 @@ module Printer(Target:TARGET) =
           let sec =
             match C2C.atom_sections name with
             | [s] -> s
-            |  _  -> Section_data true
+            |  _  -> Section_data Init
           and align =
             match C2C.atom_alignof name with
             | Some a -> a
