@@ -72,27 +72,33 @@ let rec fixup_variadic_call fixed ri rf tyl =
     | (Tint | Tany32) :: tyl ->
         fixup_variadic_call (fixed - 1) (ri + 1) rf tyl
     | Tsingle :: tyl ->
-        if fixed <= 0 then begin
+        if fixed > 0 then
+          fixup_variadic_call (fixed - 1) ri (rf + 1) tyl
+        else begin
           let rs = float_param_regs.(rf)
           and rd = int_param_regs.(ri) in
-          emit (Pfmvxs(rd, rs))
-        end;
-        fixup_variadic_call (fixed - 1) (ri + 1) (rf + 1) tyl
+          emit (Pfmvxs(rd, rs));
+          fixup_variadic_call (fixed - 1) (ri + 1) (rf + 1) tyl
+        end
     | Tlong :: tyl ->
         let ri' = if Archi.ptr64 then ri + 1 else align ri 2 + 2 in
         fixup_variadic_call (fixed - 1) ri' rf tyl
     | (Tfloat | Tany64) :: tyl ->
         if Archi.ptr64 then begin
-          if fixed <= 0 then begin
+          if fixed > 0 then
+            fixup_variadic_call (fixed - 1) ri (rf + 1) tyl
+          else begin
             let rs = float_param_regs.(rf)
             and rd = int_param_regs.(ri) in
-            emit (Pfmvxd(rd, rs))
-          end;
-          fixup_variadic_call (fixed - 1) (ri + 1) (rf + 1) tyl
+            emit (Pfmvxd(rd, rs));
+            fixup_variadic_call (fixed - 1) (ri + 1) (rf + 1) tyl
+          end
         end else begin
           let ri = align ri 2 in
           if ri < 8 then begin
-            if fixed <= 0 then begin
+            if fixed > 0 then
+              fixup_variadic_call (fixed - 1) ri (rf + 1) tyl
+            else begin
               let rs = float_param_regs.(rf)
               and rd1 = int_param_regs.(ri)
               and rd2 = int_param_regs.(ri + 1) in
@@ -100,9 +106,9 @@ let rec fixup_variadic_call fixed ri rf tyl =
               emit (Pfsd(rs, X2, Ofsimm _0));
               emit (Plw(rd1, X2, Ofsimm _0));
               emit (Plw(rd2, X2, Ofsimm _4));
-              emit (Paddiw(X2, X X2, _16))
-            end;
-            fixup_variadic_call (fixed - 1) (ri + 2) (rf + 1) tyl
+              emit (Paddiw(X2, X X2, _16));
+              fixup_variadic_call (fixed - 1) (ri + 2) (rf + 1) tyl
+            end
           end
         end
         

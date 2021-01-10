@@ -104,6 +104,17 @@ void miniprintf_extra(int i1, int i2, int i3, int i4,
   va_end(va);
 }
 
+/* Add a few dummy FP arguments to test passing of variadic FP arguments
+   in integer registers (mostly relevant for RISC-V) */
+
+void miniprintf_float(double f1, double f2, const char * fmt, ...)
+{
+  va_list va;
+  va_start(va, fmt);
+  minivprintf(fmt, va);
+  va_end(va);
+}
+
 /* Test va_list compatibility with the C library */
 
 void printf_compat(const char * fmt, ...)
@@ -140,6 +151,11 @@ int main()
                    'x',
                    "Hello, world!",
                    42,
+                   123456789012345LL,
+                   3.141592654,
+                   2.71828182);
+  miniprintf_float(0.0, 1.0,
+                   "With extra FP args: %l & %e & %f\n",
                    123456789012345LL,
                    3.141592654,
                    2.71828182);

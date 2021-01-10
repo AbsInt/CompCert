@@ -10,4 +10,5 @@ Twice: -1 1.23
 With va_copy: -1 1.23
 With va_copy: -1 1.23
 With extra args: x & Hello, world! & 42 & 123456789012345 & 3.141592654 & 2.718281746
+With extra FP args: 123456789012345 & 3.141592654 & 2.718281746
 va_list compatibility: x & Hello, world! & 42 & 123456789012345 & 3.141592654 & 2.718281746
