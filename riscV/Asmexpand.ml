@@ -24,6 +24,7 @@ open Asmexpandaux
 open AST
 open Camlcoq
 open! Integers
+open Locations
 
 exception Error of string
 
@@ -50,72 +51,92 @@ let expand_addptrofs dst src n =
 let expand_storeind_ptr src base ofs =
   List.iter emit (Asmgen.storeind_ptr src base ofs [])
 
+(* Fix-up code around function calls and function entry.
+   Some floating-point arguments residing in FP registers need to be
+   moved to integer registers or register pairs.
+   Symmetrically, some floating-point parameter passed in integer
+   registers or register pairs need to be moved to FP registers. *)
+
+let int_param_regs = [| X10; X11; X12; X13; X14; X15; X16; X17 |]
+
+let move_single_arg fr i =
+  emit (Pfmvxs(int_param_regs.(i), fr))
+
+let move_double_arg fr i =
+  if Archi.ptr64 then begin
+    emit (Pfmvxd(int_param_regs.(i), fr))
+  end else begin
+    emit (Paddiw(X2, X X2, Integers.Int.neg _16));
+    emit (Pfsd(fr, X2, Ofsimm _0));
+    emit (Plw(int_param_regs.(i), X2, Ofsimm _0));
+    if i < 7 then begin
+      emit (Plw(int_param_regs.(i + 1), X2, Ofsimm _4))
+    end else begin
+      emit (Plw(X31, X2, Ofsimm _4));
+      emit (Psw(X31, X2, Ofsimm _16))
+    end;
+    emit (Paddiw(X2, X X2, _16))
+  end
+
+let move_single_param fr i =
+  emit (Pfmvsx(fr, int_param_regs.(i)))
+
+let move_double_param fr i =
+  if Archi.ptr64 then begin
+    emit (Pfmvdx(fr, int_param_regs.(i)))
+  end else begin
+    emit (Paddiw(X2, X X2, Integers.Int.neg _16));
+    emit (Psw(int_param_regs.(i), X2, Ofsimm _0));
+    if i < 7 then begin
+      emit (Psw(int_param_regs.(i + 1), X2, Ofsimm _4))
+    end else begin
+      emit (Plw(X31, X2, Ofsimm _16));
+      emit (Psw(X31, X2, Ofsimm _4))
+    end;
+    emit (Pfld(fr, X2, Ofsimm _0));
+    emit (Paddiw(X2, X X2, _16))
+  end
+
+let float_extra_index = function
+  | Machregs.F0 -> Some (F0, 0)
+  | Machregs.F1 -> Some (F1, 1)
+  | Machregs.F2 -> Some (F2, 2)
+  | Machregs.F3 -> Some (F3, 3)
+  | Machregs.F4 -> Some (F4, 4)
+  | Machregs.F5 -> Some (F5, 5)
+  | Machregs.F6 -> Some (F6, 6)
+  | Machregs.F7 -> Some (F7, 7)
+  | _  -> None
+
+let fixup_gen single double sg =
+  let fixup ty loc =
+    match ty, loc with
+    | Tsingle, One (R r) ->
+        begin match float_extra_index r with
+        | Some(r, i) -> single r i
+        | None -> ()
+        end
+    | (Tfloat | Tany64), One (R r) ->
+        begin match float_extra_index r with
+        | Some(r, i) -> double r i
+        | None -> ()
+        end
+    | _, _ -> ()
+  in
+    List.iter2 fixup sg.sig_args (Conventions1.loc_arguments sg)
+
+let fixup_call sg =
+  fixup_gen move_single_arg move_double_arg sg
+
+let fixup_function_entry sg =
+  fixup_gen move_single_param move_double_param sg
+
 (* Built-ins.  They come in two flavors:
    - annotation statements: take their arguments in registers or stack
      locations; generate no code;
    - inlined by the compiler: take their arguments in arbitrary
      registers.
 *)
-
-(* Fix-up code around calls to variadic functions.
-   Floating-point variadic arguments residing in FP registers need to
-   be moved to integer registers. *)
-
-let int_param_regs   = [| X10; X11; X12; X13; X14; X15; X16; X17 |]
-let float_param_regs = [| F10; F11; F12; F13; F14; F15; F16; F17 |]
-
-let rec fixup_variadic_call fixed ri rf tyl =
-  if ri < 8 then
-    match tyl with
-    | [] ->
-        ()
-    | (Tint | Tany32) :: tyl ->
-        fixup_variadic_call (fixed - 1) (ri + 1) rf tyl
-    | Tsingle :: tyl ->
-        if fixed > 0 then
-          fixup_variadic_call (fixed - 1) ri (rf + 1) tyl
-        else begin
-          let rs = float_param_regs.(rf)
-          and rd = int_param_regs.(ri) in
-          emit (Pfmvxs(rd, rs));
-          fixup_variadic_call (fixed - 1) (ri + 1) (rf + 1) tyl
-        end
-    | Tlong :: tyl ->
-        let ri' = if Archi.ptr64 then ri + 1 else align ri 2 + 2 in
-        fixup_variadic_call (fixed - 1) ri' rf tyl
-    | (Tfloat | Tany64) :: tyl ->
-        if Archi.ptr64 then begin
-          if fixed > 0 then
-            fixup_variadic_call (fixed - 1) ri (rf + 1) tyl
-          else begin
-            let rs = float_param_regs.(rf)
-            and rd = int_param_regs.(ri) in
-            emit (Pfmvxd(rd, rs));
-            fixup_variadic_call (fixed - 1) (ri + 1) (rf + 1) tyl
-          end
-        end else begin
-          let ri = align ri 2 in
-          if ri < 8 then begin
-            if fixed > 0 then
-              fixup_variadic_call (fixed - 1) ri (rf + 1) tyl
-            else begin
-              let rs = float_param_regs.(rf)
-              and rd1 = int_param_regs.(ri)
-              and rd2 = int_param_regs.(ri + 1) in
-              emit (Paddiw(X2, X X2, Integers.Int.neg _16));
-              emit (Pfsd(rs, X2, Ofsimm _0));
-              emit (Plw(rd1, X2, Ofsimm _0));
-              emit (Plw(rd2, X2, Ofsimm _4));
-              emit (Paddiw(X2, X X2, _16));
-              fixup_variadic_call (fixed - 1) (ri + 2) (rf + 1) tyl
-            end
-          end
-        end
-        
-let fixup_call sg =
-  match sg.sig_cc.cc_vararg with
-  | None -> ()
-  | Some fixed -> fixup_variadic_call (Z.to_int fixed) 0 0 sg.sig_args
 
 (* Handling of annotations *)
 
@@ -323,37 +344,49 @@ let expand_builtin_vstore chunk args =
 (* Number of integer registers, FP registers, and stack words
    used to pass the (fixed) arguments to a function. *)
 
-let rec args_size ri rf ofs = function
+let arg_int_size ri rf ofs k =
+  if ri < 8
+  then k (ri + 1) rf ofs
+  else k ri rf (ofs + 1)
+
+let arg_single_size ri rf ofs k =
+  if rf < 8
+  then k ri (rf + 1) ofs
+  else arg_int_size ri rf ofs k
+
+let arg_long_size ri rf ofs k =
+  if Archi.ptr64 then
+    if ri < 8
+    then k (ri + 1) rf ofs
+    else k ri rf (ofs + 1)
+  else
+    if ri < 7 then k (ri + 2) rf ofs
+    else if ri = 7 then k (ri + 1) rf (ofs + 1)
+    else k ri rf (align ofs 2 + 2)
+
+let arg_double_size ri rf ofs k =
+  if rf < 8
+  then k ri (rf + 1) ofs
+  else arg_long_size ri rf ofs k
+
+let rec args_size l ri rf ofs =
+  match l with
   | [] -> (ri, rf, ofs)
   | (Tint | Tany32) :: l ->
-      if ri < 8
-      then args_size (ri + 1) rf ofs l
-      else args_size ri rf (ofs + 1) l
+      arg_int_size ri rf ofs (args_size l)
   | Tsingle :: l ->
-      if rf < 8
-      then args_size ri (rf + 1) ofs l
-      else args_size ri rf (ofs + 1) l
+      arg_single_size ri rf ofs (args_size l)
   | Tlong :: l ->
-      if Archi.ptr64 then
-        if ri < 8
-        then args_size (ri + 1) rf ofs l
-        else args_size ri rf (ofs + 1) l
-      else
-        if ri < 7 then args_size (ri + 2) rf ofs l
-        else if ri = 7 then args_size (ri + 1) rf (ofs + 1) l
-        else args_size ri rf (align ofs 2 + 2) l
+      arg_long_size ri rf ofs (args_size l)
   | (Tfloat | Tany64) :: l ->
-      if rf < 8
-      then args_size ri (rf + 1) ofs l
-      else let ofs' = if Archi.ptr64 then ofs + 1 else align ofs 2 + 2 in 
-           args_size ri rf ofs' l
+      arg_double_size ri rf ofs (args_size l)
 
 (* Size in words of the arguments to a function.  This includes both
    arguments passed in integer registers and arguments passed on stack,
    but not arguments passed in FP registers. *)
 
 let arguments_size sg =
-  let (ri, _, ofs) = args_size 0 0 0 sg.sig_args in
+  let (ri, _, ofs) = args_size sg.sig_args 0 0 0 in
   ri + ofs
 
 let save_arguments first_reg base_ofs =
@@ -744,6 +777,7 @@ let preg_to_dwarf = function
 let expand_function id fn =
   try
     set_current_function fn;
+    fixup_function_entry fn.fn_sig;
     expand id (* sp= *) 2 preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->

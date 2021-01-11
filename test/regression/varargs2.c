@@ -154,11 +154,11 @@ int main()
                    123456789012345LL,
                    3.141592654,
                    2.71828182);
-  miniprintf_float(0.0, 1.0,
-                   "With extra FP args: %l & %e & %f\n",
-                   123456789012345LL,
+  miniprintf_float(0.0, 0.5,
+                   "With extra FP args: %e & %f & %e & %e & %e & %e & %e & %e & %e & %e & %d\n",
                    3.141592654,
-                   2.71828182);
+                   2.71828182,
+                   1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 42);
   printf_compat("va_list compatibility: %c & %s & %d & %lld & %.10g & %.10g\n",
                 'x',
                 "Hello, world!",

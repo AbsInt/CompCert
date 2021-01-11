@@ -392,8 +392,12 @@ module Target : TARGET =
          fprintf oc "	fmv.d	%a, %a\n"     freg fd freg fs
       | Pfmvxs (rd,fs) ->
          fprintf oc "	fmv.x.s	%a, %a\n"     ireg rd freg fs
+      | Pfmvsx (fd,rs) ->
+         fprintf oc "	fmv.s.x	%a, %a\n"     freg fd ireg rs
       | Pfmvxd (rd,fs) ->
          fprintf oc "	fmv.x.d	%a, %a\n"     ireg rd freg fs
+      | Pfmvdx (fd,rs) ->
+         fprintf oc "	fmv.d.x	%a, %a\n"     freg fd ireg rs
 
       (* 32-bit (single-precision) floating point *)
       | Pfls (fd, ra, ofs) ->

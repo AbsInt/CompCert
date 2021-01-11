@@ -176,20 +176,21 @@ Qed.
 
 - RV64: pass the first 8 integer arguments in integer registers
   (a1...a8: int_param_regs), the first 8 FP arguments in FP registers
-  (fa1...fa8: float_param_regs), and the remaining arguments on the
-  stack, in 8-byte slots.
+  (fa1...fa8: float_param_regs) then in integer registers (a1...a8),
+  and the remaining arguments on the stack, in 8-byte slots.
 
-- RV32: same, but arguments of 64-bit integer type are passed in two
-  consecutive integer registers (a(i), a(i+1)) or in a(8) and on a
-  32-bit word on the stack.  Stack-allocated arguments are aligned to
-  their natural alignment.
+- RV32: same, but arguments of size 64 bits that must be passed in
+  integer registers are passed in two consecutive integer registers
+  (a(i), a(i+1)), or in a(8) and on a 32-bit word on the stack.
+  Stack-allocated arguments are aligned to their natural alignment.
 
 For variadic functions, the fixed arguments are passed as described
 above, then the variadic arguments receive special treatment:
 
-- RV64: all variadic arguments, including FP arguments,
-  are passed in the remaining integer registers (a1...a8),
-  then on the stack, in 8-byte slots.
+- RV64: FP registers are not used for passing variadic arguments.
+  All variadic arguments, including FP arguments, are passed in the
+  remaining integer registers (a1...a8), then on the stack, in 8-byte
+  slots.
 
 - RV32: likewise, but arguments of 64-bit types (integers as well
   as floats) are passed in two consecutive aligned integer registers
@@ -207,6 +208,15 @@ Definition int_param_regs :=
 Definition float_param_regs :=
   F10 :: F11 :: F12 :: F13 :: F14 :: F15 :: F16 :: F17 :: nil.
 
+(** To evaluate FP arguments that must be passed in integer registers,
+    we can use any FP caller-save register that is not already used to pass
+    a fixed FP argument.  Since there are 8 integer registers for argument
+    passing, we need at most 8 extra more FP registers for these FP
+    arguments. *)
+
+Definition float_extra_param_regs :=
+  F0 :: F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: nil.
+
 Definition int_arg (ri rf ofs: Z) (ty: typ)
                    (rec: Z -> Z -> Z -> list (rpair loc)) :=
   match list_nth_z int_param_regs ri with
@@ -220,26 +230,27 @@ Definition int_arg (ri rf ofs: Z) (ty: typ)
 
 Definition float_arg (va: bool) (ri rf ofs: Z) (ty: typ)
                      (rec: Z -> Z -> Z -> list (rpair loc)) :=
-  match list_nth_z float_param_regs rf with
+  match list_nth_z (if va then nil else float_param_regs) rf with
   | Some r =>
-      if va then
-       (let ri' :=  (* reserve 1 or 2 aligned integer registers *)
-          if Archi.ptr64 || zeq (typesize ty) 1 then ri + 1 else align ri 2 + 2 in
-        if zle ri' 8 then
-            (* we have enough integer registers, put argument in FP reg
-               and fixup code will put it in one or two integer regs *)
-            One (R r) :: rec ri' (rf + 1) ofs
-        else
-            (* we are out of integer registers, pass argument on stack *)
+      One (R r) :: rec ri (rf + 1) ofs
+  | None =>
+      (* We are out of FP registers, or cannot use them because vararg,
+         so try to put the argument in an extra FP register while
+         reserving an integer register or register pair into which
+         fixup code will move the extra FP register. *)
+      let regpair := negb Archi.ptr64 && zeq (typesize ty) 2 in
+      let ri' := if va && regpair then align ri 2 else ri in
+      match list_nth_z float_extra_param_regs ri' with
+      | Some r =>
+          let ri'' := ri' + (if Archi.ptr64 then 1 else typesize ty) in
+          let ofs'' := if regpair && zeq ri' 7 then ofs + 1 else ofs in
+          One (R r) :: rec ri'' rf ofs''
+      | None =>
+          (* We are out of integer registers, pass argument on stack *)
             let ofs := align ofs (typesize ty) in
             One(S Outgoing ofs ty)
-            :: rec ri' rf (ofs + (if Archi.ptr64 then 2 else typesize ty)))
-      else
-        One (R r) :: rec ri (rf + 1) ofs
-  | None   =>
-      let ofs := align ofs (typesize ty) in
-      One(S Outgoing ofs ty)
-      :: rec ri rf (ofs + (if Archi.ptr64 then 2 else typesize ty))
+            :: rec ri' rf (ofs + (if Archi.ptr64 then 2 else typesize ty))
+      end
   end.
 
 Definition split_long_arg (va: bool) (ri rf ofs: Z)
@@ -317,6 +328,8 @@ Proof.
   { decide_goal. }
   assert (CSF: forall r, In r float_param_regs -> is_callee_save r = false).
   { decide_goal. }
+  assert (CSFX: forall r, In r float_extra_param_regs -> is_callee_save r = false).
+  { decide_goal. }
   assert (AL: forall ofs ty, ofs >= 0 -> align ofs (typesize ty) >= 0).
   { intros. 
     assert (ofs <= align ofs (typesize ty)) by (apply align_le; apply typesize_pos).
@@ -341,18 +354,17 @@ Proof.
   assert (B: forall va ri rf ofs ty f,
              OKF f -> ofs >= 0 -> OK (float_arg va ri rf ofs ty f)).
   { intros until f; intros OF OO; red; unfold float_arg; intros.
-    destruct (list_nth_z float_param_regs rf) as [r|] eqn:NTH.
-  - set (ri' := if Archi.ptr64 || zeq (typesize ty) 1 then ri + 1 else align ri 2 + 2) in *.
-    destruct va; [destruct (zle ri' 8)|idtac]; destruct H.
-    + subst p; simpl. apply CSF. eapply list_nth_z_in; eauto.
-    + eapply OF; eauto.
-    + subst p; repeat split; auto.
-    + eapply OF; [idtac|eauto]. generalize (AL ofs ty OO) (SKK ty); lia.
-    + subst p; simpl. apply CSF. eapply list_nth_z_in; eauto.
-    + eapply OF; eauto.
+    destruct (list_nth_z (if va then nil else float_param_regs) rf) as [r|] eqn:NTH.
   - destruct H.
-    + subst p; repeat split; auto.
-    + eapply OF; [idtac|eauto]. generalize (AL ofs ty OO) (SKK ty); lia.
+    + subst p; simpl. apply CSF. destruct va. simpl in NTH; discriminate. eapply list_nth_z_in; eauto.
+    + eapply OF; eauto.
+  - set (regpair := negb Archi.ptr64 && zeq (typesize ty) 2) in *.
+    set (ri' := if va && regpair then align ri 2 else ri) in *.
+    destruct (list_nth_z float_extra_param_regs ri') as [r|] eqn:NTH'; destruct H.
+    + subst p; simpl. apply CSFX. eapply list_nth_z_in; eauto.
+    + eapply OF; [|eauto]. destruct (regpair && zeq ri' 7); lia.
+    + subst p; simpl. auto.
+    + eapply OF; [|eauto]. generalize (AL ofs ty OO) (SKK ty); lia.
   }
   assert (C: forall va ri rf ofs f,
              OKF f -> ofs >= 0 -> OK (split_long_arg va ri rf ofs f)).
