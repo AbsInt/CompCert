@@ -856,7 +856,7 @@ Proof.
   simpl; rewrite Heqo; simpl; eauto. constructor.
   simpl. unfold Int64.loword. rewrite Int64.unsigned_repr, Int.repr_unsigned. auto.
   assert (Int.modulus < Int64.max_unsigned) by (compute; auto).
-  generalize (Int.unsigned_range n). omega.  
+  generalize (Int.unsigned_range n). lia.  
 - set (im := Int.repr Int.half_modulus).
   set (fm := Float.of_intu im).
   assert (eval_expr ge sp e m (Vfloat fm :: Vfloat f :: le) (Eletvar (S O)) (Vfloat f)).
