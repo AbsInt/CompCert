@@ -388,8 +388,9 @@ let rec next_arg_locations ir fr ofs = function
       then next_arg_locations ir (fr + 1) ofs l
       else next_arg_locations ir fr (align ofs 8 + 8) l
   | Tlong :: l ->
-      if ir < 7
-      then next_arg_locations (align ir 2 + 2) fr ofs l
+      let ir = align ir 2 in
+      if ir < 8
+      then next_arg_locations (ir + 2) fr ofs l
       else next_arg_locations ir fr (align ofs 8 + 8) l
 
 let expand_builtin_va_start r =
