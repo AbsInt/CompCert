@@ -343,16 +343,19 @@ Proof.
   unfold loc_arguments; reflexivity.
 Qed.
 
-(** ** Normalization of function results *)
+(** ** Normalization of function results and parameters *)
 
 (** According to the AAPCS64 ABI specification, "padding bits" in the return
-    value of a function have unpredictable values and must be ignored.
-    Consequently, we force normalization of return values of small integer
-    types (8- and 16-bit integers), so that the top bits (the "padding bits")
-    are proper sign- or zero-extensions of the small integer value.
+    value of a function or in a function parameter have unpredictable
+    values and must be ignored.  Consequently, we force normalization
+    of return values and of function parameters when they have small
+    integer types (8- and 16-bit integers), so that the top bits (the
+    "padding bits") are proper sign- or zero-extensions of the small
+    integer value.
 
     The Apple variant of the AAPCS64 requires the callee to return a normalized
-    value, hence no normalization is needed in the caller.
+    value, and the caller to pass normalized parameters, hence no
+    normalization is needed.
  *)
 
 Definition return_value_needs_normalization (t: rettype) : bool :=
@@ -365,3 +368,4 @@ Definition return_value_needs_normalization (t: rettype) : bool :=
       end
   end.
 
+Definition parameter_needs_normalization := return_value_needs_normalization.

@@ -436,8 +436,9 @@ Proof.
   destruct Archi.abi; reflexivity.
 Qed.
 
-(** ** Normalization of function results *)
+(** ** Normalization of function results and parameters *)
 
 (** No normalization needed. *)
 
 Definition return_value_needs_normalization (t: rettype) := false.
+Definition parameter_needs_normalization (t: rettype) := false.

@@ -1108,23 +1108,37 @@ Theorem store_params_correct:
   /\ match_envs j cenv e le m' lo hi te tle tlo thi
   /\ Mem.nextblock tm' = Mem.nextblock tm.
 Proof.
+Local Opaque Conventions1.parameter_needs_normalization.
   induction 1; simpl; intros until targs; intros NOREPET CASTED VINJ MENV MINJ TLE LE.
-  (* base case *)
+- (* base case *)
   inv VINJ. exists tle2; exists tm; split. apply star_refl. split. auto. split. auto.
   split. apply match_envs_temps_exten with tle1; auto. auto.
-  (* inductive case *)
+- (* inductive case *)
   inv NOREPET. inv CASTED. inv VINJ.
   exploit me_vars; eauto. instantiate (1 := id); intros MV.
-  destruct (VSet.mem id cenv) eqn:?.
-  (* lifted to temp *)
-  eapply IHbind_parameters with (tle1 := PTree.set id v' tle1); eauto.
-  eapply match_envs_assign_lifted; eauto.
-  inv MV; try congruence. rewrite ENV in H; inv H.
-  inv H0; try congruence.
-  unfold Mem.storev in H2. eapply Mem.store_unmapped_inject; eauto.
-  intros. repeat rewrite PTree.gsspec. destruct (peq id0 id). auto.
-  apply TLE. intuition.
-  (* still in memory *)
+  destruct (VSet.mem id cenv) eqn:LIFTED.
++ (* lifted to temp *)
+  exploit (IHbind_parameters s tm (PTree.set id v' tle1) (PTree.set id v' tle2)).
+    eauto. eauto. eauto.
+    eapply match_envs_assign_lifted; eauto.
+    inv MV; try congruence. rewrite ENV in H; inv H.
+    inv H0; try congruence.
+    unfold Mem.storev in H2. eapply Mem.store_unmapped_inject; eauto.
+    intros. repeat rewrite PTree.gsspec. destruct (peq id0 id). auto.
+    apply TLE. intuition.
+    eauto.
+  intros (tle & tm' & U & V & X & Y & Z).
+  exists tle, tm'; split; [|auto].
+  destruct (Conventions1.parameter_needs_normalization (rettype_of_type ty)); [|assumption].
+  assert (A: tle!id = Some v').
+  { erewrite bind_parameter_temps_inv by eauto. apply PTree.gss. }
+  eapply star_left. constructor.
+  eapply star_left. econstructor. eapply make_cast_correct.
+    constructor; eauto. apply cast_val_casted; auto. eapply val_casted_inject; eauto.
+  rewrite PTree.gsident by auto.
+  eapply star_left. constructor. eassumption.
+  traceEq. traceEq. traceEq.
++ (* still in memory *)
   inv MV; try congruence. rewrite ENV in H; inv H.
   exploit assign_loc_inject; eauto.
   intros [tm1 [A [B C]]].
@@ -1979,7 +1993,7 @@ Lemma find_label_store_params:
   forall s k params, find_label lbl (store_params cenv params s) k = find_label lbl s k.
 Proof.
   induction params; simpl. auto.
-  destruct a as [id ty]. destruct (VSet.mem id cenv); auto.
+  destruct a as [id ty]. destruct (VSet.mem id cenv); [destruct Conventions1.parameter_needs_normalization|]; auto.
 Qed.
 
 Lemma find_label_add_debug_vars:

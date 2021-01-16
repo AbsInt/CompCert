@@ -431,7 +431,7 @@ Proof.
   unfold loc_arguments; destruct Archi.ptr64; auto; destruct Archi.win64; auto.
 Qed.
 
-(** ** Normalization of function results *)
+(** ** Normalization of function results and parameters *)
 
 (** In the x86 ABI, a return value of type "char" is returned in
     register AL, leaving the top 24 bits of EAX unspecified.
@@ -444,3 +444,8 @@ Definition return_value_needs_normalization (t: rettype) : bool :=
   | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => true
   | _ => false
   end.
+
+(** Function parameters are passed in normalized form and do not need
+    to be re-normalized at function entry. *)
+
+Definition parameter_needs_normalization (t: rettype) := false.
