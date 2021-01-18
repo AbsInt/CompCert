@@ -15,7 +15,7 @@ TESTS=int32 int64 floats floats-basics floats-lit \
   volatile1 volatile2 volatile3 volatile4 \
   funct3 expr5 struct7 struct8 struct11 struct12 casts1 casts2 char1 \
   sizeof1 sizeof2 binops bool for1 for2 switch switch2 compound \
-  decl1 interop1 bitfields9 ptrs3 \
+  decl1 bitfields9 ptrs3 \
   parsing krfun ifconv
 
 # Can run, but only in compiled mode, and have reference output in Results
@@ -43,13 +43,6 @@ FAILURES=funct1
 all: $(TESTS:%=%.compcert) $(TESTS_COMP:%=%.compcert) $(TESTS_DIFF:%=%.compcert) $(EXTRAS:%=%.s)
 
 all_s: $(TESTS:%=%.s) $(TESTS_COMP:%=%.s) $(TESTS_DIFF:%=%.s) $(EXTRAS:%=%.s)
-
-interop1.compcert: interop1.c
-	$(CC) -DCC_SIDE -c -o interop1n.o interop1.c
-	$(CCOMP) $(CCOMPFLAGS) -DCOMPCERT_SIDE -o interop1.compcert interop1.c interop1n.o $(LIBS)
-
-interop1.s: interop1.c
-	$(CCOMP) $(CCOMPFLAGS) -S interop1.c
 
 %.compcert: %.c
 	$(CCOMP) $(CCOMPFLAGS) -o $*.compcert $*.c $(LIBS)
