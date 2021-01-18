@@ -1,0 +1,41 @@
+#!/bin/sh
+
+# The name of the test
+name="$1"
+
+# Skip the test if known to fail
+
+skip () {
+  echo "$name: skipped"
+  exit 0
+}
+
+case "$name" in
+  fixed.cc2compcert|fixed.compcert2cc)
+    if [ $ARCH = arm ] && [ $ABI = hardfloat ] ; then skip; fi
+    ;;
+  struct.cc2compcert|struct.compcert2cc)
+    if [ $ARCH = x86 ] && [ $MODEL = 32sse2 ] ; then
+       # works except on Cygwin
+       if [ $SYSTEM = cygwin ] ; then skip; fi
+    elif [ $ARCH = powerpc ] && [ $ABI = linux ] ; then
+       # works
+       :
+    else
+       skip
+    fi
+    ;;
+esac
+
+# Administer the test
+
+if $SIMU ./$name
+then
+  echo "$name: passed"
+  exit 0
+else
+  echo "$name: FAILED"
+  exit 2
+fi
+
+  

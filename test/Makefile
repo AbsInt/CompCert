@@ -1,6 +1,6 @@
 include ../Makefile.config
 
-DIRS=c compression raytracer spass regression
+DIRS=c compression raytracer spass regression abi
 ifeq ($(CLIGHTGEN),true)
 DIRS+=clightgen
 endif
