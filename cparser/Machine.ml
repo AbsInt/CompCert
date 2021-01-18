@@ -178,12 +178,12 @@ let x86_32 =
                    struct_passing_style = SP_split_args;
                    struct_return_style = SR_ref}
 
-let x86_32_macosx =
+let x86_32_macos =
   {x86_32 with struct_passing_style = SP_split_args;
                struct_return_style = SR_int1248 }
 
 let x86_32_bsd =
-  x86_32_macosx
+  x86_32_macos
 
 let x86_64 =
   { i32lpll64 with name = "x86_64"; char_signed = true;

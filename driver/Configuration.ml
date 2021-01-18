@@ -157,4 +157,4 @@ let response_file_style =
 
 let gnu_toolchain = system <> "diab"
 
-let elf_target = system <> "macosx" && system <> "cygwin"
+let elf_target = system <> "macos" && system <> "cygwin"

@@ -34,7 +34,7 @@
 
 // System dependencies
 
-#if defined(SYS_macosx)
+#if defined(SYS_macos)
 
 #define GLOB(x) _##x
 

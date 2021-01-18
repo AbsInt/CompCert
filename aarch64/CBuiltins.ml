@@ -35,7 +35,7 @@ let int128_type = TArray(TInt(IULong, []), Some 2L, [])
 let builtins = {
   builtin_typedefs =
   [ "__builtin_va_list", va_list_type ] @
-  (if Configuration.system = "macosx" then
+  (if Configuration.system = "macos" then
   [ "__int128_t", int128_type;
     "__uint128_t", int128_type ]
   else []);

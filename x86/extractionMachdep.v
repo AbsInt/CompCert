@@ -28,6 +28,6 @@ Extract Constant Archi.win64 =>
 
 Extract Constant SelectOp.symbol_is_external =>
   "match Configuration.system with
-    | ""macosx"" -> C2C.atom_is_extern
+    | ""macos"" -> C2C.atom_is_extern
     | ""cygwin"" when Archi.ptr64 -> C2C.atom_is_extern
     | _ -> (fun _ -> false)".

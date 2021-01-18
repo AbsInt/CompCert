@@ -706,7 +706,7 @@ let sel_target () =
   let module S =
     (val (match Configuration.system with
           | "linux" -> (module ELF_System : SYSTEM)
-          | "macosx" -> (module MacOS_System : SYSTEM)
+          | "macos" -> (module MacOS_System : SYSTEM)
           | _ -> invalid_arg ("System " ^ Configuration.system ^ " not supported"))
      : SYSTEM) in
   (module Target(S) : TARGET)

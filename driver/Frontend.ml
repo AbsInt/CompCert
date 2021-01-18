@@ -109,8 +109,8 @@ let init () =
     | "x86"     -> if Configuration.model = "64" then
                      Machine.x86_64
                    else
-                     if Configuration.abi = "macosx"
-                     then Machine.x86_32_macosx
+                     if Configuration.abi = "macos"
+                     then Machine.x86_32_macos
                      else if Configuration.system = "bsd"
                      then Machine.x86_32_bsd
                      else Machine.x86_32

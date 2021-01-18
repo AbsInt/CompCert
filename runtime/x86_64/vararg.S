@@ -38,7 +38,7 @@
 
 // ELF ABI
 
-#if defined(SYS_linux) || defined(SYS_bsd) || defined(SYS_macosx)
+#if defined(SYS_linux) || defined(SYS_bsd) || defined(SYS_macos)
 
 // typedef struct {
 //    unsigned int gp_offset;

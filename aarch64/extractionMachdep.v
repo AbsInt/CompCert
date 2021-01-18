@@ -28,7 +28,7 @@ Extract Constant Archi.abi =>
 
 Extract Constant SelectOp.symbol_is_relocatable =>
   "match Configuration.system with
-    | ""macosx"" -> C2C.atom_is_extern
+    | ""macos"" -> C2C.atom_is_extern
     | _ -> (fun _ -> false)".
 
 (* Asm *)

@@ -71,7 +71,7 @@ val ilp32ll64 : t
 val i32lpll64 : t
 val il32pll64 : t
 val x86_32 : t
-val x86_32_macosx : t
+val x86_32_macos : t
 val x86_32_bsd : t
 val x86_64 : t
 val win32 : t

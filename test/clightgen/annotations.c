@@ -1,6 +1,6 @@
 int f(int x, long y)
 {
-#if !defined(SYSTEM_macosx) && !defined(SYSTEM_cygwin)
+#if !defined(SYSTEM_macos) && !defined(SYSTEM_cygwin)
   __builtin_ais_annot("x is %e1, y is %e2", x, y);
 #endif
   __builtin_annot("x is %1, y is %2", x, y);
