@@ -41,7 +41,23 @@ DIRS += MenhirLib
 COQINCLUDES += -R MenhirLib MenhirLib
 endif
 
-COQCOPTS ?= -w -undeclared-scope
+# Notes on silenced Coq warnings:
+#
+# undeclared-scope:
+#    warning introduced in 8.12
+#    suggested change (use `Declare Scope`) supported since 8.12
+# unused-pattern-matching-variable:
+#    warning introduced in 8.13
+#    the code rewrite that avoids the warning is not desirable
+# deprecated-ident-entry:
+#    warning introduced in 8.13
+#    suggested change (use `name` instead of `ident`) supported since 8.13
+
+COQCOPTS ?= \
+  -w -undeclared-scope \
+  -w -unused-pattern-matching-variable \
+  -w -deprecated-ident-entry
+
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
