@@ -342,7 +342,7 @@ Proof.
   induction rl; simpl; intros. constructor. constructor; auto. apply areg_sound; auto.
 Qed.
 
-Hint Resolve areg_sound aregs_sound: va.
+Global Hint Resolve areg_sound aregs_sound: va.
 
 Lemma abuiltin_arg_sound:
   forall bc ge rs sp m ae rm am,
@@ -1912,7 +1912,7 @@ Proof.
 - exact NOSTACK.
 Qed.
 
-Hint Resolve areg_sound aregs_sound: va.
+Global Hint Resolve areg_sound aregs_sound: va.
 
 (** * Interface with other optimizations *)
 

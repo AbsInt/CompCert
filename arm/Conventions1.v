@@ -427,7 +427,7 @@ Proof.
   destruct Archi.abi; [ | destruct (cc_vararg (sig_cc s)) ]; auto.
 Qed.
 
-Hint Resolve loc_arguments_acceptable: locs.
+Global Hint Resolve loc_arguments_acceptable: locs.
 
 Lemma loc_arguments_main:
   loc_arguments signature_main = nil.

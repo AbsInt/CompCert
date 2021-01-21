@@ -116,7 +116,7 @@ Lemma Plt_ne:
 Proof.
   unfold Plt; intros. red; intro. subst y. eelim Pos.lt_irrefl; eauto.
 Qed.
-Hint Resolve Plt_ne: coqlib.
+Global Hint Resolve Plt_ne: coqlib.
 
 Lemma Plt_trans:
   forall (x y z: positive), Plt x y -> Plt y z -> Plt x z.
@@ -127,14 +127,14 @@ Lemma Plt_succ:
 Proof.
   unfold Plt; intros. apply Pos.lt_succ_r. apply Pos.le_refl.
 Qed.
-Hint Resolve Plt_succ: coqlib.
+Global Hint Resolve Plt_succ: coqlib.
 
 Lemma Plt_trans_succ:
   forall (x y: positive), Plt x y -> Plt x (Pos.succ y).
 Proof.
   intros. apply Plt_trans with y. assumption. apply Plt_succ.
 Qed.
-Hint Resolve Plt_succ: coqlib.
+Global Hint Resolve Plt_succ: coqlib.
 
 Lemma Plt_succ_inv:
   forall (x y: positive), Plt x (Pos.succ y) -> Plt x y \/ x = y.
@@ -175,7 +175,7 @@ Proof (Pos.lt_le_trans).
 Lemma Plt_strict: forall p, ~ Plt p p.
 Proof (Pos.lt_irrefl).
 
-Hint Resolve Ple_refl Plt_Ple Ple_succ Plt_strict: coqlib.
+Global Hint Resolve Ple_refl Plt_Ple Ple_succ Plt_strict: coqlib.
 
 Ltac extlia := unfold Plt, Ple in *; lia.
 
@@ -559,7 +559,7 @@ Definition sum_left_map (A B C: Type) (f: A -> B) (x: A + C) : B + C :=
 
 (** Properties of [List.nth] (n-th element of a list). *)
 
-Hint Resolve in_eq in_cons: coqlib.
+Global Hint Resolve in_eq in_cons: coqlib.
 
 Lemma nth_error_in:
   forall (A: Type) (n: nat) (l: list A) (x: A),
@@ -573,14 +573,14 @@ Proof.
     discriminate.
     apply in_cons. auto.
 Qed.
-Hint Resolve nth_error_in: coqlib.
+Global Hint Resolve nth_error_in: coqlib.
 
 Lemma nth_error_nil:
   forall (A: Type) (idx: nat), nth_error (@nil A) idx = None.
 Proof.
   induction idx; simpl; intros; reflexivity.
 Qed.
-Hint Resolve nth_error_nil: coqlib.
+Global Hint Resolve nth_error_nil: coqlib.
 
 (** Compute the length of a list, with result in [Z]. *)
 
@@ -671,7 +671,7 @@ Lemma incl_cons_inv:
 Proof.
   unfold incl; intros. apply H. apply in_cons. auto.
 Qed.
-Hint Resolve incl_cons_inv: coqlib.
+Global Hint Resolve incl_cons_inv: coqlib.
 
 Lemma incl_app_inv_l:
   forall (A: Type) (l1 l2 m: list A),
@@ -687,7 +687,7 @@ Proof.
   unfold incl; intros. apply H. apply in_or_app. right; assumption.
 Qed.
 
-Hint Resolve  incl_tl incl_refl incl_app_inv_l incl_app_inv_r: coqlib.
+Global Hint Resolve  incl_tl incl_refl incl_app_inv_l incl_app_inv_r: coqlib.
 
 Lemma incl_same_head:
   forall (A: Type) (x: A) (l1 l2: list A),
@@ -1042,7 +1042,7 @@ Proof.
   constructor. constructor. constructor. auto.
 Qed.
 
-Hint Resolve is_tail_refl is_tail_cons is_tail_in is_tail_cons_left: coqlib.
+Global Hint Resolve is_tail_refl is_tail_cons is_tail_in is_tail_cons_left: coqlib.
 
 Lemma is_tail_incl:
   forall (A: Type) (l1 l2: list A), is_tail l1 l2 -> incl l1 l2.

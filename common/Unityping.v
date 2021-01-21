@@ -199,7 +199,7 @@ Proof.
   apply A. rewrite PTree.gso by congruence. auto.
 Qed.
 
-Hint Resolve set_incr: ty.
+Global Hint Resolve set_incr: ty.
 
 Lemma set_sound:
   forall te x ty e e', set e x ty = OK e' -> satisf te e' -> te x = ty.
@@ -216,7 +216,7 @@ Proof.
   induction xl; destruct tyl; simpl; intros; monadInv H; eauto with ty.
 Qed.
 
-Hint Resolve set_list_incr: ty.
+Global Hint Resolve set_list_incr: ty.
 
 Lemma set_list_sound:
   forall te xl tyl e e', set_list e xl tyl = OK e' -> satisf te e' -> map te xl = tyl.
@@ -242,7 +242,7 @@ Proof.
 - inv H; simpl in *; split; auto.
 Qed.
 
-Hint Resolve move_incr: ty.
+Global Hint Resolve move_incr: ty.
 
 Lemma move_sound:
   forall te e r1 r2 e' changed,

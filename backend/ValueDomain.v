@@ -43,12 +43,12 @@ Proof.
   elim H. apply H0; auto.
 Qed.
 
-Hint Extern 2 (_ = _) => congruence : va.
-Hint Extern 2 (_ <> _) => congruence : va.
-Hint Extern 2 (_ < _) => extlia : va.
-Hint Extern 2 (_ <= _) => extlia : va.
-Hint Extern 2 (_ > _) => extlia : va.
-Hint Extern 2 (_ >= _) => extlia : va.
+Global Hint Extern 2 (_ = _) => congruence : va.
+Global Hint Extern 2 (_ <> _) => congruence : va.
+Global Hint Extern 2 (_ < _) => extlia : va.
+Global Hint Extern 2 (_ <= _) => extlia : va.
+Global Hint Extern 2 (_ > _) => extlia : va.
+Global Hint Extern 2 (_ >= _) => extlia : va.
 
 Section MATCH.
 
@@ -4711,10 +4711,10 @@ Module VA <: SEMILATTICE.
 
 End VA.
 
-Hint Constructors cmatch : va.
-Hint Constructors pmatch: va.
-Hint Constructors vmatch: va.
-Hint Resolve cnot_sound symbol_address_sound
+Global Hint Constructors cmatch : va.
+Global Hint Constructors pmatch: va.
+Global Hint Constructors vmatch: va.
+Global Hint Resolve cnot_sound symbol_address_sound
        shl_sound shru_sound shr_sound
        and_sound or_sound xor_sound notint_sound
        ror_sound rolm_sound

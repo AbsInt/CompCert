@@ -165,7 +165,7 @@ Proof.
   subst r0; contradiction.
   apply Regmap.gso; auto.
 Qed.
-Hint Resolve match_env_update_temp: rtlg.
+Global Hint Resolve match_env_update_temp: rtlg.
 
 (** Matching between environments is preserved by simultaneous
   assignment to a Cminor local variable (in the Cminor environments)
@@ -205,7 +205,7 @@ Proof.
   eapply match_env_update_temp; eauto.
   eapply match_env_update_var; eauto.
 Qed.
-Hint Resolve match_env_update_dest: rtlg.
+Global Hint Resolve match_env_update_dest: rtlg.
 
 (** A variant of [match_env_update_var] corresponding to the assignment
   of the result of a builtin. *)

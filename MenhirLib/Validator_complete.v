@@ -140,7 +140,7 @@ Qed.
 (* We do not declare this lemma as an instance, and use [Hint Extern]
    instead, because the typeclass mechanism has trouble instantiating
    some evars if we do not explicitely call [eassumption]. *)
-Hint Extern 2 (IsValidator (state_has_future _ _ _ _) _) =>
+Global Hint Extern 2 (IsValidator (state_has_future _ _ _ _) _) =>
   eapply is_validator_state_has_future_subset; [eassumption|eassumption || reflexivity|]
 : typeclass_instances.
 
@@ -171,7 +171,7 @@ Proof.
   - destruct (b lookahead). by destruct b'. exfalso. by induction l; destruct b'.
   - eauto.
 Qed.
-Hint Extern 100 (IsValidator _ _) =>
+Global Hint Extern 100 (IsValidator _ _) =>
   match goal with
   | H : TerminalSet.In ?lookahead ?lset |- _ =>
     eapply (is_validator_iterate_lset _ (fun lookahead => _) _ _ H); clear H
@@ -238,7 +238,7 @@ Proof.
     revert EQ. unfold future_of_prod=>-> //.
 Qed.
 (* We need a hint for expplicitely instantiating b1 and b2 with lambdas. *)
-Hint Extern 0 (IsValidator
+Global Hint Extern 0 (IsValidator
                  (forall st prod fut lookahead,
                      state_has_future st prod fut lookahead -> _)
                  _) =>

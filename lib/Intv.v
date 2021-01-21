@@ -303,7 +303,7 @@ Qed.
 
 (** Hints *)
 
-Hint Resolve
+Global Hint Resolve
   notin_range range_notin
   is_notempty empty_notin in_notempty
   disjoint_sym empty_disjoint_r empty_disjoint_l

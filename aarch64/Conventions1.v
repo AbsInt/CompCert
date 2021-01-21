@@ -335,7 +335,7 @@ Proof.
   eapply loc_arguments_rec_charact; eauto. lia.
 Qed.
 
-Hint Resolve loc_arguments_acceptable: locs.
+Global Hint Resolve loc_arguments_acceptable: locs.
 
 Lemma loc_arguments_main:
   loc_arguments signature_main = nil.

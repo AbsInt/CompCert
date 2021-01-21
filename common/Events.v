@@ -1697,7 +1697,7 @@ Qed.
 
 End EVAL_BUILTIN_ARG.
 
-Hint Constructors eval_builtin_arg: barg.
+Global Hint Constructors eval_builtin_arg: barg.
 
 (** Invariance by change of global environment. *)
 

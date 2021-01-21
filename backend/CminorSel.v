@@ -464,7 +464,7 @@ Inductive final_state: state -> int -> Prop :=
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
-Hint Constructors eval_expr eval_exprlist eval_condexpr: evalexpr.
+Global Hint Constructors eval_expr eval_exprlist eval_condexpr: evalexpr.
 
 (** * Lifting of let-bound variables *)
 
@@ -580,4 +580,4 @@ Proof.
   eexact H. apply insert_lenv_0.
 Qed.
 
-Hint Resolve eval_lift: evalexpr.
+Global Hint Resolve eval_lift: evalexpr.

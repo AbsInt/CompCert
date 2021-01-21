@@ -40,14 +40,14 @@ Lemma ireg_of_not_R14:
 Proof.
   intros. erewrite <- ireg_of_eq; eauto with asmgen.
 Qed.
-Hint Resolve ireg_of_not_R14: asmgen.
+Global Hint Resolve ireg_of_not_R14: asmgen.
 
 Lemma ireg_of_not_R14':
   forall m r, ireg_of m = OK r -> r <> IR14.
 Proof.
   intros. generalize (ireg_of_not_R14 _ _ H). congruence.
 Qed.
-Hint Resolve ireg_of_not_R14': asmgen.
+Global Hint Resolve ireg_of_not_R14': asmgen.
 
 (** [undef_flags] and [nextinstr_nf] *)
 
@@ -75,7 +75,7 @@ Proof.
   intros; red; intros; subst; discriminate.
 Qed.
 
-Hint Resolve data_if_preg if_preg_not_PC: asmgen.
+Global Hint Resolve data_if_preg if_preg_not_PC: asmgen.
 
 Lemma nextinstr_nf_inv:
   forall r rs, if_preg r = true -> (nextinstr_nf rs)#r = rs#r.

@@ -4500,7 +4500,7 @@ Notation mem := Mem.mem.
 
 Global Opaque Mem.alloc Mem.free Mem.store Mem.load Mem.storebytes Mem.loadbytes.
 
-Hint Resolve
+Global Hint Resolve
   Mem.valid_not_valid_diff
   Mem.perm_implies
   Mem.perm_cur

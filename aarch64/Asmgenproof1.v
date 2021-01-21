@@ -26,7 +26,7 @@ Lemma preg_of_iregsp_not_PC: forall r, preg_of_iregsp r <> PC.
 Proof.
   destruct r; simpl; congruence.
 Qed.
-Hint Resolve preg_of_iregsp_not_PC: asmgen.
+Global Hint Resolve preg_of_iregsp_not_PC: asmgen.
 
 Lemma preg_of_not_X16: forall r, preg_of r <> X16.
 Proof.
@@ -44,7 +44,7 @@ Proof.
   intros. apply ireg_of_not_X16 in H. congruence.
 Qed.
 
-Hint Resolve preg_of_not_X16 ireg_of_not_X16 ireg_of_not_X16': asmgen.
+Global Hint Resolve preg_of_not_X16 ireg_of_not_X16 ireg_of_not_X16': asmgen.
 
 (** Useful simplification tactic *)
 

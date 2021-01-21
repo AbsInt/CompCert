@@ -132,7 +132,7 @@ Lemma important_diff:
 Proof.
   congruence.
 Qed.
-Hint Resolve important_diff: asmgen.
+Global Hint Resolve important_diff: asmgen.
 
 Lemma important_data_preg_1:
   forall r, data_preg r = true -> important_preg r = true.    
@@ -146,7 +146,7 @@ Proof.
   intros. destruct (data_preg r) eqn:E; auto. apply important_data_preg_1 in E. congruence.
 Qed.  
 
-Hint Resolve important_data_preg_1 important_data_preg_2: asmgen.
+Global Hint Resolve important_data_preg_1 important_data_preg_2: asmgen.
 
 Lemma nextinstr_inv2:
   forall r rs, important_preg r = true -> (nextinstr rs)#r = rs#r.
@@ -166,7 +166,7 @@ Lemma gpr_or_zero_zero:
 Proof.
   intros. reflexivity.
 Qed.
-Hint Resolve gpr_or_zero_not_zero gpr_or_zero_zero: asmgen.
+Global Hint Resolve gpr_or_zero_not_zero gpr_or_zero_zero: asmgen.
 
 Lemma gpr_or_zero_l_not_zero:
   forall rs r, r <> GPR0 -> gpr_or_zero_l rs r = rs#r.
@@ -178,21 +178,21 @@ Lemma gpr_or_zero_l_zero:
 Proof.
   intros. reflexivity.
 Qed.
-Hint Resolve gpr_or_zero_l_not_zero gpr_or_zero_l_zero: asmgen.
+Global Hint Resolve gpr_or_zero_l_not_zero gpr_or_zero_l_zero: asmgen.
 
 Lemma ireg_of_not_GPR0:
   forall m r, ireg_of m = OK r -> IR r <> IR GPR0.
 Proof.
   intros. erewrite <- ireg_of_eq; eauto with asmgen.
 Qed.
-Hint Resolve ireg_of_not_GPR0: asmgen.
+Global Hint Resolve ireg_of_not_GPR0: asmgen.
 
 Lemma ireg_of_not_GPR0':
   forall m r, ireg_of m = OK r -> r <> GPR0.
 Proof.
   intros. generalize (ireg_of_not_GPR0 _ _ H). congruence.
 Qed.
-Hint Resolve ireg_of_not_GPR0': asmgen.
+Global Hint Resolve ireg_of_not_GPR0': asmgen.
 
 (** Useful properties of the LR register *)
 
@@ -208,7 +208,7 @@ Proof.
   intros. rewrite preg_notin_charact. intros. apply preg_of_not_LR. 
 Qed.
 
-Hint Resolve preg_of_not_LR preg_notin_LR: asmgen.
+Global Hint Resolve preg_of_not_LR preg_notin_LR: asmgen.
       
 (** Useful simplification tactic *)
 

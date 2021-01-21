@@ -128,7 +128,7 @@ Ltac monadInv H :=
 
 (** * Monotonicity properties of the state *)
 
-Hint Resolve state_incr_refl: rtlg.
+Global Hint Resolve state_incr_refl: rtlg.
 
 Lemma instr_at_incr:
   forall s1 s2 n i,
@@ -137,7 +137,7 @@ Proof.
   intros. inv H.
   destruct (H3 n); congruence.
 Qed.
-Hint Resolve instr_at_incr: rtlg.
+Global Hint Resolve instr_at_incr: rtlg.
 
 (** The following tactic saturates the hypotheses with
   [state_incr] properties that follow by transitivity from
@@ -174,14 +174,14 @@ Lemma valid_fresh_absurd:
 Proof.
   intros r s. unfold reg_valid, reg_fresh; case r; tauto.
 Qed.
-Hint Resolve valid_fresh_absurd: rtlg.
+Global Hint Resolve valid_fresh_absurd: rtlg.
 
 Lemma valid_fresh_different:
   forall r1 r2 s, reg_valid r1 s -> reg_fresh r2 s -> r1 <> r2.
 Proof.
   unfold not; intros. subst r2. eauto with rtlg.
 Qed.
-Hint Resolve valid_fresh_different: rtlg.
+Global Hint Resolve valid_fresh_different: rtlg.
 
 Lemma reg_valid_incr:
   forall r s1 s2, state_incr s1 s2 -> reg_valid r s1 -> reg_valid r s2.
@@ -190,7 +190,7 @@ Proof.
   inversion INCR.
   unfold reg_valid. intros; apply Plt_Ple_trans with (st_nextreg s1); auto.
 Qed.
-Hint Resolve reg_valid_incr: rtlg.
+Global Hint Resolve reg_valid_incr: rtlg.
 
 Lemma reg_fresh_decr:
   forall r s1 s2, state_incr s1 s2 -> reg_fresh r s2 -> reg_fresh r s1.
@@ -199,7 +199,7 @@ Proof.
   unfold reg_fresh; unfold not; intros.
   apply H4. apply Plt_Ple_trans with (st_nextreg s1); auto.
 Qed.
-Hint Resolve reg_fresh_decr: rtlg.
+Global Hint Resolve reg_fresh_decr: rtlg.
 
 (** Validity of a list of registers. *)
 
@@ -211,7 +211,7 @@ Lemma regs_valid_nil:
 Proof.
   intros; red; intros. elim H.
 Qed.
-Hint Resolve regs_valid_nil: rtlg.
+Global Hint Resolve regs_valid_nil: rtlg.
 
 Lemma regs_valid_cons:
   forall r1 rl s,
@@ -232,7 +232,7 @@ Lemma regs_valid_incr:
 Proof.
   unfold regs_valid; intros; eauto with rtlg.
 Qed.
-Hint Resolve regs_valid_incr: rtlg.
+Global Hint Resolve regs_valid_incr: rtlg.
 
 (** A register is ``in'' a mapping if it is associated with a Cminor
   local or let-bound variable. *)
@@ -253,7 +253,7 @@ Lemma map_valid_incr:
 Proof.
   unfold map_valid; intros; eauto with rtlg.
 Qed.
-Hint Resolve map_valid_incr: rtlg.
+Global Hint Resolve map_valid_incr: rtlg.
 
 (** * Properties of basic operations over the state *)
 
@@ -265,7 +265,7 @@ Lemma add_instr_at:
 Proof.
   intros. monadInv H. simpl. apply PTree.gss.
 Qed.
-Hint Resolve add_instr_at: rtlg.
+Global Hint Resolve add_instr_at: rtlg.
 
 (** Properties of [update_instr]. *)
 
@@ -278,7 +278,7 @@ Proof.
   destruct (check_empty_node s1 n); try discriminate.
   inv H. simpl. apply PTree.gss.
 Qed.
-Hint Resolve update_instr_at: rtlg.
+Global Hint Resolve update_instr_at: rtlg.
 
 (** Properties of [new_reg]. *)
 
@@ -289,7 +289,7 @@ Proof.
   intros. monadInv H.
   unfold reg_valid; simpl. apply Plt_succ.
 Qed.
-Hint Resolve new_reg_valid: rtlg.
+Global Hint Resolve new_reg_valid: rtlg.
 
 Lemma new_reg_fresh:
   forall s1 s2 r i,
@@ -299,7 +299,7 @@ Proof.
   unfold reg_fresh; simpl.
   exact (Plt_strict _).
 Qed.
-Hint Resolve new_reg_fresh: rtlg.
+Global Hint Resolve new_reg_fresh: rtlg.
 
 Lemma new_reg_not_in_map:
   forall s1 s2 m r i,
@@ -307,7 +307,7 @@ Lemma new_reg_not_in_map:
 Proof.
   unfold not; intros; eauto with rtlg.
 Qed.
-Hint Resolve new_reg_not_in_map: rtlg.
+Global Hint Resolve new_reg_not_in_map: rtlg.
 
 (** * Properties of operations over compilation environments *)
 
@@ -330,7 +330,7 @@ Proof.
   intros. inv H0. left; exists name; auto.
   intros. inv H0.
 Qed.
-Hint Resolve find_var_in_map: rtlg.
+Global Hint Resolve find_var_in_map: rtlg.
 
 Lemma find_var_valid:
   forall s1 s2 map name r i,
@@ -338,7 +338,7 @@ Lemma find_var_valid:
 Proof.
   eauto with rtlg.
 Qed.
-Hint Resolve find_var_valid: rtlg.
+Global Hint Resolve find_var_valid: rtlg.
 
 (** Properties of [find_letvar]. *)
 
@@ -350,7 +350,7 @@ Proof.
   caseEq (nth_error (map_letvars map) idx); intros; monadInv H0.
   right; apply nth_error_in with idx; auto.
 Qed.
-Hint Resolve find_letvar_in_map: rtlg.
+Global Hint Resolve find_letvar_in_map: rtlg.
 
 Lemma find_letvar_valid:
   forall s1 s2 map idx r i,
@@ -358,7 +358,7 @@ Lemma find_letvar_valid:
 Proof.
   eauto with rtlg.
 Qed.
-Hint Resolve find_letvar_valid: rtlg.
+Global Hint Resolve find_letvar_valid: rtlg.
 
 (** Properties of [add_var]. *)
 
@@ -445,7 +445,7 @@ Proof.
   intros until r.  unfold alloc_reg.
   case a; eauto with rtlg.
 Qed.
-Hint Resolve alloc_reg_valid: rtlg.
+Global Hint Resolve alloc_reg_valid: rtlg.
 
 Lemma alloc_reg_fresh_or_in_map:
   forall map a s r s' i,
@@ -469,7 +469,7 @@ Proof.
   apply regs_valid_nil.
   apply regs_valid_cons. eauto with rtlg. eauto with rtlg.
 Qed.
-Hint Resolve alloc_regs_valid: rtlg.
+Global Hint Resolve alloc_regs_valid: rtlg.
 
 Lemma alloc_regs_fresh_or_in_map:
   forall map al s rl s' i,
@@ -494,7 +494,7 @@ Proof.
   intros until r.  unfold alloc_reg.
   case dest; eauto with rtlg.
 Qed.
-Hint Resolve alloc_optreg_valid: rtlg.
+Global Hint Resolve alloc_optreg_valid: rtlg.
 
 Lemma alloc_optreg_fresh_or_in_map:
   forall map dest s r s' i,
@@ -609,7 +609,7 @@ Proof.
   apply regs_valid_cons; eauto with rtlg.
 Qed.
 
-Hint Resolve new_reg_target_ok alloc_reg_target_ok
+Global Hint Resolve new_reg_target_ok alloc_reg_target_ok
              alloc_regs_target_ok: rtlg.
 
 (** The following predicate is a variant of [target_reg_ok] used
@@ -631,7 +631,7 @@ Lemma return_reg_ok_incr:
 Proof.
   induction 1; intros; econstructor; eauto with rtlg.
 Qed.
-Hint Resolve return_reg_ok_incr: rtlg.
+Global Hint Resolve return_reg_ok_incr: rtlg.
 
 Lemma new_reg_return_ok:
   forall s1 r s2 map sig i,
@@ -676,7 +676,7 @@ Inductive reg_map_ok: mapping -> reg -> option ident -> Prop :=
       map.(map_vars)!id = Some rd ->
       reg_map_ok map rd (Some id).
 
-Hint Resolve reg_map_ok_novar: rtlg.
+Global Hint Resolve reg_map_ok_novar: rtlg.
 
 (** [tr_expr c map pr expr ns nd rd optid] holds if the graph [c],
   between nodes [ns] and [nd], contains instructions that compute the

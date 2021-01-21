@@ -2000,7 +2000,7 @@ Inductive lessdef_list: list val -> list val -> Prop :=
       lessdef v1 v2 -> lessdef_list vl1 vl2 ->
       lessdef_list (v1 :: vl1) (v2 :: vl2).
 
-Hint Resolve lessdef_refl lessdef_undef lessdef_list_nil lessdef_list_cons : core.
+Global Hint Resolve lessdef_refl lessdef_undef lessdef_list_nil lessdef_list_cons : core.
 
 Lemma lessdef_list_inv:
   forall vl1 vl2, lessdef_list vl1 vl2 -> vl1 = vl2 \/ In Vundef vl1.
@@ -2225,7 +2225,7 @@ Inductive inject (mi: meminj): val -> val -> Prop :=
   | val_inject_undef: forall v,
       inject mi Vundef v.
 
-Hint Constructors inject : core.
+Global Hint Constructors inject : core.
 
 Inductive inject_list (mi: meminj): list val -> list val-> Prop:=
   | inject_list_nil :
@@ -2234,7 +2234,7 @@ Inductive inject_list (mi: meminj): list val -> list val-> Prop:=
       inject mi v v' -> inject_list mi vl vl'->
       inject_list mi (v :: vl) (v' :: vl').
 
-Hint Resolve inject_list_nil inject_list_cons : core.
+Global Hint Resolve inject_list_nil inject_list_cons : core.
 
 Lemma inject_ptrofs:
   forall mi i, inject mi (Vptrofs i) (Vptrofs i).
@@ -2242,7 +2242,7 @@ Proof.
   unfold Vptrofs; intros. destruct Archi.ptr64; auto.
 Qed.
 
-Hint Resolve inject_ptrofs : core.
+Global Hint Resolve inject_ptrofs : core.
 
 Section VAL_INJ_OPS.
 
@@ -2545,7 +2545,7 @@ Proof.
   constructor. eapply val_inject_incr; eauto. auto.
 Qed.
 
-Hint Resolve inject_incr_refl val_inject_incr val_inject_list_incr : core.
+Global Hint Resolve inject_incr_refl val_inject_incr val_inject_list_incr : core.
 
 Lemma val_inject_lessdef:
   forall v1 v2, Val.lessdef v1 v2 <-> Val.inject (fun b => Some(b, 0)) v1 v2.

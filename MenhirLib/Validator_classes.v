@@ -17,7 +17,7 @@ Require Import Alphabet.
 
 Class IsValidator (P : Prop) (b : bool) :=
   is_validator : b = true -> P.
-Hint Mode IsValidator + - : typeclass_instances.
+Global Hint Mode IsValidator + - : typeclass_instances.
 
 Instance is_validator_true : IsValidator True true.
 Proof. done. Qed.
@@ -55,12 +55,12 @@ Qed.
 
 (* We do not use an instance directly here, because we need somehow to
    force Coq to instantiate b with a lambda. *)
-Hint Extern 2 (IsValidator (forall x : ?A, _) _) =>
+Global Hint Extern 2 (IsValidator (forall x : ?A, _) _) =>
     eapply (is_validator_forall_finite _ _ (fun (x:A) => _))
   : typeclass_instances.
 
 (* Hint for synthetizing pattern-matching. *)
-Hint Extern 2 (IsValidator (match ?u with _ => _ end) ?b0) =>
+Global Hint Extern 2 (IsValidator (match ?u with _ => _ end) ?b0) =>
     let b := fresh "b" in
     unshelve notypeclasses refine (let b : bool := _ in _);
       [destruct u; intros; shelve|];    (* Synthetize `match .. with` in the validator. *)
@@ -71,5 +71,5 @@ Hint Extern 2 (IsValidator (match ?u with _ => _ end) ?b0) =>
 (* Hint for unfolding definitions. This is necessary because many
   hints for IsValidator use [Hint Extern], which do not automatically
   unfold identifiers. *)
-Hint Extern 100 (IsValidator ?X _) => unfold X
+Global Hint Extern 100 (IsValidator ?X _) => unfold X
   : typeclass_instances.

@@ -92,7 +92,7 @@ Record wf_numbering (n: numbering) : Prop := {
       In r (PMap.get v n.(num_val)) -> PTree.get r n.(num_reg) = Some v
 }.
 
-Hint Resolve wf_num_eqs wf_num_reg wf_num_val: cse.
+Global Hint Resolve wf_num_eqs wf_num_reg wf_num_val: cse.
 
 (** Satisfiability of numberings.  A numbering holds in a concrete
   execution state if there exists a valuation assigning values to
@@ -130,7 +130,7 @@ Record numbering_holds (valu: valuation) (ge: genv) (sp: val)
      n.(num_reg)!r = Some v -> rs#r = valu v
 }.
 
-Hint Resolve num_holds_wf num_holds_eq num_holds_reg: cse.
+Global Hint Resolve num_holds_wf num_holds_eq num_holds_reg: cse.
 
 Lemma empty_numbering_holds:
   forall valu ge sp rs m,

@@ -537,9 +537,9 @@ Inductive wt_program : program -> Prop :=
          wt_fundef p.(prog_comp_env) e fd) ->
       wt_program p.
 
-Hint Constructors wt_val wt_rvalue wt_lvalue wt_stmt wt_lblstmts: ty.
-Hint Extern 1 (wt_int _ _ _) => exact I: ty.
-Hint Extern 1 (wt_int _ _ _) => reflexivity: ty.
+Global Hint Constructors wt_val wt_rvalue wt_lvalue wt_stmt wt_lblstmts: ty.
+Global Hint Extern 1 (wt_int _ _ _) => exact I: ty.
+Global Hint Extern 1 (wt_int _ _ _) => reflexivity: ty.
 
 Ltac DestructCases :=
   match goal with
@@ -955,7 +955,7 @@ Proof.
   destruct (classify_bool t); congruence.
 Qed.
 
-Hint Resolve check_cast_sound check_bool_sound: ty.
+Global Hint Resolve check_cast_sound check_bool_sound: ty.
 
 Lemma check_arguments_sound:
   forall el tl x, check_arguments el tl = OK x -> wt_arguments el tl.

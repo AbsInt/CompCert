@@ -88,7 +88,7 @@ Proof.
   intros. apply ireg_of_not_X31 in H. congruence.
 Qed.
 
-Hint Resolve ireg_of_not_X31 ireg_of_not_X31': asmgen.
+Global Hint Resolve ireg_of_not_X31 ireg_of_not_X31': asmgen.
 
 (** Useful simplification tactic *)
 

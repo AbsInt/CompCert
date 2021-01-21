@@ -358,7 +358,7 @@ Proof.
   intros. destruct ros; simpl in *. eapply add_need_all_eagree; eauto. auto.
 Qed.
 
-Hint Resolve add_need_all_eagree add_need_all_lessdef
+Global Hint Resolve add_need_all_eagree add_need_all_lessdef
              add_need_eagree add_need_vagree
              add_needs_all_eagree add_needs_all_lessdef
              add_needs_eagree add_needs_vagree

@@ -113,7 +113,7 @@ Proof.
   intros P Q [[A B] [C D]]. split; auto.
 Qed.
 
-Hint Resolve massert_imp_refl massert_eqv_refl : core.
+Global Hint Resolve massert_imp_refl massert_eqv_refl : core.
 
 (** * Separating conjunction *)
 

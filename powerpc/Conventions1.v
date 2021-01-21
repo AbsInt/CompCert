@@ -341,7 +341,7 @@ Proof.
   unfold forall_rpair; destruct p; intuition auto.
 Qed.
 
-Hint Resolve loc_arguments_acceptable: locs.
+Global Hint Resolve loc_arguments_acceptable: locs.
 
 Lemma loc_arguments_main:
   loc_arguments signature_main = nil.

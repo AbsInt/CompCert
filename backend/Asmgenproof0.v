@@ -31,7 +31,7 @@ Require Import Conventions.
 
 (** * Processor registers and register states *)
 
-Hint Extern 2 (_ <> _) => congruence: asmgen.
+Global Hint Extern 2 (_ <> _) => congruence: asmgen.
 
 Lemma ireg_of_eq:
   forall r r', ireg_of r = OK r' -> preg_of r = IR r'.
@@ -56,7 +56,7 @@ Lemma preg_of_data:
 Proof.
   intros. destruct r; reflexivity.
 Qed.
-Hint Resolve preg_of_data: asmgen.
+Global Hint Resolve preg_of_data: asmgen.
 
 Lemma data_diff:
   forall r r',
@@ -64,7 +64,7 @@ Lemma data_diff:
 Proof.
   congruence.
 Qed.
-Hint Resolve data_diff: asmgen.
+Global Hint Resolve data_diff: asmgen.
 
 Lemma preg_of_not_SP:
   forall r, preg_of r <> SP.
@@ -78,7 +78,7 @@ Proof.
   intros. apply data_diff; auto with asmgen.
 Qed.
 
-Hint Resolve preg_of_not_SP preg_of_not_PC: asmgen.
+Global Hint Resolve preg_of_not_SP preg_of_not_PC: asmgen.
 
 Lemma nextinstr_pc:
   forall rs, (nextinstr rs)#PC = Val.offset_ptr rs#PC Ptrofs.one.
@@ -746,7 +746,7 @@ Qed.
 Definition nolabel (i: instruction) :=
   match i with Plabel _ => False | _ => True end.
 
-Hint Extern 1 (nolabel _) => exact I : labels.
+Global Hint Extern 1 (nolabel _) => exact I : labels.
 
 Lemma tail_nolabel_cons:
   forall i c k,
@@ -757,7 +757,7 @@ Proof.
   intros. simpl. rewrite <- H1. destruct i; reflexivity || contradiction.
 Qed.
 
-Hint Resolve tail_nolabel_refl: labels.
+Global Hint Resolve tail_nolabel_refl: labels.
 
 Ltac TailNoLabel :=
   eauto with labels;

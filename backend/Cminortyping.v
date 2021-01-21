@@ -290,7 +290,7 @@ Lemma expect_incr: forall te e t1 t2 e',
 Proof.
   unfold expect; intros. destruct (typ_eq t1 t2); inv H; auto.
 Qed.
-Hint Resolve expect_incr: ty.
+Global Hint Resolve expect_incr: ty.
 
 Lemma expect_sound: forall e t1 t2 e',
   expect e t1 t2 = OK e' -> t1 = t2.
@@ -305,7 +305,7 @@ Proof.
 - destruct (type_unop u) as [targ1 tres]; monadInv T; eauto with ty.
 - destruct (type_binop b) as [[targ1 targ2] tres]; monadInv T; eauto with ty.
 Qed.
-Hint Resolve type_expr_incr: ty.
+Global Hint Resolve type_expr_incr: ty.
 
 Lemma type_expr_sound: forall te a t e e',
     type_expr e a t = OK e' -> S.satisf te e' -> wt_expr te a t.
@@ -325,7 +325,7 @@ Lemma type_exprlist_incr: forall te al tl e e',
 Proof.
   induction al; destruct tl; simpl; intros until e'; intros T SAT; monadInv T; eauto with ty.
 Qed.
-Hint Resolve type_exprlist_incr: ty.
+Global Hint Resolve type_exprlist_incr: ty.
 
 Lemma type_exprlist_sound: forall te al tl e e',
     type_exprlist e al tl = OK e' -> S.satisf te e' -> list_forall2 (wt_expr te) al tl.
@@ -342,7 +342,7 @@ Proof.
 - destruct (type_unop u) as [targ1 tres]; monadInv T; eauto with ty.
 - destruct (type_binop b) as [[targ1 targ2] tres]; monadInv T; eauto with ty.
 Qed.
-Hint Resolve type_assign_incr: ty.
+Global Hint Resolve type_assign_incr: ty.
 
 Lemma type_assign_sound: forall te id a e e',
     type_assign e id a = OK e' -> S.satisf te e' -> wt_expr te a (te id).
@@ -362,7 +362,7 @@ Lemma opt_set_incr: forall te optid optty e e',
 Proof.
   unfold opt_set; intros. destruct optid, optty; try (monadInv H); eauto with ty.
 Qed.
-Hint Resolve opt_set_incr: ty.
+Global Hint Resolve opt_set_incr: ty.
 
 Lemma opt_set_sound: forall te optid sg e e',
     opt_set e optid (proj_sig_res sg) = OK e' -> S.satisf te e' ->
@@ -379,7 +379,7 @@ Proof.
   induction s; simpl; intros e1 e2 T SAT; try (monadInv T); eauto with ty.
 - destruct tret, o; try (monadInv T); eauto with ty.
 Qed.
-Hint Resolve type_stmt_incr: ty.
+Global Hint Resolve type_stmt_incr: ty.
 
 Lemma type_stmt_sound: forall te tret s e e',
     type_stmt tret e s = OK e' -> S.satisf te e' -> wt_stmt te tret s.

@@ -74,7 +74,7 @@ Proof.
   intros. simpl in H. auto.
 Qed.
 
-Hint Resolve vagree_same vagree_lessdef lessdef_vagree: na.
+Global Hint Resolve vagree_same vagree_lessdef lessdef_vagree: na.
 
 Inductive vagree_list: list val -> list val -> list nval -> Prop :=
   | vagree_list_nil: forall nvl,
@@ -100,7 +100,7 @@ Proof.
   destruct nvl; constructor; auto with na.
 Qed.
 
-Hint Resolve lessdef_vagree_list vagree_lessdef_list: na.
+Global Hint Resolve lessdef_vagree_list vagree_lessdef_list: na.
 
 (** ** Ordering and least upper bound between value needs *)
 
@@ -116,8 +116,8 @@ Proof.
   destruct x; constructor; auto.
 Qed.
 
-Hint Constructors nge: na.
-Hint Resolve nge_refl: na.
+Global Hint Constructors nge: na.
+Global Hint Resolve nge_refl: na.
 
 Lemma nge_trans: forall x y, nge x y -> forall z, nge y z -> nge x z.
 Proof.
@@ -1084,7 +1084,7 @@ Proof.
   intros. apply H.
 Qed.
 
-Hint Resolve nreg_agree: na.
+Global Hint Resolve nreg_agree: na.
 
 Lemma eagree_ge:
   forall e1 e2 ne ne',
