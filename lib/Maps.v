@@ -1349,7 +1349,7 @@ Proof.
   + inv NOREPET. auto.
   + apply FINAL. auto.
   + apply IHl. auto. inv NOREPET; auto.
-Qed.
+Defined.
 
 Theorem fold_ind:
   P m_final (T.fold f m_final init).
@@ -1364,7 +1364,7 @@ Proof.
   rewrite T.fold_spec. apply X.
   intros; simpl. rewrite <- List.in_rev.
   split. apply T.elements_complete. apply T.elements_correct.
-Qed.
+Defined.
 
 End TREE_FOLD_IND.
 
