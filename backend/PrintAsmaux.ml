@@ -312,12 +312,17 @@ let print_version_and_options oc comment =
     containing relocations.  If not provided, [sec] is used.
   - [bss] is the name of the section to use if uninitialized and
     common declarations are not used.  If not provided, [sec] is used.
+  - [common] says whether common declarations can be used for uninitialized
+    variables.  It defaults to the status of the [-fcommon] / [-fno-common]
+    command-line option.  Passing [~common:false] is needed when
+    common declarations cannot be used at all, for example in the context of
+    small data areas.
 *)
 
-let variable_section ~sec ?bss ?reloc i =
+let variable_section ~sec ?bss ?reloc ?(common = !Clflags.option_fcommon) i =
   match i with
   | Uninit ->
-      if !Clflags.option_fcommon
+      if common
       then "COMM"
       else begin match bss with Some s -> s | None -> sec end
   | Init -> sec
