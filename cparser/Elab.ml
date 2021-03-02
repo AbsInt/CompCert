@@ -1001,7 +1001,7 @@ and elab_field_group env = function
             | TInt(ik, _) -> ik
             | TEnum(_, _) -> enum_ikind
             | _ -> ILongLong (* trigger next error message *) in
-          if integer_rank ik > integer_rank IInt then begin
+          if sizeof_ikind ik > sizeof_ikind IInt then begin
             error loc
               "the type of bit-field '%a' must be an integer type no bigger than 'int'" pp_field id;
             None,env
