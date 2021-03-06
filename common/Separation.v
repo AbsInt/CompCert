@@ -870,7 +870,7 @@ Proof.
   exists j', vres2, m2'; intuition auto.
   split; [|split].
 - exact INJ'.
-- apply m_invar with (m0 := m2).
+- apply (m_invar _ m2).
 + apply globalenv_inject_incr with j m1; auto.
 + eapply Mem.unchanged_on_implies; eauto.
   intros; red; intros; red; intros.
