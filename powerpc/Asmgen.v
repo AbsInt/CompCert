@@ -190,36 +190,38 @@ Definition rolm64 (r1 r2: ireg) (amount: int) (mask: int64) (k: code) :=
 
 (** Accessing slots in the stack frame.  *)
 
+(* For 64 bit load and store the offset needs to be a multiple of word size *)
 Definition accessind {A: Type}
        (instr1: A -> constant -> ireg -> instruction)
        (instr2: A -> ireg -> ireg -> instruction)
+       (unaligned : bool)
        (base: ireg) (ofs: ptrofs) (r: A) (k: code) :=
   let ofs := Ptrofs.to_int ofs in
-  if Int.eq (high_s ofs) Int.zero
+  if Int.eq (high_s ofs) Int.zero && (unaligned || (Int.eq (Int.mods ofs (Int.repr 4)) Int.zero))
   then instr1 r (Cint ofs) base :: k
   else loadimm GPR0 ofs (instr2 r base GPR0 :: k).
 
 Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
   match ty, preg_of dst with
-  | Tint, IR r => OK(accessind Plwz Plwzx base ofs r k)
-  | Tany32, IR r => OK(accessind Plwz_a Plwzx_a base ofs r k)
-  | Tsingle, FR r => OK(accessind Plfs Plfsx base ofs r k)
-  | Tlong, IR r => OK(accessind Pld Pldx base ofs r k)
-  | Tfloat, FR r => OK(accessind Plfd Plfdx base ofs r k)
-  | Tany64, IR r => OK(accessind Pld_a Pldx_a base ofs r k)
-  | Tany64, FR r => OK(accessind Plfd_a Plfdx_a base ofs r k)
+  | Tint, IR r => OK(accessind Plwz Plwzx true base ofs r k)
+  | Tany32, IR r => OK(accessind Plwz_a Plwzx_a true base ofs r k)
+  | Tsingle, FR r => OK(accessind Plfs Plfsx true base ofs r k)
+  | Tlong, IR r => OK(accessind Pld Pldx false base ofs r k)
+  | Tfloat, FR r => OK(accessind Plfd Plfdx  true base ofs r k)
+  | Tany64, IR r => OK(accessind Pld_a Pldx_a false base ofs r k)
+  | Tany64, FR r => OK(accessind Plfd_a Plfdx_a true base ofs r k)
   | _, _ => Error (msg "Asmgen.loadind")
   end.
 
 Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :=
   match ty, preg_of src with
-  | Tint, IR r => OK(accessind Pstw Pstwx base ofs r k)
-  | Tany32, IR r => OK(accessind Pstw_a Pstwx_a base ofs r k)
-  | Tsingle, FR r => OK(accessind Pstfs Pstfsx base ofs r k)
-  | Tlong, IR r => OK(accessind Pstd Pstdx base ofs r k)
-  | Tfloat, FR r => OK(accessind Pstfd Pstfdx base ofs r k)
-  | Tany64, IR r => OK(accessind Pstd_a Pstdx_a base ofs r k)
-  | Tany64, FR r => OK(accessind Pstfd_a Pstfdx_a base ofs r k)
+  | Tint, IR r => OK(accessind Pstw Pstwx true base ofs r k)
+  | Tany32, IR r => OK(accessind Pstw_a Pstwx_a true base ofs r k)
+  | Tsingle, FR r => OK(accessind Pstfs Pstfsx true base ofs r k)
+  | Tlong, IR r => OK(accessind Pstd Pstdx false base ofs r k)
+  | Tfloat, FR r => OK(accessind Pstfd Pstfdx true base ofs r k)
+  | Tany64, IR r => OK(accessind Pstd_a Pstdx_a false base ofs r k)
+  | Tany64, FR r => OK(accessind Pstfd_a Pstfdx_a true base ofs r k)
   | _, _ => Error (msg "Asmgen.storeind")
   end.
 
@@ -724,32 +726,48 @@ Definition transl_op
 Definition int_temp_for (r: mreg) :=
   if mreg_eq r R12 then GPR11 else GPR12.
 
+Definition symbol_ofs_word_aligned symb ofs :=
+  let ofs := Ptrofs.to_int ofs in
+  symbol_is_aligned symb 4 && (Int.eq (Int.mods ofs (Int.repr 4)) Int.zero).
+
 Definition transl_memory_access
      (mk1: constant -> ireg -> instruction)
      (mk2: ireg -> ireg -> instruction)
+     (unaligned : bool)
      (addr: addressing) (args: list mreg)
      (temp: ireg) (k: code) :=
   match addr, args with
   | Aindexed ofs, a1 :: nil =>
       do r1 <- ireg_of a1;
-      OK (if Int.eq (high_s ofs) Int.zero then
-           mk1 (Cint ofs) r1 :: k
-         else
-           Paddis temp r1 (Cint (high_s ofs)) ::
-           mk1 (Cint (low_s ofs)) temp :: k)
+      OK (if unaligned || Int.eq (Int.mods ofs (Int.repr 4)) Int.zero then
+            if Int.eq (high_s ofs) Int.zero then
+               mk1 (Cint ofs) r1 :: k
+             else
+               Paddis temp r1 (Cint (high_s ofs)) ::
+               mk1 (Cint (low_s ofs)) temp :: k
+          else
+            (loadimm GPR0 ofs (mk2 r1 GPR0 :: k)))
   | Aindexed2, a1 :: a2 :: nil =>
       do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (mk2 r1 r2 :: k)
   | Aglobal symb ofs, nil =>
-      OK (if symbol_is_small_data symb ofs then
-           mk1 (Csymbol_sda symb ofs) GPR0 :: k
+       OK (if symbol_is_small_data symb ofs then
+             if unaligned || symbol_ofs_word_aligned symb ofs then
+               mk1 (Csymbol_sda symb ofs) GPR0 :: k
+             else
+               Paddi temp GPR0 (Csymbol_sda symb ofs) ::
+               mk1 (Cint Int.zero) temp :: k
          else if symbol_is_rel_data symb ofs then
            Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
            Paddi temp temp (Csymbol_rel_low symb ofs) ::
            mk1 (Cint Int.zero) temp :: k
+         else if  unaligned || symbol_ofs_word_aligned symb ofs then
+           Paddis temp GPR0 (Csymbol_high symb ofs) ::
+           mk1 (Csymbol_low symb ofs) temp :: k
          else
            Paddis temp GPR0 (Csymbol_high symb ofs) ::
-           mk1 (Csymbol_low symb ofs) temp :: k)
+           Paddi temp temp (Csymbol_low symb ofs) ::
+           mk1 (Cint Int.zero) temp :: k)
   | Abased symb ofs, a1 :: nil =>
       do r1 <- ireg_of a1;
       OK (if symbol_is_small_data symb ofs then
@@ -760,16 +778,24 @@ Definition transl_memory_access
             Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
             Paddi temp temp (Csymbol_rel_low symb ofs) ::
             mk2 temp GPR0 :: k
-          else
+          else if  unaligned || symbol_ofs_word_aligned symb ofs then
             Paddis temp r1 (Csymbol_high symb ofs) ::
-            mk1 (Csymbol_low symb ofs) temp :: k)
+            mk1 (Csymbol_low symb ofs) temp :: k
+          else
+            Pmr GPR0 r1 ::
+            Paddis temp GPR0 (Csymbol_high symb ofs) ::
+            Paddi temp temp (Csymbol_low symb ofs) ::
+            mk2 temp GPR0 :: k)
   | Ainstack ofs, nil =>
       let ofs := Ptrofs.to_int ofs in
-      OK (if Int.eq (high_s ofs) Int.zero then
-           mk1 (Cint ofs) GPR1 :: k
-         else
-           Paddis temp GPR1 (Cint (high_s ofs)) ::
-           mk1 (Cint (low_s ofs)) temp :: k)
+      OK (if  unaligned || Int.eq (Int.mods ofs (Int.repr 4)) Int.zero then
+            if Int.eq (high_s ofs) Int.zero then
+              mk1 (Cint ofs) GPR1 :: k
+            else
+              Paddis temp GPR1 (Cint (high_s ofs)) ::
+              mk1 (Cint (low_s ofs)) temp :: k
+          else
+             addimm temp GPR1 ofs (mk1 (Cint Int.zero) temp :: k))
   | _, _ =>
       Error(msg "Asmgen.transl_memory_access")
   end.
@@ -779,28 +805,28 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
   match chunk with
   | Mint8signed =>
       do r <- ireg_of dst;
-      transl_memory_access (Plbz r) (Plbzx r) addr args GPR12 (Pextsb r r :: k)
+      transl_memory_access (Plbz r) (Plbzx r) true addr args GPR12 (Pextsb r r :: k)
   | Mint8unsigned =>
       do r <- ireg_of dst;
-      transl_memory_access (Plbz r) (Plbzx r) addr args GPR12 k
+      transl_memory_access (Plbz r) (Plbzx r) true addr args GPR12 k
   | Mint16signed =>
       do r <- ireg_of dst;
-      transl_memory_access (Plha r) (Plhax r) addr args GPR12 k
+      transl_memory_access (Plha r) (Plhax r) true addr args GPR12 k
   | Mint16unsigned =>
       do r <- ireg_of dst;
-      transl_memory_access (Plhz r) (Plhzx r) addr args GPR12 k
+      transl_memory_access (Plhz r) (Plhzx r) true addr args GPR12 k
   | Mint32 =>
       do r <- ireg_of dst;
-      transl_memory_access (Plwz r) (Plwzx r) addr args GPR12 k
+      transl_memory_access (Plwz r) (Plwzx r) true addr args GPR12 k
   | Mint64 =>
       do r <- ireg_of dst;
-      transl_memory_access (Pld r) (Pldx r) addr args GPR12 k
+      transl_memory_access (Pld r) (Pldx r) false addr args GPR12 k
   | Mfloat32 =>
       do r <- freg_of dst;
-      transl_memory_access (Plfs r) (Plfsx r) addr args GPR12 k
+      transl_memory_access (Plfs r) (Plfsx r) true addr args GPR12 k
   | Mfloat64 =>
       do r <- freg_of dst;
-      transl_memory_access (Plfd r) (Plfdx r) addr args GPR12 k
+      transl_memory_access (Plfd r) (Plfdx r) true addr args GPR12 k
   | _ =>
       Error (msg "Asmgen.transl_load")
   end.
@@ -811,22 +837,22 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
   match chunk with
   | Mint8signed | Mint8unsigned =>
       do r <- ireg_of src;
-      transl_memory_access (Pstb r) (Pstbx r) addr args temp k
+      transl_memory_access (Pstb r) (Pstbx r) true addr args temp k
   | Mint16signed | Mint16unsigned =>
       do r <- ireg_of src;
-      transl_memory_access (Psth r) (Psthx r) addr args temp k
+      transl_memory_access (Psth r) (Psthx r) true addr args temp k
   | Mint32  =>
       do r <- ireg_of src;
-      transl_memory_access (Pstw r) (Pstwx r) addr args temp k
+      transl_memory_access (Pstw r) (Pstwx r) true addr args temp k
   | Mint64  =>
       do r <- ireg_of src;
-      transl_memory_access (Pstd r) (Pstdx r) addr args temp k
+      transl_memory_access (Pstd r) (Pstdx r) false addr args temp k
   | Mfloat32 =>
       do r <- freg_of src;
-      transl_memory_access (Pstfs r) (Pstfsx r) addr args temp k
+      transl_memory_access (Pstfs r) (Pstfsx r) true addr args temp k
   | Mfloat64 =>
       do r <- freg_of src;
-      transl_memory_access (Pstfd r) (Pstfdx r) addr args temp k
+      transl_memory_access (Pstfd r) (Pstfdx r) true addr args temp k
   | _ =>
       Error (msg "Asmgen.transl_store")
   end.

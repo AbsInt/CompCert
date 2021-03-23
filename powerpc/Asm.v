@@ -538,6 +538,8 @@ Axiom small_data_area_addressing:
 
 Parameter symbol_is_rel_data: ident -> ptrofs -> bool.
 
+Parameter symbol_is_aligned: ident -> Z -> bool.
+
 (** Armed with the [low_half] and [high_half] functions,
   we can define the evaluation of a symbolic constant.
   Note that for [const_high], integer constants

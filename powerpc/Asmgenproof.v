@@ -205,10 +205,13 @@ Remark loadind_label:
   forall base ofs ty dst k c,
   loadind base ofs ty dst k = OK c -> tail_nolabel k c.
 Proof.
-  unfold loadind, accessind; intros. set (ofs' := Ptrofs.to_int ofs) in *.
+  unfold loadind, accessind ; intros.
+  set (ofs' := Ptrofs.to_int ofs) in *.
+  set (ofs_mod := Int.eq (Int.mods ofs' (Int.repr 4)) Int.zero) in *.
   destruct ty; try discriminate;
   destruct (preg_of dst); try discriminate;
   destruct (Int.eq (high_s ofs') Int.zero);
+  destruct ofs_mod;
   TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
 Qed.
 
@@ -216,10 +219,13 @@ Remark storeind_label:
   forall base ofs ty src k c,
   storeind src base ofs ty k = OK c -> tail_nolabel k c.
 Proof.
-  unfold storeind, accessind; intros. set (ofs' := Ptrofs.to_int ofs) in *.
+  unfold storeind, accessind;
+  intros. set (ofs' := Ptrofs.to_int ofs) in *.
+  set (ofs_mod := Int.eq (Int.mods ofs' (Int.repr 4)) Int.zero) in *.
   destruct ty; try discriminate;
   destruct (preg_of src); try discriminate;
   destruct (Int.eq (high_s ofs') Int.zero);
+  destruct ofs_mod;
   TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
 Qed.
 
@@ -298,17 +304,22 @@ Qed.
 
 Remark transl_memory_access_label:
   forall (mk1: constant -> ireg -> instruction) (mk2: ireg -> ireg -> instruction)
-         addr args temp k c,
-  transl_memory_access mk1 mk2 addr args temp k = OK c ->
+         unaligned addr args temp k c,
+  transl_memory_access mk1 mk2 unaligned addr args temp k = OK c ->
   (forall c r, nolabel (mk1 c r)) ->
   (forall r1 r2, nolabel (mk2 r1 r2)) ->
   tail_nolabel k c.
 Proof.
   unfold transl_memory_access; intros; destruct addr; TailNoLabel.
-  destruct (Int.eq (high_s i) Int.zero); TailNoLabel.
+  destruct (unaligned || Int.eq (Int.mods i (Int.repr 4)) Int.zero). destruct (Int.eq (high_s i) Int.zero); TailNoLabel.
+  eapply tail_nolabel_trans. apply loadimm_label. TailNoLabel.
+  destruct (symbol_is_small_data i i0). destruct (unaligned || symbol_ofs_word_aligned i i0); TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
+  destruct (unaligned || symbol_ofs_word_aligned i i0); TailNoLabel.
   destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
-  destruct (symbol_is_small_data i i0). TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.
+  destruct (unaligned || symbol_ofs_word_aligned i i0); TailNoLabel.
+  destruct (unaligned || Int.eq (Int.mods (Ptrofs.to_int i) (Int.repr 4)) Int.zero).
   destruct (Int.eq (high_s (Ptrofs.to_int i)) Int.zero); TailNoLabel.
+  eapply tail_nolabel_trans. eapply addimm_label. TailNoLabel.
 Qed.
 
 Remark transl_epilogue_label:

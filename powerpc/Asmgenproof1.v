@@ -805,6 +805,7 @@ Lemma accessind_load_correct:
   forall (A: Type) (inj: A -> preg)
        (instr1: A -> constant -> ireg -> instruction)
        (instr2: A -> ireg -> ireg -> instruction)
+       (unaligned: bool)
        (base: ireg) ofs rx chunk v (rs: regset) m k,
   (forall rs m r1 cst r2,
    exec_instr ge fn (instr1 r1 cst r2) rs m = load1 ge chunk (inj r1) cst r2 rs m) ->
@@ -813,14 +814,15 @@ Lemma accessind_load_correct:
   Mem.loadv chunk m (Val.offset_ptr rs#base ofs) = Some v ->
   base <> GPR0 -> inj rx <> PC ->
   exists rs',
-     exec_straight ge fn (accessind instr1 instr2 base ofs rx k) rs m k rs' m
+     exec_straight ge fn (accessind instr1 instr2 unaligned base ofs rx k) rs m k rs' m
   /\ rs'#(inj rx) = v
   /\ forall r, r <> PC -> r <> inj rx -> r <> GPR0 -> rs'#r = rs#r.
 Proof.
   intros. unfold accessind. set (ofs' := Ptrofs.to_int ofs) in *.
+  set (ofs_mod := unaligned || Int.eq (Int.mods ofs' (Int.repr 4)) Int.zero) in *.
   assert (LD: Mem.loadv chunk m (Val.add (rs base) (Vint ofs')) = Some v)
   by (apply loadv_offset_ptr; auto).
-  destruct (Int.eq (high_s ofs') Int.zero).
+  destruct (Int.eq (high_s ofs') Int.zero && ofs_mod).
 - econstructor; split. apply exec_straight_one.
   rewrite H. unfold load1. rewrite gpr_or_zero_not_zero by auto. simpl.
   rewrite LD. eauto. unfold nextinstr. repeat Simplif.
@@ -862,6 +864,7 @@ Lemma accessind_store_correct:
   forall (A: Type) (inj: A -> preg)
        (instr1: A -> constant -> ireg -> instruction)
        (instr2: A -> ireg -> ireg -> instruction)
+       (unaligned: bool)
        (base: ireg) ofs rx chunk (rs: regset) m m' k,
   (forall rs m r1 cst r2,
    exec_instr ge fn (instr1 r1 cst r2) rs m = store1 ge chunk (inj r1) cst r2 rs m) ->
@@ -870,13 +873,14 @@ Lemma accessind_store_correct:
   Mem.storev chunk m (Val.offset_ptr rs#base ofs) (rs (inj rx)) = Some m' ->
   base <> GPR0 -> inj rx <> PC -> inj rx <> GPR0 ->
   exists rs',
-     exec_straight ge fn (accessind instr1 instr2 base ofs rx k) rs m k rs' m'
+     exec_straight ge fn (accessind instr1 instr2 unaligned base ofs rx k) rs m k rs' m'
   /\ forall r, r <> PC -> r <> GPR0 -> rs'#r = rs#r.
 Proof.
   intros. unfold accessind. set (ofs' := Ptrofs.to_int ofs) in *.
+  set (ofs_mod := unaligned || Int.eq (Int.mods ofs' (Int.repr 4)) Int.zero) in *.
   assert (ST: Mem.storev chunk m (Val.add (rs base) (Vint ofs')) (rs (inj rx)) = Some m')
   by (apply storev_offset_ptr; auto).
-  destruct (Int.eq (high_s ofs') Int.zero).
+  destruct (Int.eq (high_s ofs') Int.zero && ofs_mod).
 - econstructor; split. apply exec_straight_one.
   rewrite H. unfold store1. rewrite gpr_or_zero_not_zero by auto. simpl.
   rewrite ST. eauto. unfold nextinstr. repeat Simplif.
@@ -1540,8 +1544,8 @@ Qed.
 (** Translation of memory accesses *)
 
 Lemma transl_memory_access_correct:
-  forall (P: regset -> Prop) mk1 mk2 addr args temp k c (rs: regset) a m m',
-  transl_memory_access mk1 mk2 addr args temp k = OK c ->
+  forall (P: regset -> Prop) mk1 mk2 unaligned addr args temp k c (rs: regset) a m m',
+  transl_memory_access mk1 mk2 unaligned addr args temp k = OK c ->
   eval_addressing ge (rs#GPR1) addr (map rs (map preg_of args)) = Some a ->
   temp <> GPR0 ->
   (forall cst (r1: ireg) (rs1: regset) k,
@@ -1559,110 +1563,173 @@ Lemma transl_memory_access_correct:
 Proof.
   intros until m'; intros TR ADDR TEMP MK1 MK2.
   unfold transl_memory_access in TR; destruct addr; ArgsInv; simpl in ADDR; inv ADDR.
-  (* Aindexed *)
-  case (Int.eq (high_s i) Int.zero).
-  (* Aindexed short *)
-  apply MK1. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
-  (* Aindexed long *)
-  set (rs1 := nextinstr (rs#temp <- (Val.add (rs x) (Vint (Int.shl (high_s i) (Int.repr 16)))))).
-  exploit (MK1 (Cint (low_s i)) temp rs1 k).
-    simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen.
-    unfold rs1; Simpl. rewrite Val.add_assoc.
-Transparent Val.add.
-    simpl. rewrite low_high_s. auto.
-    intros; unfold rs1; Simpl.
-  intros [rs' [EX' AG']].
-  exists rs'. split. apply exec_straight_step with rs1 m.
-  simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
-  auto. auto.
-  (* Aindexed2 *)
-  apply MK2. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
-  (* Aglobal *)
-  destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ]; inv TR.
-  (* Aglobal from small data *)
-  apply MK1. unfold const_low. rewrite small_data_area_addressing by auto.
-  rewrite add_zero_symbol_address. auto.
-  auto.
-  (* Aglobal from relative data *)
-  set (rs1 := nextinstr (rs#temp <- (Val.add Vzero (high_half ge i i0)))).
-  set (rs2 := nextinstr (rs1#temp <- (Genv.symbol_address ge i i0))).
-  exploit (MK1 (Cint Int.zero) temp rs2).
-    simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen.
-    unfold rs2. Simpl. rewrite Val.add_commut. rewrite add_zero_symbol_address. auto.
-    intros; unfold rs2, rs1; Simpl.
-  intros [rs' [EX' AG']].
-  exists rs'; split. apply exec_straight_step with rs1 m; auto.
-  apply exec_straight_step with rs2 m; auto. simpl. unfold rs2.
-  rewrite gpr_or_zero_not_zero by eauto with asmgen. f_equal. f_equal. f_equal.
-  unfold rs1; Simpl. apply low_high_half_zero.
-  eexact EX'. auto.
-  (* Aglobal from absolute data *)
-  set (rs1 := nextinstr (rs#temp <- (Val.add Vzero (high_half ge i i0)))).
-  exploit (MK1 (Csymbol_low i i0) temp rs1).
-    simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen.
-    unfold rs1. Simpl. rewrite low_high_half_zero. auto.
-    intros; unfold rs1; Simpl.
-  intros [rs' [EX' AG']].
-  exists rs'; split. apply exec_straight_step with rs1 m; auto.
-  eexact EX'. auto.
-  (* Abased *)
+  - (* Aindexed *)
+    destruct (unaligned || Int.eq (Int.mods i (Int.repr 4)) Int.zero); [destruct (Int.eq (high_s i) Int.zero) |].
+    + (* Aindexed 4 aligned short *)
+      apply MK1. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
+    (* Aindexed 4 aligned long *)
+    + set (rs1 := nextinstr (rs#temp <- (Val.add (rs x) (Vint (Int.shl (high_s i) (Int.repr 16)))))).
+      exploit (MK1 (Cint (low_s i)) temp rs1 k).
+      simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen.
+      unfold rs1; Simpl. rewrite Val.add_assoc.
+      Transparent Val.add.
+      simpl. rewrite low_high_s. auto.
+      intros; unfold rs1; Simpl.
+      intros [rs' [EX' AG']].
+      exists rs'. split. apply exec_straight_step with rs1 m.
+      simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
+      auto. auto.
+    + (* Aindexed non 4 aligned *)
+      exploit (loadimm_correct GPR0 i (mk2 x GPR0 :: k) rs).
+      intros (rs' & A & B & C).
+      exploit (MK2 x GPR0 rs').
+      rewrite gpr_or_zero_not_zero; eauto with asmgen.
+      rewrite B. rewrite C; eauto with asmgen. auto.
+      intros.  destruct H as [rs'' [A1 B1]]. exists rs''.
+      split. eapply exec_straight_trans. exact A. exact A1. auto.
+  - (* Aindexed2 *)
+    apply MK2. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
+  - (* Aglobal *)
+    destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ]; inv TR.
+    + (* Aglobal from small data 4 aligned *)
+      case (unaligned || symbol_ofs_word_aligned i i0).
+      apply MK1. unfold const_low. rewrite small_data_area_addressing by auto.
+      rewrite add_zero_symbol_address. auto. auto.
+      (* Aglobal from small data not aligned *)
+      set (rs1 := nextinstr (rs#temp <- (Val.add (gpr_or_zero rs GPR0) (const_low ge (Csymbol_sda i i0))))).
+      exploit (MK1 (Cint Int.zero) temp rs1). rewrite gpr_or_zero_not_zero; auto.
+      unfold const_low. unfold rs1. Simpl.
+      rewrite gpr_or_zero_zero. unfold const_low.
+      rewrite small_data_area_addressing by auto.
+      rewrite add_zero_symbol_address. rewrite Val.add_commut.
+      rewrite add_zero_symbol_address. auto.
+      intros. unfold rs1. Simpl.
+      intros. destruct H as [rs2 [A B]].
+      exists rs2. split. eapply exec_straight_step. reflexivity.
+      reflexivity. eexact A. apply B.
+    + (* relative data *)
+        set (rs1 := nextinstr (rs#temp <- (Val.add Vzero (high_half ge i i0)))).
+        set (rs2 := nextinstr (rs1#temp <- (Genv.symbol_address ge i i0))).
+        exploit (MK1 (Cint Int.zero) temp rs2).
+        simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen.
+        unfold rs2. Simpl. rewrite Val.add_commut. rewrite add_zero_symbol_address. auto.
+        intros; unfold rs2, rs1; Simpl.
+        intros [rs' [EX' AG']].
+        exists rs'; split. apply exec_straight_step with rs1 m; auto.
+        apply exec_straight_step with rs2 m; auto. simpl. unfold rs2.
+        rewrite gpr_or_zero_not_zero by eauto with asmgen. f_equal. f_equal. f_equal.
+        unfold rs1; Simpl. apply low_high_half_zero.
+        eexact EX'. auto.
+    + (* Aglobal from absolute data *)
+      destruct (unaligned || symbol_ofs_word_aligned i i0).
+      (* Aglobal 4 aligned *)
+      set (rs1 := nextinstr (rs#temp <- (Val.add Vzero (high_half ge i i0)))).
+      exploit (MK1 (Csymbol_low i i0) temp rs1).
+      simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen.
+      unfold rs1. Simpl. rewrite low_high_half_zero. auto.
+      intros; unfold rs1; Simpl.
+      intros [rs' [EX' AG']].
+      exists rs'; split. apply exec_straight_step with rs1 m; auto.
+      eexact EX'. auto.
+      (* Aglobal non aligned *)
+      set (rs1 := nextinstr (rs#temp <- (Val.add Vzero (high_half ge i i0)))).
+      set (rs2 := nextinstr (rs1#temp <- (Genv.symbol_address ge i i0))).
+      exploit (MK1 (Cint Int.zero) temp rs2).
+      simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen.
+      unfold rs2. Simpl. rewrite Val.add_commut. rewrite add_zero_symbol_address.
+      auto. intros; unfold rs2, rs1; Simpl.
+      intros [rs' [EX' AG']].
+      exists rs'; split. apply exec_straight_step with rs1 m; auto.
+      apply exec_straight_step with rs2 m; auto. simpl. unfold rs2.
+      rewrite gpr_or_zero_not_zero; auto. f_equal. f_equal. f_equal.
+      unfold rs1; Simpl. apply low_high_half_zero. eexact EX'. auto.
+  -(* Abased *)
   destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ].
-  (* Abased from small data *)
-  set (rs1 := nextinstr (rs#GPR0 <- (Genv.symbol_address ge i i0))).
-  exploit (MK2 x GPR0 rs1 k).
+  + (* Abased from small data *)
+    set (rs1 := nextinstr (rs#GPR0 <- (Genv.symbol_address ge i i0))).
+    exploit (MK2 x GPR0 rs1 k).
     simpl. rewrite gpr_or_zero_not_zero by eauto with asmgen.
     unfold rs1; Simpl. rewrite Val.add_commut. auto.
     intros. unfold rs1; Simpl.
-  intros [rs' [EX' AG']].
-  exists rs'; split. apply exec_straight_step with rs1 m.
-  unfold exec_instr. rewrite gpr_or_zero_zero. f_equal. unfold rs1. f_equal. f_equal.
-  unfold const_low. rewrite small_data_area_addressing; auto.
-  apply add_zero_symbol_address.
-  reflexivity.
-  assumption. assumption.
-  (* Abased from relative data *)
-  set (rs1 := nextinstr (rs#GPR0 <- (rs#x))).
-  set (rs2 := nextinstr (rs1#temp <- (Val.add Vzero (high_half ge i i0)))).
-  set (rs3 := nextinstr (rs2#temp <- (Genv.symbol_address ge i i0))).
-  exploit (MK2 temp GPR0 rs3).
+    intros [rs' [EX' AG']].
+    exists rs'; split. apply exec_straight_step with rs1 m.
+    unfold exec_instr. rewrite gpr_or_zero_zero. f_equal. unfold rs1. f_equal. f_equal.
+    unfold const_low. rewrite small_data_area_addressing; auto.
+    apply add_zero_symbol_address.
+    reflexivity.
+    assumption. assumption.
+  + (* Abased from relative data *)
+    set (rs1 := nextinstr (rs#GPR0 <- (rs#x))).
+    set (rs2 := nextinstr (rs1#temp <- (Val.add Vzero (high_half ge i i0)))).
+    set (rs3 := nextinstr (rs2#temp <- (Genv.symbol_address ge i i0))).
+    exploit (MK2 temp GPR0 rs3).
     rewrite gpr_or_zero_not_zero by eauto with asmgen.
     f_equal. unfold rs3; Simpl. unfold rs3, rs2, rs1; Simpl.
     intros. unfold rs3, rs2, rs1; Simpl.
-  intros [rs' [EX' AG']].
-  exists rs'. split. eapply exec_straight_trans with (rs2 := rs3) (m2 := m).
-  apply exec_straight_three with rs1 m rs2 m; auto.
-  simpl. unfold rs3. f_equal. f_equal. f_equal. rewrite gpr_or_zero_not_zero by auto.
-  unfold rs2; Simpl. apply low_high_half_zero.
-  eexact EX'. auto.
-  (* Abased absolute *)
-  set (rs1 := nextinstr (rs#temp <- (Val.add (rs x) (high_half ge i i0)))).
-  exploit (MK1 (Csymbol_low i i0) temp rs1 k).
+    intros [rs' [EX' AG']].
+    exists rs'. split. eapply exec_straight_trans with (rs2 := rs3) (m2 := m).
+    apply exec_straight_three with rs1 m rs2 m; auto.
+    simpl. unfold rs3. f_equal. f_equal. f_equal. rewrite gpr_or_zero_not_zero by auto.
+    unfold rs2; Simpl. apply low_high_half_zero.
+    eexact EX'. auto.
+  + (* Abased absolute *)
+    destruct (unaligned || symbol_ofs_word_aligned i i0).
+    (* Abased absolute 4 aligned *)
+    set (rs1 := nextinstr (rs#temp <- (Val.add (rs x) (high_half ge i i0)))).
+    exploit (MK1 (Csymbol_low i i0) temp rs1 k).
     simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen.
     unfold rs1. Simpl.
     rewrite Val.add_assoc. rewrite low_high_half. rewrite Val.add_commut. auto.
     intros; unfold rs1; Simpl.
-  intros [rs' [EX' AG']].
-  exists rs'. split. apply exec_straight_step with rs1 m.
-  unfold exec_instr. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
-  assumption. assumption.
-  (* Ainstack *)
-  set (ofs := Ptrofs.to_int i) in *.
-  assert (L: Val.lessdef (Val.offset_ptr (rs GPR1) i) (Val.add (rs GPR1) (Vint ofs))).
-  { destruct (rs GPR1); simpl; auto. unfold ofs; rewrite Ptrofs.of_int_to_int; auto. }
-  destruct (Int.eq (high_s ofs) Int.zero); inv TR.
-  apply MK1. simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
-  set (rs1 := nextinstr (rs#temp <- (Val.add rs#GPR1 (Vint (Int.shl (high_s ofs) (Int.repr 16)))))).
-  exploit (MK1 (Cint (low_s ofs)) temp rs1 k).
-    simpl. rewrite gpr_or_zero_not_zero; auto.
-    unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
-    rewrite Val.add_assoc. simpl. rewrite low_high_s. auto.
-    congruence.
-    intros. unfold rs1. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
-  intros [rs' [EX' AG']].
-  exists rs'. split. apply exec_straight_step with rs1 m.
-  unfold exec_instr. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
-  assumption. assumption.
+    intros [rs' [EX' AG']].
+    exists rs'. split. apply exec_straight_step with rs1 m.
+    unfold exec_instr. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
+    assumption. assumption.
+    (* Abased absolute non aligned *)
+    set (rs1 := nextinstr (rs#GPR0 <- (rs#x))).
+    set (rs2 := nextinstr (rs1#temp <- (Val.add Vzero (high_half ge i i0)))).
+    set (rs3 := nextinstr (rs2#temp <- (Genv.symbol_address ge i i0))).
+    exploit (MK2 temp GPR0 rs3).
+    rewrite gpr_or_zero_not_zero by eauto with asmgen.
+    f_equal. unfold rs3; Simpl. unfold rs3, rs2, rs1; Simpl.
+    intros. unfold rs3, rs2, rs1; Simpl.
+    intros [rs' [EX' AG']].
+    exists rs'. split. eapply exec_straight_trans with (rs2 := rs3) (m2 := m).
+    apply exec_straight_three with rs1 m rs2 m; auto.
+    simpl. unfold rs3. f_equal. f_equal. f_equal. rewrite gpr_or_zero_not_zero by auto.
+    unfold rs2; Simpl. apply low_high_half_zero.
+    eexact EX'. auto.
+  - (* Ainstack *)
+    set (ofs := Ptrofs.to_int i) in *.
+    assert (L: Val.lessdef (Val.offset_ptr (rs GPR1) i) (Val.add (rs GPR1) (Vint ofs))).
+    { destruct (rs GPR1); simpl; auto. unfold ofs; rewrite Ptrofs.of_int_to_int; auto. }
+    destruct (unaligned || Int.eq (Int.mods ofs (Int.repr 4)) Int.zero); [destruct (Int.eq (high_s ofs) Int.zero)|]; inv TR.
+    + (* Ainstack short *)
+      apply MK1. simpl. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
+    + (* Ainstack non short *)
+      set (rs1 := nextinstr (rs#temp <- (Val.add rs#GPR1 (Vint (Int.shl (high_s ofs) (Int.repr 16)))))).
+      exploit (MK1 (Cint (low_s ofs)) temp rs1 k).
+      simpl. rewrite gpr_or_zero_not_zero; auto.
+      unfold rs1. rewrite nextinstr_inv. rewrite Pregmap.gss.
+      rewrite Val.add_assoc. simpl. rewrite low_high_s. auto.
+      congruence.
+      intros. unfold rs1. rewrite nextinstr_inv; auto. apply Pregmap.gso; auto.
+      intros [rs' [EX' AG']].
+      exists rs'. split. apply exec_straight_step with rs1 m.
+      unfold exec_instr. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
+      assumption. assumption.
+    + (* Ainstack non aligned *)
+      exploit (addimm_correct temp GPR1 ofs  (mk1 (Cint Int.zero) temp :: k) rs); eauto with asmgen.
+      intros [rs1 [A [B C]]].
+      exploit (MK1 (Cint Int.zero) temp rs1 k).
+      rewrite gpr_or_zero_not_zero; auto. rewrite B. simpl.
+      destruct (rs GPR1); auto.  simpl. rewrite Ptrofs.add_zero.
+      unfold ofs. rewrite Ptrofs.of_int_to_int. auto. auto.
+      intros. rewrite C; auto. intros [rs2 [EX' AG']].
+      exists rs2. split; auto.
+      eapply exec_straight_trans. eexact A. assumption.
 Qed.
+
 
 (** Translation of loads *)
 
@@ -1679,8 +1746,8 @@ Proof.
   intros.
   assert (LD: forall v, Val.lessdef a v -> v = a).
   { intros. inv H2; auto. discriminate H1. }
-  assert (BASE: forall mk1 mk2 k' chunk' v',
-  transl_memory_access mk1 mk2 addr args GPR12 k' = OK c ->
+  assert (BASE: forall mk1 mk2 unaligned k' chunk' v',
+  transl_memory_access mk1 mk2 unaligned addr args GPR12 k' = OK c ->
   Mem.loadv chunk' m a = Some v' ->
   (forall cst (r1: ireg) (rs1: regset),
     exec_instr ge fn (mk1 cst r1) rs1 m =
@@ -1758,8 +1825,8 @@ Local Transparent destroyed_by_store.
     subst src; simpl; congruence.
     change (IR GPR12) with (preg_of R12). red; intros; elim n.
     eapply preg_of_injective; eauto.
-  assert (BASE: forall mk1 mk2 chunk',
-  transl_memory_access mk1 mk2 addr args (int_temp_for src) k = OK c ->
+  assert (BASE: forall mk1 mk2 unaligned chunk',
+  transl_memory_access mk1 mk2 unaligned addr args (int_temp_for src) k = OK c ->
   Mem.storev chunk' m a (rs (preg_of src)) = Some m' ->
   (forall cst (r1: ireg) (rs1: regset),
     exec_instr ge fn (mk1 cst r1) rs1 m =
