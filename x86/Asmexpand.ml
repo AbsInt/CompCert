@@ -490,6 +490,9 @@ let expand_builtin_inline name args res =
   (* no operation *)
   | "__builtin_nop", [], _ ->
      emit Pnop
+  (* Unconditional trap *)
+  | "__builtin_trap", [], _ ->
+     emit Ptrap
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))

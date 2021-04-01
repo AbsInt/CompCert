@@ -64,6 +64,9 @@ let builtins = {
       (TVoid [], [TPtr(TInt(IUShort, []), []); TInt(IUShort, [])], false);
     "__builtin_write32_reversed",
       (TVoid [], [TPtr(TInt(IUInt, []), []); TInt(IUInt, [])], false);
+    (* Unconditional trap *)
+    "__builtin_trap",
+      (TVoid [], [], false);
   ]
 }
 
