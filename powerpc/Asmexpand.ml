@@ -177,34 +177,56 @@ let expand_builtin_memcpy sz al args =
 let expand_volatile_access
        (mk1: ireg -> constant -> unit)
        (mk2: ireg -> ireg -> unit)
+       ?(ofs_unaligned = true)
        addr temp =
   match addr with
   | BA(IR r) ->
       mk1 r (Cint _0)
   | BA_addrstack ofs ->
-      if offset_in_range ofs then
-        mk1 GPR1 (Cint ofs)
+      if ofs_unaligned || Int.eq (Int.mods ofs _4) _0 then
+        if offset_in_range ofs then
+          mk1 GPR1 (Cint ofs)
+        else begin
+          emit (Paddis(temp, GPR1, Cint (Asmgen.high_s ofs)));
+          mk1 temp (Cint (Asmgen.low_s ofs))
+        end
       else begin
-        emit (Paddis(temp, GPR1, Cint (Asmgen.high_s ofs)));
-        mk1 temp (Cint (Asmgen.low_s ofs))
+        emit (Paddis (temp, GPR1, Cint (Asmgen.high_s ofs)));
+        emit (Paddi (temp, temp, Cint (Asmgen.low_s ofs)));
+        mk1 temp (Cint _0)
       end
   | BA_addrglobal(id, ofs) ->
       if symbol_is_small_data id ofs then
-        mk1 GPR0 (Csymbol_sda(id, ofs))
+        if ofs_unaligned || Asmgen.symbol_ofs_word_aligned id ofs then
+          mk1 GPR0 (Csymbol_sda(id, ofs))
+        else begin
+          emit (Paddi (temp, GPR0, (Csymbol_sda (id,ofs))));
+          mk1 temp (Cint _0)
+        end
       else if symbol_is_rel_data id ofs then begin
         emit (Paddis(temp, GPR0, Csymbol_rel_high(id, ofs)));
         emit (Paddi(temp, temp, Csymbol_rel_low(id, ofs)));
         mk1 temp (Cint _0)
-      end else begin
+      end else if ofs_unaligned || Asmgen.symbol_ofs_word_aligned id ofs then begin
         emit (Paddis(temp, GPR0, Csymbol_high(id, ofs)));
         mk1 temp (Csymbol_low(id, ofs))
+      end else begin
+        emit (Paddis (temp, GPR0, (Csymbol_high (id, ofs))));
+        emit (Paddi (temp, temp, (Csymbol_low (id, ofs))));
+        mk1 temp (Cint _0)
       end
   | BA_addptr(BA(IR r), BA_int n) ->
-      if offset_in_range n then
-        mk1 r (Cint n)
+      if ofs_unaligned || Int.eq (Int.mods n _4) _0 then
+        if offset_in_range n then
+          mk1 r (Cint n)
+        else begin
+          emit (Paddis(temp, r, Cint (Asmgen.high_s n)));
+          mk1 temp (Cint (Asmgen.low_s n))
+        end
       else begin
-        emit (Paddis(temp, r, Cint (Asmgen.high_s n)));
-        mk1 temp (Cint (Asmgen.low_s n))
+        emit (Paddis (temp, r, Cint (Asmgen.high_s n)));
+        emit (Paddi (temp, temp, Cint (Asmgen.low_s n)));
+        mk1 temp (Cint _0)
       end
   | BA_addptr(BA_addrglobal(id, ofs), BA(IR r)) ->
       if symbol_is_small_data id ofs then begin
@@ -215,9 +237,14 @@ let expand_volatile_access
         emit (Paddis(temp, GPR0, Csymbol_rel_high(id, ofs)));
         emit (Paddi(temp, temp, Csymbol_rel_low(id, ofs)));
         mk2 temp GPR0
-      end else begin
+      end else if ofs_unaligned || Asmgen.symbol_ofs_word_aligned id ofs then begin
         emit (Paddis(temp, r, Csymbol_high(id, ofs)));
         mk1 temp (Csymbol_low(id, ofs))
+      end else begin
+        emit (Pmr (GPR0, r));
+        emit (Paddis(temp, GPR0, Csymbol_high(id, ofs)));
+        emit (Paddi(temp, temp, Csymbol_low(id, ofs)));
+        mk2 temp GPR0
       end
   | BA_addptr(BA(IR r1), BA(IR r2)) ->
       mk2 r1 r2
@@ -283,6 +310,7 @@ let expand_builtin_vload_1 chunk addr res =
       expand_volatile_access
         (fun r c -> emit (Pld(res, c, r)))
         (fun r1 r2 -> emit (Pldx(res, r1, r2)))
+        ~ofs_unaligned:false
         addr GPR11
   | Mint64, BR_splitlong(BR(IR hi), BR(IR lo)) ->
       expand_volatile_access
@@ -346,6 +374,7 @@ let expand_builtin_vstore_1 chunk addr src =
       expand_volatile_access
         (fun r c -> emit (Pstd(src, c, r)))
         (fun r1 r2 -> emit (Pstdx(src, r1, r2)))
+        ~ofs_unaligned:false
         addr temp
   | Mint64, BA_splitlong(BA(IR hi), BA(IR lo)) ->
       expand_volatile_access
