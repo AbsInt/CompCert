@@ -72,12 +72,13 @@ let preprocessed_file transfs name sourcefile =
               (fun () ->
                 Parser.translation_unit_file log_fuel (Lexer.tokens_stream name text)) ()
            with
-           | Parser.MenhirLibParser.Inter.Fail_pr ->
-                 (* Theoretically impossible : implies inconsistencies
-                    between grammars. *)
-              Diagnostics.fatal_error Diagnostics.no_loc "internal error while parsing"
-           | Parser.MenhirLibParser.Inter.Timeout_pr -> assert false
-           | Parser.MenhirLibParser.Inter.Parsed_pr (ast, _ ) -> ast) in
+           | Parser.MenhirLibParser.Inter.Parsed_pr (ast, _ ) -> ast
+           | _ -> (* Fail_pr or Fail_pr_full or Timeout_pr, depending
+                     on the version of Menhir.
+                     Fail_pr{,_full} means that there's an inconsistency
+                     between the pre-parser and the parser.
+                     Timeout_pr means that we ran for 2^50 steps. *)
+              Diagnostics.fatal_error Diagnostics.no_loc "internal error while parsing") in
       let p1 = Timing.time "Elaboration" Elab.elab_file ast in
       Diagnostics.check_errors ();
       Timing.time2 "Emulations" transform_program t p1 name in
