@@ -887,7 +887,7 @@ Qed.
 Definition readbytes_as_zero (m: mem) (b: block) (ofs len: Z) : Prop :=
   forall p n,
   ofs <= p -> p + Z.of_nat n <= ofs + len ->
-  Mem.loadbytes m b p (Z.of_nat n) = Some (list_repeat n (Byte Byte.zero)).
+  Mem.loadbytes m b p (Z.of_nat n) = Some (List.repeat (Byte Byte.zero) n).
 
 Lemma store_zeros_loadbytes:
   forall m b p n m',
@@ -901,8 +901,8 @@ Proof.
   + subst p0. destruct n0. simpl. apply Mem.loadbytes_empty. lia.
     rewrite Nat2Z.inj_succ in H1. rewrite Nat2Z.inj_succ.
     replace (Z.succ (Z.of_nat n0)) with (1 + Z.of_nat n0) by lia.
-    change (list_repeat (S n0) (Byte Byte.zero))
-      with ((Byte Byte.zero :: nil) ++ list_repeat n0 (Byte Byte.zero)).
+    change (List.repeat (Byte Byte.zero) (S n0))
+      with ((Byte Byte.zero :: nil) ++ List.repeat (Byte Byte.zero) n0).
     apply Mem.loadbytes_concat.
     eapply Mem.loadbytes_unchanged_on with (P := fun b1 ofs1 => ofs1 = p).
     eapply store_zeros_unchanged; eauto. intros; lia.
@@ -924,11 +924,11 @@ Definition bytes_of_init_data (i: init_data): list memval :=
   | Init_int64 n => inj_bytes (encode_int 8%nat (Int64.unsigned n))
   | Init_float32 n => inj_bytes (encode_int 4%nat (Int.unsigned (Float32.to_bits n)))
   | Init_float64 n => inj_bytes (encode_int 8%nat (Int64.unsigned (Float.to_bits n)))
-  | Init_space n => list_repeat (Z.to_nat n) (Byte Byte.zero)
+  | Init_space n => List.repeat (Byte Byte.zero) (Z.to_nat n)
   | Init_addrof id ofs =>
       match find_symbol ge id with
       | Some b => inj_value (if Archi.ptr64 then Q64 else Q32) (Vptr b ofs)
-      | None   => list_repeat (if Archi.ptr64 then 8%nat else 4%nat) Undef
+      | None   => List.repeat Undef (if Archi.ptr64 then 8%nat else 4%nat)
       end
   end.
 
@@ -1020,7 +1020,7 @@ Lemma store_zeros_read_as_zero:
   read_as_zero m' b p n.
 Proof.
   intros; red; intros.
-  transitivity (Some(decode_val chunk (list_repeat (size_chunk_nat chunk) (Byte Byte.zero)))).
+  transitivity (Some(decode_val chunk (List.repeat (Byte Byte.zero) (size_chunk_nat chunk)))).
   apply Mem.loadbytes_load; auto. rewrite size_chunk_conv.
   eapply store_zeros_loadbytes; eauto. rewrite <- size_chunk_conv; auto.
   f_equal. destruct chunk; unfold decode_val; unfold decode_int; unfold rev_if_be; destruct Archi.big_endian; reflexivity.

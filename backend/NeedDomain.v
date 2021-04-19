@@ -737,7 +737,7 @@ Lemma store_argument_sound:
 Proof.
   intros.
   assert (UNDEF: list_forall2 memval_lessdef
-                     (list_repeat (size_chunk_nat chunk) Undef)
+                     (List.repeat Undef (size_chunk_nat chunk))
                      (encode_val chunk w)).
   {
      rewrite <- (encode_val_length chunk w).

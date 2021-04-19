@@ -371,14 +371,14 @@ Definition encode_val (chunk: memory_chunk) (v: val) : list memval :=
   | Vint n, (Mint8signed | Mint8unsigned) => inj_bytes (encode_int 1%nat (Int.unsigned n))
   | Vint n, (Mint16signed | Mint16unsigned) => inj_bytes (encode_int 2%nat (Int.unsigned n))
   | Vint n, Mint32 => inj_bytes (encode_int 4%nat (Int.unsigned n))
-  | Vptr b ofs, Mint32 => if Archi.ptr64 then list_repeat 4%nat Undef else inj_value Q32 v
+  | Vptr b ofs, Mint32 => if Archi.ptr64 then List.repeat Undef 4%nat else inj_value Q32 v
   | Vlong n, Mint64 => inj_bytes (encode_int 8%nat (Int64.unsigned n))
-  | Vptr b ofs, Mint64 => if Archi.ptr64 then inj_value Q64 v else list_repeat 8%nat Undef
+  | Vptr b ofs, Mint64 => if Archi.ptr64 then inj_value Q64 v else List.repeat Undef 8%nat
   | Vsingle n, Mfloat32 => inj_bytes (encode_int 4%nat (Int.unsigned (Float32.to_bits n)))
   | Vfloat n, Mfloat64 => inj_bytes (encode_int 8%nat (Int64.unsigned (Float.to_bits n)))
   | _, Many32 => inj_value Q32 v
   | _, Many64 => inj_value Q64 v
-  | _, _ => list_repeat (size_chunk_nat chunk) Undef
+  | _, _ => List.repeat Undef (size_chunk_nat chunk)
   end.
 
 Definition decode_val (chunk: memory_chunk) (vl: list memval) : val :=
@@ -674,10 +674,10 @@ Local Transparent inj_value.
     constructor; auto. unfold inj_bytes; intros. exploit list_in_map_inv; eauto.
     intros (b & P & Q); exists b; auto.
   }
-  assert (D: shape_encoding chunk v (list_repeat (size_chunk_nat chunk) Undef)).
+  assert (D: shape_encoding chunk v (List.repeat Undef (size_chunk_nat chunk))).
   {
     intros. rewrite EQ; simpl; constructor; auto.
-    intros. eapply in_list_repeat; eauto.
+    intros. eapply repeat_spec; eauto.
   }
   generalize (encode_val_length chunk v). intros LEN.
   unfold encode_val; unfold encode_val in LEN;
@@ -882,21 +882,21 @@ Qed.
 
 Lemma repeat_Undef_inject_any:
   forall f vl,
-  list_forall2 (memval_inject f) (list_repeat (length vl) Undef) vl.
+  list_forall2 (memval_inject f) (List.repeat Undef (length vl)) vl.
 Proof.
   induction vl; simpl; constructor; auto. constructor.
 Qed.
 
 Lemma repeat_Undef_inject_encode_val:
   forall f chunk v,
-  list_forall2 (memval_inject f) (list_repeat (size_chunk_nat chunk) Undef) (encode_val chunk v).
+  list_forall2 (memval_inject f) (List.repeat Undef (size_chunk_nat chunk)) (encode_val chunk v).
 Proof.
   intros. rewrite <- (encode_val_length chunk v). apply repeat_Undef_inject_any.
 Qed.
 
 Lemma repeat_Undef_inject_self:
   forall f n,
-  list_forall2 (memval_inject f) (list_repeat n Undef) (list_repeat n Undef).
+  list_forall2 (memval_inject f) (List.repeat Undef n) (List.repeat Undef n).
 Proof.
   induction n; simpl; constructor; auto. constructor.
 Qed.
@@ -915,7 +915,7 @@ Theorem encode_val_inject:
   Val.inject f v1 v2 ->
   list_forall2 (memval_inject f) (encode_val chunk v1) (encode_val chunk v2).
 Proof.
-Local Opaque list_repeat.
+Local Opaque List.repeat.
   intros. inversion H; subst; simpl; destruct chunk;
   auto using inj_bytes_inject, inj_value_inject, repeat_Undef_inject_self, repeat_Undef_inject_encode_val.
 - destruct Archi.ptr64; auto using inj_value_inject, repeat_Undef_inject_self.

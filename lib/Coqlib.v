@@ -1153,26 +1153,6 @@ Proof.
   destruct l; simpl; auto.
 Qed.
 
-(** A list of [n] elements, all equal to [x]. *)
-
-Fixpoint list_repeat {A: Type} (n: nat) (x: A) {struct n} :=
-  match n with
-  | O => nil
-  | S m => x :: list_repeat m x
-  end.
-
-Lemma length_list_repeat:
-  forall (A: Type) n (x: A), length (list_repeat n x) = n.
-Proof.
-  induction n; simpl; intros. auto. decEq; auto.
-Qed.
-
-Lemma in_list_repeat:
-  forall (A: Type) n (x: A) y, In y (list_repeat n x) -> y = x.
-Proof.
-  induction n; simpl; intros. elim H. destruct H; auto.
-Qed.
-
 (** * Definitions and theorems over boolean types *)
 
 Definition proj_sumbool {P Q: Prop} (a: {P} + {Q}) : bool :=
