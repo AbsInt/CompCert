@@ -17,7 +17,7 @@
 
 module CharSet = Set.Make(struct type t = char let compare = compare end)
 
-let transform_program t p name =
+let transform_program t p =
   let run_pass pass flag p =
     if CharSet.mem flag t then begin
       let p = pass p in
@@ -26,12 +26,12 @@ let transform_program t p name =
     end else
       p
   in
-  let p1 = (run_pass StructPassing.program 's'
-  (run_pass PackedStructs.program 'p'
-  (run_pass Unblock.program 'b'
-  (run_pass Bitfields.program 'f'
-     p)))) in
-  Rename.program p1
+    p
+    |> run_pass Bitfields.program 'f'
+    |> run_pass Unblock.program 'b'
+    |> run_pass PackedStructs.program 'p'
+    |> run_pass StructPassing.program 's'
+    |> Rename.program
 
 let parse_transformations s =
   let t = ref CharSet.empty in
@@ -52,35 +52,33 @@ let read_file sourcefile =
   close_in ic;
   text
 
+let parse_string name text =
+  let log_fuel = Camlcoq.Nat.of_int 50 in
+  match
+    Parser.translation_unit_file log_fuel (Lexer.tokens_stream name text)
+  with
+  | Parser.MenhirLibParser.Inter.Parsed_pr (ast, _ ) ->
+      (ast: Cabs.definition list)
+  | _ -> (* Fail_pr or Fail_pr_full or Timeout_pr, depending
+            on the version of Menhir.
+            Fail_pr{,_full} means that there's an inconsistency
+            between the pre-parser and the parser.
+            Timeout_pr means that we ran for 2^50 steps. *)
+      Diagnostics.fatal_error Diagnostics.no_loc "internal error while parsing"
+
 let preprocessed_file transfs name sourcefile =
   Diagnostics.reset();
+  let check_errors x =
+    Diagnostics.check_errors(); x in
   (* Reading the whole file at once may seem costly, but seems to be
      the simplest / most robust way of accessing the text underlying
      a range of positions. This is used when printing an error message.
      Plus, I note that reading the whole file into memory leads to a
      speed increase: "make -C test" speeds up by 3 seconds out of 40
      on my machine. *)
-  let text = read_file sourcefile in
-  let p =
-      let t = parse_transformations transfs in
-      let log_fuel = Camlcoq.Nat.of_int 50 in
-      let ast : Cabs.definition list =
-          (match Timing.time "Parsing"
-              (* The call to Lexer.tokens_stream results in the pre
-                 parsing of the entire file. This is non-negligeabe,
-                 so we cannot use Timing.time2 *)
-              (fun () ->
-                Parser.translation_unit_file log_fuel (Lexer.tokens_stream name text)) ()
-           with
-           | Parser.MenhirLibParser.Inter.Parsed_pr (ast, _ ) -> ast
-           | _ -> (* Fail_pr or Fail_pr_full or Timeout_pr, depending
-                     on the version of Menhir.
-                     Fail_pr{,_full} means that there's an inconsistency
-                     between the pre-parser and the parser.
-                     Timeout_pr means that we ran for 2^50 steps. *)
-              Diagnostics.fatal_error Diagnostics.no_loc "internal error while parsing") in
-      let p1 = Timing.time "Elaboration" Elab.elab_file ast in
-      Diagnostics.check_errors ();
-      Timing.time2 "Emulations" transform_program t p1 name in
-  Diagnostics.check_errors();
-  p
+  read_file sourcefile
+  |> Timing.time2 "Parsing" parse_string name
+  |> Timing.time "Elaboration" Elab.elab_file
+  |> check_errors
+  |> Timing.time2 "Emulations" transform_program (parse_transformations transfs)
+  |> check_errors
