@@ -455,8 +455,10 @@ let print_composite_definition p (Composite(id, su, m, a)) =
 let prologue = "\
 From Coq Require Import String List ZArith.\n\
 From compcert Require Import Coqlib Integers Floats AST Ctypes Cop Clight Clightdefs.\n\
+Import Clightdefs.ClightNotations.\n\
 Local Open Scope Z_scope.\n\
-Local Open Scope string_scope.\n"
+Local Open Scope string_scope.\n\
+Local Open Scope clight_scope.\n"
 
 (* Naming the compiler-generated temporaries occurring in the program *)
 
