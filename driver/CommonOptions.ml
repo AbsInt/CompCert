@@ -77,7 +77,6 @@ let general_help =
   -v             Print external commands before invoking them
   -timings       Show the time spent in various compiler passes
   -version       Print the version string and exit
-  -version-file <file> Print version inforation to <file> and exit
   -target <value> Generate code for the given target
   -conf <file>   Read configuration from file
   @<file>        Read command line options from <file>
