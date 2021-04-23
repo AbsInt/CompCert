@@ -18,6 +18,8 @@
 From Coq Require Import Ascii String List ZArith.
 From compcert Require Import Integers Floats Maps Errors AST Ctypes Cop Clight.
 
+(** ** Short names for types *)
+
 Definition tvoid := Tvoid.
 Definition tschar := Tint I8 Signed noattr.
 Definition tuchar := Tint I8 Unsigned noattr.
@@ -56,6 +58,8 @@ Definition talignas (n: N) (ty: type) :=
 Definition tvolatile_alignas (n: N) (ty: type) :=
   tattr {| attr_volatile := true; attr_alignas := Some n |} ty.
 
+(** ** Constructor for programs and compilation units *)
+
 Definition wf_composites (types: list composite_definition) : Prop :=
   match build_composite_env types with OK _ => True | Error _ => False end.
 
@@ -80,6 +84,8 @@ Definition mkprogram (types: list composite_definition)
      prog_types := types;
      prog_comp_env := ce;
      prog_comp_env_eq := EQ |}.
+
+(** ** Encoding character strings as positive numbers *)
 
 (** The following encoding of character strings as positive numbers
     must be kept consistent with the OCaml function [Camlcoq.pos_of_string]. *)
@@ -168,17 +174,6 @@ Fixpoint ident_of_string (s: string) : ident :=
   | EmptyString => xH
   | String c s => append_char_pos c (ident_of_string s)
   end.
-
-(** A convenient notation [$ "ident"] to force evaluation of
-    [ident_of_string "ident"] *)
-
-Ltac ident_of_string s :=
-  let x := constr:(ident_of_string s) in
-  let y := eval compute in x in
-  exact y.
-
-Notation "$ s" := (ltac:(ident_of_string s))
-                  (at level 1, only parsing) : string_scope.
 
 (** The inverse conversion, from encoded strings to strings *)
 
@@ -289,3 +284,20 @@ Proof.
   intros. rewrite <- (string_of_ident_of_string s1), <- (string_of_ident_of_string s2).
   congruence.
 Qed.
+
+(** ** Notations *)
+
+Module ClightNotations.
+
+(** A convenient notation [$ "ident"] to force evaluation of
+    [ident_of_string "ident"] *)
+
+Ltac ident_of_string s :=
+  let x := constr:(ident_of_string s) in
+  let y := eval compute in x in
+  exact y.
+
+Notation "$ s" := (ltac:(ident_of_string s))
+                  (at level 1, only parsing) : clight_scope.
+
+End ClightNotations.
