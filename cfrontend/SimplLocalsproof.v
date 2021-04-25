@@ -935,7 +935,6 @@ Proof.
   (* local var, lifted *)
   destruct R as [U V]. exploit H2; eauto. intros [chunk X].
   eapply match_var_lifted with (v := Vundef) (tv := Vundef); eauto.
-  rewrite U; apply PTree.gempty.
   eapply alloc_variables_initial_value; eauto.
   red. unfold empty_env; intros. rewrite PTree.gempty in H4; congruence.
   apply create_undef_temps_charact with ty.

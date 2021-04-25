@@ -893,13 +893,9 @@ Qed.
 Lemma static_bool_val_sound:
   forall v t m b, bool_val v t Mem.empty = Some b -> bool_val v t m = Some b.
 Proof.
-  assert (A: forall b ofs, Mem.weak_valid_pointer Mem.empty b ofs = false).
-  { unfold Mem.weak_valid_pointer, Mem.valid_pointer, proj_sumbool; intros.
-    rewrite ! pred_dec_false by (apply Mem.perm_empty). auto. }  
   intros until b; unfold bool_val.
-  destruct (classify_bool t); destruct v; destruct Archi.ptr64 eqn:SF; auto.
-- rewrite A; congruence.
-- simpl; rewrite A; congruence.
+  destruct (classify_bool t); destruct v; destruct Archi.ptr64 eqn:SF; auto;
+  simpl; congruence.
 Qed.
 
 Lemma step_makeif:
