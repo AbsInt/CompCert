@@ -268,6 +268,9 @@ let builtins_generic = {
         (TPtr(TVoid [], []),
           [TPtr(TVoid [], []); TInt(IULong, [])],
           false);
+  (* Optimization hints *)
+    "__builtin_unreachable",
+        (TVoid [], [], false);
   (* Helper functions for int64 arithmetic *)
     "__compcert_i64_dtos",
         (TInt(ILongLong, []),

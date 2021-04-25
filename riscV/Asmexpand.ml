@@ -646,8 +646,12 @@ let expand_builtin_inline name args res =
                         (fun rl ->
                           emit (Pmulw (rl, X a, X b));
                           emit (Pmulhuw (rh, X a, X b)))
+  (* No operation *)
   | "__builtin_nop", [], _ ->
      emit Pnop
+  (* Optimization hint *)
+  | "__builtin_unreachable", [], _ ->
+     ()
   (* Catch-all *)
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))

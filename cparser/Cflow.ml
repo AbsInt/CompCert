@@ -23,8 +23,12 @@ open Cutil
 module StringSet = Set.Make(String)
 
 (* Functions declared noreturn by the standard *)
+(* We also add our own "__builtin_unreachable" function because, currently,
+   it is difficult to attach attributes to a built-in function. *)
+
 let std_noreturn_functions =
-   ["longjmp";"exit";"_exit";"abort";"_Exit";"quick_exit";"thrd_exit"]
+   ["longjmp";"exit";"_exit";"abort";"_Exit";"quick_exit";"thrd_exit";
+    "__builtin_unreachable"]
 
 (* Statements are abstracted as "flow transformers":
    functions from possible inputs to possible outcomes.
