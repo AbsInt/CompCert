@@ -793,6 +793,9 @@ let expand_builtin_inline name args res =
   (* no operation *)
   | "__builtin_nop", [], _ ->
       emit (Pori (GPR0, GPR0, Cint _0))
+  (* Optimization hint *)
+  | "__builtin_unreachable", [], _ ->
+     ()
   (* atomic operations *)
   | "__builtin_atomic_exchange", [BA (IR a1); BA (IR a2); BA (IR a3)],_ ->
       (* Register constraints imposed by Machregs.v *)

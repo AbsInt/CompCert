@@ -341,6 +341,7 @@ Inductive standard_builtin : Type :=
   | BI_i16_bswap
   | BI_i32_bswap
   | BI_i64_bswap
+  | BI_unreachable
   | BI_i64_umulh
   | BI_i64_smulh
   | BI_i64_sdiv
@@ -376,6 +377,7 @@ Definition standard_builtin_table : list (string * standard_builtin) :=
  :: ("__builtin_bswap", BI_i32_bswap)
  :: ("__builtin_bswap32", BI_i32_bswap)
  :: ("__builtin_bswap64", BI_i64_bswap)
+ :: ("__builtin_unreachable", BI_unreachable)
  :: ("__compcert_i64_umulh", BI_i64_umulh)
  :: ("__compcert_i64_smulh", BI_i64_smulh)
  :: ("__compcert_i64_sdiv", BI_i64_sdiv)
@@ -414,6 +416,8 @@ Definition standard_builtin_sig (b: standard_builtin) : signature :=
       mksignature (Tlong :: nil) Tlong cc_default
   | BI_i16_bswap =>
       mksignature (Tint :: nil) Tint cc_default
+  | BI_unreachable =>
+      mksignature nil Tvoid cc_default
   | BI_i64_shl  | BI_i64_shr | BI_i64_sar =>
       mksignature (Tlong :: Tint :: nil) Tlong cc_default
   | BI_i64_dtos | BI_i64_dtou =>
@@ -448,6 +452,7 @@ Program Definition standard_builtin_sem (b: standard_builtin) : builtin_sem (sig
   | BI_i64_bswap =>
     mkbuiltin_n1t Tlong Tlong
                   (fun n => Int64.repr (decode_int (List.rev (encode_int 8%nat (Int64.unsigned n)))))
+  | BI_unreachable => mkbuiltin Tvoid (fun vargs => None) _ _
   | BI_i64_umulh => mkbuiltin_n2t Tlong Tlong Tlong Int64.mulhu
   | BI_i64_smulh => mkbuiltin_n2t Tlong Tlong Tlong Int64.mulhs
   | BI_i64_sdiv => mkbuiltin_v2p Tlong Val.divls _ _
