@@ -271,6 +271,8 @@ let builtins_generic = {
   (* Optimization hints *)
     "__builtin_unreachable",
         (TVoid [], [], false);
+    "__builtin_expect",
+        (TInt(ILong, []), [TInt(ILong, []); TInt(ILong, [])], false);
   (* Helper functions for int64 arithmetic *)
     "__compcert_i64_dtos",
         (TInt(ILongLong, []),
@@ -991,6 +993,9 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_sel"}}, [arg1; arg2; arg3]) ->
       ewrap (Ctyping.eselection (convertExpr env arg1)
                                 (convertExpr env arg2) (convertExpr env arg3))
+
+  | C.ECall({edesc = C.EVar {name = "__builtin_expect"}}, [arg1; arg2]) ->
+      convertExpr env arg1
 
   | C.ECall({edesc = C.EVar {name = "printf"}}, args)
     when !Clflags.option_interp ->
