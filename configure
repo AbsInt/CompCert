@@ -363,7 +363,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         casm_options="-arch x86_64 -c"
         clinker_options="-arch x86_64"
         clinker_needs_no_pie=false
-        cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -Wno-\\#warnings -E"
+        cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' '-D__DARWIN_OS_INLINE=static inline' -Wno-\\#warnings -E"
         libmath=""
         system="macos"
         ;;
@@ -417,7 +417,7 @@ if test "$arch" = "aarch64"; then
         clinker="${toolprefix}cc"
         clinker_needs_no_pie=false
         cprepro="${toolprefix}cc"
-        cprepro_options="-std=c99 -arch arm64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' -Wno-\\#warnings -E"
+        cprepro_options="-std=c99 -arch arm64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' '-D__DARWIN_OS_INLINE=static inline' -Wno-\\#warnings -E"
         libmath=""
         system="macos"
         ;;
