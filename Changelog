@@ -1,3 +1,56 @@
+New features:
+- New port: AArch64 (ARM 64 bits, "Apple silicon") under macOS.
+- Support bitfields of types other than `int`, provided they are no larger
+  than 32 bits (#387)
+
+Optimizations:
+- Improved branch tunneling: optimized conditional branches can
+  introduce further opportunities for tunneling, which are now taken
+  into account.
+
+Usability:
+- Pragmas within functions are now ignored (with a warning) instead of
+  being lifted just before the function like in earlier versions.
+- configure script: add `-mandir` option (#382)
+
+Compiler internals:
+- Finer control of variable initialization in sections.  Now we can
+  put variables initialized with symbol addresses that need relocation
+  in specific sections (e.g. `const_data`).
+- Support re-normalization of function parameters at function entry,
+  as required by the AArch64/ELF ABI.
+- PowerPC 64 bits: remove `Pfcfi`, `Pfcfiu`, `Pfctiu` pseudo-instructions,
+  expanding the corresponding int<->FP conversions during the
+  selection pass instead.
+
+Bug fixing:
+- PowerPC 64 bits: incorrect `ld` and `std` instructions were generated
+  and rejected by the assembler.
+- PowerPC: some variadic functions had the wrong position for their
+  first variadic parameter.
+- RISC-V: fix calling convention in the case of floating-point
+  arguments that are passed in integer registers.
+- AArch64: the default function alignment was incorrect, causing a
+  warning from the LLVM assembler.
+- Pick the correct archiver to build `.a` library archives (#380).
+- x86 32 bits: make sure functions returning structs and unions
+  return the correct pointer in register EAX (#377).
+- PowerPC, ARM, AArch64: updated the registers destroyed by asm
+  pseudo-instructions and built-in functions.
+
+The clightgen tool:
+- Move the `$` notation for Clight identifiers to scope `clight_scope`
+  and submodule `ClightNotations`, to avoid clashes with Ltac2's use of `$`
+  (#392).
+
+Coq development:
+- Compatibility with Coq 8.12.2, 8.13.0, 8.13.1, 8.13.2.
+- Compatibility with Menhir 20210419 and up.
+- Oldest Coq version supported is now 8.9.0.
+- Use the `lia` tactic instead of `omega`.
+- Updated the Flocq library to version 3.4.0.
+
+
 Release 3.8, 2020-11-16
 =======================
 
