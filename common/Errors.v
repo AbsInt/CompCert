@@ -109,24 +109,29 @@ Notation "'assertion' A ; B" := (if A then B else assertion_failed)
 
 Local Open Scope error_monad_scope.
 
-Fixpoint mmap (A B: Type) (f: A -> res B) (l: list A) {struct l} : res (list B) :=
-  match l with
-  | nil => OK nil
-  | hd :: tl => do hd' <- f hd; do tl' <- mmap f tl; OK (hd' :: tl')
-  end.
+Section mmap.
+  Context (A B: Type).
+  Variable (f: A -> res B).
 
-Remark mmap_inversion:
-  forall (A B: Type) (f: A -> res B) (l: list A) (l': list B),
-  mmap f l = OK l' ->
-  list_forall2 (fun x y => f x = OK y) l l'.
-Proof.
-  induction l; simpl; intros.
-  inversion_clear H. constructor.
-  destruct (bind_inversion _ _ H) as [hd' [P Q]].
-  destruct (bind_inversion _ _ Q) as [tl' [R S]].
-  inversion_clear S.
-  constructor. auto. auto.
-Qed.
+  Fixpoint mmap (l: list A) {struct l} : res (list B) :=
+    match l with
+    | nil => OK nil
+    | hd :: tl => do hd' <- f hd; do tl' <- mmap tl; OK (hd' :: tl')
+    end.
+
+  Remark mmap_inversion:
+    forall (l: list A) (l': list B),
+      mmap l = OK l' ->
+      list_forall2 (fun x y => f x = OK y) l l'.
+  Proof.
+    induction l; simpl; intros.
+    inversion_clear H. constructor.
+    destruct (bind_inversion _ _ H) as [hd' [P Q]].
+    destruct (bind_inversion _ _ Q) as [tl' [R S]].
+    inversion_clear S.
+    constructor. auto. auto.
+  Qed.
+End mmap.
 
 (** * Reasoning over monadic computations *)
 
