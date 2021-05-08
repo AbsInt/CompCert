@@ -2,6 +2,8 @@ New features:
 - New port: AArch64 (ARM 64 bits, "Apple silicon") under macOS.
 - Support bitfields of types other than `int`, provided they are no larger
   than 32 bits (#387)
+- Support `__builtin_unreachable` and `__builtin_expect` (#394)
+  (but these builtins are not used for optimization yet)
 
 Optimizations:
 - Improved branch tunneling: optimized conditional branches can
@@ -16,7 +18,7 @@ Usability:
 Compiler internals:
 - Finer control of variable initialization in sections.  Now we can
   put variables initialized with symbol addresses that need relocation
-  in specific sections (e.g. `const_data`).
+  in specific sections (e.g. `const_data` on macOS).
 - Support re-normalization of function parameters at function entry,
   as required by the AArch64/ELF ABI.
 - PowerPC 64 bits: remove `Pfcfi`, `Pfcfiu`, `Pfctiu` pseudo-instructions,
@@ -37,6 +39,9 @@ Bug fixing:
   return the correct pointer in register EAX (#377).
 - PowerPC, ARM, AArch64: updated the registers destroyed by asm
   pseudo-instructions and built-in functions.
+- Remove spurious error on initialization of a local struct
+  containing a flexible array member.
+- Fixed bug in emulation of assignment to a volatile bit-field (#395).
 
 The clightgen tool:
 - Move the `$` notation for Clight identifiers to scope `clight_scope`
@@ -49,6 +54,11 @@ Coq development:
 - Oldest Coq version supported is now 8.9.0.
 - Use the `lia` tactic instead of `omega`.
 - Updated the Flocq library to version 3.4.0.
+
+Licensing and distribution:
+- Dual-licensed source files are now distributed under the LGPL version 2.1
+  (plus the Inria non-commercial license) instead of the GPL version 2
+  (plus the Inria non-commercial license).
 
 
 Release 3.8, 2020-11-16
