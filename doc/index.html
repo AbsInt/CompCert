@@ -8,6 +8,7 @@
 body {
   color: black; background: white;
   margin-left: 5%; margin-right: 5%;
+  max-width:750px;
 }
 h2 { margin-left: -5%;}
 h3 { margin-left: -3%; }
@@ -24,7 +25,7 @@ a:active {color : Red; text-decoration : underline; }
 
 <H1 align="center">The CompCert verified compiler</H1>
 <H2 align="center">Commented Coq development</H2>
-<H3 align="center">Version 3.8, 2020-11-16</H3>
+<H3 align="center">Version 3.9, 2021-05-10</H3>
 
 <H2>Introduction</H2>
 
@@ -46,9 +47,9 @@ Journal of Automated Reasoning 43(4):363-446, 2009.
 
 <P>This Web site gives a commented listing of the underlying Coq
 specifications and proofs.  Proof scripts are folded by default, but
-can be viewed by clicking on "Proof".  Some modules (written in <I>italics</I> below) differ between the four target architectures.  The
-PowerPC versions of these modules are shown below; the ARM, x86 and RISC-V
-versions can be found in the source distribution.
+can be viewed by clicking on "Proof".  Some modules (written in <I>italics</I> below) differ between the five target architectures.  The
+PowerPC versions of these modules are shown below; the AArch64, ARM,
+x86 and RISC-V versions can be found in the source distribution.
 </P>
 
 <P> This development is a work in progress; some parts have
