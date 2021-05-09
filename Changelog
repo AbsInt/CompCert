@@ -1,3 +1,6 @@
+Release 3.9, 2021-05-10
+=======================
+
 New features:
 - New port: AArch64 (ARM 64 bits, "Apple silicon") under macOS.
 - Support bitfields of types other than `int`, provided they are no larger
