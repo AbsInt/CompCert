@@ -30,7 +30,7 @@ Variable ge: genv.
 
 Fixpoint simple (a: expr) : Prop :=
   match a with
-  | Eloc _ _ _ => True
+  | Eloc _ _ _ _ => True
   | Evar _ _ => True
   | Ederef r _ => simple r
   | Efield l1 _ _ => simple l1
@@ -65,38 +65,38 @@ Section SIMPLE_EXPRS.
 Variable e: env.
 Variable m: mem.
 
-Inductive eval_simple_lvalue: expr -> block -> ptrofs -> Prop :=
-  | esl_loc: forall b ofs ty,
-      eval_simple_lvalue (Eloc b ofs ty) b ofs
+Inductive eval_simple_lvalue: expr -> block -> ptrofs -> bitfield -> Prop :=
+  | esl_loc: forall b ofs bf ty,
+      eval_simple_lvalue (Eloc b ofs bf ty) b ofs bf
   | esl_var_local: forall x ty b,
       e!x = Some(b, ty) ->
-      eval_simple_lvalue (Evar x ty) b Ptrofs.zero
+      eval_simple_lvalue (Evar x ty) b Ptrofs.zero Full
   | esl_var_global: forall x ty b,
       e!x = None ->
       Genv.find_symbol ge x = Some b ->
-      eval_simple_lvalue (Evar x ty) b Ptrofs.zero
+      eval_simple_lvalue (Evar x ty) b Ptrofs.zero Full
   | esl_deref: forall r ty b ofs,
       eval_simple_rvalue r (Vptr b ofs) ->
-      eval_simple_lvalue (Ederef r ty) b ofs
+      eval_simple_lvalue (Ederef r ty) b ofs Full
   | esl_field_struct: forall r f ty b ofs id co a delta,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tstruct id a -> ge.(genv_cenv)!id = Some co -> field_offset ge f (co_members co) = OK delta ->
-      eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta))
+      eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta)) Full
   | esl_field_union: forall r f ty b ofs id a,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tunion id a ->
-      eval_simple_lvalue (Efield r f ty) b ofs
+      eval_simple_lvalue (Efield r f ty) b ofs Full
 
 with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_val: forall v ty,
       eval_simple_rvalue (Eval v ty) v
-  | esr_rvalof: forall b ofs l ty v,
-      eval_simple_lvalue l b ofs ->
+  | esr_rvalof: forall b ofs bf l ty v,
+      eval_simple_lvalue l b ofs bf ->
       ty = typeof l ->
-      deref_loc ge ty m b ofs E0 v ->
+      deref_loc ge ty m b ofs bf E0 v ->
       eval_simple_rvalue (Evalof l ty) v
   | esr_addrof: forall b ofs l ty,
-      eval_simple_lvalue l b ofs ->
+      eval_simple_lvalue l b ofs Full ->
       eval_simple_rvalue (Eaddrof l ty) (Vptr b ofs)
   | esr_unop: forall op r1 ty v1 v,
       eval_simple_rvalue r1 v1 ->
@@ -153,7 +153,7 @@ End SIMPLE_EXPRS.
 Definition compat_eval (k: kind) (e: env) (a a': expr) (m: mem) : Prop :=
   typeof a = typeof a' /\
   match k with
-  | LV => forall b ofs, eval_simple_lvalue e m a' b ofs -> eval_simple_lvalue e m a b ofs
+  | LV => forall b ofs bf, eval_simple_lvalue e m a' b ofs bf -> eval_simple_lvalue e m a b ofs bf
   | RV => forall v, eval_simple_rvalue e m a' v -> eval_simple_rvalue e m a v
   end.
 
@@ -167,7 +167,7 @@ Lemma lred_compat:
   forall e l m l' m', lred ge e l m l' m' ->
   m = m' /\ compat_eval LV e l l' m.
 Proof.
-  induction 1; simpl; split; auto; split; auto; intros bx ofsx EV; inv EV.
+  induction 1; simpl; split; auto; split; auto; intros bx ofsx bf EV; inv EV.
   apply esl_var_local; auto.
   apply esl_var_global; auto.
   constructor. constructor.
@@ -374,20 +374,22 @@ Lemma constval_rvalue:
   constval ge a = OK v' ->
   Val.inject inj v' v
 with constval_lvalue:
-  forall m a b ofs,
-  eval_simple_lvalue empty_env m a b ofs ->
+  forall m a b ofs bf,
+  eval_simple_lvalue empty_env m a b ofs bf ->
   forall v',
   constval ge a = OK v' ->
-  Val.inject inj v' (Vptr b ofs).
+  bf = Full /\ Val.inject inj v' (Vptr b ofs).
 Proof.
   (* rvalue *)
   induction 1; intros vres CV; simpl in CV; try (monadInv CV).
   (* val *)
   destruct v; monadInv CV; constructor.
   (* rval *)
-  inv H1; rewrite H2 in CV; try congruence. eauto. eauto.
+  assert (constval ge l = OK vres) by (destruct (access_mode ty); congruence).
+  exploit constval_lvalue; eauto. intros [A B]. subst bf.
+  inv H1; rewrite H3 in CV; congruence.
   (* addrof *)
-  eauto.
+  eapply constval_lvalue; eauto.
   (* unop *)
   destruct (sem_unary_operation op x (typeof r1) Mem.empty) as [v1'|] eqn:E; inv EQ0.
   exploit (sem_unary_operation_inj inj Mem.empty m).
@@ -436,7 +438,7 @@ Proof.
   eapply sem_cast_match; eauto.
 
   (* lvalue *)
-  induction 1; intros v' CV; simpl in CV; try (monadInv CV).
+  induction 1; intros v' CV; simpl in CV; try (monadInv CV); split; auto.
   (* var local *)
   unfold empty_env in H. rewrite PTree.gempty in H. congruence.
   (* var_global *)

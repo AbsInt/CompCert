@@ -103,7 +103,7 @@ Qed.
 Lemma eval_Ederef':
   forall ge e le m a t l ofs,
   eval_expr ge e le m a (Vptr l ofs) ->
-  eval_lvalue ge e le m (Ederef' a t) l ofs.
+  eval_lvalue ge e le m (Ederef' a t) l ofs Full.
 Proof.
   intros. unfold Ederef'; destruct a; auto using eval_Ederef.
   destruct (type_eq t (typeof a)); auto using eval_Ederef.
@@ -120,7 +120,7 @@ Qed.
 
 Lemma eval_Eaddrof':
   forall ge e le m a t l ofs,
-  eval_lvalue ge e le m a l ofs ->
+  eval_lvalue ge e le m a l ofs Full ->
   eval_expr ge e le m (Eaddrof' a t) (Vptr l ofs).
 Proof.
   intros. unfold Eaddrof'; destruct a; auto using eval_Eaddrof.
@@ -172,40 +172,44 @@ Proof (proj2 tr_simple_nil).
 (** Translation of [deref_loc] and [assign_loc] operations. *)
 
 Remark deref_loc_translated:
-  forall ty m b ofs t v,
-  Csem.deref_loc ge ty m b ofs t v ->
+  forall ty m b ofs bf t v,
+  Csem.deref_loc ge ty m b ofs bf t v ->
   match chunk_for_volatile_type ty with
-  | None => t = E0 /\ Clight.deref_loc ty m b ofs v
-  | Some chunk => volatile_load tge chunk m b ofs t v
+  | None => t = E0 /\ Clight.deref_loc ty m b ofs bf v
+  | Some chunk => bf = Full /\ volatile_load tge chunk m b ofs t v
   end.
 Proof.
   intros. unfold chunk_for_volatile_type. inv H.
-  (* By_value, not volatile *)
+- (* By_value, not volatile *)
   rewrite H1. split; auto. eapply deref_loc_value; eauto.
-  (* By_value, volatile *)
-  rewrite H0; rewrite H1. eapply volatile_load_preserved with (ge1 := ge); auto. apply senv_preserved.
-  (* By reference *)
+- (* By_value, volatile *)
+  rewrite H0, H1. split; auto. eapply volatile_load_preserved with (ge1 := ge); auto. apply senv_preserved.
+- (* By reference *)
   rewrite H0. destruct (type_is_volatile ty); split; auto; eapply deref_loc_reference; eauto.
-  (* By copy *)
+- (* By copy *)
   rewrite H0. destruct (type_is_volatile ty); split; auto; eapply deref_loc_copy; eauto.
+- (* Bitfield *)
+  rewrite H0. split; auto. apply deref_loc_bitfield; auto.
 Qed.
 
 Remark assign_loc_translated:
-  forall ty m b ofs v t m',
-  Csem.assign_loc ge ty m b ofs v t m' ->
+  forall ty m b ofs bf v t m',
+  Csem.assign_loc ge ty m b ofs bf v t m' ->
   match chunk_for_volatile_type ty with
-  | None => t = E0 /\ Clight.assign_loc tge ty m b ofs v m'
-  | Some chunk => volatile_store tge chunk m b ofs v t m'
+  | None => t = E0 /\ Clight.assign_loc tge ty m b ofs bf v m'
+  | Some chunk => bf = Full /\ volatile_store tge chunk m b ofs v t m'
   end.
 Proof.
   intros. unfold chunk_for_volatile_type. inv H.
-  (* By_value, not volatile *)
+- (* By_value, not volatile *)
   rewrite H1. split; auto. eapply assign_loc_value; eauto.
-  (* By_value, volatile *)
-  rewrite H0; rewrite H1. eapply volatile_store_preserved with (ge1 := ge); auto. apply senv_preserved.
-  (* By copy *)
+- (* By_value, volatile *)
+  rewrite H0, H1. split; auto. eapply volatile_store_preserved with (ge1 := ge); auto. apply senv_preserved.
+- (* By copy *)
   rewrite H0. rewrite <- comp_env_preserved in *.
   destruct (type_is_volatile ty); split; auto; eapply assign_loc_copy; eauto.
+- (* Bitfield *)
+  rewrite H0. split; auto. apply assign_loc_bitfield; auto.
 Qed.
 
 (** Evaluation of simple expressions and of their translation *)
@@ -225,11 +229,11 @@ Lemma tr_simple:
              /\ eval_expr tge e le m b v
   end)
 /\
- (forall l b ofs,
-  eval_simple_lvalue ge e m l b ofs ->
+ (forall l b ofs bf,
+  eval_simple_lvalue ge e m l b ofs bf ->
   forall le sl a tmps,
   tr_expr le For_val l sl a tmps ->
-  sl = nil /\ Csyntax.typeof l = typeof a /\ eval_lvalue tge e le m a b ofs).
+  sl = nil /\ Csyntax.typeof l = typeof a /\ eval_lvalue tge e le m a b ofs bf).
 Proof.
 Opaque makeif.
   intros e m.
@@ -320,11 +324,11 @@ Proof.
 Qed.
 
 Lemma tr_simple_lvalue:
-  forall e m l b ofs,
-  eval_simple_lvalue ge e m l b ofs ->
+  forall e m l b ofs bf,
+  eval_simple_lvalue ge e m l b ofs bf ->
   forall le sl a tmps,
   tr_expr le For_val l sl a tmps ->
-  sl = nil /\ Csyntax.typeof l = typeof a /\ eval_lvalue tge e le m a b ofs.
+  sl = nil /\ Csyntax.typeof l = typeof a /\ eval_lvalue tge e le m a b ofs bf.
 Proof.
   intros e m. exact (proj2 (tr_simple e m)).
 Qed.
@@ -835,9 +839,9 @@ Proof.
 Qed.
 
 Lemma step_make_set:
-  forall id a ty m b ofs t v e le f k,
-  Csem.deref_loc ge ty m b ofs t v ->
-  eval_lvalue tge e le m a b ofs ->
+  forall id a ty m b ofs bf t v e le f k,
+  Csem.deref_loc ge ty m b ofs bf t v ->
+  eval_lvalue tge e le m a b ofs bf ->
   typeof a = ty ->
   step1 tge (State f (make_set id a) k e le m)
           t (State f Sskip k e (PTree.set id v le) m).
@@ -845,7 +849,8 @@ Proof.
   intros. exploit deref_loc_translated; eauto. rewrite <- H1.
   unfold make_set. destruct (chunk_for_volatile_type (typeof a)) as [chunk|].
 (* volatile case *)
-  intros. change (PTree.set id v le) with (set_opttemp (Some id) v le). econstructor.
+  intros [A B]. subst bf.
+  change (PTree.set id v le) with (set_opttemp (Some id) v le). econstructor.
   econstructor. constructor. eauto.
   simpl. unfold sem_cast. simpl. eauto. constructor.
   simpl. econstructor; eauto.
@@ -854,9 +859,9 @@ Proof.
 Qed.
 
 Lemma step_make_assign:
-  forall a1 a2 ty m b ofs t v m' v2 e le f k,
-  Csem.assign_loc ge ty m b ofs v t m' ->
-  eval_lvalue tge e le m a1 b ofs ->
+  forall a1 a2 ty m b ofs bf t v m' v2 e le f k,
+  Csem.assign_loc ge ty m b ofs bf v t m' ->
+  eval_lvalue tge e le m a1 b ofs bf ->
   eval_expr tge e le m a2 v2 ->
   sem_cast v2 (typeof a2) ty m = Some v ->
   typeof a1 = ty ->
@@ -866,7 +871,7 @@ Proof.
   intros. exploit assign_loc_translated; eauto. rewrite <- H3.
   unfold make_assign. destruct (chunk_for_volatile_type (typeof a1)) as [chunk|].
 (* volatile case *)
-  intros. change le with (set_opttemp None Vundef le) at 2. econstructor.
+  intros [A B]. subst bf. change le with (set_opttemp None Vundef le) at 2. econstructor.
   econstructor. constructor. eauto.
   simpl. unfold sem_cast. simpl. eauto.
   econstructor; eauto. rewrite H3; eauto. constructor.
@@ -900,9 +905,9 @@ Proof.
 Qed.
 
 Lemma step_tr_rvalof:
-  forall ty m b ofs t v e le a sl a' tmp f k,
-  Csem.deref_loc ge ty m b ofs t v ->
-  eval_lvalue tge e le m a b ofs ->
+  forall ty m b ofs bf t v e le a sl a' tmp f k,
+  Csem.deref_loc ge ty m b ofs bf t v ->
+  eval_lvalue tge e le m a b ofs bf ->
   tr_rvalof ty a sl a' tmp ->
   typeof a = ty ->
   exists le',
@@ -1362,7 +1367,7 @@ The following measure decreases for these stuttering steps. *)
 
 Fixpoint esize (a: Csyntax.expr) : nat :=
   match a with
-  | Csyntax.Eloc _ _ _ => 1%nat
+  | Csyntax.Eloc _ _ _ _ => 1%nat
   | Csyntax.Evar _ _ => 1%nat
   | Csyntax.Ederef r1 _ => S(esize r1)
   | Csyntax.Efield l1 _ _ => S(esize l1)

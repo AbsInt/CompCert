@@ -372,18 +372,63 @@ Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type
         e1 ty1 e2 ty2
   end.
 
+(** Auxiliary for translating bitfield accesses *)
+
+Definition make_extract_bitfield (ty: type) (carrier: intsize) (pos width: Z)
+                                 (addr: expr) : res expr :=
+  match ty with
+  | Tint sz sg _ =>
+      if zle 0 pos && zlt 0 width && zle (pos + width) Int.zwordsize
+      then
+        let e1 := Eload (chunk_for_carrier carrier) addr in
+        let e2 := Ebinop Oshl e1 (make_intconst (Int.repr (Int.zwordsize - pos - width))) in
+        let e3 := Ebinop (if intsize_eq sz IBool || signedness_eq sg Unsigned then Oshru else Oshr)
+                         e2 (make_intconst (Int.repr (Int.zwordsize - width))) in
+        OK e3
+      else
+        Error(msg "Cshmgen.extract_bitfield(1)")
+  | _ =>
+    Error(msg "Cshmgen.extract_bitfield(2)")
+  end.
+
 (** [make_load addr ty_res] loads a value of type [ty_res] from
-   the memory location denoted by the Csharpminor expression [addr].
+   the memory location denoted by the Csharpminor expression [addr]
+   and the bitfield designator [bf].
    If [ty_res] is an array or function type, returns [addr] instead,
    as consistent with C semantics.
 *)
 
-Definition make_load (addr: expr) (ty_res: type) :=
-  match (access_mode ty_res) with
-  | By_value chunk => OK (Eload chunk addr)
-  | By_reference => OK addr
-  | By_copy => OK addr
-  | By_nothing => Error (msg "Cshmgen.make_load")
+Definition make_load (addr: expr) (ty_res: type) (bf: bitfield) :=
+  match bf with
+  | Full =>
+      match access_mode ty_res with
+      | By_value chunk => OK (Eload chunk addr)
+      | By_reference => OK addr
+      | By_copy => OK addr
+      | By_nothing => Error (msg "Cshmgen.make_load")
+      end
+  | Bits carrier pos width =>
+    make_extract_bitfield ty_res carrier pos width addr
+  end.
+
+(** Auxiliary for translating bitfield updates *)
+
+Definition make_store_bitfield (ty: type) (carrier: intsize) (pos width: Z)
+                               (addr val: expr) : res stmt :=
+  match ty with
+  | Tint sz sg _ =>
+      if zle 0 pos && zlt 0 width && zle (pos + width) Int.zwordsize
+      then
+        let mask := Int.shl (Int.repr (two_p width - 1)) (Int.repr pos) in
+        let e1 := Eload (chunk_for_carrier carrier) addr in
+        let e2 := Ebinop Oshl val (make_intconst (Int.repr pos)) in
+        let e3 := Ebinop Oor (Ebinop Oand e2 (make_intconst mask))
+                             (Ebinop Oand e1 (make_intconst (Int.not mask))) in
+        OK (Sstore (chunk_for_carrier carrier) addr e3)
+      else
+        Error(msg "Cshmgen.make_store_bitfield(1)")
+  | _ =>
+    Error(msg "Cshmgen.make_store_bitfield(2)")
   end.
 
 (** [make_memcpy dst src ty] returns a [memcpy] builtin appropriate for
@@ -394,16 +439,21 @@ Definition make_memcpy (ce: composite_env) (dst src: expr) (ty: type) :=
   OK (Sbuiltin None (EF_memcpy sz (Ctypes.alignof_blockcopy ce ty))
                     (dst :: src :: nil)).
 
-(** [make_store addr ty rhs] stores the value of the
+(** [make_store addr ty bf rhs] stores the value of the
    Csharpminor expression [rhs] into the memory location denoted by the
    Csharpminor expression [addr].
-   [ty] is the type of the memory location. *)
+   [ty] is the type of the memory location and [bf] a bitfield designator. *)
 
-Definition make_store (ce: composite_env) (addr: expr) (ty: type) (rhs: expr) :=
-  match access_mode ty with
-  | By_value chunk => OK (Sstore chunk addr rhs)
-  | By_copy => make_memcpy ce addr rhs ty
-  | _ => Error (msg "Cshmgen.make_store")
+Definition make_store (ce: composite_env) (addr: expr) (ty: type) (bf: bitfield) (rhs: expr) :=
+  match bf with
+  | Full =>
+      match access_mode ty with
+      | By_value chunk => OK (Sstore chunk addr rhs)
+      | By_copy => make_memcpy ce addr rhs ty
+      | _ => Error (msg "Cshmgen.make_store")
+      end
+  | Bits carrier pos width =>
+      make_store_bitfield ty carrier pos width addr rhs
   end.
 
 (** ** Translation of operators *)
@@ -441,7 +491,7 @@ Definition transl_binop (ce: composite_env)
 
 (** ** Translation of field accesses *)
 
-Definition make_field_access (ce: composite_env) (ty: type) (f: ident) (a: expr) : res expr :=
+Definition make_field_access (ce: composite_env) (ty: type) (f: ident) (a: expr) : res (expr * bitfield) :=
   match ty with
   | Tstruct id _ =>
       match ce!id with
@@ -449,12 +499,14 @@ Definition make_field_access (ce: composite_env) (ty: type) (f: ident) (a: expr)
           Error (MSG "Undefined struct " :: CTX id :: nil)
       | Some co =>
           do ofs <- field_offset ce f (co_members co);
-          OK (if Archi.ptr64
-              then Ebinop Oaddl a (make_longconst (Int64.repr ofs))
-              else Ebinop Oadd a (make_intconst (Int.repr ofs)))
+          let a' :=
+            if Archi.ptr64
+            then Ebinop Oaddl a (make_longconst (Int64.repr ofs))
+            else Ebinop Oadd a (make_intconst (Int.repr ofs)) in
+          OK (a', Full)
       end
   | Tunion id _ =>
-      OK a
+      OK (a, Full)
   | _ =>
       Error(msg "Cshmgen.make_field_access")
   end.
@@ -476,14 +528,18 @@ Fixpoint transl_expr (ce: composite_env) (a: Clight.expr) {struct a} : res expr 
   | Clight.Econst_long n _ =>
       OK(make_longconst n)
   | Clight.Evar id ty =>
-      make_load (Eaddrof id) ty
+      make_load (Eaddrof id) ty Full
   | Clight.Etempvar id ty =>
       OK(Evar id)
   | Clight.Ederef b ty =>
       do tb <- transl_expr ce b;
-      make_load tb ty
+      make_load tb ty Full
   | Clight.Eaddrof b _ =>
-      transl_lvalue ce b
+      do (tb, bf) <- transl_lvalue ce b;
+      match bf with
+      | Full => OK tb
+      | Bits _ _ _ => Error (msg "Cshmgen.transl_expr: addrof bitfield")
+      end
   | Clight.Eunop op b _ =>
       do tb <- transl_expr ce b;
       transl_unop op tb (typeof b)
@@ -496,8 +552,8 @@ Fixpoint transl_expr (ce: composite_env) (a: Clight.expr) {struct a} : res expr 
       make_cast (typeof b) ty tb
   | Clight.Efield b i ty =>
       do tb <- transl_expr ce b;
-      do addr <- make_field_access ce (typeof b) i tb;
-      make_load addr ty
+      do (addr, bf) <- make_field_access ce (typeof b) i tb;
+      make_load addr ty bf
   | Clight.Esizeof ty' ty =>
       do sz <- sizeof ce ty'; OK(make_ptrofsconst sz)
   | Clight.Ealignof ty' ty =>
@@ -506,15 +562,16 @@ Fixpoint transl_expr (ce: composite_env) (a: Clight.expr) {struct a} : res expr 
 
 (** [transl_lvalue a] returns the Csharpminor code that evaluates
    [a] as a lvalue, that is, code that returns the memory address
-   where the value of [a] is stored.
+   where the value of [a] is stored.  It also returns the bitfield to be
+   accessed at this address, if appropriate.
 *)
 
-with transl_lvalue (ce: composite_env) (a: Clight.expr) {struct a} : res expr :=
+with transl_lvalue (ce: composite_env) (a: Clight.expr) {struct a} : res (expr * bitfield) :=
   match a with
   | Clight.Evar id _ =>
-      OK (Eaddrof id)
+      OK (Eaddrof id, Full)
   | Clight.Ederef b _ =>
-      transl_expr ce b
+      do tb <- transl_expr ce b; OK (tb, Full)
   | Clight.Efield b i ty =>
       do tb <- transl_expr ce b;
       make_field_access ce (typeof b) i tb
@@ -618,10 +675,10 @@ Fixpoint transl_statement (ce: composite_env) (tyret: type) (nbrk ncnt: nat)
   | Clight.Sskip =>
       OK Sskip
   | Clight.Sassign b c =>
-      do tb <- transl_lvalue ce b;
+      do (tb, bf) <- transl_lvalue ce b;
       do tc <- transl_expr ce c;
       do tc' <- make_cast (typeof c) (typeof b) tc;
-      make_store ce tb (typeof b) tc'
+      make_store ce tb (typeof b) bf tc'
   | Clight.Sset x b =>
       do tb <- transl_expr ce b;
       OK(Sset x tb)

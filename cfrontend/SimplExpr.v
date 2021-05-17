@@ -229,7 +229,7 @@ Definition sd_seqbool_set (ty: type) (sd: set_destination) :=
 
 Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement * expr) :=
   match a with
-  | Csyntax.Eloc b ofs ty =>
+  | Csyntax.Eloc b ofs bf ty =>
       error (msg "SimplExpr.transl_expr: Eloc")
   | Csyntax.Evar x ty =>
       ret (finish dst nil (Evar x ty))

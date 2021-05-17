@@ -204,7 +204,7 @@ let rec expr p (prec, e) =
   then fprintf p "@[<hov 2>("
   else fprintf p "@[<hov 2>";
   begin match e with
-  | Eloc(b, ofs, _) ->
+  | Eloc(b, ofs, _, _) ->
       fprintf p "<loc%a>" !print_pointer_hook (b, ofs)
   | Evar(id, _) ->
       fprintf p "%s" (extern_atom id)

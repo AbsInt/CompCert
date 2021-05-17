@@ -391,7 +391,7 @@ Lemma match_envs_assign_lifted:
   e!id = Some(b, ty) ->
   val_casted v ty ->
   Val.inject f v tv ->
-  assign_loc ge ty m b Ptrofs.zero v m' ->
+  assign_loc ge ty m b Ptrofs.zero Full v m' ->
   VSet.mem id cenv = true ->
   match_envs f cenv e le m' lo hi te (PTree.set id tv tle) tlo thi.
 Proof.
@@ -1004,13 +1004,13 @@ Proof.
 Qed.
 
 Lemma assign_loc_inject:
-  forall f ty m loc ofs v m' tm loc' ofs' v',
-  assign_loc ge ty m loc ofs v m' ->
+  forall f ty m loc ofs bf v m' tm loc' ofs' v',
+  assign_loc ge ty m loc ofs bf v m' ->
   Val.inject f (Vptr loc ofs) (Vptr loc' ofs') ->
   Val.inject f v v' ->
   Mem.inject f m tm ->
   exists tm',
-     assign_loc tge ty tm loc' ofs' v' tm'
+     assign_loc tge ty tm loc' ofs' bf v' tm'
   /\ Mem.inject f m' tm'
   /\ (forall b chunk v,
       f b = None -> Mem.load chunk m b 0 = Some v -> Mem.load chunk m' b 0 = Some v).
@@ -1078,15 +1078,25 @@ Proof.
   split. auto.
   intros. rewrite <- H0. eapply Mem.load_storebytes_other; eauto.
   left. congruence.
+- (* bitfield *)
+  inv H3.
+  exploit Mem.loadv_inject; eauto. intros (vc' & LD' & INJ). inv INJ.
+  exploit Mem.storev_mapped_inject; eauto. intros [tm' [A B]].
+  inv H1.
+  exists tm'; split. eapply assign_loc_bitfield; eauto. econstructor; eauto.
+  split. auto.
+  intros. rewrite <- H3. eapply Mem.load_store_other; eauto.
+  left. inv H0. congruence.
 Qed.
 
 Lemma assign_loc_nextblock:
-  forall ge ty m b ofs v m',
-  assign_loc ge ty m b ofs v m' -> Mem.nextblock m' = Mem.nextblock m.
+  forall ge ty m b ofs bf v m',
+  assign_loc ge ty m b ofs bf v m' -> Mem.nextblock m' = Mem.nextblock m.
 Proof.
   induction 1.
   simpl in H0. eapply Mem.nextblock_store; eauto.
   eapply Mem.nextblock_storebytes; eauto.
+  inv H. eapply Mem.nextblock_store; eauto.
 Qed.
 
 Theorem store_params_correct:
@@ -1168,7 +1178,7 @@ Local Opaque Conventions1.parameter_needs_normalization.
   reflexivity. reflexivity.
   eexact U.
   traceEq.
-  rewrite (assign_loc_nextblock _ _ _ _ _ _ _ A) in Z. auto.
+  rewrite (assign_loc_nextblock _ _ _ _ _ _ _ _ A) in Z. auto.
 Qed.
 
 Lemma bind_parameters_nextblock:
@@ -1400,19 +1410,22 @@ Proof.
 Qed.
 
 Lemma deref_loc_inject:
-  forall ty loc ofs v loc' ofs',
-  deref_loc ty m loc ofs v ->
+  forall ty loc ofs bf v loc' ofs',
+  deref_loc ty m loc ofs bf v ->
   Val.inject f (Vptr loc ofs) (Vptr loc' ofs') ->
-  exists tv, deref_loc ty tm loc' ofs' tv /\ Val.inject f v tv.
+  exists tv, deref_loc ty tm loc' ofs' bf tv /\ Val.inject f v tv.
 Proof.
   intros. inv H.
-  (* by value *)
+- (* by value *)
   exploit Mem.loadv_inject; eauto. intros [tv [A B]].
   exists tv; split; auto. eapply deref_loc_value; eauto.
-  (* by reference *)
+- (* by reference *)
   exists (Vptr loc' ofs'); split; auto. eapply deref_loc_reference; eauto.
-  (* by copy *)
+- (* by copy *)
   exists (Vptr loc' ofs'); split; auto. eapply deref_loc_copy; eauto.
+- (* bitfield *)
+  inv H1.   exploit Mem.loadv_inject; eauto. intros [tc [A B]]. inv B. 
+  econstructor; split. eapply deref_loc_bitfield. econstructor; eauto. constructor.
 Qed.
 
 Lemma eval_simpl_expr:
@@ -1422,11 +1435,11 @@ Lemma eval_simpl_expr:
   exists tv, eval_expr tge te tle tm (simpl_expr cenv a) tv /\ Val.inject f v tv
 
 with eval_simpl_lvalue:
-  forall a b ofs,
-  eval_lvalue ge e le m a b ofs ->
+  forall a b ofs bf,
+  eval_lvalue ge e le m a b ofs bf ->
   compat_cenv (addr_taken_expr a) cenv ->
   match a with Evar id ty => VSet.mem id cenv = false | _ => True end ->
-  exists b', exists ofs', eval_lvalue tge te tle tm (simpl_expr cenv a) b' ofs' /\ Val.inject f (Vptr b ofs) (Vptr b' ofs').
+  exists b', exists ofs', eval_lvalue tge te tle tm (simpl_expr cenv a) b' ofs' bf /\ Val.inject f (Vptr b ofs) (Vptr b' ofs').
 
 Proof.
   destruct 1; simpl; intros.
@@ -1472,7 +1485,7 @@ Proof.
   subst a. simpl. rewrite OPT.
   exploit me_vars; eauto. instantiate (1 := id). intros MV.
   inv H; inv MV; try congruence.
-  rewrite ENV in H6; inv H6.
+  rewrite ENV in H7; inv H7.
   inv H0; try congruence.
   assert (chunk0 = chunk). simpl in H. congruence. subst chunk0.
   assert (v0 = v). unfold Mem.loadv in H2. rewrite Ptrofs.unsigned_zero in H2. congruence. subst v0.
@@ -1607,18 +1620,20 @@ Qed.
 (** Invariance by assignment to location "above" *)
 
 Lemma match_cont_assign_loc:
-  forall f cenv k tk m bound tbound ty loc ofs v m',
+  forall f cenv k tk m bound tbound ty loc ofs bf v m',
   match_cont f cenv k tk m bound tbound ->
-  assign_loc ge ty m loc ofs v m' ->
+  assign_loc ge ty m loc ofs bf v m' ->
   Ple bound loc ->
   match_cont f cenv k tk m' bound tbound.
 Proof.
   intros. eapply match_cont_invariant; eauto.
   intros. rewrite <- H4. inv H0.
-  (* scalar *)
+- (* scalar *)
   simpl in H6. eapply Mem.load_store_other; eauto. left. unfold block; extlia.
-  (* block copy *)
+- (* block copy *)
   eapply Mem.load_storebytes_other; eauto. left. unfold block; extlia.
+- (* bitfield *)
+  inv H5. eapply Mem.load_store_other; eauto. left. unfold block; extlia.
 Qed.
 
 (** Invariance by external calls *)

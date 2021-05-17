@@ -84,14 +84,18 @@ Proof.
   decide equality.
 Defined.
 
+Lemma signedness_eq: forall (s1 s2: signedness), {s1=s2} + {s1<>s2}.
+Proof.
+  decide equality.
+Defined.
+
 Lemma type_eq: forall (ty1 ty2: type), {ty1=ty2} + {ty1<>ty2}
 with typelist_eq: forall (tyl1 tyl2: typelist), {tyl1=tyl2} + {tyl1<>tyl2}.
 Proof.
-  assert (forall (x y: signedness), {x=y} + {x<>y}) by decide equality.
   assert (forall (x y: floatsize), {x=y} + {x<>y}) by decide equality.
   assert (forall (x y: attr), {x=y} + {x<>y}).
   { decide equality. decide equality. apply N.eq_dec. apply bool_dec. }
-  generalize ident_eq zeq bool_dec ident_eq intsize_eq; intros.
+  generalize ident_eq zeq bool_dec ident_eq intsize_eq signedness_eq; intros.
   decide equality.
   decide equality.
   decide equality.
@@ -193,6 +197,13 @@ Record composite : Type := {
 }.
 
 Definition composite_env : Type := PTree.t composite.
+
+(** Access modes for members of structs or unions: either a plain field
+    or a bitfield *)
+
+Inductive bitfield : Type :=
+  | Full
+  | Bits (carrier: intsize) (pos: Z) (width: Z).
 
 (** * Operations over types *)
 
