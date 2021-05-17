@@ -161,6 +161,22 @@ let attribute p a =
               a.attr_volatile
               (print_option coqN) a.attr_alignas
 
+(* Raw int size and signedness *)
+
+let intsize p sz =
+  fprintf p "%s"
+    (match sz with 
+     | I8 -> "I8"
+     | I16 -> "I16"
+     | I32 -> "I32"
+     | IBool -> "IBool")
+
+let signedness p sg =
+  fprintf p "%s"
+    (match sg with
+      | Signed -> "Signed"
+      | Unsigned -> "Unsigned")
+
 (* Types *)
 
 let rec typ p t =
@@ -444,11 +460,24 @@ let print_ident_globdef p = function
 
 (* Composite definitions *)
 
+let print_member p = function
+  | Member_plain (id, ty) ->
+      fprintf p "@[<hov 2>Member_plain@ %a@ %a@]"
+              ident id typ ty
+  | Member_bitfield (id, sz, sg, a, width, pad) ->
+      fprintf p "@[<hov 2>Member_bitfield@ %a@ %a@ %a@ %a@ %a@ %B@]"
+              ident id
+              intsize sz
+              signedness sg
+              attribute a
+              coqZ width
+              pad
+
 let print_composite_definition p (Composite(id, su, m, a)) =
   fprintf p "@[<hv 2>Composite %a %s@ %a@ %a@]"
     ident id
     (match su with Struct -> "Struct" | Union -> "Union")
-    (print_list (print_pair ident typ)) m
+    (print_list print_member) m
     attribute a
 
 (* The prologue *)

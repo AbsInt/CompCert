@@ -114,18 +114,23 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
   | Ederef r ty =>
       constval ce r
   | Efield l f ty =>
-      match typeof l with
-      | Tstruct id _ =>
-          do co <- lookup_composite ce id;
-          do delta <- field_offset ce f (co_members co);
-          do v <- constval ce l;
+      do (delta, bf) <-
+        match typeof l with
+        | Tstruct id _ =>
+            do co <- lookup_composite ce id; field_offset ce f (co_members co)
+        | Tunion id _ =>
+            do co <- lookup_composite ce id; union_field_offset ce f (co_members co)
+        | _ =>
+            Error (msg "ill-typed field access")
+        end;
+      do v <- constval ce l;
+      match bf with
+      | Full =>
           OK (if Archi.ptr64
               then Val.addl v (Vlong (Int64.repr delta))
               else Val.add v (Vint (Int.repr delta)))
-      | Tunion id _ =>
-          constval ce l
-      | _ =>
-          Error(msg "ill-typed field access")
+      | Bits _ _ _ _ =>
+          Error(msg "taking the address of a bitfield")
       end
   | Eparen r tycast ty =>
       do v <- constval ce r; do_cast v (typeof r) tycast
@@ -138,6 +143,183 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
 Definition constval_cast (ce: composite_env) (a: expr) (ty: type): res val :=
   do v <- constval ce a; do_cast v (typeof a) ty.
 
+(** * Building and recording initialization data *)
+
+(** The following [state] type is the output of the translation of
+    initializers.  It contains the list of initialization data
+    generated so far, the corresponding position in bytes, and the
+    total size expected for the final initialization data, in bytes. *)
+
+Record state : Type := {
+  init: list init_data;      (**r reversed *)
+  curr: Z;                   (**r current position for head of [init] *)
+  total_size: Z              (**r total expected size *)
+}.
+
+(** A state [s] can also be viewed as a memory block.  The size of
+    the block is [s.(total_size)], it is initialized with zero bytes,
+    then filled with the initialization data [rev s.(init)] like
+    [Genv.store_init_data_list] does. *)
+
+Definition initial_state (sz: Z) : state :=
+  {| init := nil; curr := 0; total_size := sz |}.
+
+(** We now define abstract "store" operations that operate
+    directly on the state, but whose behavior mimic those of
+    storing in the corresponding memory block.  To initialize
+    bitfields, we also need an abstract "load" operation.
+    The operations are optimized for stores that occur at increasing
+    positions, like those that take place during initialization. *)
+
+(** Initialization from bytes *)
+
+Definition int_of_byte (b: byte) := Int.repr (Byte.unsigned b).
+
+Definition Init_byte (b: byte) := Init_int8 (int_of_byte b).
+
+(** Add a list of bytes to a reversed initialization data list. *)
+
+Fixpoint add_rev_bytes (l: list byte) (il: list init_data) :=
+  match l with
+  | nil => il
+  | b :: l => add_rev_bytes l (Init_byte b :: il)
+  end.
+
+(** Add [n] zero bytes to an initialization data list. *)
+
+Definition add_zeros (n: Z) (il: list init_data) :=
+  Z.iter n (fun l => Init_int8 Int.zero :: l) il.
+
+(** Make sure the [depth] positions at the top of [il] are bytes,
+    that is, [Init_int8] items.  Other numerical items are split
+    into bytes.  [Init_addrof] items cannot be split and result in
+    an error. *)
+
+Fixpoint normalize (il: list init_data) (depth: Z) : res (list init_data) :=
+  if zle depth 0 then OK il else
+    match il with
+    | nil =>
+        Error (msg "normalize: empty list")
+    | Init_int8 n :: il =>
+        do il' <- normalize il (depth - 1);
+        OK (Init_int8 n :: il')
+    | Init_int16 n :: il =>
+        do il' <- normalize il (depth - 2);
+        OK (add_rev_bytes (encode_int 2%nat (Int.unsigned n)) il')
+    | Init_int32 n :: il =>
+        do il' <- normalize il (depth - 4);
+        OK (add_rev_bytes (encode_int 4%nat (Int.unsigned n)) il')
+    | Init_int64 n :: il =>
+        do il' <- normalize il (depth - 8);
+        OK (add_rev_bytes (encode_int 8%nat (Int64.unsigned n)) il')
+    | Init_float32 f :: il =>
+        do il' <- normalize il (depth - 4);
+        OK (add_rev_bytes (encode_int 4%nat (Int.unsigned (Float32.to_bits f))) il')
+    | Init_float64 f :: il =>
+        do il' <- normalize il (depth - 8);
+        OK (add_rev_bytes (encode_int 8%nat (Int64.unsigned (Float.to_bits f))) il')
+    | Init_addrof _ _ :: il =>
+        Error (msg "normalize: Init_addrof")
+    | Init_space n :: il =>
+        let n := Z.max 0 n in
+        if zle n depth then
+          do il' <- normalize il (depth - n);
+          OK (add_zeros n il')
+        else
+          OK (add_zeros depth (Init_space (n - depth) :: il))
+    end.
+
+(** Split [il] into [depth] bytes and the initialization list that follows.
+    The bytes are returned reversed. *)
+
+Fixpoint decompose_rec (accu: list byte) (il: list init_data) (depth: Z) : res (list byte * list init_data) :=
+  if zle depth 0 then OK (accu, il) else
+    match il with
+    | Init_int8 n :: il => decompose_rec (Byte.repr (Int.unsigned n) :: accu) il (depth - 1)
+    | _ => Error (msg "decompose: wrong shape")
+    end.
+
+Definition decompose (il: list init_data) (depth: Z) : res (list byte * list init_data) :=
+  decompose_rec nil il depth.
+
+(** Decompose an initialization list in three parts:
+    [depth] bytes (reversed), [sz] bytes (reversed),
+    and the remainder of the initialization list. *)
+
+Definition trisection (il: list init_data) (depth sz: Z) : res (list byte * list byte * list init_data) :=
+  do il0 <- normalize il (depth + sz);
+  do (bytes1, il1) <- decompose il0 depth;
+  do (bytes2, il2) <- decompose il1 sz;
+  OK (bytes1, bytes2, il2).
+
+(** Graphically: [rev il] is equal to
+<<
+                 <---sz---><--depth-->
++----------------+---------+---------+
+|                |         |         |
++----------------+---------+---------+
+    rev il2         bytes2    bytes1
+>>
+*)
+
+(** Add padding if necessary so that position [pos] is within the state. *)
+
+Definition pad_to (s: state) (pos: Z) : state :=
+  if zle pos s.(curr)
+  then s
+  else {| init := Init_space (pos - s.(curr)) :: s.(init);
+          curr := pos;
+          total_size := s.(total_size) |}.
+
+(** Store the initialization data [i] at position [pos] in state [s]. *)
+
+Definition store_data (s: state) (pos: Z) (i: init_data) : res state :=
+  let sz := init_data_size i in
+  assertion (zle 0 pos && zle (pos + sz) s.(total_size));
+  if zle s.(curr) pos then
+    OK {| init := i :: (if zlt s.(curr) pos
+                        then Init_space (pos - s.(curr)) :: s.(init)
+                        else s.(init));
+          curr := pos + sz;
+          total_size := s.(total_size) |}
+  else
+    let s' := pad_to s (pos + sz) in
+    do x3 <- trisection s'.(init) (s'.(curr) - (pos + sz)) sz;
+    let '(bytes1, _, il2) := x3 in
+    OK {| init := add_rev_bytes bytes1 (i :: il2);
+          curr := s'.(curr);
+          total_size := s'.(total_size) |}.
+
+(** Store the integer [n] of size [isz] at position [pos] in state [s]. *)
+
+Definition init_data_for_carrier (isz: intsize) (n: int) :=
+  match isz with
+  | I8 | IBool => Init_int8 n
+  | I16 => Init_int16 n
+  | I32 => Init_int32 n
+  end.
+
+Definition store_int (s: state) (pos: Z) (isz: intsize) (n: int) : res state :=
+  store_data s pos (init_data_for_carrier isz n).
+
+(** Load the integer of size [isz] at position [pos] in state [s]. *)
+
+Definition load_int (s: state) (pos: Z) (isz: intsize) : res int :=
+  let chunk := chunk_for_carrier isz in
+  let sz := size_chunk chunk in
+  assertion (zle 0 pos && zle (pos + sz) s.(total_size));
+  let s' := pad_to s (pos + sz) in
+  do x3 <- trisection s'.(init) (s'.(curr) - (pos + sz)) sz;
+  let '(_, bytes2, _) := x3 in
+  OK (Int.repr (decode_int bytes2)).
+
+(** Extract the final initialization data from a state. *)
+
+Definition init_data_list_of_state (s: state) : res (list init_data) :=
+  assertion (zle s.(curr) s.(total_size));
+  let s' := pad_to s s.(total_size) in
+  OK (List.rev' s'.(init)).
+
 (** * Translation of initializers *)
 
 Inductive initializer :=
@@ -148,6 +330,11 @@ Inductive initializer :=
 with initializer_list :=
   | Init_nil
   | Init_cons (i: initializer) (il: initializer_list).
+
+Definition length_initializer_list (il: initializer_list) :=
+  let fix length (accu: Z) (il: initializer_list) : Z :=
+    match il with Init_nil => accu | Init_cons _ il => length (Z.succ accu) il end
+  in length 0 il.
 
 (** Translate an initializing expression [a] for a scalar variable
   of type [ty].  Return the corresponding initialization datum. *)
@@ -170,69 +357,116 @@ Definition transl_init_single (ce: composite_env) (ty: type) (a: expr) : res ini
   | _, _ => Error (msg "type mismatch in initializer")
   end.
 
-(** Translate an initializer [i] for a variable of type [ty].
-  [transl_init ce ty i] returns the appropriate list of initialization data.
-  The intermediate functions [transl_init_rec], [transl_init_array]
-  and [transl_init_struct] append initialization data to the given
-  list [k], and build the list of initialization data in reverse order,
-  so as to remain tail-recursive. *)
+(** Initialize a bitfield [Bits sz sg p w] with expression [a]. *)
 
-Definition padding (frm to: Z) (k: list init_data) : list init_data :=
-  if zlt frm to then Init_space (to - frm) :: k else k.
+Definition transl_init_bitfield (ce: composite_env) (s: state)
+                                (ty: type) (sz: intsize) (p w: Z)
+                                (i: initializer) (pos: Z) : res state :=
+  match i with
+  | Init_single a =>
+      do v <- constval_cast ce a ty;
+      match v with
+      | Vint n =>
+          do c <- load_int s pos sz;
+          let c' := Int.bitfield_insert (first_bit sz p w) w c n in
+          store_int s pos sz c'
+      | Vundef =>
+          Error (msg "undefined operation in bitfield initializer")
+      | _ =>
+          Error (msg "type mismatch in bitfield initializer")
+      end
+  | _ =>
+      Error (msg "bitfield initialized by composite initializer")
+  end.
 
-Fixpoint transl_init_rec (ce: composite_env) (ty: type) (i: initializer)
-                         (k: list init_data) {struct i} : res (list init_data) :=
+(** Padding bitfields and bitfields with zero width are not initialized. *)
+
+Definition member_not_initialized (m: member) : bool :=
+  match m with
+  | Member_plain _ _ => false
+  | Member_bitfield _ _ _ _ w p => p || zle w 0
+  end.
+
+(** Translate an initializer [i] for a variable of type [ty]
+    and store the corresponding list of initialization data in state [s]
+    at position [pos].  Return the updated state. *)
+
+Fixpoint transl_init_rec (ce: composite_env) (s: state)
+                         (ty: type) (i: initializer) (pos: Z)
+                         {struct i} : res state :=
   match i, ty with
   | Init_single a, _ =>
-      do d <- transl_init_single ce ty a; OK (d :: k)
+      do d <- transl_init_single ce ty a; store_data s pos d
   | Init_array il, Tarray tyelt nelt _ =>
-      transl_init_array ce tyelt il (Z.max 0 nelt) k
+      assertion (zle (length_initializer_list il) (Z.max 0 nelt));
+      transl_init_array ce s tyelt il pos
   | Init_struct il, Tstruct id _ =>
       do co <- lookup_composite ce id;
       match co_su co with
-      | Struct => transl_init_struct ce ty (co_members co) il 0 k
+      | Struct => transl_init_struct ce s (co_members co) il pos 0
       | Union  => Error (MSG "struct/union mismatch on " :: CTX id :: nil)
       end
   | Init_union f i1, Tunion id _ =>
       do co <- lookup_composite ce id;
       match co_su co with
       | Struct => Error (MSG "union/struct mismatch on " :: CTX id :: nil)
-      | Union =>
-          do ty1 <- field_type f (co_members co);
-          do k1  <- transl_init_rec ce ty1 i1 k;
-          OK (padding (sizeof ce ty1) (sizeof ce ty) k1)
+      | Union =>  do ty1 <- field_type f (co_members co);
+                  do (delta, layout) <- union_field_offset ce f (co_members co);
+                  match layout with
+                  | Full =>
+                      transl_init_rec ce s ty1 i1 (pos + delta)
+                  | Bits sz sg p w =>
+                      transl_init_bitfield ce s ty1 sz p w i1 (pos + delta)
+                  end
       end
   | _, _ =>
       Error (msg "wrong type for compound initializer")
   end
 
-with transl_init_array (ce: composite_env) (ty: type) (il: initializer_list) (sz: Z)
-                       (k: list init_data) {struct il} : res (list init_data) :=
+with transl_init_array (ce: composite_env) (s: state)
+                       (tyelt: type) (il: initializer_list) (pos: Z)
+                       {struct il} : res state :=
   match il with
   | Init_nil =>
-      if zeq sz 0 then OK k
-      else if zle 0 sz then OK (Init_space (sz * sizeof ce ty) :: k)
-      else Error (msg "wrong number of elements in array initializer")
+      OK s
   | Init_cons i1 il' =>
-      do k1 <- transl_init_rec ce ty i1 k;
-      transl_init_array ce ty il' (sz - 1) k1
+      do s1 <- transl_init_rec ce s tyelt i1 pos;
+      transl_init_array ce s1 tyelt il' (pos + sizeof ce tyelt)
   end
 
-with transl_init_struct (ce: composite_env) (ty: type)
-                        (fl: members) (il: initializer_list) (pos: Z)
-                        (k: list init_data)
-                        {struct il} : res (list init_data) :=
-  match il, fl with
-  | Init_nil, nil =>
-      OK (padding pos (sizeof ce ty) k)
-  | Init_cons i1 il', (_, ty1) :: fl' =>
-      let pos1 := align pos (alignof ce ty1) in
-      do k1 <- transl_init_rec ce ty1 i1 (padding pos pos1 k);
-      transl_init_struct ce ty fl' il' (pos1 + sizeof ce ty1) k1
-  | _, _ =>
-      Error (msg "wrong number of elements in struct initializer")
+with transl_init_struct (ce: composite_env) (s: state)
+                        (ms: members) (il: initializer_list)
+                        (base: Z) (pos: Z)
+                        {struct il} : res state :=
+  match il with
+  | Init_nil =>
+      OK s
+  | Init_cons i1 il' =>
+      let fix init (ms: members) (pos: Z) {struct ms} : res state :=
+        match ms with
+        | nil =>
+            Error (msg "too many elements in struct initializer")
+        | m :: ms' =>
+            if member_not_initialized m then
+              init ms' (next_field ce pos m)
+            else
+              do (delta, layout) <- layout_field ce pos m;
+              do s1 <-
+                match layout with
+                | Full =>
+                    transl_init_rec ce s (type_member m) i1 (base + delta)
+                | Bits sz sg p w =>
+                    transl_init_bitfield ce s (type_member m) sz p w i1 (base + delta)
+                end;
+                transl_init_struct ce s1 ms' il' base (next_field ce pos m)
+         end in
+      init ms pos
   end.
+
+(** The entry point. *)
 
 Definition transl_init (ce: composite_env) (ty: type) (i: initializer)
                        : res (list init_data) :=
-  do k <- transl_init_rec ce ty i nil; OK (List.rev' k).
+  let s0 := initial_state (sizeof ce ty) in
+  do s1 <- transl_init_rec ce s0 ty i 0;
+  init_data_list_of_state s1.

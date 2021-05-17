@@ -37,6 +37,10 @@ Notation "'do' X , Y , Z <- A ; B" := (match A with Some (X, Y, Z) => B | None =
   (at level 200, X ident, Y ident, Z ident, A at level 100, B at level 200)
   : option_monad_scope.
 
+Notation "'do' X , Y , Z , W <- A ; B" := (match A with Some (X, Y, Z, W) => B | None => None end)
+  (at level 200, X ident, Y ident, Z ident, W ident, A at level 100, B at level 200)
+  : option_monad_scope.
+
 Notation " 'check' A ; B" := (if A then B else None)
   (at level 200, A at level 100, B at level 200)
   : option_monad_scope.
@@ -61,14 +65,14 @@ Proof.
   intros until ty. destruct a; simpl; congruence.
 Qed.
 
-Definition is_loc (a: expr) : option (block * ptrofs * type) :=
+Definition is_loc (a: expr) : option (block * ptrofs * bitfield * type) :=
   match a with
-  | Eloc b ofs ty => Some(b, ofs, ty)
+  | Eloc b ofs bf ty => Some(b, ofs, bf, ty)
   | _ => None
   end.
 
 Lemma is_loc_inv:
-  forall a b ofs ty, is_loc a = Some(b, ofs, ty) -> a = Eloc b ofs ty.
+  forall a b ofs bf ty, is_loc a = Some(b, ofs, bf, ty) -> a = Eloc b ofs bf ty.
 Proof.
   intros until ty. destruct a; simpl; congruence.
 Qed.
@@ -209,15 +213,15 @@ Definition do_volatile_load (w: world) (chunk: memory_chunk) (m: mem) (b: block)
     Some(w, E0, v).
 
 Definition do_volatile_store (w: world) (chunk: memory_chunk) (m: mem) (b: block) (ofs: ptrofs) (v: val)
-                             : option (world * trace * mem) :=
+                             : option (world * trace * mem * val) :=
   if Genv.block_is_volatile ge b then
     do id <- Genv.invert_symbol ge b;
     do ev <- eventval_of_val (Val.load_result chunk v) (type_of_chunk chunk);
     do w' <- nextworld_vstore w chunk id ofs ev;
-    Some(w', Event_vstore chunk id ofs ev :: nil, m)
+    Some(w', Event_vstore chunk id ofs ev :: nil, m, v)
   else
     do m' <- Mem.store chunk m b (Ptrofs.unsigned ofs) v;
-    Some(w, E0, m').
+    Some(w, E0, m', v).
 
 Lemma do_volatile_load_sound:
   forall w chunk m b ofs w' t v,
@@ -244,21 +248,21 @@ Proof.
 Qed.
 
 Lemma do_volatile_store_sound:
-  forall w chunk m b ofs v w' t m',
-  do_volatile_store w chunk m b ofs v = Some(w', t, m') ->
-  volatile_store ge chunk m b ofs v t m' /\ possible_trace w t w'.
+  forall w chunk m b ofs v w' t m' v',
+  do_volatile_store w chunk m b ofs v = Some(w', t, m', v') ->
+  volatile_store ge chunk m b ofs v t m' /\ possible_trace w t w' /\ v' = v.
 Proof.
-  intros until m'. unfold do_volatile_store. mydestr.
+  intros until v'. unfold do_volatile_store. mydestr.
   split. constructor; auto. apply Genv.invert_find_symbol; auto.
   apply eventval_of_val_sound; auto.
-  econstructor. constructor; eauto. constructor.
-  split. constructor; auto. constructor.
+  split. econstructor. constructor; eauto. constructor. auto.
+  split. constructor; auto. split. constructor. auto.
 Qed.
 
 Lemma do_volatile_store_complete:
   forall w chunk m b ofs v w' t m',
   volatile_store ge chunk m b ofs v t m' -> possible_trace w t w' ->
-  do_volatile_store w chunk m b ofs v = Some(w', t, m').
+  do_volatile_store w chunk m b ofs v = Some(w', t, m', v).
 Proof.
   unfold do_volatile_store; intros. inv H; simpl in *.
   rewrite H1. rewrite (Genv.find_invert_symbol _ _ H2).
@@ -269,16 +273,31 @@ Qed.
 
 (** Accessing locations *)
 
-Definition do_deref_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs) : option (world * trace * val) :=
-  match access_mode ty with
-  | By_value chunk =>
+Definition do_deref_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs) (bf: bitfield) : option (world * trace * val) :=
+  match bf with
+  | Full =>
+    match access_mode ty with
+    | By_value chunk =>
       match type_is_volatile ty with
       | false => do v <- Mem.loadv chunk m (Vptr b ofs); Some(w, E0, v)
       | true => do_volatile_load w chunk m b ofs
       end
-  | By_reference => Some(w, E0, Vptr b ofs)
-  | By_copy => Some(w, E0, Vptr b ofs)
-  | _ => None
+    | By_reference => Some(w, E0, Vptr b ofs)
+    | By_copy => Some(w, E0, Vptr b ofs)
+    | _ => None
+    end
+  | Bits sz sg pos width =>
+    match ty with
+    | Tint sz1 sg1 _ =>
+      check (intsize_eq sz1 sz &&
+             signedness_eq sg1 (if zlt width (bitsize_intsize sz) then Signed else sg) &&
+             zle 0 pos && zlt 0 width && zle width (bitsize_intsize sz) && zle (pos + width) (bitsize_carrier sz));
+      match Mem.loadv (chunk_for_carrier sz) m (Vptr b ofs) with
+      | Some (Vint c) => Some (w, E0, Vint (bitfield_extract sz sg pos width c))
+      | _ => None
+      end
+    | _ => None
+    end
   end.
 
 Definition assign_copy_ok (ty: type) (b: block) (ofs: ptrofs) (b': block) (ofs': ptrofs) : Prop :=
@@ -310,75 +329,103 @@ Proof with try (right; intuition lia).
   destruct Y... left; intuition lia.
 Defined.
 
-Definition do_assign_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs) (v: val): option (world * trace * mem) :=
-  match access_mode ty with
-  | By_value chunk =>
-      match type_is_volatile ty with
-      | false => do m' <- Mem.storev chunk m (Vptr b ofs) v; Some(w, E0, m')
-      | true => do_volatile_store w chunk m b ofs v
-      end
-  | By_copy =>
-      match v with
-      | Vptr b' ofs' =>
-          if check_assign_copy ty b ofs b' ofs' then
-            do bytes <- Mem.loadbytes m b' (Ptrofs.unsigned ofs') (sizeof ge ty);
-            do m' <- Mem.storebytes m b (Ptrofs.unsigned ofs) bytes;
-            Some(w, E0, m')
-          else None
-      | _ => None
-      end
-  | _ => None
+Definition do_assign_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs) (bf: bitfield) (v: val): option (world * trace * mem * val) :=
+  match bf with
+  | Full =>
+    match access_mode ty with
+    | By_value chunk =>
+        match type_is_volatile ty with
+        | false => do m' <- Mem.storev chunk m (Vptr b ofs) v; Some(w, E0, m', v)
+        | true => do_volatile_store w chunk m b ofs v
+        end
+    | By_copy =>
+        match v with
+        | Vptr b' ofs' =>
+            if check_assign_copy ty b ofs b' ofs' then
+              do bytes <- Mem.loadbytes m b' (Ptrofs.unsigned ofs') (sizeof ge ty);
+              do m' <- Mem.storebytes m b (Ptrofs.unsigned ofs) bytes;
+              Some(w, E0, m', v)
+            else None
+        | _ => None
+        end
+    | _ => None
+    end
+  | Bits sz sg pos width =>
+    check (zle 0 pos && zlt 0 width && zle width (bitsize_intsize sz) && zle (pos + width) (bitsize_carrier sz));
+    match ty, v, Mem.loadv (chunk_for_carrier sz) m (Vptr b ofs) with
+    | Tint sz1 sg1 _, Vint n, Some (Vint c) =>
+        check (intsize_eq sz1 sz &&
+               signedness_eq sg1 (if zlt width (bitsize_intsize sz) then Signed else sg));
+        do m' <- Mem.storev (chunk_for_carrier sz) m (Vptr b ofs)
+                            (Vint ((Int.bitfield_insert (first_bit sz pos width) width c n)));
+        Some (w, E0, m', Vint (bitfield_normalize sz sg width n))
+    | _, _, _ => None
+    end
   end.
 
 Lemma do_deref_loc_sound:
-  forall w ty m b ofs w' t v,
-  do_deref_loc w ty m b ofs = Some(w', t, v) ->
-  deref_loc ge ty m b ofs t v /\ possible_trace w t w'.
+  forall w ty m b ofs bf w' t v,
+  do_deref_loc w ty m b ofs bf = Some(w', t, v) ->
+  deref_loc ge ty m b ofs bf t v /\ possible_trace w t w'.
 Proof.
   unfold do_deref_loc; intros until v.
-  destruct (access_mode ty) eqn:?; mydestr.
+  destruct bf.
+- destruct (access_mode ty) eqn:?; mydestr.
   intros. exploit do_volatile_load_sound; eauto. intuition. eapply deref_loc_volatile; eauto.
   split. eapply deref_loc_value; eauto. constructor.
   split. eapply deref_loc_reference; eauto. constructor.
   split. eapply deref_loc_copy; eauto. constructor.
+- mydestr. destruct ty; mydestr. InvBooleans. subst i. destruct v0; mydestr.
+  split. eapply deref_loc_bitfield; eauto. econstructor; eauto. constructor.
 Qed.
 
 Lemma do_deref_loc_complete:
-  forall w ty m b ofs w' t v,
-  deref_loc ge ty m b ofs t v -> possible_trace w t w' ->
-  do_deref_loc w ty m b ofs = Some(w', t, v).
+  forall w ty m b ofs bf w' t v,
+  deref_loc ge ty m b ofs bf t v -> possible_trace w t w' ->
+  do_deref_loc w ty m b ofs bf = Some(w', t, v).
 Proof.
   unfold do_deref_loc; intros. inv H.
-  inv H0. rewrite H1; rewrite H2; rewrite H3; auto.
-  rewrite H1; rewrite H2. apply do_volatile_load_complete; auto.
-  inv H0. rewrite H1. auto.
-  inv H0. rewrite H1. auto.
+- inv H0. rewrite H1; rewrite H2; rewrite H3; auto.
+- rewrite H1; rewrite H2. apply do_volatile_load_complete; auto.
+- inv H0. rewrite H1. auto.
+- inv H0. rewrite H1. auto.
+- inv H0. inv H1.
+  unfold proj_sumbool; rewrite ! dec_eq_true, ! zle_true, ! zlt_true by lia. cbn.
+  cbn in H4; rewrite H4. auto. 
 Qed.
 
 Lemma do_assign_loc_sound:
-  forall w ty m b ofs v w' t m',
-  do_assign_loc w ty m b ofs v = Some(w', t, m') ->
-  assign_loc ge ty m b ofs v t m' /\ possible_trace w t w'.
+  forall w ty m b ofs bf v w' t m' v',
+  do_assign_loc w ty m b ofs bf v = Some(w', t, m', v') ->
+  assign_loc ge ty m b ofs bf v t m' v' /\ possible_trace w t w'.
 Proof.
-  unfold do_assign_loc; intros until m'.
-  destruct (access_mode ty) eqn:?; mydestr.
-  intros. exploit do_volatile_store_sound; eauto. intuition. eapply assign_loc_volatile; eauto.
+  unfold do_assign_loc; intros until v'.
+  destruct bf.
+- destruct (access_mode ty) eqn:?; mydestr.
+  intros. exploit do_volatile_store_sound; eauto. intros (P & Q & R). subst v'. intuition. eapply assign_loc_volatile; eauto.
   split. eapply assign_loc_value; eauto. constructor.
   destruct v; mydestr. destruct a as [P [Q R]].
   split. eapply assign_loc_copy; eauto. constructor.
+- mydestr. InvBooleans.
+  destruct ty; mydestr. destruct v; mydestr. destruct v; mydestr. InvBooleans. subst s i.
+  split. eapply assign_loc_bitfield; eauto. econstructor; eauto. constructor.
 Qed.
 
 Lemma do_assign_loc_complete:
-  forall w ty m b ofs v w' t m',
-  assign_loc ge ty m b ofs v t m' -> possible_trace w t w' ->
-  do_assign_loc w ty m b ofs v = Some(w', t, m').
+  forall w ty m b ofs bf v w' t m' v',
+  assign_loc ge ty m b ofs bf v t m' v' -> possible_trace w t w' ->
+  do_assign_loc w ty m b ofs bf v = Some(w', t, m', v').
 Proof.
   unfold do_assign_loc; intros. inv H.
-  inv H0. rewrite H1; rewrite H2; rewrite H3; auto.
-  rewrite H1; rewrite H2. apply do_volatile_store_complete; auto.
-  rewrite H1. destruct (check_assign_copy ty b ofs b' ofs').
+- inv H0. rewrite H1; rewrite H2; rewrite H3; auto.
+- rewrite H1; rewrite H2. apply do_volatile_store_complete; auto.
+- rewrite H1. destruct (check_assign_copy ty b ofs b' ofs').
   inv H0. rewrite H5; rewrite H6; auto.
   elim n. red; tauto.
+- inv H0. inv H1. 
+  unfold proj_sumbool; rewrite ! zle_true, ! zlt_true by lia. cbn.
+  rewrite ! dec_eq_true.
+  cbn in H4; rewrite H4. cbn in H5; rewrite H5. auto.
 Qed.
 
 (** External calls *)
@@ -421,7 +468,7 @@ Definition do_ef_volatile_load (chunk: memory_chunk)
 Definition do_ef_volatile_store (chunk: memory_chunk)
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
   match vargs with
-  | Vptr b ofs :: v :: nil => do w',t,m' <- do_volatile_store w chunk m b ofs v; Some(w',t,Vundef,m')
+  | Vptr b ofs :: v :: nil => do w',t,m',v' <- do_volatile_store w chunk m b ofs v; Some(w',t,Vundef,m')
   | _ => None
   end.
 
@@ -564,7 +611,7 @@ Proof with try congruence.
   exploit do_volatile_load_sound; eauto. intuition. econstructor; eauto.
 - (* EF_vstore *)
   unfold do_ef_volatile_store. destruct vargs... destruct v... destruct vargs... destruct vargs...
-  mydestr. destruct p as [[w'' t''] m'']. mydestr.
+  mydestr. destruct p as [[[w'' t''] m''] v'']. mydestr.
   exploit do_volatile_store_sound; eauto. intuition. econstructor; eauto.
 - (* EF_malloc *)
   unfold do_ef_malloc. destruct vargs... destruct vargs... mydestr.
@@ -710,6 +757,10 @@ Notation "'do' X , Y , Z <- A ; B" := (match A with Some (X, Y, Z) => B | None =
   (at level 200, X ident, Y ident, Z ident, A at level 100, B at level 200)
   : reducts_monad_scope.
 
+Notation "'do' X , Y , Z , W <- A ; B" := (match A with Some (X, Y, Z, W) => B | None => stuck end)
+  (at level 200, X ident, Y ident, Z ident, W ident, A at level 100, B at level 200)
+  : reducts_monad_scope.
+
 Notation " 'check' A ; B" := (if A then B else stuck)
   (at level 200, A at level 100, B at level 200)
   : reducts_monad_scope.
@@ -718,21 +769,21 @@ Local Open Scope reducts_monad_scope.
 
 Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
   match k, a with
-  | LV, Eloc b ofs ty =>
+  | LV, Eloc b ofs bf ty =>
       nil
   | LV, Evar x ty =>
       match e!x with
       | Some(b, ty') =>
           check type_eq ty ty';
-          topred (Lred "red_var_local" (Eloc b Ptrofs.zero ty) m)
+          topred (Lred "red_var_local" (Eloc b Ptrofs.zero Full ty) m)
       | None =>
           do b <- Genv.find_symbol ge x;
-          topred (Lred "red_var_global" (Eloc b Ptrofs.zero ty) m)
+          topred (Lred "red_var_global" (Eloc b Ptrofs.zero Full ty) m)
       end
   | LV, Ederef r ty =>
       match is_val r with
       | Some(Vptr b ofs, ty') =>
-          topred (Lred "red_deref" (Eloc b ofs ty) m)
+          topred (Lred "red_deref" (Eloc b ofs Full ty) m)
       | Some _ =>
           stuck
       | None =>
@@ -746,11 +797,14 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
               do co <- ge.(genv_cenv)!id;
               match field_offset ge f (co_members co) with
               | Error _ => stuck
-              | OK delta => topred (Lred "red_field_struct" (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) ty) m)
+              | OK (delta, bf) => topred (Lred "red_field_struct" (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) bf ty) m)
               end
           | Tunion id _ =>
               do co <- ge.(genv_cenv)!id;
-              topred (Lred "red_field_union" (Eloc b ofs ty) m)
+              match union_field_offset ge f (co_members co) with
+              | Error _ => stuck
+              | OK (delta, bf) => topred (Lred "red_field_union" (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) bf ty) m)
+              end
           | _ => stuck
           end
       | Some _ =>
@@ -762,16 +816,19 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       nil
   | RV, Evalof l ty =>
       match is_loc l with
-      | Some(b, ofs, ty') =>
+      | Some(b, ofs, bf, ty') =>
           check type_eq ty ty';
-          do w',t,v <- do_deref_loc w ty m b ofs;
+          do w',t,v <- do_deref_loc w ty m b ofs bf;
           topred (Rred "red_rvalof" (Eval v ty) m t)
       | None =>
           incontext (fun x => Evalof x ty) (step_expr LV l m)
       end
   | RV, Eaddrof l ty =>
       match is_loc l with
-      | Some(b, ofs, ty') => topred (Rred "red_addrof" (Eval (Vptr b ofs) ty) m E0)
+      | Some(b, ofs, bf, ty') =>
+          match bf with Full => topred (Rred "red_addrof" (Eval (Vptr b ofs) ty) m E0)
+                      | Bits _ _ _ _ => stuck
+          end
       | None => incontext (fun x => Eaddrof x ty) (step_expr LV l m)
       end
   | RV, Eunop op r1 ty =>
@@ -831,21 +888,21 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       topred (Rred "red_alignof" (Eval (Vptrofs (Ptrofs.repr (alignof ge ty'))) ty) m E0)
   | RV, Eassign l1 r2 ty =>
       match is_loc l1, is_val r2 with
-      | Some(b, ofs, ty1), Some(v2, ty2) =>
+      | Some(b, ofs, bf, ty1), Some(v2, ty2) =>
           check type_eq ty1 ty;
           do v <- sem_cast v2 ty2 ty1 m;
-          do w',t,m' <- do_assign_loc w ty1 m b ofs v;
-          topred (Rred "red_assign" (Eval v ty) m' t)
+          do w',t,m',v' <- do_assign_loc w ty1 m b ofs bf v;
+          topred (Rred "red_assign" (Eval v' ty) m' t)
       | _, _ =>
          incontext2 (fun x => Eassign x r2 ty) (step_expr LV l1 m)
                     (fun x => Eassign l1 x ty) (step_expr RV r2 m)
       end
   | RV, Eassignop op l1 r2 tyres ty =>
       match is_loc l1, is_val r2 with
-      | Some(b, ofs, ty1), Some(v2, ty2) =>
+      | Some(b, ofs, bf, ty1), Some(v2, ty2) =>
           check type_eq ty1 ty;
-          do w',t,v1 <- do_deref_loc w ty1 m b ofs;
-          let r' := Eassign (Eloc b ofs ty1)
+          do w',t,v1 <- do_deref_loc w ty1 m b ofs bf;
+          let r' := Eassign (Eloc b ofs bf ty1)
                            (Ebinop op (Eval v1 ty1) (Eval v2 ty2) tyres) ty1 in
           topred (Rred "red_assignop" r' m t)
       | _, _ =>
@@ -854,12 +911,12 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       end
   | RV, Epostincr id l ty =>
       match is_loc l with
-      | Some(b, ofs, ty1) =>
+      | Some(b, ofs, bf, ty1) =>
           check type_eq ty1 ty;
-          do w',t, v1 <- do_deref_loc w ty m b ofs;
+          do w',t, v1 <- do_deref_loc w ty m b ofs bf;
           let op := match id with Incr => Oadd | Decr => Osub end in
           let r' :=
-            Ecomma (Eassign (Eloc b ofs ty)
+            Ecomma (Eassign (Eloc b ofs bf ty)
                            (Ebinop op (Eval v1 ty) (Eval (Vint Int.one) type_int32s) (incrdecr_type ty))
                            ty)
                    (Eval v1 ty) ty in
@@ -926,8 +983,8 @@ with step_exprlist (rl: exprlist) (m: mem): reducts exprlist :=
 Inductive imm_safe_t: kind -> expr -> mem -> Prop :=
   | imm_safe_t_val: forall v ty m,
       imm_safe_t RV (Eval v ty) m
-  | imm_safe_t_loc: forall b ofs ty m,
-      imm_safe_t LV (Eloc b ofs ty) m
+  | imm_safe_t_loc: forall b ofs ty bf m,
+      imm_safe_t LV (Eloc b ofs bf ty) m
   | imm_safe_t_lred: forall to C l m l' m',
       lred ge e l m l' m' ->
       context LV to C ->
@@ -961,23 +1018,25 @@ Fixpoint exprlist_all_values (rl: exprlist) : Prop :=
 
 Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   match a with
-  | Eloc b ofs ty => False
+  | Eloc b ofs bf ty => False
   | Evar x ty =>
       exists b,
       e!x = Some(b, ty)
       \/ (e!x = None /\ Genv.find_symbol ge x = Some b)
   | Ederef (Eval v ty1) ty =>
       exists b, exists ofs, v = Vptr b ofs
+  | Eaddrof (Eloc b ofs bf ty1) ty =>
+      bf = Full
   | Efield (Eval v ty1) f ty =>
       exists b, exists ofs, v = Vptr b ofs /\
       match ty1 with
-      | Tstruct id _ => exists co delta, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = OK delta
-      | Tunion  id _ => exists co, ge.(genv_cenv)!id = Some co
+      | Tstruct id _ => exists co delta bf, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = OK (delta, bf)
+      | Tunion id _ => exists co delta bf, ge.(genv_cenv)!id = Some co /\ union_field_offset ge f (co_members co) = OK (delta, bf)
       | _ => False
       end
   | Eval v ty => False
-  | Evalof (Eloc b ofs ty') ty =>
-      ty' = ty /\ exists t, exists v, exists w', deref_loc ge ty m b ofs t v /\ possible_trace w t w'
+  | Evalof (Eloc b ofs bf ty') ty =>
+      ty' = ty /\ exists t, exists v, exists w', deref_loc ge ty m b ofs bf t v /\ possible_trace w t w'
   | Eunop op (Eval v1 ty1) ty =>
       exists v, sem_unary_operation op v1 ty1 m = Some v
   | Ebinop op (Eval v1 ty1) (Eval v2 ty2) ty =>
@@ -990,15 +1049,15 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       exists b, bool_val v1 ty1 m = Some b
   | Econdition (Eval v1 ty1) r1 r2 ty =>
       exists b, bool_val v1 ty1 m = Some b
-  | Eassign (Eloc b ofs ty1) (Eval v2 ty2) ty =>
-      exists v, exists m', exists t, exists w',
-      ty = ty1 /\ sem_cast v2 ty2 ty1 m = Some v /\ assign_loc ge ty1 m b ofs v t m' /\ possible_trace w t w'
-  | Eassignop op (Eloc b ofs ty1) (Eval v2 ty2) tyres ty =>
+  | Eassign (Eloc b ofs bf ty1) (Eval v2 ty2) ty =>
+      exists v, exists m', exists v', exists t, exists w',
+      ty = ty1 /\ sem_cast v2 ty2 ty1 m = Some v /\ assign_loc ge ty1 m b ofs bf v t m' v' /\ possible_trace w t w'
+  | Eassignop op (Eloc b ofs bf ty1) (Eval v2 ty2) tyres ty =>
       exists t, exists v1, exists w',
-      ty = ty1 /\ deref_loc ge ty1 m b ofs t v1 /\ possible_trace w t w'
-  | Epostincr id (Eloc b ofs ty1) ty =>
+      ty = ty1 /\ deref_loc ge ty1 m b ofs bf t v1 /\ possible_trace w t w'
+  | Epostincr id (Eloc b ofs bf ty1) ty =>
       exists t, exists v1, exists w',
-      ty = ty1 /\ deref_loc ge ty m b ofs t v1 /\ possible_trace w t w'
+      ty = ty1 /\ deref_loc ge ty m b ofs bf t v1 /\ possible_trace w t w'
   | Ecomma (Eval v ty1) r2 ty =>
       typeof r2 = ty
   | Eparen (Eval v1 ty1) tycast ty =>
@@ -1026,8 +1085,8 @@ Proof.
   exists b; auto.
   exists b; auto.
   exists b; exists ofs; auto.
-  exists b; exists ofs; split; auto. exists co, delta; auto.
-  exists b; exists ofs; split; auto. exists co; auto.
+  exists b; exists ofs; split; auto. exists co, delta, bf; auto.
+  exists b; exists ofs; split; auto. exists co, delta, bf; auto.
 Qed.
 
 Lemma rred_invert:
@@ -1041,7 +1100,7 @@ Proof.
   exists true; auto. exists false; auto.
   exists true; auto. exists false; auto.
   exists b; auto.
-  exists v; exists m'; exists t; exists w'; auto.
+  exists v; exists m'; exists v'; exists t; exists w'; auto.
   exists t; exists v1; exists w'; auto.
   exists t; exists v1; exists w'; auto.
   exists v; auto.
@@ -1076,7 +1135,7 @@ Proof.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
-  auto.
+  destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct (C a); auto; contradiction.
   destruct e1; auto; destruct (C a); auto; contradiction.
@@ -1102,7 +1161,7 @@ Lemma imm_safe_t_inv:
   forall k a m,
   imm_safe_t k a m ->
   match a with
-  | Eloc _ _ _ => True
+  | Eloc _ _ _ _ => True
   | Eval _ _ => True
   | _ => invert_expr_prop a m
   end.
@@ -1228,7 +1287,7 @@ Qed.
 Lemma not_invert_ok:
   forall k a m,
   match a with
-  | Eloc _ _ _ => False
+  | Eloc _ _ _ _ => False
   | Eval _ _ => False
   | _ => invert_expr_prop a m -> False
   end ->
@@ -1369,18 +1428,19 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct ty'...
   (* top struct *)
   destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
-  destruct (field_offset ge f (co_members co)) as [delta|] eqn:?...
+  destruct (field_offset ge f (co_members co)) as [[delta bf]|] eqn:?...
   apply topred_ok; auto. eapply red_field_struct; eauto.
   (* top union *)
   destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
+  destruct (union_field_offset ge f (co_members co)) as [[delta bf]|] eqn:?...
   apply topred_ok; auto. eapply red_field_union; eauto.
   (* in depth *)
   eapply incontext_ok; eauto.
 (* Evalof *)
-  destruct (is_loc a) as [[[b ofs] ty'] | ] eqn:?. rewrite (is_loc_inv _ _ _ _ Heqo).
+  destruct (is_loc a) as [[[[b ofs] bf] ty']  | ] eqn:?. rewrite (is_loc_inv _ _ _ _ _ Heqo).
   (* top *)
   destruct (type_eq ty ty')... subst ty'.
-  destruct (do_deref_loc w ty m b ofs) as [[[w' t] v] | ] eqn:?.
+  destruct (do_deref_loc w ty m b ofs bf) as [[[w' t] v] | ] eqn:?.
   exploit do_deref_loc_sound; eauto. intros [A B].
   apply topred_ok; auto. red. split. apply red_rvalof; auto. exists w'; auto.
   apply not_invert_ok; simpl; intros; myinv. exploit do_deref_loc_complete; eauto. congruence.
@@ -1393,8 +1453,9 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   (* depth *)
   eapply incontext_ok; eauto.
 (* Eaddrof *)
-  destruct (is_loc a) as [[[b ofs] ty'] | ] eqn:?. rewrite (is_loc_inv _ _ _ _ Heqo).
+  destruct (is_loc a) as [[[[b ofs] bf ] ty'] | ] eqn:?. rewrite (is_loc_inv _ _ _ _ _ Heqo).
   (* top *)
+  destruct bf... 
   apply topred_ok; auto. split. apply red_addrof; auto. exists w; constructor.
   (* depth *)
   eapply incontext_ok; eauto.
@@ -1450,26 +1511,26 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
 (* alignof *)
   apply topred_ok; auto. split. apply red_alignof. exists w; constructor.
 (* assign *)
-  destruct (is_loc a1) as [[[b ofs] ty1] | ] eqn:?.
+  destruct (is_loc a1) as [[[[b ofs] bf] ty1] | ] eqn:?.
   destruct (is_val a2) as [[v2 ty2] | ] eqn:?.
-  rewrite (is_loc_inv _ _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0).
+  rewrite (is_loc_inv _ _ _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0).
   (* top *)
   destruct (type_eq ty1 ty)... subst ty1.
   destruct (sem_cast v2 ty2 ty m) as [v|] eqn:?...
-  destruct (do_assign_loc w ty m b ofs v) as [[[w' t] m']|] eqn:?.
+  destruct (do_assign_loc w ty m b ofs bf v) as [[[[w' t] m'] v']|] eqn:?.
   exploit do_assign_loc_sound; eauto. intros [P Q].
-  apply topred_ok; auto. split. apply red_assign; auto. exists w'; auto.
+  apply topred_ok; auto. split. eapply red_assign; eauto. exists w'; auto.
   apply not_invert_ok; simpl; intros; myinv. exploit do_assign_loc_complete; eauto. congruence.
   (* depth *)
   eapply incontext2_ok; eauto.
   eapply incontext2_ok; eauto.
 (* assignop *)
-  destruct (is_loc a1) as [[[b ofs] ty1] | ] eqn:?.
+  destruct (is_loc a1) as [[[[b ofs] bf] ty1] | ] eqn:?.
   destruct (is_val a2) as [[v2 ty2] | ] eqn:?.
-  rewrite (is_loc_inv _ _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0).
+  rewrite (is_loc_inv _ _ _ _ _ Heqo). rewrite (is_val_inv _ _ _ Heqo0).
   (* top *)
   destruct (type_eq ty1 ty)... subst ty1.
-  destruct (do_deref_loc w ty m b ofs) as [[[w' t] v] | ] eqn:?.
+  destruct (do_deref_loc w ty m b ofs bf) as [[[w' t] v] | ] eqn:?.
   exploit do_deref_loc_sound; eauto. intros [A B].
   apply topred_ok; auto. red. split. apply red_assignop; auto. exists w'; auto.
   apply not_invert_ok; simpl; intros; myinv. exploit do_deref_loc_complete; eauto. congruence.
@@ -1477,10 +1538,10 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   eapply incontext2_ok; eauto.
   eapply incontext2_ok; eauto.
 (* postincr *)
-  destruct (is_loc a) as [[[b ofs] ty'] | ] eqn:?. rewrite (is_loc_inv _ _ _ _ Heqo).
+  destruct (is_loc a) as [[[[b ofs] bf] ty'] | ] eqn:?. rewrite (is_loc_inv _ _ _ _ _ Heqo).
   (* top *)
   destruct (type_eq ty' ty)... subst ty'.
-  destruct (do_deref_loc w ty m b ofs) as [[[w' t] v] | ] eqn:?.
+  destruct (do_deref_loc w ty m b ofs bf) as [[[w' t] v] | ] eqn:?.
   exploit do_deref_loc_sound; eauto. intros [A B].
   apply topred_ok; auto. red. split. apply red_postincr; auto. exists w'; auto.
   apply not_invert_ok; simpl; intros; myinv. exploit do_deref_loc_complete; eauto. congruence.
@@ -1576,7 +1637,7 @@ Proof.
 (* field struct *)
   rewrite H, H0; econstructor; eauto.
 (* field union *)
-  rewrite H; econstructor; eauto.
+  rewrite H, H0; econstructor; eauto.
 Qed.
 
 Lemma rred_topred:
@@ -1587,7 +1648,7 @@ Proof.
   induction 1; simpl; intros.
 (* valof *)
   rewrite dec_eq_true.
-  rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ H H0). econstructor; eauto.
+  rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ _ H H0). econstructor; eauto.
 (* addrof *)
   inv H. econstructor; eauto.
 (* unop *)
@@ -1609,13 +1670,13 @@ Proof.
 (* alignof *)
   inv H. econstructor; eauto.
 (* assign *)
-  rewrite dec_eq_true. rewrite H. rewrite (do_assign_loc_complete _ _ _ _ _ _ _ _ _ H0 H1).
+  rewrite dec_eq_true. rewrite H. rewrite (do_assign_loc_complete _ _ _ _ _ _ _ _ _ _ _ H0 H1).
   econstructor; eauto.
 (* assignop *)
-  rewrite dec_eq_true. rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ H H0).
+  rewrite dec_eq_true. rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ _ H H0).
   econstructor; eauto.
 (* postincr *)
-  rewrite dec_eq_true. subst. rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ H H1).
+  rewrite dec_eq_true. subst. rewrite (do_deref_loc_complete _ _ _ _ _ _ _ _ _ H H1).
   econstructor; eauto.
 (* comma *)
   inv H0. rewrite dec_eq_true. econstructor; eauto.
@@ -1664,10 +1725,10 @@ Proof.
 Qed.
 
 Lemma reducts_incl_loc:
-  forall (A: Type) a m b ofs ty (C: expr -> A) res,
-  is_loc a = Some(b, ofs, ty) -> reducts_incl C (step_expr LV a m) res.
+  forall (A: Type) a m b ofs ty bf (C: expr -> A) res,
+  is_loc a = Some(b, ofs, bf, ty) -> reducts_incl C (step_expr LV a m) res.
 Proof.
-  intros. rewrite (is_loc_inv _ _ _ _ H). apply reducts_incl_nil.
+  intros. rewrite (is_loc_inv _ _ _ _ _ H). apply reducts_incl_nil.
 Qed.
 
 Lemma reducts_incl_listval:
@@ -1732,10 +1793,10 @@ Proof.
   destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* valof *)
   eapply reducts_incl_trans with (C' := fun x => Evalof x ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
+  destruct (is_loc (C a)) as [[[[b ofs] bf] ty']|] eqn:?; eauto.
 (* addrof *)
   eapply reducts_incl_trans with (C' := fun x => Eaddrof x ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
+  destruct (is_loc (C a)) as [[[[b ofs] bf] ty']|] eqn:?; eauto.
 (* unop *)
   eapply reducts_incl_trans with (C' := fun x => Eunop op x ty); eauto.
   destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
@@ -1760,21 +1821,21 @@ Proof.
   destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
 (* assign left *)
   eapply reducts_incl_trans with (C' := fun x => Eassign x e2 ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
+  destruct (is_loc (C a)) as [[[[b ofs] bf] ty']|] eqn:?; eauto.
 (* assign right *)
   eapply reducts_incl_trans with (C' := fun x => Eassign e1 x ty); eauto.
-  destruct (is_loc e1) as [[[b ofs] ty1]|] eqn:?; eauto.
+  destruct (is_loc e1) as [[[[b ofs] bf] ty1]|] eqn:?; eauto.
   destruct (is_val (C a)) as [[v2 ty2]|] eqn:?; eauto.
 (* assignop left *)
   eapply reducts_incl_trans with (C' := fun x => Eassignop op x e2 tyres ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
+  destruct (is_loc (C a)) as [[[[b ofs] bf] ty']|] eqn:?; eauto.
 (* assignop right *)
   eapply reducts_incl_trans with (C' := fun x => Eassignop op e1 x tyres ty); eauto.
-  destruct (is_loc e1) as [[[b ofs] ty1]|] eqn:?; eauto.
+  destruct (is_loc e1) as [[[[b ofs] bf] ty1]|] eqn:?; eauto.
   destruct (is_val (C a)) as [[v2 ty2]|] eqn:?; eauto.
 (* postincr *)
   eapply reducts_incl_trans with (C' := fun x => Epostincr id x ty); eauto.
-  destruct (is_loc (C a)) as [[[b ofs] ty']|] eqn:?; eauto.
+  destruct (is_loc (C a)) as [[[[b ofs] bf] ty']|] eqn:?; eauto.
 (* call left *)
   eapply reducts_incl_trans with (C' := fun x => Ecall x el ty); eauto.
   destruct (is_val (C a)) as [[v ty']|] eqn:?; eauto.
@@ -1915,7 +1976,7 @@ Function sem_bind_parameters (w: world) (e: env) (m: mem) (l: list (ident * type
       match PTree.get id e with
          | Some (b, ty') =>
              check (type_eq ty ty');
-             do w', t, m1 <- do_assign_loc w ty m b Ptrofs.zero v1;
+             do w', t, m1, v' <- do_assign_loc w ty m b Ptrofs.zero Full v1;
              match t with nil => sem_bind_parameters w e m1 params lv | _ => None end
         | None => None
       end
@@ -1935,10 +1996,11 @@ Lemma sem_bind_parameters_complete : forall w e m l lv m',
   bind_parameters ge e m l lv m' ->
   sem_bind_parameters w e m l lv = Some m'.
 Proof.
+Local Opaque do_assign_loc.
    induction 1; simpl; auto.
    rewrite H. rewrite dec_eq_true.
    assert (possible_trace w E0 w) by constructor.
-   rewrite (do_assign_loc_complete _ _ _ _ _ _ _ _ _ H0 H2).
+   rewrite (do_assign_loc_complete _ _ _ _ _ _ _ _ _ _ _ H0 H2).
    simpl. auto.
 Qed.
 
