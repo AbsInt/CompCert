@@ -78,10 +78,10 @@ Inductive eval_simple_lvalue: expr -> block -> ptrofs -> bitfield -> Prop :=
   | esl_deref: forall r ty b ofs,
       eval_simple_rvalue r (Vptr b ofs) ->
       eval_simple_lvalue (Ederef r ty) b ofs Full
-  | esl_field_struct: forall r f ty b ofs id co a delta,
+  | esl_field_struct: forall r f ty b ofs id co a delta bf,
       eval_simple_rvalue r (Vptr b ofs) ->
-      typeof r = Tstruct id a -> ge.(genv_cenv)!id = Some co -> field_offset ge f (co_members co) = OK delta ->
-      eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta)) Full
+      typeof r = Tstruct id a -> ge.(genv_cenv)!id = Some co -> field_offset ge f (co_members co) = OK (delta, bf) ->
+      eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta)) bf
   | esl_field_union: forall r f ty b ofs id a,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tunion id a ->
@@ -167,7 +167,7 @@ Lemma lred_compat:
   forall e l m l' m', lred ge e l m l' m' ->
   m = m' /\ compat_eval LV e l l' m.
 Proof.
-  induction 1; simpl; split; auto; split; auto; intros bx ofsx bf EV; inv EV.
+  induction 1; simpl; split; auto; split; auto; intros bx ofsx bf' EV; inv EV.
   apply esl_var_local; auto.
   apply esl_var_global; auto.
   constructor. constructor.
@@ -438,22 +438,26 @@ Proof.
   eapply sem_cast_match; eauto.
 
   (* lvalue *)
-  induction 1; intros v' CV; simpl in CV; try (monadInv CV); split; auto.
+  induction 1; intros v' CV; simpl in CV; try (monadInv CV).
   (* var local *)
-  unfold empty_env in H. rewrite PTree.gempty in H. congruence.
+  split; auto. unfold empty_env in H. rewrite PTree.gempty in H. congruence.
   (* var_global *)
-  econstructor. unfold inj. rewrite H0. eauto. auto.
+  split; auto. econstructor. unfold inj. rewrite H0. eauto. auto.
   (* deref *)
-  eauto.
+  split; eauto.
   (* field struct *)
-  rewrite H0 in CV. monadInv CV. unfold lookup_composite in EQ; rewrite H1 in EQ; monadInv EQ.
-  exploit constval_rvalue; eauto. intro MV. inv MV.
-  replace x0 with delta by congruence. rewrite Ptrofs.add_assoc. rewrite (Ptrofs.add_commut (Ptrofs.repr delta0)).
+  rewrite H0 in CV. monadInv CV. destruct x1; monadInv EQ3.
+  unfold lookup_composite in EQ; rewrite H1 in EQ; monadInv EQ.
+  exploit constval_rvalue; eauto. intro MV.
+  split. congruence.
+  replace x0 with delta by congruence.
+  inv MV.
+  rewrite Ptrofs.add_assoc. rewrite (Ptrofs.add_commut (Ptrofs.repr delta0)).
   simpl; destruct Archi.ptr64 eqn:SF;
   econstructor; eauto; rewrite ! Ptrofs.add_assoc; f_equal; f_equal; symmetry; auto with ptrofs.
   destruct Archi.ptr64; auto.
   (* field union *)
-  rewrite H0 in CV. eauto.
+  split. congruence. rewrite H0 in CV. eauto.
 Qed.
 
 Lemma constval_simple:
@@ -477,6 +481,8 @@ Proof.
   intros. exploit eval_simple_steps; eauto. eapply constval_simple; eauto.
   intros [A [B C]]. intuition. eapply constval_rvalue; eauto.
 Qed.
+
+(* TODO: REVISE
 
 (** * Relational specification of the translation of initializers *)
 
@@ -517,7 +523,7 @@ with tr_init_struct: type -> members -> initializer_list -> Z -> list init_data 
       let pos1 := align pos (alignof ge ty1) in
       tr_init ty1 i1 d1 ->
       tr_init_struct ty fl il (pos1 + sizeof ge ty1) d2 ->
-      tr_init_struct ty ((f1, ty1) :: fl) (Init_cons i1 il)
+      tr_init_struct ty (Member_plain f1 ty1 :: fl) (Init_cons i1 il)
                      pos (tr_padding pos pos1 ++ d1 ++ d2).
 
 Lemma transl_padding_spec:
@@ -573,10 +579,10 @@ Local Opaque sizeof.
 
 - destruct il; intros until res; intros TR; simpl in TR.
 + destruct fl; inv TR. econstructor; split. constructor. apply transl_padding_spec.
-+ destruct fl as [ | [f1 ty1] fl ]; monadInv TR.
++ destruct fl as [ | [] fl ]; monadInv TR.
   destruct (transl_init_rec_spec _ _ _ _ EQ) as (d1 & A1 & B1).
   destruct (transl_init_struct_spec _ _ _ _ _ _ EQ0) as (d2 & A2 & B2).
-  exists (tr_padding pos (align pos (alignof ge ty1)) ++ d1 ++ d2); split.
+  exists (tr_padding pos (align pos (alignof ge t)) ++ d1 ++ d2); split.
   econstructor; eauto.
   rewrite ! rev_app_distr. subst res x. rewrite ! app_ass. rewrite transl_padding_spec. auto.
 Qed.
@@ -689,9 +695,9 @@ Qed.
 Remark union_field_size:
   forall f ty fl, field_type f fl = OK ty -> sizeof ge ty <= sizeof_union ge fl.
 Proof.
-  induction fl as [|[i t]]; simpl; intros.
+  induction fl as [|m fl]; simpl; intros.
 - inv H.
-- destruct (ident_eq f i).
+- destruct (ident_eq f (name_member m)).
   + inv H. extlia.
   + specialize (IHfl H). extlia.
 Qed.
@@ -880,8 +886,11 @@ Local Opaque sizeof.
   apply align_le. apply alignof_pos.
 Qed.
 
+*)
+
 End SOUNDNESS.
 
+(*
 Theorem transl_init_sound:
   forall p m b ty i m' data,
   exec_init (globalenv p) m b 0 ty i m' ->
@@ -895,3 +904,4 @@ Proof.
   eapply build_composite_env_consistent. apply prog_comp_env_eq.
   eapply A; eauto. apply transl_init_spec; auto.
 Qed.
+*)

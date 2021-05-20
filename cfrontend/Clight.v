@@ -418,12 +418,12 @@ with eval_lvalue: expr -> block -> ptrofs -> bitfield -> Prop :=
   | eval_Ederef: forall a ty l ofs,
       eval_expr a (Vptr l ofs) ->
       eval_lvalue (Ederef a ty) l ofs Full
- | eval_Efield_struct:   forall a i ty l ofs id co att delta,
+ | eval_Efield_struct:   forall a i ty l ofs id co att delta bf,
       eval_expr a (Vptr l ofs) ->
       typeof a = Tstruct id att ->
       ge.(genv_cenv)!id = Some co ->
-      field_offset ge i (co_members co) = OK delta ->
-      eval_lvalue (Efield a i ty) l (Ptrofs.add ofs (Ptrofs.repr delta)) Full
+      field_offset ge i (co_members co) = OK (delta, bf) ->
+      eval_lvalue (Efield a i ty) l (Ptrofs.add ofs (Ptrofs.repr delta)) bf
  | eval_Efield_union:   forall a i ty l ofs id co att,
       eval_expr a (Vptr l ofs) ->
       typeof a = Tunion id att ->

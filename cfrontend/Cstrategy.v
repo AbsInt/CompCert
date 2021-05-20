@@ -99,12 +99,12 @@ Inductive eval_simple_lvalue: expr -> block -> ptrofs -> bitfield -> Prop :=
   | esl_deref: forall r ty b ofs,
       eval_simple_rvalue r (Vptr b ofs) ->
       eval_simple_lvalue (Ederef r ty) b ofs Full
-  | esl_field_struct: forall r f ty b ofs id co a delta,
+  | esl_field_struct: forall r f ty b ofs id co a delta bf,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tstruct id a ->
       ge.(genv_cenv)!id = Some co ->
-      field_offset ge f (co_members co) = OK delta ->
-      eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta)) Full
+      field_offset ge f (co_members co) = OK (delta, bf) ->
+      eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta)) bf
   | esl_field_union: forall r f ty b ofs id co a,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tunion id a ->
@@ -530,7 +530,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Efield (Eval v ty1) f ty =>
       exists b, exists ofs, v = Vptr b ofs /\
       match ty1 with
-      | Tstruct id _ => exists co delta, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = Errors.OK delta
+      | Tstruct id _ => exists co delta bf, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = Errors.OK (delta, bf)
       | Tunion id _ => exists co, ge.(genv_cenv)!id = Some co
       | _ => False
       end
@@ -586,7 +586,7 @@ Proof.
   exists b; auto.
   exists b; auto.
   exists b; exists ofs; auto.
-  exists b; exists ofs; split; auto. exists co, delta; auto.
+  exists b; exists ofs; split; auto. exists co, delta, bf; auto.
   exists b; exists ofs; split; auto. exists co; auto.
 Qed.
 
@@ -821,7 +821,7 @@ Ltac StepR REC C' a :=
   StepR IHa (fun x => C(Efield x f0 ty)) a.
   exploit safe_inv. eexact SAFE0. eauto. simpl.
   intros [b [ofs [EQ TY]]]. subst v. destruct (typeof a) eqn:?; try contradiction.
-  destruct TY as (co & delta & CE & OFS). exists b, (Ptrofs.add ofs (Ptrofs.repr delta)), Full; econstructor; eauto.
+  destruct TY as (co & delta & bf & CE & OFS). exists b, (Ptrofs.add ofs (Ptrofs.repr delta)), bf; econstructor; eauto.
   destruct TY as (co & CE).  exists b, ofs, Full; econstructor; eauto.
 - (* valof *)
   destruct (andb_prop _ _ S) as [S1 S2]. clear S. rewrite negb_true_iff in S2.

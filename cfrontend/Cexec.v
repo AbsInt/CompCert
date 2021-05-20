@@ -797,7 +797,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
               do co <- ge.(genv_cenv)!id;
               match field_offset ge f (co_members co) with
               | Error _ => stuck
-              | OK delta => topred (Lred "red_field_struct" (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) Full ty) m)
+              | OK (delta, bf) => topred (Lred "red_field_struct" (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) bf ty) m)
               end
           | Tunion id _ =>
               do co <- ge.(genv_cenv)!id;
@@ -1027,7 +1027,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
   | Efield (Eval v ty1) f ty =>
       exists b, exists ofs, v = Vptr b ofs /\
       match ty1 with
-      | Tstruct id _ => exists co delta, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = OK delta
+      | Tstruct id _ => exists co delta bf, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = OK (delta, bf)
       | Tunion  id _ => exists co, ge.(genv_cenv)!id = Some co
       | _ => False
       end
@@ -1082,7 +1082,7 @@ Proof.
   exists b; auto.
   exists b; auto.
   exists b; exists ofs; auto.
-  exists b; exists ofs; split; auto. exists co, delta; auto.
+  exists b; exists ofs; split; auto. exists co, delta, bf; auto.
   exists b; exists ofs; split; auto. exists co; auto.
 Qed.
 
@@ -1425,7 +1425,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   destruct ty'...
   (* top struct *)
   destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
-  destruct (field_offset ge f (co_members co)) as [delta|] eqn:?...
+  destruct (field_offset ge f (co_members co)) as [[delta bf]|] eqn:?...
   apply topred_ok; auto. eapply red_field_struct; eauto.
   (* top union *)
   destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...

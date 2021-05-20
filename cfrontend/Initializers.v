@@ -117,11 +117,16 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
       match typeof l with
       | Tstruct id _ =>
           do co <- lookup_composite ce id;
-          do delta <- field_offset ce f (co_members co);
+          do (delta, bf) <- field_offset ce f (co_members co);
           do v <- constval ce l;
-          OK (if Archi.ptr64
-              then Val.addl v (Vlong (Int64.repr delta))
-              else Val.add v (Vint (Int.repr delta)))
+          match bf with
+          | Full =>
+              OK (if Archi.ptr64
+                  then Val.addl v (Vlong (Int64.repr delta))
+                  else Val.add v (Vint (Int.repr delta)))
+          | Bits _ _ _ =>
+              Error(msg "taking the address of a bitfield")
+          end
       | Tunion id _ =>
           constval ce l
       | _ =>
@@ -225,10 +230,12 @@ with transl_init_struct (ce: composite_env) (ty: type)
   match il, fl with
   | Init_nil, nil =>
       OK (padding pos (sizeof ce ty) k)
-  | Init_cons i1 il', (_, ty1) :: fl' =>
+  | Init_cons i1 il', Member_plain _ ty1 :: fl' =>
       let pos1 := align pos (alignof ce ty1) in
       do k1 <- transl_init_rec ce ty1 i1 (padding pos pos1 k);
       transl_init_struct ce ty fl' il' (pos1 + sizeof ce ty1) k1
+  | Init_cons i1 il', Member_bitfield _ _ _ _ _ _ :: fl' =>
+      Error (msg "bitfield initialization not supported yet")
   | _, _ =>
       Error (msg "wrong number of elements in struct initializer")
   end.

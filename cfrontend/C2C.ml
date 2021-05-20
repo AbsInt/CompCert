@@ -679,9 +679,16 @@ let rec convertTypAnnotArgs env = function
             convertTypAnnotArgs env el)
 
 let convertField env f =
-  if f.fld_bitfield <> None then
-    unsupported "bit field in struct or union (consider adding option [-fbitfields])";
-  (intern_string f.fld_name, convertTyp env f.fld_typ)
+  let id = intern_string f.fld_name
+  and ty = convertTyp env f.fld_typ in
+  match f.fld_bitfield with
+  | None -> Member_plain(id, ty)
+  | Some w ->
+      match ty with
+      | Tint(sz, sg, attr) ->
+          Member_bitfield(id, sz, sg, attr, Z.of_uint w, f.fld_name = "")
+      | _ ->
+          fatal_error "bitfield must have type int"
 
 let convertCompositedef env su id attr members =
   if Cutil.find_custom_attributes ["packed";"__packed__"] attr <> [] then

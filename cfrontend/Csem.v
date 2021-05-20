@@ -222,11 +222,11 @@ Inductive lred: expr -> mem -> expr -> mem -> Prop :=
   | red_deref: forall b ofs ty1 ty m,
       lred (Ederef (Eval (Vptr b ofs) ty1) ty) m
            (Eloc b ofs Full ty) m
-  | red_field_struct: forall b ofs id co a f ty m delta,
+  | red_field_struct: forall b ofs id co a f ty m delta bf,
       ge.(genv_cenv)!id = Some co ->
-      field_offset ge f (co_members co) = OK delta ->
+      field_offset ge f (co_members co) = OK (delta, bf) ->
       lred (Efield (Eval (Vptr b ofs) (Tstruct id a)) f ty) m
-           (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) Full ty) m
+           (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) bf ty) m
   | red_field_union: forall b ofs id co a f ty m,
       ge.(genv_cenv)!id = Some co ->
       lred (Efield (Eval (Vptr b ofs) (Tunion id a)) f ty) m

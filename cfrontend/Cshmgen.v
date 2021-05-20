@@ -498,12 +498,12 @@ Definition make_field_access (ce: composite_env) (ty: type) (f: ident) (a: expr)
       | None =>
           Error (MSG "Undefined struct " :: CTX id :: nil)
       | Some co =>
-          do ofs <- field_offset ce f (co_members co);
+          do (ofs, bf) <- field_offset ce f (co_members co);
           let a' :=
             if Archi.ptr64
             then Ebinop Oaddl a (make_longconst (Int64.repr ofs))
             else Ebinop Oadd a (make_intconst (Int.repr ofs)) in
-          OK (a', Full)
+          OK (a', bf)
       end
   | Tunion id _ =>
       OK (a, Full)

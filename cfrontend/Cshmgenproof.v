@@ -128,12 +128,15 @@ Proof.
     apply prog_comp_env_eq. }
   destruct H as [_ A].
   split. auto. generalize (co_consistent_complete _ _ C).
-  unfold field_offset. generalize 0. induction (co_members co) as [ | [f1 t1] m]; simpl; intros.
+  unfold field_offset. generalize 0.
+  induction (co_members co) as [ | m ms]; simpl; intros.
 - auto.
 - InvBooleans.
-  rewrite ! (alignof_stable _ _ A) by auto.
-  rewrite ! (sizeof_stable _ _ A) by auto.
-  destruct (ident_eq f f1); eauto.
+  unfold layout_field, next_field, bitalignof, bitsizeof; destruct m; simpl name_member.
+  + rewrite ! (alignof_stable _ _ A) by auto.
+    rewrite ! (sizeof_stable _ _ A) by auto.
+    destruct (ident_eq f id0); eauto.
+  + destruct (ident_eq f id0); eauto.
 Qed.
 
 (** * Properties of the translation functions *)
@@ -144,9 +147,13 @@ Lemma transl_expr_lvalue:
   forall ge e le m a loc ofs bf ce ta,
   Clight.eval_lvalue ge e le m a loc ofs bf ->
   transl_expr ce a = OK ta ->
+  (forall f id co,
+     ce!id = Some co ->
+     ge.(genv_cenv)!id = Some co /\
+     field_offset ge f (co_members co) = field_offset ce f (co_members co)) ->
   (exists tb, transl_lvalue ce a = OK (tb, bf) /\ make_load tb (typeof a) bf = OK ta).
 Proof.
-  intros until ta; intros EVAL TR. inv EVAL; simpl in TR.
+  intros until ta; intros EVAL TR CONSIST. inv EVAL; simpl in TR.
 - (* var local *)
   exists (Eaddrof id); auto.
 - (* var global *)
@@ -155,9 +162,12 @@ Proof.
   monadInv TR. cbn; rewrite EQ. exists x; auto.
 - (* field struct *)
   monadInv TR.
-  assert (x1 = Full).
-  { rewrite H0 in EQ1. cbn in EQ1. destruct ce!id; try discriminate. monadInv EQ1. auto. }
-  subst x1. exists x0; split; auto. simpl; rewrite EQ; auto.
+  assert (x1 = bf).
+  { rewrite H0 in EQ1. simpl in EQ1.
+    destruct (ce!id) as [co'|] eqn:E; monadInv EQ1.
+    exploit (CONSIST i id); eauto. intros [A B]. rewrite <- B in EQ0. congruence. }
+  subst x1.
+  exists x0; split; auto. simpl; rewrite EQ; auto.
 - (* field union *)
   monadInv TR.
   assert (x1 = Full).
@@ -1296,7 +1306,8 @@ Proof.
 - (* alignof *)
   rewrite (transl_alignof _ _ _ _ LINK EQ). apply make_ptrofsconst_correct.
 - (* rvalue out of lvalue *)
-  exploit transl_expr_lvalue; eauto. intros [tb [TRLVAL MKLOAD]].
+  exploit transl_expr_lvalue; eauto. intros; eapply field_offset_stable; eauto.
+  intros [tb [TRLVAL MKLOAD]].
   apply H0 in TRLVAL; destruct TRLVAL. 
   eapply make_load_correct; eauto.
 - (* var local *)
@@ -1312,9 +1323,10 @@ Proof.
   unfold make_field_access in EQ0. rewrite H1 in EQ0.
   destruct (prog_comp_env cunit)!id as [co'|] eqn:CO; monadInv EQ0.
   exploit field_offset_stable. eexact LINK. eauto. instantiate (1 := i). intros [A B].
-  rewrite <- B in EQ1.
+  rewrite <- B in EQ1. 
   assert (x0 = delta) by (unfold ge in *; simpl in *; congruence).
-  subst x0. split; auto.
+  assert (bf' = bf) by (unfold ge in *; simpl in *; congruence).
+  subst x0 bf'. split; auto.
   destruct Archi.ptr64 eqn:SF.
 + eapply eval_Ebinop; eauto using make_longconst_correct.
   simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal. auto with ptrofs.
