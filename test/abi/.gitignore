@@ -6,3 +6,4 @@
 *.compcert2cc
 *.light.c
 *.s
+!layout.c
