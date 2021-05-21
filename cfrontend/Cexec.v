@@ -286,9 +286,7 @@ Definition do_deref_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs) 
     check (negb (type_is_volatile ty));
     match ty with
     | Tint sz sg _ =>
-      check (zle 0 pos && zlt pos Int.zwordsize
-             && zlt 0 width && zle (pos + width) Int.zwordsize
-             && zle width (bitsize_intsize sz));
+      check (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
       match Mem.loadv (chunk_for_carrier carrier) m (Vptr b ofs) with
       | Some (Vint c) => Some (w, E0, Vint (bitfield_extract sz sg pos width c))
       | _ => None
@@ -351,13 +349,11 @@ Definition do_assign_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs)
     check (negb (type_is_volatile ty));
     match ty with
     | Tint sz sg _ =>
-      check (zle 0 pos && zlt pos Int.zwordsize
-             && zlt 0 width && zle (pos + width) Int.zwordsize
-             && zle width (bitsize_intsize sz));
+      check (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
       match v, Mem.loadv (chunk_for_carrier carrier) m (Vptr b ofs) with
       | Vint n, Some (Vint c) =>
           do m' <- Mem.storev (chunk_for_carrier carrier) m (Vptr b ofs)
-                              (Vint ((Int.bitfield_insert pos width c n)));
+                              (Vint ((Int.bitfield_insert (first_bit sz pos width) width c n)));
           Some (w, E0, m')
       | _, _ => None
       end
@@ -395,7 +391,7 @@ Proof.
 - inv H0. rewrite H1. auto.
 - inv H0. inv H2. rewrite H1; simpl.
   unfold proj_sumbool; rewrite ! zle_true, ! zlt_true by lia. cbn.
-  cbn in H5; rewrite H5. auto. 
+  cbn in H4; rewrite H4. auto. 
 Qed.
 
 Lemma do_assign_loc_sound:
@@ -429,7 +425,7 @@ Proof.
   elim n. red; tauto.
 - inv H0. inv H2. rewrite H1; simpl. 
   unfold proj_sumbool; rewrite ! zle_true, ! zlt_true by lia. cbn.
-  cbn in H5; rewrite H5. cbn in H6; rewrite H6. auto.
+  cbn in H4; rewrite H4. cbn in H5; rewrite H5. auto.
 Qed.
 
 (** External calls *)

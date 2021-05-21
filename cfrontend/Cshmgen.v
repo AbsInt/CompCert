@@ -378,12 +378,15 @@ Definition make_extract_bitfield (ty: type) (carrier: intsize) (pos width: Z)
                                  (addr: expr) : res expr :=
   match ty with
   | Tint sz sg _ =>
-      if zle 0 pos && zlt 0 width && zle (pos + width) Int.zwordsize
+      if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)
       then
+        let amount1 := Int.repr (Int.zwordsize - first_bit sz pos width - width) in
+        let amount2 := Int.repr (Int.zwordsize - width) in
         let e1 := Eload (chunk_for_carrier carrier) addr in
-        let e2 := Ebinop Oshl e1 (make_intconst (Int.repr (Int.zwordsize - pos - width))) in
-        let e3 := Ebinop (if intsize_eq sz IBool || signedness_eq sg Unsigned then Oshru else Oshr)
-                         e2 (make_intconst (Int.repr (Int.zwordsize - width))) in
+        let e2 := Ebinop Oshl e1 (make_intconst amount1) in
+        let e3 := Ebinop (if intsize_eq sz IBool
+                          || signedness_eq sg Unsigned then Oshru else Oshr)
+                         e2 (make_intconst amount2) in
         OK e3
       else
         Error(msg "Cshmgen.extract_bitfield(1)")
@@ -408,7 +411,7 @@ Definition make_load (addr: expr) (ty_res: type) (bf: bitfield) :=
       | By_nothing => Error (msg "Cshmgen.make_load")
       end
   | Bits carrier pos width =>
-    make_extract_bitfield ty_res carrier pos width addr
+      make_extract_bitfield ty_res carrier pos width addr
   end.
 
 (** Auxiliary for translating bitfield updates *)
@@ -417,11 +420,12 @@ Definition make_store_bitfield (ty: type) (carrier: intsize) (pos width: Z)
                                (addr val: expr) : res stmt :=
   match ty with
   | Tint sz sg _ =>
-      if zle 0 pos && zlt 0 width && zle (pos + width) Int.zwordsize
+      if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)
       then
-        let mask := Int.shl (Int.repr (two_p width - 1)) (Int.repr pos) in
+        let amount := first_bit sz pos width in
+        let mask := Int.shl (Int.repr (two_p width - 1)) (Int.repr amount) in
         let e1 := Eload (chunk_for_carrier carrier) addr in
-        let e2 := Ebinop Oshl val (make_intconst (Int.repr pos)) in
+        let e2 := Ebinop Oshl val (make_intconst (Int.repr amount)) in
         let e3 := Ebinop Oor (Ebinop Oand e2 (make_intconst mask))
                              (Ebinop Oand e1 (make_intconst (Int.not mask))) in
         OK (Sstore (chunk_for_carrier carrier) addr e3)

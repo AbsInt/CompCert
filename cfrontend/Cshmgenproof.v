@@ -141,40 +141,6 @@ Qed.
 
 (** * Properties of the translation functions *)
 
-(** Transformation of expressions and statements. *)
-
-Lemma transl_expr_lvalue:
-  forall ge e le m a loc ofs bf ce ta,
-  Clight.eval_lvalue ge e le m a loc ofs bf ->
-  transl_expr ce a = OK ta ->
-  (forall f id co,
-     ce!id = Some co ->
-     ge.(genv_cenv)!id = Some co /\
-     field_offset ge f (co_members co) = field_offset ce f (co_members co)) ->
-  (exists tb, transl_lvalue ce a = OK (tb, bf) /\ make_load tb (typeof a) bf = OK ta).
-Proof.
-  intros until ta; intros EVAL TR CONSIST. inv EVAL; simpl in TR.
-- (* var local *)
-  exists (Eaddrof id); auto.
-- (* var global *)
-  exists (Eaddrof id); auto.
-- (* deref *)
-  monadInv TR. cbn; rewrite EQ. exists x; auto.
-- (* field struct *)
-  monadInv TR.
-  assert (x1 = bf).
-  { rewrite H0 in EQ1. simpl in EQ1.
-    destruct (ce!id) as [co'|] eqn:E; monadInv EQ1.
-    exploit (CONSIST i id); eauto. intros [A B]. rewrite <- B in EQ0. congruence. }
-  subst x1.
-  exists x0; split; auto. simpl; rewrite EQ; auto.
-- (* field union *)
-  monadInv TR.
-  assert (x1 = Full).
-  { rewrite H0 in EQ1. cbn in EQ1. congruence. }
-  subst x1. exists x0; split; auto. simpl; rewrite EQ; auto.
-Qed.
-
 (** Properties of labeled statements *)
 
 Lemma transl_lbl_stmt_1:
@@ -963,6 +929,17 @@ Proof.
   auto.
 Qed.
 
+Remark first_bit_range: forall sz pos width,
+  0 <= pos -> 0 < width -> pos + width <= bitsize_intsize sz ->
+     0 <= first_bit sz pos width < Int.zwordsize
+  /\ 0 <= Int.zwordsize - first_bit sz pos width - width < Int.zwordsize.
+Proof.
+  intros.
+  assert (bitsize_carrier sz <= Int.zwordsize) by (destruct sz; compute; congruence).
+  assert (bitsize_intsize sz <= bitsize_carrier sz) by (destruct sz; simpl; lia).
+  unfold first_bit; destruct Archi.big_endian; lia.
+Qed.
+
 Lemma make_load_correct:
   forall addr ty bf code b ofs v e le m,
   make_load addr ty bf = OK code ->
@@ -980,10 +957,11 @@ Proof.
   rewrite H in MKLOAD. inv MKLOAD. auto.
 - (* by bitfield *)
   inv H.
-  unfold make_extract_bitfield in MKLOAD.
-  set (amount1 := Int.repr (Int.zwordsize - pos - width)) in MKLOAD.
+  unfold make_extract_bitfield in MKLOAD. unfold bitfield_extract.
+  exploit (first_bit_range sz pos width); eauto. intros [A1 A2].
+  set (amount1 := Int.repr (Int.zwordsize - first_bit sz pos width - width)) in MKLOAD.
   set (amount2 := Int.repr (Int.zwordsize - width)) in MKLOAD.
-  destruct (zle 0 pos && zlt 0 width && zle (pos + width) Int.zwordsize); inv MKLOAD.
+  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)); inv MKLOAD.
   set (e1 := Eload (chunk_for_carrier carrier) addr).
   assert (E1: eval_expr ge e le m e1 (Vint c)) by (econstructor; eauto).
   set (e2 := Ebinop Oshl e1 (make_intconst amount1)).
@@ -991,11 +969,11 @@ Proof.
   { econstructor; eauto using make_intconst_correct. cbn.
     unfold amount1 at 1; rewrite int_ltu_true by lia. auto. } 
   econstructor; eauto using make_intconst_correct.
-  unfold bitfield_extract. destruct (Ctypes.intsize_eq sz IBool || Ctypes.signedness_eq sg Unsigned); cbn.
+  destruct (Ctypes.intsize_eq sz IBool || Ctypes.signedness_eq sg Unsigned); cbn.
   + unfold amount2 at 1; rewrite int_ltu_true by lia. 
-    rewrite Int.unsigned_bitfield_extract_by_shifts; auto.
+    rewrite Int.unsigned_bitfield_extract_by_shifts by lia. auto.
   + unfold amount2 at 1; rewrite int_ltu_true by lia. 
-    rewrite Int.signed_bitfield_extract_by_shifts; auto.
+    rewrite Int.signed_bitfield_extract_by_shifts by lia. auto.
 Qed.
 
 Lemma make_store_bitfield_correct: 
@@ -1007,12 +985,14 @@ Lemma make_store_bitfield_correct:
   step ge (State f s k e le m) E0 (State f Sskip k e le m').
 Proof.
   intros until s; intros DST SRC ASG MK.
-  inv ASG. inv H4. simpl in MK.
-  destruct (zle 0 pos && zlt 0 width && zle (pos + width) Int.zwordsize); inv MK.
+  inv ASG. inv H4. unfold make_store_bitfield in MK.
+  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)); inv MK.
   econstructor; eauto.
+  exploit (first_bit_range sz pos width); eauto. intros [A1 A2].
   rewrite Int.bitfield_insert_alternative by lia.
-  set (mask := Int.shl (Int.repr (two_p width - 1)) (Int.repr pos)).
-  repeat econstructor; eauto. cbn. rewrite int_ltu_true by lia. auto.
+  set (amount := first_bit sz pos width).
+  set (mask := Int.shl (Int.repr (two_p width - 1)) (Int.repr amount)).
+  repeat econstructor; eauto. cbn. rewrite int_ltu_true by lia. auto. 
 Qed.
 
 Lemma make_memcpy_correct:
@@ -1272,6 +1252,36 @@ Variable m: mem.
 Variable te: Csharpminor.env.
 Hypothesis MENV: match_env e te.
 
+Lemma transl_expr_lvalue:
+  forall a loc ofs bf ta,
+  Clight.eval_lvalue ge e le m a loc ofs bf ->
+  transl_expr cunit.(prog_comp_env) a = OK ta ->
+  exists tb, transl_lvalue cunit.(prog_comp_env) a = OK (tb, bf)
+          /\ make_load tb (typeof a) bf = OK ta.
+Proof.
+  intros until ta; intros EVAL TR. inv EVAL; simpl in TR.
+- (* var local *)
+  exists (Eaddrof id); auto.
+- (* var global *)
+  exists (Eaddrof id); auto.
+- (* deref *)
+  monadInv TR. cbn; rewrite EQ. exists x; auto.
+- (* field struct *)
+  monadInv TR.
+  assert (x1 = bf).
+  { rewrite H0 in EQ1. simpl in EQ1.
+    destruct ((prog_comp_env cunit)!id) as [co'|] eqn:E; monadInv EQ1.
+    exploit field_offset_stable. eexact LINK. eauto. instantiate (1 := i). intros [A B].
+    simpl in H1, H2. congruence. }
+  subst x1.
+  exists x0; split; auto. simpl; rewrite EQ; auto.
+- (* field union *)
+  monadInv TR.
+  assert (x1 = Full).
+  { rewrite H0 in EQ1. cbn in EQ1. congruence. }
+  subst x1. exists x0; split; auto. simpl; rewrite EQ; auto.
+Qed.
+
 Lemma transl_expr_lvalue_correct:
   (forall a v,
    Clight.eval_expr ge e le m a v ->
@@ -1306,8 +1316,7 @@ Proof.
 - (* alignof *)
   rewrite (transl_alignof _ _ _ _ LINK EQ). apply make_ptrofsconst_correct.
 - (* rvalue out of lvalue *)
-  exploit transl_expr_lvalue; eauto. intros; eapply field_offset_stable; eauto.
-  intros [tb [TRLVAL MKLOAD]].
+  exploit transl_expr_lvalue; eauto. intros [tb [TRLVAL MKLOAD]].
   apply H0 in TRLVAL; destruct TRLVAL. 
   eapply make_load_correct; eauto.
 - (* var local *)
@@ -1534,7 +1543,7 @@ Proof.
   destruct x0.
   destruct (access_mode (typeof e)); monadInv EQ3; auto.
   unfold make_store_bitfield in EQ3. destruct (typeof e); try discriminate.
-  destruct (zle 0 pos && zlt 0 width && zle (pos + width) Int.zwordsize);
+  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize i));
   monadInv EQ3; auto.
 - (* set *)
   auto.
@@ -1638,7 +1647,7 @@ Proof.
     destruct x0. 
     destruct (access_mode (typeof a1)); monadInv EQ3; auto.
     unfold make_store_bitfield in EQ3. destruct (typeof a1); try discriminate.
-    destruct (zle 0 pos && zlt 0 width && zle (pos + width) Int.zwordsize);
+    destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize i));
     monadInv EQ3; auto.
   }
   destruct SAME; subst ts' tk'.

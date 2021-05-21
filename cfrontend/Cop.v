@@ -1101,25 +1101,41 @@ Definition bitsize_intsize (sz: intsize) : Z :=
   | IBool => 1
   end.
 
+(** For bitfield accesses, bits are numbered differently on
+    little-endian and on big-endian machines: bit 0 is the least
+    significant bit in little-endian, and the most significant bit in
+    big-endian. *)
+
+Definition bitsize_carrier (sz: intsize) : Z :=
+  match sz with
+  | I8 | IBool => 8
+  | I16 => 16
+  | I32 => 32
+  end.
+
+Definition first_bit (sz: intsize) (pos width: Z) : Z :=
+  if Archi.big_endian
+  then bitsize_carrier sz - pos - width
+  else pos.
+
 Definition bitfield_extract (sz: intsize) (sg: signedness) (pos width: Z) (c: int) : int :=
   if intsize_eq sz IBool || signedness_eq sg Unsigned
-  then Int.unsigned_bitfield_extract pos width c
-  else Int.signed_bitfield_extract pos width c.
+  then Int.unsigned_bitfield_extract (first_bit sz pos width) width c
+  else Int.signed_bitfield_extract (first_bit sz pos width) width c.
 
 Inductive load_bitfield: type -> intsize -> Z -> Z -> mem -> val -> val -> Prop :=
   | load_bitfield_intro: forall sz sg attr carrier pos width m addr c,
-      0 <= pos -> 0 < width -> pos + width <= Int.zwordsize ->
-      width <= bitsize_intsize sz ->
+      0 <= pos -> 0 < width -> pos + width <= bitsize_intsize sz ->
       Mem.loadv (chunk_for_carrier carrier) m addr = Some (Vint c) ->
       load_bitfield (Tint sz sg attr) carrier pos width m addr
                     (Vint (bitfield_extract sz sg pos width c)).
 
 Inductive store_bitfield: type -> intsize -> Z -> Z -> mem -> val -> val -> mem -> Prop :=
   | store_bitfield_intro: forall sz sg attr carrier pos width m addr c n m',
-      0 <= pos -> 0 < width -> pos + width <= Int.zwordsize ->
-      width <= bitsize_intsize sz ->
+      0 <= pos -> 0 < width -> pos + width <= bitsize_intsize sz ->
       Mem.loadv (chunk_for_carrier carrier) m addr = Some (Vint c) ->
-      Mem.storev (chunk_for_carrier carrier) m addr (Vint (Int.bitfield_insert pos width c n)) = Some m' ->
+      Mem.storev (chunk_for_carrier carrier) m addr
+                 (Vint (Int.bitfield_insert (first_bit sz pos width) width c n)) = Some m' ->
       store_bitfield (Tint sz sg attr) carrier pos width m addr (Vint n) m'.
 
 (** * Compatibility with extensions and injections *)
