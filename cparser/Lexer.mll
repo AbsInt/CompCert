@@ -393,7 +393,7 @@ and string_literal startp accu = parse
 (* We assume gcc -E syntax but try to tolerate variations. *)
 and hash = parse
   | whitespace_char_no_newline +
-    (decimal_constant as n)
+    (digit + as n)
     whitespace_char_no_newline *
     "\"" ([^ '\n' '\"']* as file) "\""
     [^ '\n']* '\n'
