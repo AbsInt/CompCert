@@ -456,7 +456,7 @@ Definition layout_field (pos: Z) (m: member) : res (Z * bitfield) :=
   match m with
   | Member_plain _ t =>
       OK (align pos (bitalignof t) / 8, Full)
-  | Member_bitfield _ sz _  _ w _ =>
+  | Member_bitfield _ sz _ _ w _ =>
       if zle w 0 then
         Error (msg "accessing zero-width bitfield")
       else
