@@ -1093,14 +1093,6 @@ Definition chunk_for_carrier (sz: intsize) : memory_chunk :=
   | I32 => Mint32
   end.
 
-Definition bitsize_intsize (sz: intsize) : Z :=
-  match sz with
-  | I8 => 8
-  | I16 => 16
-  | I32 => 32
-  | IBool => 1
-  end.
-
 (** For bitfield accesses, bits are numbered differently on
     little-endian and on big-endian machines: bit 0 is the least
     significant bit in little-endian, and the most significant bit in

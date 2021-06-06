@@ -114,23 +114,21 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
   | Ederef r ty =>
       constval ce r
   | Efield l f ty =>
-      match typeof l with
-      | Tstruct id _ =>
-          do co <- lookup_composite ce id;
-          do (delta, bf) <- field_offset ce f (co_members co);
-          do v <- constval ce l;
-          match bf with
-          | Full =>
-              OK (if Archi.ptr64
-                  then Val.addl v (Vlong (Int64.repr delta))
-                  else Val.add v (Vint (Int.repr delta)))
-          | Bits _ _ _ =>
-              Error(msg "taking the address of a bitfield")
-          end
-      | Tunion id _ =>
-          constval ce l
-      | _ =>
-          Error(msg "ill-typed field access")
+      do (delta, bf) <-
+        match typeof l with
+        | Tstruct id _ =>
+            do co <- lookup_composite ce id; field_offset ce f (co_members co)
+        | Tunion id _ =>
+            do co <- lookup_composite ce id; union_field_offset ce f (co_members co)
+        | _ =>
+            Error (msg "ill-typed field access")
+        end;
+      do v <- constval ce l;
+      match bf with
+      | Full =>
+          OK (Val.offset_ptr v (Ptrofs.repr delta))
+      | Bits _ _ _ =>
+          Error(msg "taking the address of a bitfield")
       end
   | Eparen r tycast ty =>
       do v <- constval ce r; do_cast v (typeof r) tycast
@@ -305,7 +303,8 @@ Definition store_int (s: state) (pos: Z) (isz: intsize) (n: int) : res state :=
 (** Load the integer of size [isz] at position [pos] in state [s]. *)
 
 Definition load_int (s: state) (pos: Z) (isz: intsize) : res int :=
-  let sz := size_chunk (chunk_for_carrier isz) in
+  let chunk := chunk_for_carrier isz in
+  let sz := size_chunk chunk in
   assertion (zle 0 pos && zle (pos + sz) s.(total_size));
   let s' := pad_to s (pos + sz) in
   do x3 <- trisection s'.(init) (s'.(curr) - (pos + sz)) sz;
@@ -360,17 +359,22 @@ Definition transl_init_single (ce: composite_env) (ty: type) (a: expr) : res ini
 
 Definition transl_init_bitfield (ce: composite_env) (s: state)
                                 (ty: type) (carrier: intsize) (p w: Z)
-                                (a: expr) (pos: Z) : res state :=
-  do v <- constval_cast ce a ty;
-  match v with
-  | Vint n =>
-      do c <- load_int s pos carrier;
-      let c' := Int.bitfield_insert (first_bit carrier p w) w c n in
-      store_int s pos carrier c'
-  | Vundef =>
-      Error (msg "undefined operation in bitfield initializer")
+                                (i: initializer) (pos: Z) : res state :=
+  match i with
+  | Init_single a =>
+      do v <- constval_cast ce a ty;
+      match v with
+      | Vint n =>
+          do c <- load_int s pos carrier;
+          let c' := Int.bitfield_insert (first_bit carrier p w) w c n in
+          store_int s pos carrier c'
+      | Vundef =>
+          Error (msg "undefined operation in bitfield initializer")
+      | _ =>
+          Error (msg "type mismatch in bitfield initializer")
+      end
   | _ =>
-      Error (msg "type mismatch in bitfield initializer")
+      Error (msg "bitfield initialized by composite initializer")
   end.
 
 (** Padding bitfields and bitfields with zero width are not initialized. *)
@@ -405,7 +409,13 @@ Fixpoint transl_init_rec (ce: composite_env) (s: state)
       match co_su co with
       | Struct => Error (MSG "union/struct mismatch on " :: CTX id :: nil)
       | Union =>  do ty1 <- field_type f (co_members co);
-                  transl_init_rec ce s ty1 i1 pos
+                  do (delta, layout) <- union_field_offset ce f (co_members co);
+                  match layout with
+                  | Full =>
+                      transl_init_rec ce s ty1 i1 (pos + delta)
+                  | Bits carrier p w =>
+                      transl_init_bitfield ce s ty1 carrier p w i1 (pos + delta)
+                  end
       end
   | _, _ =>
       Error (msg "wrong type for compound initializer")
@@ -440,13 +450,11 @@ with transl_init_struct (ce: composite_env) (s: state)
             else
               do (delta, layout) <- layout_field ce pos m;
               do s1 <-
-                match layout, i1 with
-                | Full, _ =>
+                match layout with
+                | Full =>
                     transl_init_rec ce s (type_member m) i1 (base + delta)
-                | Bits carrier p w, Init_single a =>
-                    transl_init_bitfield ce s (type_member m) carrier p w a (base + delta)
-                | _, _ =>
-                    Error (msg "bitfield initialized by composite initializer")
+                | Bits carrier p w =>
+                    transl_init_bitfield ce s (type_member m) carrier p w i1 (base + delta)
                 end;
                 transl_init_struct ce s1 ms' il' base (next_field ce pos m)
          end in

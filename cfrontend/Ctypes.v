@@ -438,6 +438,16 @@ Definition bitalignof_intsize (sz: intsize) : Z :=
   | I32 => 32
   end.
 
+(** Maximal size in bits of a bitfield of type [sz].
+    Note: this is not [8 * sizeof (Tint sz .. ..)] because of the [IBool] case. *)
+Definition bitsize_intsize (sz: intsize) : Z :=
+  match sz with
+  | I8 => 8
+  | I16 => 16
+  | I32 => 32
+  | IBool => 1
+  end.
+
 Definition next_field (pos: Z) (m: member) : Z :=
   match m with
   | Member_plain _ t =>
@@ -457,8 +467,8 @@ Definition layout_field (pos: Z) (m: member) : res (Z * bitfield) :=
   | Member_plain _ t =>
       OK (align pos (bitalignof t) / 8, Full)
   | Member_bitfield _ sz _ _ w _ =>
-      if zle w 0 then
-        Error (msg "accessing zero-width bitfield")
+      if zle w 0 then Error (msg "accessing zero-width bitfield")
+      else if zle (bitsize_intsize sz) w then Error (msg "bitfield too wide")
       else
         let s := bitalignof_intsize sz in
         let start := floor pos s in
@@ -521,6 +531,7 @@ Proof.
   rewrite E. lia.
 - unfold next_field.
   destruct (zle width 0); try discriminate. rewrite zlt_true by lia.
+  destruct (zle (bitsize_intsize sz) width); try discriminate.
   set (s := bitalignof_intsize sz) in *.
   assert (A: s > 0) by (apply bitalignof_intsize_pos).
   generalize (floor_interval pos s A). set (p := floor pos s) in *. intros B.
@@ -550,6 +561,7 @@ Proof.
   { apply align_divides. unfold bitalignof. generalize (alignof_pos env t). lia. }
   destruct A as [n E]. exists n. rewrite E. unfold bitalignof. rewrite Z.mul_assoc, Z.div_mul by lia. auto.
 - destruct (zle width 0); try discriminate.
+  destruct (zle (bitsize_intsize sz) width); try discriminate.
   set (s := bitalignof_intsize sz) in *.
   assert (A: s > 0) by (apply bitalignof_intsize_pos).
   set (p := floor pos s) in *.
@@ -641,6 +653,12 @@ Qed.
 
 (** ** Byte offset and bitfield designator for a field of a structure *)
 
+Fixpoint field_type (id: ident) (ms: members) {struct ms} : res type :=
+  match ms with
+  | nil => Error (MSG "Unknown field " :: CTX id :: nil)
+  | m :: ms => if ident_eq id (name_member m) then OK (type_member m) else field_type id ms
+  end.
+
 (** [field_offset env id fld] returns the byte offset for field [id]
   in a structure whose members are [fld].  It also returns a
   bitfield designator, giving the location of the bits to access
@@ -658,12 +676,6 @@ Fixpoint field_offset_rec (env: composite_env) (id: ident) (ms: members) (pos: Z
 
 Definition field_offset (env: composite_env) (id: ident) (ms: members) : res (Z * bitfield) :=
   field_offset_rec env id ms 0.
-
-Fixpoint field_type (id: ident) (ms: members) {struct ms} : res type :=
-  match ms with
-  | nil => Error (MSG "Unknown field " :: CTX id :: nil)
-  | m :: ms => if ident_eq id (name_member m) then OK (type_member m) else field_type id ms
-  end.
 
 (** Some sanity checks about field offsets.  First, field offsets are
   within the range of acceptable offsets. *)
@@ -769,6 +781,57 @@ Corollary field_offset_aligned:
   (alignof env ty | ofs).
 Proof.
   intros. exploit field_offset_aligned_gen; eauto.
+Qed.
+
+(** [union_field_offset env id ms] returns the byte offset and
+    bitfield designator for accessing a member named [id] of a union
+    whose members are [ms].  The byte offset is always 0. *)
+
+Fixpoint union_field_offset (env: composite_env) (id: ident) (ms: members)
+                          {struct ms} : res (Z * bitfield) :=
+  match ms with
+  | nil => Error (MSG "Unknown field " :: CTX id :: nil)
+  | m :: ms =>
+      if ident_eq id (name_member m)
+      then layout_field env 0 m
+      else union_field_offset env id ms
+  end.
+
+(** Some sanity checks about union field offsets.  First, field offsets
+    fit within the size of the union. *)
+
+Lemma union_field_offset_in_range_gen:
+  forall env id ofs bf ty ms,
+  union_field_offset env id ms = OK (ofs, bf) -> field_type id ms = OK ty ->
+  ofs = 0 /\ 0 <= layout_start ofs bf /\ layout_start ofs bf + layout_width env ty bf <= sizeof_union env ms * 8.
+Proof.
+  induction ms as [ | m ms]; simpl; intros.
+- discriminate.
+- destruct (ident_eq id (name_member m)).
+  + inv H0. set (ty := type_member m) in *.
+    destruct m; simpl in H.
+    * inv H. unfold layout_start, layout_width. 
+      rewrite align_same. change (0 / 8) with 0. unfold bitsizeof. lia.
+      unfold bitalignof. generalize (alignof_pos env t). lia.
+      apply Z.divide_0_r.
+    * destruct (zle width 0); try discriminate.
+      destruct (zle (bitsize_intsize sz) width); try discriminate.
+      assert (A: bitsize_intsize sz <= bitalignof_intsize sz <= sizeof env (Tint sz sg a) * 8).
+      { destruct sz; simpl; lia. }
+      rewrite zle_true in H by lia. inv H.
+      unfold layout_start, layout_width, ty, type_member.
+      unfold floor; rewrite Z.div_0_l by lia.
+      lia.
+  + exploit IHms; eauto. lia.
+Qed.
+
+Corollary union_field_offset_in_range:
+  forall env ms id ofs ty,
+  union_field_offset env id ms = OK (ofs, Full) -> field_type id ms = OK ty ->
+  ofs = 0 /\ sizeof env ty <= sizeof_union env ms.
+Proof.
+  intros. exploit union_field_offset_in_range_gen; eauto. 
+  unfold layout_start, layout_width, bitsizeof. lia.
 Qed.
 
 (** ** Access modes *)

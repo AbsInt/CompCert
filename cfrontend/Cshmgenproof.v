@@ -115,6 +115,28 @@ Proof.
   destruct (prog_comp_env cunit)!i as [co|] eqn:X; try discriminate; erewrite H1 by eauto; auto.
 Qed.
 
+Lemma union_field_offset_stable:
+  forall (cunit prog: Clight.program) id co f,
+  linkorder cunit prog ->
+  cunit.(prog_comp_env)!id = Some co ->
+  prog.(prog_comp_env)!id = Some co /\
+  union_field_offset prog.(prog_comp_env) f (co_members co) = union_field_offset cunit.(prog_comp_env) f (co_members co).
+Proof.
+  intros.
+  assert (C: composite_consistent cunit.(prog_comp_env) co).
+  { apply build_composite_env_consistent with cunit.(prog_types) id; auto.
+    apply prog_comp_env_eq. }
+  destruct H as [_ A].
+  split. auto. generalize (co_consistent_complete _ _ C).
+  induction (co_members co) as [ | m ms]; simpl; intros.
+- auto.
+- InvBooleans.
+  unfold layout_field, bitalignof, bitsizeof; destruct m; simpl name_member.
+  + rewrite ! (alignof_stable _ _ A) by auto.
+    destruct (ident_eq f id0); eauto.
+  + destruct (ident_eq f id0); eauto.
+Qed.
+
 Lemma field_offset_stable:
   forall (cunit prog: Clight.program) id co f,
   linkorder cunit prog ->
@@ -138,6 +160,7 @@ Proof.
     destruct (ident_eq f id0); eauto.
   + destruct (ident_eq f id0); eauto.
 Qed.
+
 
 (** * Properties of the translation functions *)
 
@@ -1269,17 +1292,23 @@ Proof.
 - (* field struct *)
   monadInv TR.
   assert (x1 = bf).
-  { rewrite H0 in EQ1. simpl in EQ1.
-    destruct ((prog_comp_env cunit)!id) as [co'|] eqn:E; monadInv EQ1.
+  { rewrite H0 in EQ1. unfold make_field_access in EQ1.
+    destruct ((prog_comp_env cunit)!id) as [co'|] eqn:E; try discriminate.
+    monadInv EQ1.
     exploit field_offset_stable. eexact LINK. eauto. instantiate (1 := i). intros [A B].
     simpl in H1, H2. congruence. }
   subst x1.
   exists x0; split; auto. simpl; rewrite EQ; auto.
 - (* field union *)
   monadInv TR.
-  assert (x1 = Full).
-  { rewrite H0 in EQ1. cbn in EQ1. congruence. }
-  subst x1. exists x0; split; auto. simpl; rewrite EQ; auto.
+  assert (x1 = bf).
+  { rewrite H0 in EQ1. unfold make_field_access in EQ1.
+    destruct ((prog_comp_env cunit)!id) as [co'|] eqn:E; try discriminate.
+    monadInv EQ1.
+    exploit union_field_offset_stable. eexact LINK. eauto. instantiate (1 := i). intros [A B].
+    simpl in H1, H2. congruence. }
+  subst x1.
+  exists x0; split; auto. simpl; rewrite EQ; auto.
 Qed.
 
 Lemma transl_expr_lvalue_correct:
@@ -1330,7 +1359,7 @@ Proof.
   eauto.
 - (* field struct *)
   unfold make_field_access in EQ0. rewrite H1 in EQ0.
-  destruct (prog_comp_env cunit)!id as [co'|] eqn:CO; monadInv EQ0.
+  destruct (prog_comp_env cunit)!id as [co'|] eqn:CO; try discriminate; monadInv EQ0.
   exploit field_offset_stable. eexact LINK. eauto. instantiate (1 := i). intros [A B].
   rewrite <- B in EQ1. 
   assert (x0 = delta) by (unfold ge in *; simpl in *; congruence).
@@ -1342,8 +1371,18 @@ Proof.
 + eapply eval_Ebinop; eauto using make_intconst_correct.
   simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal. auto with ptrofs.
 - (* field union *)
-  unfold make_field_access in EQ0; rewrite H1 in EQ0; monadInv EQ0.
-  auto.
+  unfold make_field_access in EQ0. rewrite H1 in EQ0.
+  destruct (prog_comp_env cunit)!id as [co'|] eqn:CO; try discriminate; monadInv EQ0.
+  exploit union_field_offset_stable. eexact LINK. eauto. instantiate (1 := i). intros [A B].
+  rewrite <- B in EQ1. 
+  assert (x0 = delta) by (unfold ge in *; simpl in *; congruence).
+  assert (bf' = bf) by (unfold ge in *; simpl in *; congruence).
+  subst x0 bf'. split; auto.
+  destruct Archi.ptr64 eqn:SF.
++ eapply eval_Ebinop; eauto using make_longconst_correct.
+  simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal. auto with ptrofs.
++ eapply eval_Ebinop; eauto using make_intconst_correct.
+  simpl. rewrite SF. apply f_equal. apply f_equal. apply f_equal. auto with ptrofs.
 Qed.
 
 Lemma transl_expr_correct:

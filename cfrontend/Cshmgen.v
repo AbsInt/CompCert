@@ -496,24 +496,26 @@ Definition transl_binop (ce: composite_env)
 (** ** Translation of field accesses *)
 
 Definition make_field_access (ce: composite_env) (ty: type) (f: ident) (a: expr) : res (expr * bitfield) :=
-  match ty with
-  | Tstruct id _ =>
-      match ce!id with
-      | None =>
-          Error (MSG "Undefined struct " :: CTX id :: nil)
-      | Some co =>
-          do (ofs, bf) <- field_offset ce f (co_members co);
-          let a' :=
-            if Archi.ptr64
-            then Ebinop Oaddl a (make_longconst (Int64.repr ofs))
-            else Ebinop Oadd a (make_intconst (Int.repr ofs)) in
-          OK (a', bf)
-      end
-  | Tunion id _ =>
-      OK (a, Full)
-  | _ =>
-      Error(msg "Cshmgen.make_field_access")
-  end.
+  do (ofs, bf) <-
+    match ty with
+    | Tstruct id _ =>
+        match ce!id with
+        | None => Error (MSG "Undefined struct " :: CTX id :: nil)
+        | Some co => field_offset ce f (co_members co)
+        end
+    | Tunion id _ =>
+        match ce!id with
+        | None => Error (MSG "Undefined union " :: CTX id :: nil)
+        | Some co => union_field_offset ce f (co_members co)
+        end
+    | _ =>
+        Error(msg "Cshmgen.make_field_access")
+    end;
+  let a' :=
+    if Archi.ptr64
+    then Ebinop Oaddl a (make_longconst (Int64.repr ofs))
+    else Ebinop Oadd a (make_intconst (Int.repr ofs)) in
+  OK (a', bf).
 
 (** * Translation of expressions *)
 

@@ -227,10 +227,11 @@ Inductive lred: expr -> mem -> expr -> mem -> Prop :=
       field_offset ge f (co_members co) = OK (delta, bf) ->
       lred (Efield (Eval (Vptr b ofs) (Tstruct id a)) f ty) m
            (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) bf ty) m
-  | red_field_union: forall b ofs id co a f ty m,
+  | red_field_union: forall b ofs id co a f ty m delta bf,
       ge.(genv_cenv)!id = Some co ->
+      union_field_offset ge f (co_members co) = OK (delta, bf) ->
       lred (Efield (Eval (Vptr b ofs) (Tunion id a)) f ty) m
-           (Eloc b ofs Full ty) m.
+           (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) bf ty) m.
 
 (** Head reductions for r-values *)
 

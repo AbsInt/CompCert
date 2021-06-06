@@ -797,7 +797,10 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
               end
           | Tunion id _ =>
               do co <- ge.(genv_cenv)!id;
-              topred (Lred "red_field_union" (Eloc b ofs Full ty) m)
+              match union_field_offset ge f (co_members co) with
+              | Error _ => stuck
+              | OK (delta, bf) => topred (Lred "red_field_union" (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) bf ty) m)
+              end
           | _ => stuck
           end
       | Some _ =>
@@ -1024,7 +1027,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       exists b, exists ofs, v = Vptr b ofs /\
       match ty1 with
       | Tstruct id _ => exists co delta bf, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = OK (delta, bf)
-      | Tunion  id _ => exists co, ge.(genv_cenv)!id = Some co
+      | Tunion id _ => exists co delta bf, ge.(genv_cenv)!id = Some co /\ union_field_offset ge f (co_members co) = OK (delta, bf)
       | _ => False
       end
   | Eval v ty => False
@@ -1079,7 +1082,7 @@ Proof.
   exists b; auto.
   exists b; exists ofs; auto.
   exists b; exists ofs; split; auto. exists co, delta, bf; auto.
-  exists b; exists ofs; split; auto. exists co; auto.
+  exists b; exists ofs; split; auto. exists co, delta, bf; auto.
 Qed.
 
 Lemma rred_invert:
@@ -1425,6 +1428,7 @@ Proof with (try (apply not_invert_ok; simpl; intro; myinv; intuition congruence;
   apply topred_ok; auto. eapply red_field_struct; eauto.
   (* top union *)
   destruct (ge.(genv_cenv)!i0) as [co|] eqn:?...
+  destruct (union_field_offset ge f (co_members co)) as [[delta bf]|] eqn:?...
   apply topred_ok; auto. eapply red_field_union; eauto.
   (* in depth *)
   eapply incontext_ok; eauto.
@@ -1629,7 +1633,7 @@ Proof.
 (* field struct *)
   rewrite H, H0; econstructor; eauto.
 (* field union *)
-  rewrite H; econstructor; eauto.
+  rewrite H, H0; econstructor; eauto.
 Qed.
 
 Lemma rred_topred:

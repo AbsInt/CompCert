@@ -105,11 +105,12 @@ Inductive eval_simple_lvalue: expr -> block -> ptrofs -> bitfield -> Prop :=
       ge.(genv_cenv)!id = Some co ->
       field_offset ge f (co_members co) = OK (delta, bf) ->
       eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta)) bf
-  | esl_field_union: forall r f ty b ofs id co a,
+  | esl_field_union: forall r f ty b ofs id co a delta bf,
       eval_simple_rvalue r (Vptr b ofs) ->
       typeof r = Tunion id a ->
+      union_field_offset ge f (co_members co) = OK (delta, bf) ->
       ge.(genv_cenv)!id = Some co ->
-      eval_simple_lvalue (Efield r f ty) b ofs Full
+      eval_simple_lvalue (Efield r f ty) b (Ptrofs.add ofs (Ptrofs.repr delta)) bf
 
 with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_val: forall v ty,
@@ -531,7 +532,7 @@ Definition invert_expr_prop (a: expr) (m: mem) : Prop :=
       exists b, exists ofs, v = Vptr b ofs /\
       match ty1 with
       | Tstruct id _ => exists co delta bf, ge.(genv_cenv)!id = Some co /\ field_offset ge f (co_members co) = Errors.OK (delta, bf)
-      | Tunion id _ => exists co, ge.(genv_cenv)!id = Some co
+      | Tunion id _ => exists co delta bf, ge.(genv_cenv)!id = Some co /\ union_field_offset ge f (co_members co) = Errors.OK (delta, bf)
       | _ => False
       end
   | Eval v ty => False
@@ -587,7 +588,7 @@ Proof.
   exists b; auto.
   exists b; exists ofs; auto.
   exists b; exists ofs; split; auto. exists co, delta, bf; auto.
-  exists b; exists ofs; split; auto. exists co; auto.
+  exists b; exists ofs; split; auto. exists co, delta, bf; auto.
 Qed.
 
 Lemma rred_invert:
@@ -821,8 +822,8 @@ Ltac StepR REC C' a :=
   StepR IHa (fun x => C(Efield x f0 ty)) a.
   exploit safe_inv. eexact SAFE0. eauto. simpl.
   intros [b [ofs [EQ TY]]]. subst v. destruct (typeof a) eqn:?; try contradiction.
-  destruct TY as (co & delta & bf & CE & OFS). exists b, (Ptrofs.add ofs (Ptrofs.repr delta)), bf; econstructor; eauto.
-  destruct TY as (co & CE).  exists b, ofs, Full; econstructor; eauto.
+  destruct TY as (co & delta & bf & CE & OFS). exists b, (Ptrofs.add ofs (Ptrofs.repr delta)), bf; eapply esl_field_struct; eauto.
+  destruct TY as (co & delta & bf & CE & OFS). exists b, (Ptrofs.add ofs (Ptrofs.repr delta)), bf; eapply esl_field_union; eauto.
 - (* valof *)
   destruct (andb_prop _ _ S) as [S1 S2]. clear S. rewrite negb_true_iff in S2.
   StepL IHa (fun x => C(Evalof x ty)) a.

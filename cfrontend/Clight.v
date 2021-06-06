@@ -424,11 +424,12 @@ with eval_lvalue: expr -> block -> ptrofs -> bitfield -> Prop :=
       ge.(genv_cenv)!id = Some co ->
       field_offset ge i (co_members co) = OK (delta, bf) ->
       eval_lvalue (Efield a i ty) l (Ptrofs.add ofs (Ptrofs.repr delta)) bf
- | eval_Efield_union:   forall a i ty l ofs id co att,
+ | eval_Efield_union:   forall a i ty l ofs id co att delta bf,
       eval_expr a (Vptr l ofs) ->
       typeof a = Tunion id att ->
       ge.(genv_cenv)!id = Some co ->
-      eval_lvalue (Efield a i ty) l ofs Full.
+      union_field_offset ge i (co_members co) = OK (delta, bf) ->
+      eval_lvalue (Efield a i ty) l (Ptrofs.add ofs (Ptrofs.repr delta)) bf.
 
 Scheme eval_expr_ind2 := Minimality for eval_expr Sort Prop
   with eval_lvalue_ind2 := Minimality for eval_lvalue Sort Prop.

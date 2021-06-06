@@ -1529,7 +1529,8 @@ Proof.
   exploit eval_simpl_expr; eauto. intros [tv [A B]].
   inversion B. subst.
   econstructor; econstructor; split.
-  eapply eval_Efield_union; eauto. rewrite typeof_simpl_expr; eauto. auto.
+  eapply eval_Efield_union; eauto. rewrite typeof_simpl_expr; eauto.
+  econstructor; eauto. repeat rewrite Ptrofs.add_assoc. decEq. apply Ptrofs.add_commut.
 Qed.
 
 Lemma eval_simpl_exprlist:
