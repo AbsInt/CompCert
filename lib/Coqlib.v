@@ -773,6 +773,32 @@ Proof.
   exists (a0 :: l1); exists l2; intuition. simpl; congruence.
 Qed.
 
+(** Properties of [List.app] (concatenation) *)
+
+Lemma list_append_injective_l:
+  forall (A: Type) (l1 l2 l1' l2': list A),
+  l1 ++ l2 = l1' ++ l2' -> List.length l1 = List.length l1' -> l1 = l1' /\ l2 = l2'.
+Proof.
+  intros until l2'. revert l1 l1'. induction l1 as [ | a l1]; destruct l1' as [ | a' l1']; simpl; intros.
+- auto.
+- discriminate.
+- discriminate.
+- destruct (IHl1 l1'). congruence. congruence. split; congruence.
+Qed.
+
+Lemma list_append_injective_r:
+  forall (A: Type) (l1 l2 l1' l2': list A),
+  l1 ++ l2 = l1' ++ l2' -> List.length l2 = List.length l2' -> l1 = l1' /\ l2 = l2'.
+Proof.
+  intros.
+  assert (X: rev l2 = rev l2' /\ rev l1 = rev l1').
+  { apply list_append_injective_l.
+    rewrite <- ! rev_app_distr. congruence.
+    rewrite ! rev_length; auto. }
+  rewrite <- (rev_involutive l1), <- (rev_involutive l1'), <- (rev_involutive l2), <- (rev_involutive l2').
+  intuition congruence.
+Qed.
+
 (** Folding a function over a list *)
 
 Section LIST_FOLD.
