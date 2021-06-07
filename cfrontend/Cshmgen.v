@@ -374,25 +374,19 @@ Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type
 
 (** Auxiliary for translating bitfield accesses *)
 
-Definition make_extract_bitfield (ty: type) (carrier: intsize) (pos width: Z)
+Definition make_extract_bitfield (sz: intsize) (sg: signedness) (pos width: Z)
                                  (addr: expr) : res expr :=
-  match ty with
-  | Tint sz sg _ =>
-      if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)
-      then
-        let amount1 := Int.repr (Int.zwordsize - first_bit sz pos width - width) in
-        let amount2 := Int.repr (Int.zwordsize - width) in
-        let e1 := Eload (chunk_for_carrier carrier) addr in
-        let e2 := Ebinop Oshl e1 (make_intconst amount1) in
-        let e3 := Ebinop (if intsize_eq sz IBool
-                          || signedness_eq sg Unsigned then Oshru else Oshr)
-                         e2 (make_intconst amount2) in
-        OK e3
-      else
-        Error(msg "Cshmgen.extract_bitfield(1)")
-  | _ =>
-    Error(msg "Cshmgen.extract_bitfield(2)")
-  end.
+  if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz) then
+    let amount1 := Int.repr (Int.zwordsize - first_bit sz pos width - width) in
+    let amount2 := Int.repr (Int.zwordsize - width) in
+    let e1 := Eload (chunk_for_carrier sz) addr in
+    let e2 := Ebinop Oshl e1 (make_intconst amount1) in
+    let e3 := Ebinop (if intsize_eq sz IBool
+                      || signedness_eq sg Unsigned then Oshru else Oshr)
+                     e2 (make_intconst amount2) in
+    OK e3
+  else
+    Error(msg "Cshmgen.extract_bitfield").
 
 (** [make_load addr ty_res] loads a value of type [ty_res] from
    the memory location denoted by the Csharpminor expression [addr]
@@ -410,30 +404,24 @@ Definition make_load (addr: expr) (ty_res: type) (bf: bitfield) :=
       | By_copy => OK addr
       | By_nothing => Error (msg "Cshmgen.make_load")
       end
-  | Bits carrier pos width =>
-      make_extract_bitfield ty_res carrier pos width addr
+  | Bits sz sg pos width =>
+      make_extract_bitfield sz sg pos width addr
   end.
 
 (** Auxiliary for translating bitfield updates *)
 
-Definition make_store_bitfield (ty: type) (carrier: intsize) (pos width: Z)
+Definition make_store_bitfield (sz: intsize) (sg: signedness) (pos width: Z)
                                (addr val: expr) : res stmt :=
-  match ty with
-  | Tint sz sg _ =>
-      if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)
-      then
-        let amount := first_bit sz pos width in
-        let mask := Int.shl (Int.repr (two_p width - 1)) (Int.repr amount) in
-        let e1 := Eload (chunk_for_carrier carrier) addr in
-        let e2 := Ebinop Oshl val (make_intconst (Int.repr amount)) in
-        let e3 := Ebinop Oor (Ebinop Oand e2 (make_intconst mask))
-                             (Ebinop Oand e1 (make_intconst (Int.not mask))) in
-        OK (Sstore (chunk_for_carrier carrier) addr e3)
-      else
-        Error(msg "Cshmgen.make_store_bitfield(1)")
-  | _ =>
-    Error(msg "Cshmgen.make_store_bitfield(2)")
-  end.
+  if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz) then
+    let amount := first_bit sz pos width in
+    let mask := Int.shl (Int.repr (two_p width - 1)) (Int.repr amount) in
+    let e1 := Eload (chunk_for_carrier sz) addr in
+    let e2 := Ebinop Oshl val (make_intconst (Int.repr amount)) in
+    let e3 := Ebinop Oor (Ebinop Oand e2 (make_intconst mask))
+                         (Ebinop Oand e1 (make_intconst (Int.not mask))) in
+    OK (Sstore (chunk_for_carrier sz) addr e3)
+  else
+    Error(msg "Cshmgen.make_store_bitfield").
 
 (** [make_memcpy dst src ty] returns a [memcpy] builtin appropriate for
   by-copy assignment of a value of Clight type [ty]. *)
@@ -456,8 +444,8 @@ Definition make_store (ce: composite_env) (addr: expr) (ty: type) (bf: bitfield)
       | By_copy => make_memcpy ce addr rhs ty
       | _ => Error (msg "Cshmgen.make_store")
       end
-  | Bits carrier pos width =>
-      make_store_bitfield ty carrier pos width addr rhs
+  | Bits sz sg pos width =>
+      make_store_bitfield sz sg pos width addr rhs
   end.
 
 (** ** Translation of operators *)
@@ -544,7 +532,7 @@ Fixpoint transl_expr (ce: composite_env) (a: Clight.expr) {struct a} : res expr 
       do (tb, bf) <- transl_lvalue ce b;
       match bf with
       | Full => OK tb
-      | Bits _ _ _ => Error (msg "Cshmgen.transl_expr: addrof bitfield")
+      | Bits _ _ _ _ => Error (msg "Cshmgen.transl_expr: addrof bitfield")
       end
   | Clight.Eunop op b _ =>
       do tb <- transl_expr ce b;

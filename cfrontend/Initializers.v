@@ -127,7 +127,7 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
       match bf with
       | Full =>
           OK (Val.offset_ptr v (Ptrofs.repr delta))
-      | Bits _ _ _ =>
+      | Bits _ _ _ _ =>
           Error(msg "taking the address of a bitfield")
       end
   | Eparen r tycast ty =>
@@ -355,19 +355,19 @@ Definition transl_init_single (ce: composite_env) (ty: type) (a: expr) : res ini
   | _, _ => Error (msg "type mismatch in initializer")
   end.
 
-(** Initialize a bitfield [Bits carrier p w] with expression [a]. *)
+(** Initialize a bitfield [Bits sz sg p w] with expression [a]. *)
 
 Definition transl_init_bitfield (ce: composite_env) (s: state)
-                                (ty: type) (carrier: intsize) (p w: Z)
+                                (ty: type) (sz: intsize) (p w: Z)
                                 (i: initializer) (pos: Z) : res state :=
   match i with
   | Init_single a =>
       do v <- constval_cast ce a ty;
       match v with
       | Vint n =>
-          do c <- load_int s pos carrier;
-          let c' := Int.bitfield_insert (first_bit carrier p w) w c n in
-          store_int s pos carrier c'
+          do c <- load_int s pos sz;
+          let c' := Int.bitfield_insert (first_bit sz p w) w c n in
+          store_int s pos sz c'
       | Vundef =>
           Error (msg "undefined operation in bitfield initializer")
       | _ =>
@@ -413,8 +413,8 @@ Fixpoint transl_init_rec (ce: composite_env) (s: state)
                   match layout with
                   | Full =>
                       transl_init_rec ce s ty1 i1 (pos + delta)
-                  | Bits carrier p w =>
-                      transl_init_bitfield ce s ty1 carrier p w i1 (pos + delta)
+                  | Bits sz sg p w =>
+                      transl_init_bitfield ce s ty1 sz p w i1 (pos + delta)
                   end
       end
   | _, _ =>
@@ -453,8 +453,8 @@ with transl_init_struct (ce: composite_env) (s: state)
                 match layout with
                 | Full =>
                     transl_init_rec ce s (type_member m) i1 (base + delta)
-                | Bits carrier p w =>
-                    transl_init_bitfield ce s (type_member m) carrier p w i1 (base + delta)
+                | Bits sz sg p w =>
+                    transl_init_bitfield ce s (type_member m) sz p w i1 (base + delta)
                 end;
                 transl_init_struct ce s1 ms' il' base (next_field ce pos m)
          end in

@@ -72,10 +72,10 @@ Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs) :
   | deref_loc_copy:
       access_mode ty = By_copy ->
       deref_loc ty m b ofs Full E0 (Vptr b ofs)
-  | deref_loc_bitfield: forall carrier pos width v,
+  | deref_loc_bitfield: forall sz sg pos width v,
       type_is_volatile ty = false ->
-      load_bitfield ty carrier pos width m (Vptr b ofs) v ->
-      deref_loc ty m b ofs (Bits carrier pos width) E0 v.
+      load_bitfield ty sz sg pos width m (Vptr b ofs) v ->
+      deref_loc ty m b ofs (Bits sz sg pos width) E0 v.
 
 (** Symmetrically, [assign_loc ty m b ofs bf v t m'] returns the
   memory state after storing the value [v] in the datum
@@ -106,10 +106,10 @@ Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs):
       Mem.loadbytes m b' (Ptrofs.unsigned ofs') (sizeof ge ty) = Some bytes ->
       Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
       assign_loc ty m b ofs Full (Vptr b' ofs') E0 m'
-  | assign_loc_bitfield: forall carrier pos width v m',
+  | assign_loc_bitfield: forall sz sg pos width v m',
       type_is_volatile ty = false ->
-      store_bitfield ty carrier pos width m (Vptr b ofs) v m' ->
-      assign_loc ty m b ofs (Bits carrier pos width) v E0 m'.
+      store_bitfield sz sg pos width m (Vptr b ofs) v m' ->
+      assign_loc ty m b ofs (Bits sz sg pos width) v E0 m'.
 
 (** Allocation of function-local variables.
   [alloc_variables e1 m1 vars e2 m2] allocates one memory block

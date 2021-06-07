@@ -159,6 +159,16 @@ Definition attr_union (a1 a2: attr) : attr :=
 Definition merge_attributes (ty: type) (a: attr) : type :=
   change_attributes (attr_union a) ty.
 
+(** Maximal size in bits of a bitfield of type [sz]. *)
+
+Definition bitsize_intsize (sz: intsize) : Z :=
+  match sz with
+  | I8 => 8
+  | I16 => 16
+  | I32 => 32
+  | IBool => 1
+  end.
+
 (** Syntax for [struct] and [union] definitions.  [struct] and [union]
   are collectively called "composites".  Each compilation unit
   comes with a list of top-level definitions of composites. *)
@@ -176,13 +186,25 @@ Inductive composite_definition : Type :=
   Composite (id: ident) (su: struct_or_union) (m: members) (a: attr).
 
 Definition name_member (m: member) : ident :=
-  match m with Member_plain id _ => id | Member_bitfield id _ _ _ _ _ => id end.
+  match m with
+  | Member_plain id _ => id
+  | Member_bitfield id _ _ _ _ _ => id
+  end.
 
 Definition type_member (m: member) : type :=
-  match m with Member_plain _ t => t | Member_bitfield _ sz sg a _ _ => Tint sz sg a end.
+  match m with
+  | Member_plain _ t => t
+  | Member_bitfield _ sz sg a w _ =>
+      (* An unsigned bitfield of width < size of type reads with a signed type *)
+      let sg' := if zlt w (bitsize_intsize sz) then Signed else sg in
+      Tint sz sg' a
+  end.
 
 Definition member_is_padding (m: member) : bool :=
-  match m with Member_plain _ _ => false | Member_bitfield _ _ _ _ _ p => p end.
+  match m with
+  | Member_plain _ _ => false
+  | Member_bitfield _ _ _ _ _ p => p
+  end.
 
 Definition name_composite_def (c: composite_definition) : ident :=
   match c with Composite id su m a => id end.
@@ -224,7 +246,7 @@ Definition composite_env : Type := PTree.t composite.
 
 Inductive bitfield : Type :=
   | Full
-  | Bits (carrier: intsize) (pos: Z) (width: Z).
+  | Bits (sz: intsize) (sg: signedness) (pos: Z) (width: Z).
 
 (** * Operations over types *)
 
@@ -438,16 +460,6 @@ Definition bitalignof_intsize (sz: intsize) : Z :=
   | I32 => 32
   end.
 
-(** Maximal size in bits of a bitfield of type [sz].
-    Note: this is not [8 * sizeof (Tint sz .. ..)] because of the [IBool] case. *)
-Definition bitsize_intsize (sz: intsize) : Z :=
-  match sz with
-  | I8 => 8
-  | I16 => 16
-  | I32 => 32
-  | IBool => 1
-  end.
-
 Definition next_field (pos: Z) (m: member) : Z :=
   match m with
   | Member_plain _ t =>
@@ -466,17 +478,17 @@ Definition layout_field (pos: Z) (m: member) : res (Z * bitfield) :=
   match m with
   | Member_plain _ t =>
       OK (align pos (bitalignof t) / 8, Full)
-  | Member_bitfield _ sz _ _ w _ =>
+  | Member_bitfield _ sz sg _ w _ =>
       if zle w 0 then Error (msg "accessing zero-width bitfield")
-      else if zle (bitsize_intsize sz) w then Error (msg "bitfield too wide")
+      else if zlt (bitsize_intsize sz) w then Error (msg "bitfield too wide")
       else
         let s := bitalignof_intsize sz in
         let start := floor pos s in
         let next := start + s in
         if zle (pos + w) next then
-          OK (start / 8, Bits sz (pos - start) w)
+          OK (start / 8, Bits sz sg (pos - start) w)
         else
-          OK (next / 8, Bits sz 0 w)
+          OK (next / 8, Bits sz sg 0 w)
   end.
 
 (** Some properties *)
@@ -506,10 +518,10 @@ Proof.
 Qed.
 
 Definition layout_start (p: Z) (bf: bitfield) :=
-  p * 8 + match bf with Full => 0 | Bits carrier pos w => pos end.
+  p * 8 + match bf with Full => 0 | Bits sz sg pos w => pos end.
 
 Definition layout_width (t: type) (bf: bitfield) :=
-  match bf with Full => bitsizeof t | Bits carrier pos w => w end.
+  match bf with Full => bitsizeof t | Bits sz sg pos w => w end.
 
 Lemma layout_field_range: forall pos m ofs bf,
   layout_field pos m = OK (ofs, bf) ->
@@ -531,7 +543,7 @@ Proof.
   rewrite E. lia.
 - unfold next_field.
   destruct (zle width 0); try discriminate. rewrite zlt_true by lia.
-  destruct (zle (bitsize_intsize sz) width); try discriminate.
+  destruct (zlt (bitsize_intsize sz) width); try discriminate.
   set (s := bitalignof_intsize sz) in *.
   assert (A: s > 0) by (apply bitalignof_intsize_pos).
   generalize (floor_interval pos s A). set (p := floor pos s) in *. intros B.
@@ -548,7 +560,10 @@ Proof.
 Qed.
 
 Definition layout_alignment (t: type) (bf: bitfield) :=
-  match bf with Full => alignof env t | Bits carrier _ _ => bitalignof_intsize carrier / 8 end.
+  match bf with
+  | Full => alignof env t
+  | Bits sz _ _ _ => bitalignof_intsize sz / 8
+  end.
 
 Lemma layout_field_alignment: forall pos m ofs bf,
   layout_field pos m = OK (ofs, bf) ->
@@ -561,7 +576,7 @@ Proof.
   { apply align_divides. unfold bitalignof. generalize (alignof_pos env t). lia. }
   destruct A as [n E]. exists n. rewrite E. unfold bitalignof. rewrite Z.mul_assoc, Z.div_mul by lia. auto.
 - destruct (zle width 0); try discriminate.
-  destruct (zle (bitsize_intsize sz) width); try discriminate.
+  destruct (zlt (bitsize_intsize sz) width); try discriminate.
   set (s := bitalignof_intsize sz) in *.
   assert (A: s > 0) by (apply bitalignof_intsize_pos).
   set (p := floor pos s) in *.
@@ -815,11 +830,11 @@ Proof.
       unfold bitalignof. generalize (alignof_pos env t). lia.
       apply Z.divide_0_r.
     * destruct (zle width 0); try discriminate.
-      destruct (zle (bitsize_intsize sz) width); try discriminate.
-      assert (A: bitsize_intsize sz <= bitalignof_intsize sz <= sizeof env (Tint sz sg a) * 8).
-      { destruct sz; simpl; lia. }
+      destruct (zlt (bitsize_intsize sz) width); try discriminate.
+      assert (A: bitsize_intsize sz <= bitalignof_intsize sz <= sizeof env ty * 8).
+      { unfold ty, type_member; destruct sz; simpl; lia. }
       rewrite zle_true in H by lia. inv H.
-      unfold layout_start, layout_width, ty, type_member.
+      unfold layout_start, layout_width.
       unfold floor; rewrite Z.div_0_l by lia.
       lia.
   + exploit IHms; eauto. lia.

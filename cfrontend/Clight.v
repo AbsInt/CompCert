@@ -216,9 +216,9 @@ Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs) :
   | deref_loc_copy:
       access_mode ty = By_copy ->
       deref_loc ty m b ofs Full (Vptr b ofs)
-  | deref_loc_bitfield: forall carrier pos width v,
-      load_bitfield ty carrier pos width m (Vptr b ofs) v ->
-      deref_loc ty m b ofs (Bits carrier pos width) v.
+  | deref_loc_bitfield: forall sz sg pos width v,
+      load_bitfield ty sz sg pos width m (Vptr b ofs) v ->
+      deref_loc ty m b ofs (Bits sz sg pos width) v.
 
 (** Symmetrically, [assign_loc ty m b ofs bf v m'] returns the
   memory state after storing the value [v] in the datum
@@ -243,9 +243,9 @@ Inductive assign_loc (ce: composite_env) (ty: type) (m: mem) (b: block) (ofs: pt
       Mem.loadbytes m b' (Ptrofs.unsigned ofs') (sizeof ce ty) = Some bytes ->
       Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
       assign_loc ce ty m b ofs Full (Vptr b' ofs') m'
-  | assign_loc_bitfield: forall carrier pos width v m',
-      store_bitfield ty carrier pos width m (Vptr b ofs) v m' ->
-      assign_loc ce ty m b ofs (Bits carrier pos width) v m'.
+  | assign_loc_bitfield: forall sz sg pos width v m',
+      store_bitfield sz sg pos width m (Vptr b ofs) v m' ->
+      assign_loc ce ty m b ofs (Bits sz sg pos width) v m'.
 
 Section SEMANTICS.
 

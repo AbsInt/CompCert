@@ -985,7 +985,7 @@ Proof.
   set (amount1 := Int.repr (Int.zwordsize - first_bit sz pos width - width)) in MKLOAD.
   set (amount2 := Int.repr (Int.zwordsize - width)) in MKLOAD.
   destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)); inv MKLOAD.
-  set (e1 := Eload (chunk_for_carrier carrier) addr).
+  set (e1 := Eload (chunk_for_carrier sz) addr).
   assert (E1: eval_expr ge e le m e1 (Vint c)) by (econstructor; eauto).
   set (e2 := Ebinop Oshl e1 (make_intconst amount1)).
   assert (E2: eval_expr ge e le m e2 (Vint (Int.shl c amount1))).
@@ -1000,15 +1000,15 @@ Proof.
 Qed.
 
 Lemma make_store_bitfield_correct: 
-  forall f carrier pos width dst src ty k e le m b ofs v m' s,
+  forall f sz sg pos width dst src ty k e le m b ofs v m' s,
   eval_expr ge e le m dst (Vptr b ofs) ->
   eval_expr ge e le m src v ->
-  assign_loc prog.(prog_comp_env) ty m b ofs (Bits carrier pos width) v m' ->
-  make_store_bitfield ty carrier pos width dst src = OK s ->
+  assign_loc prog.(prog_comp_env) ty m b ofs (Bits sz sg pos width) v m' ->
+  make_store_bitfield sz sg pos width dst src = OK s ->
   step ge (State f s k e le m) E0 (State f Sskip k e le m').
 Proof.
   intros until s; intros DST SRC ASG MK.
-  inv ASG. inv H4. unfold make_store_bitfield in MK.
+  inv ASG. inv H5. unfold make_store_bitfield in MK.
   destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)); inv MK.
   econstructor; eauto.
   exploit (first_bit_range sz pos width); eauto. intros [A1 A2].
@@ -1581,8 +1581,8 @@ Proof.
   unfold make_store, make_memcpy in EQ3.
   destruct x0.
   destruct (access_mode (typeof e)); monadInv EQ3; auto.
-  unfold make_store_bitfield in EQ3. destruct (typeof e); try discriminate.
-  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize i));
+  unfold make_store_bitfield in EQ3.
+  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
   monadInv EQ3; auto.
 - (* set *)
   auto.
@@ -1683,10 +1683,10 @@ Proof.
   assert (SAME: ts' = ts /\ tk' = tk).
   { inversion MTR. auto.
     subst ts. unfold make_store, make_memcpy in EQ3.
-    destruct x0. 
+    destruct x0.
     destruct (access_mode (typeof a1)); monadInv EQ3; auto.
-    unfold make_store_bitfield in EQ3. destruct (typeof a1); try discriminate.
-    destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize i));
+    unfold make_store_bitfield in EQ3.
+    destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
     monadInv EQ3; auto.
   }
   destruct SAME; subst ts' tk'.

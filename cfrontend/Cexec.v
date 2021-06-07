@@ -282,12 +282,14 @@ Definition do_deref_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs) 
     | By_copy => Some(w, E0, Vptr b ofs)
     | _ => None
     end
-  | Bits carrier pos width =>
+  | Bits sz sg pos width =>
     check (negb (type_is_volatile ty));
     match ty with
-    | Tint sz sg _ =>
-      check (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
-      match Mem.loadv (chunk_for_carrier carrier) m (Vptr b ofs) with
+    | Tint sz1 sg1 _ =>
+      check (intsize_eq sz1 sz &&
+             signedness_eq sg1 (if zlt width (bitsize_intsize sz) then Signed else sg) &&
+             zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
+      match Mem.loadv (chunk_for_carrier sz) m (Vptr b ofs) with
       | Some (Vint c) => Some (w, E0, Vint (bitfield_extract sz sg pos width c))
       | _ => None
       end
@@ -345,19 +347,15 @@ Definition do_assign_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs)
         end
     | _ => None
     end
-  | Bits carrier pos width =>
+  | Bits sz sg pos width =>
     check (negb (type_is_volatile ty));
-    match ty with
-    | Tint sz sg _ =>
-      check (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
-      match v, Mem.loadv (chunk_for_carrier carrier) m (Vptr b ofs) with
-      | Vint n, Some (Vint c) =>
-          do m' <- Mem.storev (chunk_for_carrier carrier) m (Vptr b ofs)
-                              (Vint ((Int.bitfield_insert (first_bit sz pos width) width c n)));
-          Some (w, E0, m')
-      | _, _ => None
-      end
-    | _ => None
+    check (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
+    match v, Mem.loadv (chunk_for_carrier sz) m (Vptr b ofs) with
+    | Vint n, Some (Vint c) =>
+        do m' <- Mem.storev (chunk_for_carrier sz) m (Vptr b ofs)
+                            (Vint ((Int.bitfield_insert (first_bit sz pos width) width c n)));
+        Some (w, E0, m')
+    | _, _ => None
     end
   end.
 
@@ -374,8 +372,7 @@ Proof.
   split. eapply deref_loc_reference; eauto. constructor.
   split. eapply deref_loc_copy; eauto. constructor.
 - mydestr. apply negb_true_iff in Heqb0.
-  destruct ty; mydestr. InvBooleans. rename i into sz; rename s into sg.
-  destruct v0; mydestr.
+  destruct ty; mydestr. InvBooleans. subst i. destruct v0; mydestr.
   split. eapply deref_loc_bitfield; eauto. econstructor; eauto. constructor.
 Qed.
 
@@ -390,8 +387,8 @@ Proof.
 - inv H0. rewrite H1. auto.
 - inv H0. rewrite H1. auto.
 - inv H0. inv H2. rewrite H1; simpl.
-  unfold proj_sumbool; rewrite ! zle_true, ! zlt_true by lia. cbn.
-  cbn in H4; rewrite H4. auto. 
+  unfold proj_sumbool; rewrite ! dec_eq_true, ! zle_true, ! zlt_true by lia. cbn.
+  cbn in H5; rewrite H5. auto. 
 Qed.
 
 Lemma do_assign_loc_sound:
@@ -406,8 +403,7 @@ Proof.
   split. eapply assign_loc_value; eauto. constructor.
   destruct v; mydestr. destruct a as [P [Q R]].
   split. eapply assign_loc_copy; eauto. constructor.
-- mydestr. apply negb_true_iff in Heqb0.
-  destruct ty; mydestr. InvBooleans. rename i into sz; rename s into sg.
+- mydestr. apply negb_true_iff in Heqb0. InvBooleans.
   destruct v; mydestr. destruct v; mydestr. 
   split. eapply assign_loc_bitfield; eauto. econstructor; eauto. constructor.
 Qed.
@@ -823,7 +819,7 @@ Fixpoint step_expr (k: kind) (a: expr) (m: mem): reducts expr :=
       match is_loc l with
       | Some(b, ofs, bf, ty') =>
           match bf with Full => topred (Rred "red_addrof" (Eval (Vptr b ofs) ty) m E0)
-                      | Bits _ _ _ => stuck
+                      | Bits _ _ _ _ => stuck
           end
       | None => incontext (fun x => Eaddrof x ty) (step_expr LV l m)
       end

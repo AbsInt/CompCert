@@ -1682,10 +1682,22 @@ Proof.
   destruct i; destruct s; discriminate.
   destruct f; discriminate.
 - (* bitfield *)
-  inv H0. constructor.
-  destruct sz; cbn in *; auto.
-  + destruct sg; cbn. apply Int.sign_ext_widen; lia. apply Int.zero_ext_widen; lia.
-  + destruct sg; cbn. apply Int.sign_ext_widen; lia. apply Int.zero_ext_widen; lia.
+  inv H0. set (sg' := (if zlt width (bitsize_intsize sz) then Signed else  sg)) in *.
+  constructor.
+  destruct sz; cbn in *.
+  + destruct sg.
+    * replace sg' with Signed by (unfold sg'; destruct zlt; auto).
+      apply Int.sign_ext_widen; lia.
+    * unfold sg'; destruct zlt.
+      ** apply Int.sign_zero_ext_widen; lia.
+      ** apply Int.zero_ext_widen; lia.
+  + destruct sg.
+    * replace sg' with Signed by (unfold sg'; destruct zlt; auto).
+      apply Int.sign_ext_widen; lia.
+    * unfold sg'; destruct zlt.
+      ** apply Int.sign_zero_ext_widen; lia.
+      ** apply Int.zero_ext_widen; lia.
+  + auto.
   + apply Int.zero_ext_widen; lia.
 Qed.
 
