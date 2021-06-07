@@ -525,6 +525,23 @@ Proof.
   intros. unfold align. apply Z.divide_factor_r.
 Qed.
 
+Lemma align_lt: forall x y, y > 0 -> align x y < x + y.
+Proof.
+  intros. unfold align.
+  generalize (Z_div_mod_eq (x + y - 1) y H); intro.
+  generalize (Z_mod_lt (x + y - 1) y H); intro.
+  lia.
+Qed.
+
+Lemma align_same:
+  forall x y, y > 0 -> (y | x) -> align x y = x.
+Proof.
+  unfold align; intros. destruct H0 as [k E].
+  replace (x  + y - 1) with (x + (y - 1)) by lia.
+  rewrite E, Z.div_add_l, Z.div_small by lia.
+  lia.
+Qed.
+
 (** * Definitions and theorems on the data types [option], [sum] and [list] *)
 
 Set Implicit Arguments.
