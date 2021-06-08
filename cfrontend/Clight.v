@@ -243,8 +243,8 @@ Inductive assign_loc (ce: composite_env) (ty: type) (m: mem) (b: block) (ofs: pt
       Mem.loadbytes m b' (Ptrofs.unsigned ofs') (sizeof ce ty) = Some bytes ->
       Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
       assign_loc ce ty m b ofs Full (Vptr b' ofs') m'
-  | assign_loc_bitfield: forall sz sg pos width v m',
-      store_bitfield sz sg pos width m (Vptr b ofs) v m' ->
+  | assign_loc_bitfield: forall sz sg pos width v m' v',
+      store_bitfield ty sz sg pos width m (Vptr b ofs) v m' v' ->
       assign_loc ce ty m b ofs (Bits sz sg pos width) v m'.
 
 Section SEMANTICS.

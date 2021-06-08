@@ -77,25 +77,29 @@ Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs) :
       load_bitfield ty sz sg pos width m (Vptr b ofs) v ->
       deref_loc ty m b ofs (Bits sz sg pos width) E0 v.
 
-(** Symmetrically, [assign_loc ty m b ofs bf v t m'] returns the
+(** Symmetrically, [assign_loc ty m b ofs bf v t m' v'] returns the
   memory state after storing the value [v] in the datum
   of type [ty] residing in memory [m] at block [b], offset [ofs],
   and bitfield designation [bf].
   This is allowed only if [ty] indicates an access by value or by copy.
   [m'] is the updated memory state and [t] the trace of observables
-  (nonempty if this is a volatile store). *)
+  (nonempty if this is a volatile store).
+  [v'] is the result value of the assignment.  It is equal to [v]
+  if [bf] is [Full], and to [v] normalized to the width and signedness
+  of the bitfield [bf] otherwise.
+*)
 
 Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs):
-                                bitfield -> val -> trace -> mem -> Prop :=
+                              bitfield -> val -> trace -> mem -> val -> Prop :=
   | assign_loc_value: forall v chunk m',
       access_mode ty = By_value chunk ->
       type_is_volatile ty = false ->
       Mem.storev chunk m (Vptr b ofs) v = Some m' ->
-      assign_loc ty m b ofs Full v E0 m'
+      assign_loc ty m b ofs Full v E0 m' v
   | assign_loc_volatile: forall v chunk t m',
       access_mode ty = By_value chunk -> type_is_volatile ty = true ->
       volatile_store ge chunk m b ofs v t m' ->
-      assign_loc ty m b ofs Full v t m'
+      assign_loc ty m b ofs Full v t m' v
   | assign_loc_copy: forall b' ofs' bytes m',
       access_mode ty = By_copy ->
       (alignof_blockcopy ge ty | Ptrofs.unsigned ofs') ->
@@ -105,11 +109,11 @@ Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs):
               \/ Ptrofs.unsigned ofs + sizeof ge ty <= Ptrofs.unsigned ofs' ->
       Mem.loadbytes m b' (Ptrofs.unsigned ofs') (sizeof ge ty) = Some bytes ->
       Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
-      assign_loc ty m b ofs Full (Vptr b' ofs') E0 m'
-  | assign_loc_bitfield: forall sz sg pos width v m',
+      assign_loc ty m b ofs Full (Vptr b' ofs') E0 m' (Vptr b' ofs')
+  | assign_loc_bitfield: forall sz sg pos width v m' v',
       type_is_volatile ty = false ->
-      store_bitfield sz sg pos width m (Vptr b ofs) v m' ->
-      assign_loc ty m b ofs (Bits sz sg pos width) v E0 m'.
+      store_bitfield ty sz sg pos width m (Vptr b ofs) v m' v' ->
+      assign_loc ty m b ofs (Bits sz sg pos width) v E0 m' v'.
 
 (** Allocation of function-local variables.
   [alloc_variables e1 m1 vars e2 m2] allocates one memory block
@@ -142,9 +146,9 @@ Inductive bind_parameters (e: env):
       forall m,
       bind_parameters e m nil nil m
   | bind_parameters_cons:
-      forall m id ty params v1 vl b m1 m2,
+      forall m id ty params v1 vl v1' b m1 m2,
       PTree.get id e = Some(b, ty) ->
-      assign_loc ty m b Ptrofs.zero Full v1 E0 m1 ->
+      assign_loc ty m b Ptrofs.zero Full v1 E0 m1 v1' ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, ty) :: params) (v1 :: vl) m2.
 
@@ -281,11 +285,11 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
   | red_alignof: forall ty1 ty m,
       rred (Ealignof ty1 ty) m
         E0 (Eval (Vptrofs (Ptrofs.repr (alignof ge ty1))) ty) m
-  | red_assign: forall b ofs ty1 bf v2 ty2 m v t m',
+  | red_assign: forall b ofs ty1 bf v2 ty2 m v t m' v',
       sem_cast v2 ty2 ty1 m = Some v ->
-      assign_loc ty1 m b ofs bf v t m' ->
+      assign_loc ty1 m b ofs bf v t m' v' ->
       rred (Eassign (Eloc b ofs bf ty1) (Eval v2 ty2) ty1) m
-         t (Eval v ty1) m'
+         t (Eval v' ty1) m'
   | red_assignop: forall op b ofs ty1 bf v2 ty2 tyres m t v1,
       deref_loc ty1 m b ofs bf t v1 ->
       rred (Eassignop op (Eloc b ofs bf ty1) (Eval v2 ty2) tyres ty1) m
@@ -853,7 +857,7 @@ Proof.
   set (ge := globalenv p) in *.
   assert (DEREF: forall chunk m b ofs bf t v, deref_loc ge chunk m b ofs bf t v -> (length t <= 1)%nat).
   { intros. inv H0; simpl; try lia. inv H3; simpl; try lia. }
-  assert (ASSIGN: forall chunk m b ofs bf t v m', assign_loc ge chunk m b ofs bf v t m' -> (length t <= 1)%nat).
+  assert (ASSIGN: forall chunk m b ofs bf t v m' v', assign_loc ge chunk m b ofs bf v t m' v' -> (length t <= 1)%nat).
   { intros. inv H0; simpl; try lia. inv H3; simpl; try lia. }
   destruct H.
   inv H; simpl; try lia. inv H0; eauto; simpl; try lia.

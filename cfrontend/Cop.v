@@ -1115,6 +1115,11 @@ Definition bitfield_extract (sz: intsize) (sg: signedness) (pos width: Z) (c: in
   then Int.unsigned_bitfield_extract (first_bit sz pos width) width c
   else Int.signed_bitfield_extract (first_bit sz pos width) width c.
 
+Definition bitfield_normalize (sz: intsize) (sg: signedness) (width: Z) (n: int) : int :=
+  if intsize_eq sz IBool || signedness_eq sg Unsigned
+  then Int.zero_ext width n
+  else Int.sign_ext width n.
+
 Inductive load_bitfield: type -> intsize -> signedness -> Z -> Z -> mem -> val -> val -> Prop :=
   | load_bitfield_intro: forall sz sg1 attr sg pos width m addr c,
       0 <= pos -> 0 < width -> pos + width <= bitsize_intsize sz ->
@@ -1123,13 +1128,15 @@ Inductive load_bitfield: type -> intsize -> signedness -> Z -> Z -> mem -> val -
       load_bitfield (Tint sz sg1 attr) sz sg pos width m addr
                     (Vint (bitfield_extract sz sg pos width c)).
 
-Inductive store_bitfield: intsize -> signedness -> Z -> Z -> mem -> val -> val -> mem -> Prop :=
-  | store_bitfield_intro: forall sz sg pos width m addr c n m',
+Inductive store_bitfield: type -> intsize -> signedness -> Z -> Z -> mem -> val -> val -> mem -> val -> Prop :=
+  | store_bitfield_intro: forall sz sg1 attr sg pos width m addr c n m',
       0 <= pos -> 0 < width -> pos + width <= bitsize_intsize sz ->
+      sg1 = (if zlt width (bitsize_intsize sz) then Signed else sg) ->
       Mem.loadv (chunk_for_carrier sz) m addr = Some (Vint c) ->
       Mem.storev (chunk_for_carrier sz) m addr
                  (Vint (Int.bitfield_insert (first_bit sz pos width) width c n)) = Some m' ->
-      store_bitfield sz sg pos width m addr (Vint n) m'.
+      store_bitfield (Tint sz sg1 attr) sz sg pos width m addr (Vint n)
+                     m' (Vint (bitfield_normalize sz sg width n)).
 
 (** * Compatibility with extensions and injections *)
 

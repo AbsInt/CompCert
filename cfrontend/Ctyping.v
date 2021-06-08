@@ -1657,6 +1657,28 @@ Proof.
   unfold Mptr in *. destruct Archi.ptr64 eqn:SF; auto with ty.
 Qed.
 
+Remark wt_bitfield_normalize: forall sz sg width sg1 n,
+  0 < width <= bitsize_intsize sz ->
+  sg1 = (if zlt width (bitsize_intsize sz) then Signed else sg) ->
+  wt_int (bitfield_normalize sz sg width n) sz sg1.
+Proof.
+  intros. destruct sz; cbn in *.
+  + destruct sg.
+    * replace sg1 with Signed by (destruct zlt; auto).
+      apply Int.sign_ext_widen; lia.
+    * subst sg1; destruct zlt.
+      ** apply Int.sign_zero_ext_widen; lia.
+      ** apply Int.zero_ext_widen; lia.
+  + destruct sg.
+    * replace sg1 with Signed by (destruct zlt; auto).
+      apply Int.sign_ext_widen; lia.
+    * subst sg1; destruct zlt.
+      ** apply Int.sign_zero_ext_widen; lia.
+      ** apply Int.zero_ext_widen; lia.
+  + auto.
+  + apply Int.zero_ext_widen; lia.
+Qed.
+
 Lemma wt_deref_loc:
   forall ge ty m b ofs bf t v,
   deref_loc ge ty m b ofs bf t v ->
@@ -1682,23 +1704,18 @@ Proof.
   destruct i; destruct s; discriminate.
   destruct f; discriminate.
 - (* bitfield *)
-  inv H0. set (sg' := (if zlt width (bitsize_intsize sz) then Signed else  sg)) in *.
-  constructor.
-  destruct sz; cbn in *.
-  + destruct sg.
-    * replace sg' with Signed by (unfold sg'; destruct zlt; auto).
-      apply Int.sign_ext_widen; lia.
-    * unfold sg'; destruct zlt.
-      ** apply Int.sign_zero_ext_widen; lia.
-      ** apply Int.zero_ext_widen; lia.
-  + destruct sg.
-    * replace sg' with Signed by (unfold sg'; destruct zlt; auto).
-      apply Int.sign_ext_widen; lia.
-    * unfold sg'; destruct zlt.
-      ** apply Int.sign_zero_ext_widen; lia.
-      ** apply Int.zero_ext_widen; lia.
-  + auto.
-  + apply Int.zero_ext_widen; lia.
+  inv H0. constructor.
+  apply wt_bitfield_normalize. lia. auto.
+Qed.
+
+Lemma wt_assign_loc:
+  forall ge ty m b ofs bf v t m' v',
+  assign_loc ge ty m b ofs bf v t m' v' ->
+  wt_val v ty -> wt_val v' ty.
+Proof.
+  induction 1; intros; auto.
+- inv H0. constructor.
+  apply wt_bitfield_normalize. lia. auto.
 Qed.
 
 Lemma wt_cast_self:
@@ -1789,7 +1806,7 @@ Proof.
 - (* condition *) constructor. destruct b; auto. destruct b; auto. red; auto.
 - (* sizeof *)  unfold size_t, Vptrofs; destruct Archi.ptr64; constructor; auto with ty.
 - (* alignof *)  unfold size_t, Vptrofs; destruct Archi.ptr64; constructor; auto with ty.
-- (* assign *) inversion H5. constructor. eapply pres_sem_cast; eauto.
+- (* assign *) inversion H5. constructor. eapply wt_assign_loc; eauto. eapply pres_sem_cast; eauto.
 - (* assignop *) subst tyres l r. constructor. auto.
   constructor. constructor. eapply wt_deref_loc; eauto.
   auto. auto. auto.

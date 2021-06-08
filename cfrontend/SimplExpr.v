@@ -13,17 +13,8 @@
 (** Translation from Compcert C to Clight.
     Side effects are pulled out of Compcert C expressions. *)
 
-Require Import Coqlib.
-Require Import Errors.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import AST.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
-Require Import Clight.
+Require Import Coqlib Maps Integers Floats Values AST Memory Errors.
+Require Import Ctypes Cop Csyntax Clight.
 
 Local Open Scope string_scope.
 Local Open Scope list_scope.
@@ -71,8 +62,6 @@ Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
    (at level 200, X ident, Y ident, A at level 100, B at level 200)
    : gensym_monad_scope.
 
-Local Open Scope gensym_monad_scope.
-
 Parameter first_unused_ident: unit -> ident.
 
 Definition initial_generator (x: unit) : generator :=
@@ -95,6 +84,12 @@ Fixpoint makeseq_rec (s: statement) (l: list statement) : statement :=
 
 Definition makeseq (l: list statement) : statement :=
   makeseq_rec Sskip l.
+
+Section SIMPL_EXPR.
+
+Local Open Scope gensym_monad_scope.
+
+Variable ce: composite_env.
 
 (** Smart constructor for [if ... then ... else]. *)
 
@@ -179,6 +174,56 @@ Definition make_assign (l r: expr) : statement :=
       let typtr := Tpointer ty noattr in
       Sbuiltin None (EF_vstore chunk) (Tcons typtr (Tcons ty Tnil))
                     (Eaddrof l typtr :: r :: nil)
+  end.
+
+(** Given a simple l-value expression [l], determine whether it
+    designates a bitfield.  *)
+
+Definition is_bitfield_access_aux
+              (fn: composite_env -> ident -> members -> res (Z * bitfield))
+              (id: ident) (fld: ident) : mon bitfield :=
+  match ce!id with
+  | None => error (MSG "unknown composite " :: CTX id :: nil)
+  | Some co =>
+      match fn ce fld (co_members co) with
+      | OK (_, bf) => ret bf
+      | Error _ => error (MSG "unknown field " :: CTX fld :: nil)
+      end
+  end.
+
+Definition is_bitfield_access (l: expr) : mon bitfield :=
+  match l with
+  | Efield r f _ =>
+      match typeof r with
+      | Tstruct id _ => is_bitfield_access_aux field_offset id f
+      | Tunion id _  => is_bitfield_access_aux union_field_offset id f
+      | _ => error (msg "is_bitfield_access")
+      end
+  | _ => ret Full
+  end.
+
+(** Translation of the value of an assignment expression.
+    For non-bitfield assignments, it's the value of the right-hand side
+    converted to the type of the left-hand side.
+    For assignments to bitfields, an additional normalization to
+    the width and signedness of the bitfield is required. *)
+
+Definition make_normalize (sz: intsize) (sg: signedness) (width: Z) (r: expr) :=
+  let intconst (n: Z) := Econst_int (Int.repr n) type_int32s in
+  if intsize_eq sz IBool || signedness_eq sg Unsigned then
+    let mask := two_p width - 1 in
+    Ebinop Oand r (intconst mask) (typeof r)
+  else
+    let amount := Int.zwordsize - width in
+    Ebinop Oshr
+           (Ebinop Oshl r (intconst amount) type_int32s)
+           (intconst amount)
+           (typeof r).
+
+Definition make_assign_value (bf: bitfield) (r: expr): expr :=
+  match bf with
+  | Full => r
+  | Bits sz sg pos width => make_normalize sz sg width r
   end.
 
 (** Translation of expressions.  Return a pair [(sl, a)] of
@@ -340,9 +385,10 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       match dst with
       | For_val | For_set _ =>
           do t <- gensym ty1;
+          do bf <- is_bitfield_access a1;
           ret (finish dst
                  (sl1 ++ sl2 ++ Sset t (Ecast a2 ty1) :: make_assign a1 (Etempvar t ty1) :: nil)
-                 (Etempvar t ty1))
+                 (make_assign_value bf (Etempvar t ty1)))
       | For_effects =>
           ret (sl1 ++ sl2 ++ make_assign a1 a2 :: nil,
                dummy_expr)
@@ -355,11 +401,12 @@ Fixpoint transl_expr (dst: destination) (a: Csyntax.expr) : mon (list statement 
       match dst with
       | For_val | For_set _ =>
           do t <- gensym ty1;
+          do bf <- is_bitfield_access a1;
           ret (finish dst
                  (sl1 ++ sl2 ++ sl3 ++
                   Sset t (Ecast (Ebinop op a3 a2 tyres) ty1) ::
                   make_assign a1 (Etempvar t ty1) :: nil)
-                 (Etempvar t ty1))
+                 (make_assign_value bf (Etempvar t ty1)))
       | For_effects =>
           ret (sl1 ++ sl2 ++ sl3 ++ make_assign a1 (Ebinop op a3 a2 tyres) :: nil,
                dummy_expr)
@@ -423,12 +470,6 @@ Definition transl_expression (r: Csyntax.expr) : mon (statement * expr) :=
 
 Definition transl_expr_stmt (r: Csyntax.expr) : mon statement :=
   do (sl, a) <- transl_expr For_effects r; ret (makeseq sl).
-
-(*
-Definition transl_if (r: Csyntax.expr) (s1 s2: statement) : mon statement :=
-  do (sl, a) <- transl_expr For_val r;
-  ret (makeseq (sl ++ makeif a s1 s2 :: nil)).
-*)
 
 Definition transl_if (r: Csyntax.expr) (s1 s2: statement) : mon statement :=
   do (sl, a) <- transl_expr For_val r;
@@ -533,8 +574,12 @@ Definition transl_fundef (fd: Csyntax.fundef) : res fundef :=
       OK (External ef targs tres cc)
   end.
 
+End SIMPL_EXPR.
+
+Local Open Scope error_monad_scope.
+
 Definition transl_program (p: Csyntax.program) : res program :=
-  do p1 <- AST.transform_partial_program transl_fundef p;
+  do p1 <- AST.transform_partial_program (transl_fundef p.(prog_comp_env)) p;
   OK {| prog_defs := AST.prog_defs p1;
         prog_public := AST.prog_public p1;
         prog_main := AST.prog_main p1;
