@@ -2766,7 +2766,7 @@ Qed.
 
 Corollary sign_ext_shr_shl:
   forall n x,
-  0 < n < zwordsize ->
+  0 < n <= zwordsize ->
   let y := repr (zwordsize - n) in
   sign_ext n x = shr (shl x y) y.
 Proof.
@@ -2801,7 +2801,7 @@ Qed.
 Lemma sign_ext_range:
   forall n x, 0 < n < zwordsize -> -two_p (n-1) <= signed (sign_ext n x) < two_p (n-1).
 Proof.
-  intros. rewrite sign_ext_shr_shl; auto.
+  intros. rewrite sign_ext_shr_shl by lia.
   set (X := shl x (repr (zwordsize - n))).
   assert (two_p (n - 1) > 0) by (apply two_p_gt_ZERO; lia).
   assert (unsigned (repr (zwordsize - n)) = zwordsize - n).
