@@ -1218,18 +1218,20 @@ Proof.
   InvBooleans. rewrite alignof_stable by auto. rewrite IHms by auto. auto.
 Qed.
 
+Remark next_field_stable: forall pos m,
+  complete_type env (type_member m) = true -> next_field env' pos m = next_field env pos m.
+Proof.
+  destruct m; simpl; intros.
+- unfold bitalignof, bitsizeof. rewrite alignof_stable, sizeof_stable by auto. auto.
+- auto.
+Qed.
+
 Lemma bitsizeof_struct_stable:
   forall ms pos, complete_members env ms = true -> bitsizeof_struct env' pos ms = bitsizeof_struct env pos ms.
 Proof.
   induction ms as [|m ms]; simpl; intros.
   auto.
-  InvBooleans.
-  replace (next_field env pos m) with (next_field env' pos m).
-  apply IHms; auto.
-  unfold next_field. destruct m; auto.
-  unfold bitalignof, bitsizeof.
-  rewrite alignof_stable by auto. rewrite sizeof_stable by auto.
-  auto.
+  InvBooleans. rewrite next_field_stable by auto. apply IHms; auto.
 Qed.
 
 Lemma sizeof_union_stable:
@@ -1262,6 +1264,35 @@ Proof.
   induction ms as [|m ms]; simpl; intros.
   auto.
   InvBooleans. destruct m; auto. f_equal; auto. apply rank_type_stable; auto.
+Qed.
+
+Remark layout_field_stable: forall pos m,
+  complete_type env (type_member m) = true -> layout_field env' pos m = layout_field env pos m.
+Proof.
+  destruct m; simpl; intros.
+- unfold bitalignof. rewrite alignof_stable by auto. auto.
+- auto.
+Qed.
+
+Lemma field_offset_stable:
+  forall f ms, complete_members env ms = true -> field_offset env' f ms = field_offset env f ms.
+Proof.
+  intros until ms. unfold field_offset. generalize 0.
+  induction ms as [|m ms]; simpl; intros.
+- auto.
+- InvBooleans. destruct (ident_eq f (name_member m)).
+  apply layout_field_stable; auto.
+  rewrite next_field_stable by auto. apply IHms; auto.
+Qed.
+
+Lemma union_field_offset_stable:
+  forall f ms, complete_members env ms = true -> union_field_offset env' f ms = union_field_offset env f ms.
+Proof.
+  induction ms as [|m ms]; simpl; intros.
+- auto.
+- InvBooleans. destruct (ident_eq f (name_member m)).
+  apply layout_field_stable; auto.
+  apply IHms; auto.
 Qed.
 
 End STABILITY.

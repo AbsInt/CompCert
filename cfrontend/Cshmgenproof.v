@@ -127,14 +127,7 @@ Proof.
   { apply build_composite_env_consistent with cunit.(prog_types) id; auto.
     apply prog_comp_env_eq. }
   destruct H as [_ A].
-  split. auto. generalize (co_consistent_complete _ _ C).
-  induction (co_members co) as [ | m ms]; simpl; intros.
-- auto.
-- InvBooleans.
-  unfold layout_field, bitalignof, bitsizeof; destruct m; simpl name_member.
-  + rewrite ! (alignof_stable _ _ A) by auto.
-    destruct (ident_eq f id0); eauto.
-  + destruct (ident_eq f id0); eauto.
+  split. auto. apply Ctypes.union_field_offset_stable; eauto using co_consistent_complete.
 Qed.
 
 Lemma field_offset_stable:
@@ -149,18 +142,8 @@ Proof.
   { apply build_composite_env_consistent with cunit.(prog_types) id; auto.
     apply prog_comp_env_eq. }
   destruct H as [_ A].
-  split. auto. generalize (co_consistent_complete _ _ C).
-  unfold field_offset. generalize 0.
-  induction (co_members co) as [ | m ms]; simpl; intros.
-- auto.
-- InvBooleans.
-  unfold layout_field, next_field, bitalignof, bitsizeof; destruct m; simpl name_member.
-  + rewrite ! (alignof_stable _ _ A) by auto.
-    rewrite ! (sizeof_stable _ _ A) by auto.
-    destruct (ident_eq f id0); eauto.
-  + destruct (ident_eq f id0); eauto.
+  split. auto. apply Ctypes.field_offset_stable; eauto using co_consistent_complete.
 Qed.
-
 
 (** * Properties of the translation functions *)
 
