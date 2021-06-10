@@ -95,9 +95,6 @@ let z oc n = output_string oc (Z.to_string n)
 
 let data_pointer = if Archi.ptr64 then ".quad" else ".long"
 
-(* The comment deliminiter *)
-let comment = "#"
-
 (* Base-2 log of a Caml integer *)
 let rec log2 n =
   assert (n > 0);
@@ -106,6 +103,7 @@ let rec log2 n =
 (* System dependent printer functions *)
 module type SYSTEM =
     sig
+      val comment: string
       val raw_symbol: out_channel -> string -> unit
       val symbol: out_channel -> P.t -> unit
       val label: out_channel -> int -> unit
@@ -123,6 +121,9 @@ module type SYSTEM =
 (* Printer functions for ELF *)
 module ELF_System : SYSTEM =
   struct
+
+    (* The comment delimiter *)
+    let comment = "#"
 
     let raw_symbol oc s =
       fprintf oc "%s" s
@@ -179,6 +180,10 @@ module ELF_System : SYSTEM =
 (* Printer functions for MacOS *)
 module MacOS_System : SYSTEM =
   struct
+
+    (* The comment delimiter.
+        `##` instead of `#` to please the Clang assembler. *)
+    let comment = "##"
 
     let raw_symbol oc s =
      fprintf oc "_%s" s
@@ -238,6 +243,9 @@ module MacOS_System : SYSTEM =
 (* Printer functions for Cygwin *)
 module Cygwin_System : SYSTEM =
   struct
+
+    (* The comment delimiter *)
+    let comment = "#"
 
     let symbol_prefix =
       if Archi.ptr64 then "" else "_"
