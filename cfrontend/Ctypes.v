@@ -1516,6 +1516,57 @@ Global Opaque Linker_program.
 
 (** ** Commutation between linking and program transformations *)
 
+Section LINK_MATCH_PROGRAM_GEN.
+
+Context {F G: Type}.
+Variable match_fundef: program F -> fundef F -> fundef G -> Prop.
+
+Hypothesis link_match_fundef:
+  forall ctx1 ctx2 f1 tf1 f2 tf2 f,
+  link f1 f2 = Some f ->
+  match_fundef ctx1 f1 tf1 -> match_fundef ctx2 f2 tf2 ->
+  exists tf, link tf1 tf2 = Some tf /\ (match_fundef ctx1 f tf \/ match_fundef ctx2 f tf).
+
+Let match_program (p: program F) (tp: program G) : Prop :=
+    Linking.match_program_gen match_fundef eq p p tp
+ /\ prog_types tp = prog_types p.
+
+Theorem link_match_program_gen:
+  forall p1 p2 tp1 tp2 p,
+  link p1 p2 = Some p -> match_program p1 tp1 -> match_program p2 tp2 ->
+  exists tp, link tp1 tp2 = Some tp /\ match_program p tp.
+Proof.
+  intros until p; intros L [M1 T1] [M2 T2].
+  exploit link_linkorder; eauto. intros [LO1 LO2]. 
+Local Transparent Linker_program.
+  simpl in L; unfold link_program in L.
+  destruct (link (program_of_program p1) (program_of_program p2)) as [pp|] eqn:LP; try discriminate.
+  assert (A: exists tpp,
+               link (program_of_program tp1) (program_of_program tp2) = Some tpp
+             /\ Linking.match_program_gen match_fundef eq p pp tpp).
+  { eapply Linking.link_match_program; eauto.
+  - intros.
+    Local Transparent Linker_types.
+    simpl in *. destruct (type_eq v1 v2); inv H. exists v; rewrite dec_eq_true; auto.
+  }
+  destruct A as (tpp & TLP & MP).
+  simpl; unfold link_program. rewrite TLP.
+  destruct (lift_option (link (prog_types p1) (prog_types p2))) as [[typs EQ]|EQ]; try discriminate.
+  destruct (link_build_composite_env (prog_types p1) (prog_types p2) typs
+           (prog_comp_env p1) (prog_comp_env p2) (prog_comp_env_eq p1)
+           (prog_comp_env_eq p2) EQ) as (env & P & Q). 
+  rewrite <- T1, <- T2 in EQ.
+  destruct (lift_option (link (prog_types tp1) (prog_types tp2))) as [[ttyps EQ']|EQ']; try congruence.
+  assert (ttyps = typs) by congruence. subst ttyps. 
+  destruct (link_build_composite_env (prog_types tp1) (prog_types tp2) typs
+         (prog_comp_env tp1) (prog_comp_env tp2) (prog_comp_env_eq tp1)
+         (prog_comp_env_eq tp2) EQ') as (tenv & R & S).
+  assert (tenv = env) by congruence. subst tenv.
+  econstructor; split; eauto. inv L. split; auto.
+Qed.
+
+End LINK_MATCH_PROGRAM_GEN.
+
 Section LINK_MATCH_PROGRAM.
 
 Context {F G: Type}.
@@ -1571,3 +1622,4 @@ Local Transparent Linker_program.
 Qed.
 
 End LINK_MATCH_PROGRAM.
+
