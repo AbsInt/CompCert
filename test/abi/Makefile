@@ -23,7 +23,7 @@ test:
          done
 	@set -e; for t in layout staticlayout; do \
 	  $(SIMU) ./$$t.compcert > _compcert.log; \
-	  ./$$t.cc > _cc.log; \
+	  $(SIMU) ./$$t.cc > _cc.log; \
 	 if diff -a -u  _cc.log  _compcert.log; \
          then echo "$$t: CompCert and $CC agree"; rm _*.log; \
 	 else echo "$$t: CompCert and $CC DISAGREE"; exit 2; fi; \

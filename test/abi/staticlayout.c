@@ -60,7 +60,7 @@ void print_epilogue (void)
 #define TEST4(s)                                                            \
   static struct s x1 = {-1, 0, 0, 0};                                       \
   static struct s x2 = {-1, -1, 0, 0};                                      \
-  static struct s x3 = {-1, -1, -1, 0};                                     \
+  static struct s x3 = {-1, 0, -1, 0};                                      \
   static struct s x4 = {-1, -1, -1, -1};                                    \
   print_prologue(#s, _Alignof(struct s), sizeof(x1));                       \
   print_contents(sizeof(x1), &x1);                                          \
