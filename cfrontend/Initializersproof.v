@@ -578,29 +578,30 @@ Proof.
                        /\ List.length nl = Z.to_nat depth).
   { induction il as [ | i il ]; intros until il'; intros D; simpl in D.
   - destruct (zle depth 0); inv D.
-    exists (@nil int); simpl; intuition lia.
+    exists (@nil int); simpl. rewrite Z_to_nat_neg by auto. auto.
   - destruct (zle depth 0). 
-    + inv D. exists (@nil int); simpl; intuition lia.
+    + inv D. exists (@nil int); simpl. rewrite Z_to_nat_neg by auto. auto.
     + destruct i; try discriminate.
       apply IHil in D; destruct D as (nl & P & Q & R).
       exists (i :: nl); simpl; split. congruence. split.
       rewrite map_app. simpl. rewrite app_ass. exact Q.
-      lia.
+      rewrite R, <- Z2Nat.inj_succ by lia. f_equal; lia.
   }
   intros. apply REC in H. destruct H as (nl & P & Q & R). rewrite app_nil_r in Q.
   exists nl; auto.
-Qed.
-
-Lemma list_rev_repeat: forall (A: Type) (a: A) n,
-  rev (List.repeat a n) = List.repeat a n.
-Proof.
-  induction n; simpl. auto. rewrite IHn. symmetry. apply repeat_cons.
 Qed.
 
 Lemma list_repeat_app: forall (A: Type) (a: A) n2 n1,
   List.repeat a n1 ++ List.repeat a n2 = List.repeat a (n1 + n2)%nat.
 Proof.
   induction n1; simpl; congruence.
+Qed.
+
+Lemma list_rev_repeat: forall (A: Type) (a: A) n,
+  rev (List.repeat a n) = List.repeat a n.
+Proof.
+  induction n; simpl. auto. rewrite IHn. change (a :: nil) with (repeat a 1%nat).
+  rewrite list_repeat_app. rewrite Nat.add_comm. auto. 
 Qed.
 
 Lemma normalize_boidl: forall il depth il',
@@ -618,11 +619,12 @@ Proof.
   + rewrite add_zeros_spec, rev_app_distr, ! boidl_app by lia.
     erewrite IHil by eauto. f_equal.
     rewrite list_rev_repeat. simpl. rewrite app_nil_r, boidl_ints8.
-    f_equal. lia.
+    f_equal. unfold n. apply Z.max_case_strong; intros; auto. rewrite ! Z_to_nat_neg by lia. auto.
   + rewrite add_zeros_spec, rev_app_distr, !boidl_app by lia.
     simpl. rewrite boidl_rev_cons, list_rev_repeat. simpl.
     rewrite app_ass, app_nil_r, !boidl_ints8. f_equal.
-    rewrite list_repeat_app. f_equal. lia.
+    rewrite list_repeat_app. f_equal. rewrite <- Z2Nat.inj_add by lia.
+    unfold n. apply Z.max_case_strong; intros; f_equal; lia.
 Qed.
 
 Lemma trisection_boidl: forall il depth sz bytes1 bytes2 il',
@@ -687,20 +689,22 @@ Proof.
   induction len using (well_founded_induction (Zwf_well_founded 0)).
   intros. destruct (zeq len 0).
 - subst len. rewrite Mem.loadbytes_empty by lia. auto.
-- replace (Z.to_nat len) with (S (Z.to_nat (len - 1))) by lia.
+- replace (Z.to_nat len) with (S (Z.to_nat (len - 1))).
   change (repeat (Byte Byte.zero) (S (Z.to_nat (len - 1))))
     with ((Byte Byte.zero :: nil) ++ repeat (Byte Byte.zero) (Z.to_nat (len - 1))).
   replace len with (1 + (len - 1)) at 1 by lia. 
   apply Mem.loadbytes_concat; try lia.
   + apply RZ. lia.
   + apply H; unfold Zwf; lia.
+  + rewrite <- Z2Nat.inj_succ by lia. f_equal; lia. 
 Qed.
 
 Lemma reads_as_zeros_equiv: forall m b from to,
   reads_as_zeros m b from to <-> Genv.readbytes_as_zero m b from (to - from).
 Proof.
   intros; split; intros.
-- red; intros. set (len := Z.of_nat n). replace n with (Z.to_nat len) by lia.
+- red; intros. set (len := Z.of_nat n).
+  replace n with (Z.to_nat len) by apply Nat2Z.id.
   eapply reads_as_zeros_loadbytes; eauto. lia. lia.
 - red; intros. red in H. apply (H i 1%nat). lia. lia.
 Qed.
@@ -808,7 +812,8 @@ Proof.
   exploit trisection_correct; eauto. lia.
   intros (L1 & L2 & L3).
   assert (LEN: Z.of_nat (length bytes2) = sz).
-  { apply Mem.loadbytes_length in L2. unfold inj_bytes in L2. rewrite map_length in L2. lia. }
+  { apply Mem.loadbytes_length in L2. unfold inj_bytes in L2.
+    rewrite map_length in L2. rewrite L2. apply Z2Nat.id; lia. }
   exploit Mem.loadbytes_load. eexact L2. exact ALIGN. rewrite LD. 
   unfold decode_val. rewrite proj_inj_bytes. intros E; inv E; inv EQ0.
   unfold chunk, chunk_for_carrier; destruct isz; f_equal.
@@ -852,7 +857,7 @@ Proof.
   assert (IL: boidl (rev il) = boidl (rev (init s)) ++ repeat (Byte Byte.zero) (Z.to_nat (pos - curr s))).
   { unfold il; destruct (zlt (curr s) pos).
   - simpl rev. rewrite boidl_rev_cons. simpl. auto.
-  - replace (Z.to_nat (pos - curr s)) with O by lia. simpl. rewrite app_nil_r; auto.
+  - rewrite Z_to_nat_neg by lia. simpl. rewrite app_nil_r; auto.
   }
   constructor; simpl; intros.
   + lia.
