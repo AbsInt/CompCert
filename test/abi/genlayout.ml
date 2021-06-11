@@ -107,10 +107,28 @@ let rec random_struct len =
     f :: random_struct (match f with Padding _ -> len | _ -> len - 1)
   end
 
+(* Optional filtering of structs where padding fields can increase alignment.
+   ELF says that padding fields are ignored to determine struct alignment,
+   but ARM does otherwise. *)
+
+let alignof = function Char -> 1 | Short -> 2 | Int -> 4
+
+let unstable_alignment str =
+  let rec alignments al_data al_padding = function
+    | [] ->
+        al_padding > al_data
+    | (Plain t | Bitfield(t, _)) :: l ->
+        alignments (max (alignof t) al_data) al_padding l
+    | Padding(t, _) :: l ->
+        alignments al_data (max (alignof t) al_padding) l
+  in
+    alignments 1 1 str
+
 (* Random testing *)
 
 let structsize = ref 4
 let ntests = ref 1000
+let stable = ref false
 
 let _ =
   Arg.parse [
@@ -119,14 +137,18 @@ let _ =
      "-n", Arg.Int (fun n -> ntests := n),
        " <num> produce <num> random structs";
      "-seed", Arg.Int Random.init,
-       " <seed> use the given seed for randomization"
+       " <seed> use the given seed for randomization";
+     "-stable", Arg.Set stable,
+       " don't generate padding fields that could cause differences in alignment"
   ]
   (fun s -> raise (Arg.Bad ("don't know what to do with " ^ s)))
   "Usage: genlayout [options]\n\nOptions are:";
   for _i = 1 to !ntests do
     let s = random_struct !structsize in
-    printf "{\n";
-    c_struct stdout s;
-    printf "TEST%d(%a)\n" !structsize print_struct s;
-    printf "}\n"
+    if not (!stable && unstable_alignment s) then begin
+      printf "{\n";
+      c_struct stdout s;
+      printf "TEST%d(%a)\n" !structsize print_struct s;
+      printf "}\n"
+    end
   done

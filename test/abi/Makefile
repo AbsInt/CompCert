@@ -62,8 +62,15 @@ struct_def.c struct_use.c: struct_decl.h
 clean::
 	rm -f struct_decl.h struct_def.c struct_use.c
 
+ifeq ($(ARCH),arm)
+GENLAYOUT_OPTIONS += -stable
+endif
+ifeq ($(ARCH),aarch64)
+GENLAYOUT_OPTIONS += -stable
+endif
+
 layout.h: genlayout.exe
-	./genlayout.exe > layout.h
+	./genlayout.exe $(GENLAYOUT_OPTIONS) > layout.h
 
 struct%.o: CCOMPFLAGS += -fstruct-passing -dclight
 
