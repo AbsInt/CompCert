@@ -612,7 +612,7 @@ let checkFunctionType env tres targs =
     end
   end
 
-let rec convertTyp env t =
+let rec convertTyp env ?bitwidth t =
   match t with
   | C.TVoid a -> Tvoid
   | C.TInt(ik, a) ->
@@ -643,7 +643,21 @@ let rec convertTyp env t =
   | C.TUnion(id, a) ->
       Tunion(intern_string id.name, convertAttr a)
   | C.TEnum(id, a) ->
-      convertIkind Cutil.enum_ikind (convertAttr a)
+      let ik =
+        match bitwidth with
+        | None -> Cutil.enum_ikind
+        | Some w ->
+            let info = Env.find_enum env id in
+            let representable sg =
+              List.for_all (fun (_, v, _) -> Cutil.int_representable v w sg)
+                           info.Env.ei_members in
+            if representable false then
+              Cutil.unsigned_ikind_of Cutil.enum_ikind
+            else if representable true then
+              Cutil.signed_ikind_of Cutil.enum_ikind
+            else
+              Cutil.enum_ikind in
+      convertIkind ik (convertAttr a)
 
 and convertParams env = function
     | [] -> Tnil
@@ -680,7 +694,7 @@ let rec convertTypAnnotArgs env = function
 
 let convertField env f =
   let id = intern_string f.fld_name
-  and ty = convertTyp env f.fld_typ in
+  and ty = convertTyp env ?bitwidth: f.fld_bitfield f.fld_typ in
   match f.fld_bitfield with
   | None -> Member_plain(id, ty)
   | Some w ->
