@@ -253,88 +253,11 @@ let builtins_generic = {
         (TVoid [],
           [TPtr(TVoid [], [])],
           false);
-    "__compcert_va_int32",
-        (TInt(IUInt, []),
-          [TPtr(TVoid [], [])],
-          false);
-    "__compcert_va_int64",
-        (TInt(IULongLong, []),
-          [TPtr(TVoid [], [])],
-          false);
-    "__compcert_va_float64",
-        (TFloat(FDouble, []),
-          [TPtr(TVoid [], [])],
-          false);
-    "__compcert_va_composite",
-        (TPtr(TVoid [], []),
-          [TPtr(TVoid [], []); TInt(IULong, [])],
-          false);
   (* Optimization hints *)
     "__builtin_unreachable",
         (TVoid [], [], false);
     "__builtin_expect",
-        (TInt(ILong, []), [TInt(ILong, []); TInt(ILong, [])], false);
-  (* Helper functions for int64 arithmetic *)
-    "__compcert_i64_dtos",
-        (TInt(ILongLong, []),
-         [TFloat(FDouble, [])],
-         false);
-    "__compcert_i64_dtou",
-        (TInt(IULongLong, []),
-         [TFloat(FDouble, [])],
-         false);
-    "__compcert_i64_stod",
-        (TFloat(FDouble, []),
-         [TInt(ILongLong, [])],
-         false);
-    "__compcert_i64_utod",
-        (TFloat(FDouble, []),
-         [TInt(IULongLong, [])],
-         false);
-    "__compcert_i64_stof",
-        (TFloat(FFloat, []),
-         [TInt(ILongLong, [])],
-         false);
-    "__compcert_i64_utof",
-        (TFloat(FFloat, []),
-         [TInt(IULongLong, [])],
-         false);
-    "__compcert_i64_sdiv",
-        (TInt(ILongLong, []),
-         [TInt(ILongLong, []); TInt(ILongLong, [])],
-         false);
-    "__compcert_i64_udiv",
-        (TInt(IULongLong, []),
-         [TInt(IULongLong, []); TInt(IULongLong, [])],
-         false);
-    "__compcert_i64_smod",
-        (TInt(ILongLong, []),
-         [TInt(ILongLong, []); TInt(ILongLong, [])],
-         false);
-    "__compcert_i64_umod",
-        (TInt(IULongLong, []),
-         [TInt(IULongLong, []); TInt(IULongLong, [])],
-         false);
-    "__compcert_i64_shl",
-        (TInt(ILongLong, []),
-         [TInt(ILongLong, []); TInt(IInt, [])],
-         false);
-    "__compcert_i64_shr",
-        (TInt(IULongLong, []),
-         [TInt(IULongLong, []); TInt(IInt, [])],
-         false);
-    "__compcert_i64_sar",
-        (TInt(ILongLong, []),
-         [TInt(ILongLong, []); TInt(IInt, [])],
-         false);
-    "__compcert_i64_smulh",
-        (TInt(ILongLong, []),
-         [TInt(ILongLong, []); TInt(ILongLong, [])],
-         false);
-    "__compcert_i64_umulh",
-        (TInt(IULongLong, []),
-         [TInt(IULongLong, []); TInt(IULongLong, [])],
-         false)
+        (TInt(ILong, []), [TInt(ILong, []); TInt(ILong, [])], false)
   ]
 }
 
@@ -1280,7 +1203,6 @@ let convertFundef loc env fd =
 (** External function declaration *)
 
 let re_builtin = Str.regexp "__builtin_"
-let re_runtime = Str.regexp "__compcert_i64_"
 
 let convertFundecl env (sto, id, ty, optinit) =
   let (args, res, cconv) =
@@ -1293,7 +1215,6 @@ let convertFundecl env (sto, id, ty, optinit) =
   let ef =
     if id.name = "malloc" then AST.EF_malloc else
     if id.name = "free" then AST.EF_free else
-    if Str.string_match re_runtime id.name 0 then  AST.EF_runtime(id'', sg) else
     if Str.string_match re_builtin id.name 0
     && List.mem_assoc id.name builtins.builtin_functions
     then AST.EF_builtin(id'', sg)
@@ -1415,6 +1336,81 @@ let rec convertCompositedefs env res gl =
       | _ ->
           convertCompositedefs env res gl'
 
+(** Add declarations for the helper functions
+    (for varargs and for int64 arithmetic) *)
+
+let helper_functions () = [
+    "__compcert_va_int32",
+        Tint(I32, Unsigned, noattr),
+        [Tpointer(Tvoid, noattr)];
+    "__compcert_va_int64",
+        Tlong(Unsigned, noattr),
+        [Tpointer(Tvoid, noattr)];
+    "__compcert_va_float64",
+        Tfloat(F64, noattr),
+        [Tpointer(Tvoid, noattr)];
+    "__compcert_va_composite",
+        Tpointer(Tvoid, noattr),
+        [Tpointer(Tvoid, noattr); convertIkind (Cutil.size_t_ikind()) noattr];
+    "__compcert_i64_dtos",
+        Tlong(Signed, noattr),
+        [Tfloat(F64, noattr)];
+    "__compcert_i64_dtou",
+        Tlong(Unsigned, noattr),
+        [Tfloat(F64, noattr)];
+    "__compcert_i64_stod",
+        Tfloat(F64, noattr),
+        [Tlong(Signed, noattr)];
+    "__compcert_i64_utod",
+        Tfloat(F64, noattr),
+        [Tlong(Unsigned, noattr)];
+    "__compcert_i64_stof",
+        Tfloat(F32, noattr),
+        [Tlong(Signed, noattr)];
+    "__compcert_i64_utof",
+        Tfloat(F32, noattr),
+        [Tlong(Unsigned, noattr)];
+    "__compcert_i64_sdiv",
+        Tlong(Signed, noattr),
+        [Tlong(Signed, noattr); Tlong(Signed, noattr)];
+    "__compcert_i64_udiv",
+        Tlong(Unsigned, noattr),
+        [Tlong(Unsigned, noattr); Tlong(Unsigned, noattr)];
+    "__compcert_i64_smod",
+        Tlong(Signed, noattr),
+        [Tlong(Signed, noattr); Tlong(Signed, noattr)];
+    "__compcert_i64_umod",
+        Tlong(Unsigned, noattr),
+        [Tlong(Unsigned, noattr); Tlong(Unsigned, noattr)];
+    "__compcert_i64_shl",
+        Tlong(Signed, noattr),
+        [Tlong(Signed, noattr); Tint(I32, Signed, noattr)];
+    "__compcert_i64_shr",
+        Tlong(Unsigned, noattr),
+        [Tlong(Unsigned, noattr); Tint(I32, Signed, noattr)];
+    "__compcert_i64_sar",
+        Tlong(Signed, noattr),
+        [Tlong(Signed, noattr); Tint(I32, Signed, noattr)];
+    "__compcert_i64_smulh",
+        Tlong(Signed, noattr),
+        [Tlong(Signed, noattr); Tlong(Signed, noattr)];
+    "__compcert_i64_umulh",
+        Tlong(Unsigned, noattr),
+        [Tlong(Unsigned, noattr); Tlong(Unsigned, noattr)]
+]
+
+let helper_function_declaration (name, tyres, tyargs) =
+  let tyargs =
+    List.fold_right (fun t tl -> Tcons(t, tl)) tyargs Tnil in
+  let ef =
+    AST.EF_runtime(coqstring_of_camlstring name,
+                   signature_of_type tyargs tyres AST.cc_default) in
+  (intern_string name,
+   AST.Gfun (Ctypes.External(ef, tyargs, tyres, AST.cc_default)))
+
+let add_helper_functions globs =
+  List.map helper_function_declaration (helper_functions()) @ globs
+
 (** Build environment of typedefs, structs, unions and enums *)
 
 let rec translEnv env = function
@@ -1512,10 +1508,11 @@ let convertProgram p =
         comp_env := ce;
         let gl1 = convertGlobdecls env [] p in
         let gl2 = globals_for_strings gl1 in
+        let gl3 = add_helper_functions gl2 in
         comp_env := Maps.PTree.empty;
         let p' =
-          { prog_defs = gl2;
-            prog_public = public_globals gl2;
+          { prog_defs = gl3;
+            prog_public = public_globals gl3;
             prog_main = intern_string !Clflags.main_function_name;
             prog_types = typs;
             prog_comp_env = ce } in
