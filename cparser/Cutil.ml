@@ -493,9 +493,12 @@ let alignof_struct_union env members =
   let rec align_rec al = function
   | [] -> Some al
   | m :: rem ->
-      match alignof env m.fld_typ with
-      | None -> None
-      | Some a -> align_rec (max a al) rem
+      if m.fld_name = "" then
+        align_rec al rem
+      else
+        match alignof env m.fld_typ with
+        | None -> None
+        | Some a -> align_rec (max a al) rem
   in align_rec 1 members
 
 let align x boundary =
