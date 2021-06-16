@@ -657,6 +657,97 @@ Proof.
   unfold encode_val, Mptr; destruct Archi.ptr64; reflexivity.
 Qed.
 
+(** ** Validity and size of initialization data *)
+
+Definition idvalid (i: init_data) : Prop :=
+  match i with
+  | Init_addrof symb ofs => exists b, Genv.find_symbol ge symb = Some b
+  | _ => True
+  end.
+
+Fixpoint idlvalid (p: Z) (il: list init_data) {struct il} : Prop :=
+  match il with
+  | nil => True
+  | i1 :: il =>
+        (Genv.init_data_alignment i1 | p)
+     /\ idvalid i1
+     /\ idlvalid (p + init_data_size i1) il
+  end.
+
+Lemma idlvalid_app: forall l2 l1 pos,
+  idlvalid pos (l1 ++ l2) <-> idlvalid pos l1 /\ idlvalid (pos + init_data_list_size l1) l2.
+Proof.
+  induction l1 as [ | d l1]; intros; simpl.
+- rewrite Z.add_0_r; tauto.
+- rewrite IHl1. rewrite Z.add_assoc. tauto.
+Qed.
+
+Lemma add_rev_bytes_valid: forall il bl,
+  idlvalid 0 (rev il) -> idlvalid 0 (rev (add_rev_bytes bl il)).
+Proof.
+  intros. rewrite add_rev_bytes_spec, rev_app_distr, idlvalid_app. split; auto.
+  generalize (rev bl) (0 + init_data_list_size (rev il)). induction l; simpl; intros.
+  auto.
+  rewrite idlvalid_app; split; auto. simpl. auto using Z.divide_1_l.
+Qed.
+
+Lemma add_zeros_valid: forall il n,
+  0 <= n -> idlvalid 0 (rev il) -> idlvalid 0 (rev (add_zeros n il)).
+Proof.
+  intros. rewrite add_zeros_spec, rev_app_distr, idlvalid_app by auto.
+  split; auto.
+  generalize (Z.to_nat n) (0 + init_data_list_size (rev il)). induction n0; simpl; intros.
+  auto.
+  rewrite idlvalid_app; split; auto. simpl. auto using Z.divide_1_l.
+Qed.
+
+Lemma normalize_valid: forall il depth il',
+  normalize il depth = OK il' -> idlvalid 0 (rev il) -> idlvalid 0 (rev il').
+Proof.
+  induction il as [ | i il]; simpl; intros.
+- destruct (zle depth 0); inv H. simpl. tauto.
+- destruct (zle depth 0). inv H. auto.
+  rewrite idlvalid_app in H0; destruct H0.
+  destruct i; try (monadInv H; apply add_rev_bytes_valid; eapply IHil; eauto).
+  + monadInv H. simpl. rewrite idlvalid_app; split. eauto. simpl; auto using Z.divide_1_l. 
+  + destruct (zle (Z.max 0 z)); monadInv H.
+    * apply add_zeros_valid. lia. eauto.
+    * apply add_zeros_valid. lia. simpl. rewrite idlvalid_app; split. auto. simpl; auto using Z.divide_1_l.
+Qed.
+
+Lemma trisection_valid: forall il depth sz bytes1 bytes2 il',
+  trisection il depth sz = OK (bytes1, bytes2, il') ->
+  idlvalid 0 (rev il) ->
+  idlvalid 0 (rev il').
+Proof.
+  unfold trisection; intros. monadInv H.
+  apply decompose_spec in EQ1. destruct EQ1 as (nl1 & A1 & B1 & C1).
+  apply decompose_spec in EQ0. destruct EQ0 as (nl2 & A2 & B2 & C2).
+  exploit normalize_valid; eauto. rewrite A1, A2, !rev_app_distr, !idlvalid_app.
+  tauto.
+Qed.
+
+Lemma init_data_size_boid: forall i,
+  init_data_size i = Z.of_nat (length (boid i)).
+Proof.
+  intros. destruct i; simpl; rewrite ?length_inj_bytes, ?encode_int_length; auto.
+- rewrite repeat_length. rewrite Z_to_nat_max; auto.
+- destruct (Genv.find_symbol ge i), Archi.ptr64; reflexivity.
+Qed.
+
+Lemma init_data_list_size_boidl: forall il,
+  init_data_list_size il = Z.of_nat (length (boidl il)).
+Proof.
+  induction il as [ | i il]; simpl. auto. 
+  rewrite app_length, init_data_size_boid. lia.
+Qed.
+
+Lemma init_data_list_size_app: forall l1 l2,
+  init_data_list_size (l1 ++ l2) = init_data_list_size l1 + init_data_list_size l2.
+Proof.
+  induction l1 as [ | i l1]; intros; simpl. auto. rewrite IHl1; lia.
+Qed.
+
 (** ** Memory areas that are initialized to zeros *)
 
 Definition reads_as_zeros (m: mem) (b: block) (from to: Z) : Prop :=
@@ -718,9 +809,20 @@ Record match_state (s: state) (m: mem) (b: block) : Prop := {
     0 <= s.(curr) <= s.(total_size);
   match_contents:
     Mem.loadbytes m b 0 s.(curr) = Some (boidl (rev s.(init)));
+  match_valid:
+    idlvalid 0 (rev s.(init));
   match_uninitialized:
     reads_as_zeros m b s.(curr) s.(total_size)
 }.
+
+Lemma match_size: forall s m b,
+  match_state s m b ->
+  init_data_list_size (rev s.(init)) = s.(curr).
+Proof.
+  intros. rewrite init_data_list_size_boidl.
+  erewrite Mem.loadbytes_length by (eapply match_contents; eauto).
+  apply Z2Nat.id. eapply match_range; eauto.
+Qed.
 
 Lemma curr_pad_to: forall s pos,
   curr s <= curr (pad_to s pos) /\ pos <= curr (pad_to s pos).
@@ -739,13 +841,14 @@ Lemma pad_to_correct: forall pos s m b,
   match_state (pad_to s pos) m b.
 Proof.
   intros. unfold pad_to. destruct (zle pos (curr s)); auto.
-  destruct H. constructor; simpl; intros.
+  destruct H; constructor; simpl; intros.
 - lia.
 - rewrite boidl_rev_cons. simpl.
   replace pos with (s.(curr) + (pos - s.(curr))) at 1 by lia.
   apply Mem.loadbytes_concat; try lia.
     * auto.
     * eapply reads_as_zeros_loadbytes; eauto. lia. lia. lia.
+- rewrite idlvalid_app. split; auto. simpl. intuition auto using Z.divide_1_l.
 - eapply reads_as_zeros_mono; eauto; lia.
 Qed.
 
@@ -843,6 +946,9 @@ Theorem store_data_correct: forall s m b pos i s' m',
   match_state s' m' b.
 Proof.
   intros until m'; intros MS ST SI NOSPACE.
+  exploit Genv.store_init_data_aligned; eauto. intros ALIGN.
+  assert (VALID: idvalid i).
+  { destruct i; simpl; auto. simpl in SI. destruct (Genv.find_symbol ge i); try discriminate. exists b0; auto. }
   unfold store_data in ST.
   set (sz := init_data_size i) in *.
   assert (sz >= 0) by (apply init_data_size_pos).
@@ -871,6 +977,16 @@ Proof.
       eapply reads_as_zeros_loadbytes. eapply match_uninitialized; eauto. lia. lia. lia.
     * exact D.
     * eapply match_range; eauto.
+  + rewrite idlvalid_app; split.
+    * unfold il; destruct (zlt (curr s) pos).
+      ** simpl; rewrite idlvalid_app; split. eapply match_valid; eauto. simpl. auto using Z.divide_1_l.
+      ** eapply match_valid; eauto.
+    * simpl.
+      replace (init_data_list_size (rev il)) with pos. tauto.
+      unfold il; destruct (zlt (curr s) pos).
+      ** simpl; rewrite init_data_list_size_app; simpl.
+         erewrite match_size by eauto. lia.
+      ** erewrite match_size by eauto. lia.
   + eapply reads_as_zeros_unchanged; eauto.
     eapply reads_as_zeros_mono. eapply match_uninitialized; eauto. lia. lia.
     intros. simpl. lia.
@@ -891,6 +1007,10 @@ Proof.
     * exact D.
     * eapply Mem.loadbytes_unchanged_on; eauto.
       intros. simpl. lia.
+  + apply add_rev_bytes_valid. simpl; rewrite idlvalid_app; split.
+    * eapply trisection_valid; eauto. eapply match_valid; eauto.
+    * rewrite init_data_list_size_boidl. erewrite Mem.loadbytes_length by eauto.
+      rewrite Z2Nat.id by lia. simpl. tauto.
   + eapply reads_as_zeros_unchanged; eauto. eapply match_uninitialized; eauto.
     intros. simpl. lia.
 Qed.
@@ -906,238 +1026,212 @@ Proof.
 - destruct isz; exact I.
 Qed.
 
-Theorem init_data_list_of_state_correct: forall s m b il m0 b' m1 m2,
+Theorem init_data_list_of_state_correct: forall s m b il b' m1,
   match_state s m b ->
   init_data_list_of_state s = OK il ->
-  store_zeros m0 b' 0 (init_data_list_size il) = Some m1 ->
-  Genv.store_init_data_list ge m1 b' 0 il = Some m2 ->
-  Mem.loadbytes m2 b' 0 (init_data_list_size il) = Mem.loadbytes m b 0 s.(total_size).
+  Mem.range_perm m1 b' 0 s.(total_size) Cur Writable ->
+  reads_as_zeros m1 b' 0 s.(total_size) ->
+  exists m2,
+     Genv.store_init_data_list ge m1 b' 0 il = Some m2
+  /\ Mem.loadbytes m2 b' 0 (init_data_list_size il) = Mem.loadbytes m b 0 s.(total_size).
 Proof.
-  intros. unfold init_data_list_of_state in H0; monadInv H0.
+  intros. unfold init_data_list_of_state in H0; monadInv H0. rename l into LE.
   set (s1 := pad_to s s.(total_size)) in *.
-  transitivity (Some (boidl (rev' (init s1)))).
-  eapply Genv.store_init_data_list_loadbytes; eauto.
-  eapply Genv.store_zeros_loadbytes; eauto.
-  symmetry. unfold rev'. rewrite <- rev_alt.
-  replace (total_size s) with (curr s1). eapply match_contents; eauto. apply pad_to_correct; auto. lia.
-  unfold s1, pad_to. destruct (zle (total_size s) (curr s)); simpl; lia.
+  assert (MS1: match_state s1 m b) by (apply pad_to_correct; auto; lia).
+  apply reads_as_zeros_equiv in H2. rewrite Z.sub_0_r in H2.
+  assert (R: rev' (init s1) = rev (init s1)).
+  { unfold rev'. rewrite <- rev_alt. auto. }
+  assert (C: curr s1 = total_size s).
+  { unfold s1, pad_to. destruct zle; simpl; lia. }
+  assert (A: Genv.init_data_list_aligned 0 (rev (init s1))).
+  { exploit match_valid; eauto. generalize (rev (init s1)) 0.
+    induction l as [ | i l]; simpl; intuition. }
+  assert (B: forall id ofs, In (Init_addrof id ofs) (rev (init s1)) ->
+             exists b, Genv.find_symbol ge id = Some b).
+  { intros id ofs. exploit match_valid; eauto. generalize (rev (init s1)) 0.
+    induction l as [ | i l]; simpl; intuition eauto. subst i; assumption. }
+  exploit Genv.store_init_data_list_exists.
+  2: eexact A. 2: eexact B.
+  erewrite match_size by eauto. rewrite C. eauto.
+  intros (m2 & ST). exists m2; split.
+- rewrite R. auto.
+- rewrite R. transitivity (Some (boidl (rev (init s1)))).
+  + eapply Genv.store_init_data_list_loadbytes; eauto.
+    erewrite match_size, C by eauto. auto.
+  + symmetry. rewrite <- C. eapply match_contents; eauto.
 Qed.
 
-(** REVISE
+(** ** Total size properties *)
+
+Lemma total_size_store_data: forall s pos i s',
+  store_data s pos i = OK s' -> total_size s' = total_size s.
+Proof.
+  unfold store_data; intros. monadInv H. destruct (zle (curr s) pos); monadInv H.
+- auto.
+- destruct x as [[bytes1 bytes2] il2]. inv EQ0. simpl. apply total_size_pad_to.
+Qed.
+
+Lemma total_size_transl_init_bitfield: forall ce s ty sz p w i pos s',
+  transl_init_bitfield ce s ty sz p w i pos = OK s' -> total_size s' = total_size s.
+Proof.
+  unfold transl_init_bitfield; intros. destruct i; monadInv H. destruct x; monadInv EQ0.
+  eapply total_size_store_data. eexact EQ2.
+Qed.
+
+Lemma total_size_transl_init_rec: forall ce s ty i pos s',
+  transl_init_rec ce s ty i pos = OK s' -> total_size s' = total_size s
+with total_size_transl_init_array: forall ce s tyelt il pos s',
+  transl_init_array ce s tyelt il pos = OK s' -> total_size s' = total_size s
+with total_size_transl_init_struct: forall ce s ms il base pos s',
+  transl_init_struct ce s ms il base pos = OK s' -> total_size s' = total_size s.
+Proof.
+- destruct i; simpl; intros.
+  + monadInv H; eauto using total_size_store_data.
+  + destruct ty; monadInv H. eauto.
+  + destruct ty; monadInv H. destruct (co_su x); try discriminate. eauto.
+  + destruct ty; monadInv H. destruct (co_su x); monadInv EQ0. destruct x2.
+    * eauto.
+    * eauto using total_size_transl_init_bitfield.
+- destruct il; simpl; intros.
+  + inv H; auto.
+  + monadInv H. transitivity (total_size x); eauto.
+- destruct il; simpl; intros.
+  + inv H; auto.
+  + revert ms pos H. induction ms; intros.
+    * inv H.
+    * destruct (member_not_initialized a). eapply IHms; eauto.
+      monadInv H. transitivity (total_size x1). eauto.
+      destruct x0; eauto using total_size_transl_init_bitfield.
+Qed.
 
 (** * Soundness of the translation of initializers *)
 
 (** Soundness for single initializers. *)
 
-Theorem transl_init_single_steps:
-  forall ty a data f m v1 ty1 m' v chunk b ofs m'',
+Inductive exec_assign: mem -> block -> Z -> bitfield -> type -> val -> mem -> Prop :=
+  | exec_assign_full: forall m b ofs ty v m' chunk,
+      access_mode ty = By_value chunk ->
+      Mem.store chunk m b ofs v = Some m' ->
+      exec_assign m b ofs Full ty v m'
+  | exec_assign_bits: forall m b ofs sz sg sg1 attr pos width ty n m' c,
+      type_is_volatile ty = false ->
+      0 <= pos -> 0 < width -> pos + width <= bitsize_intsize sz ->
+      sg1 = (if zlt width (bitsize_intsize sz) then Signed else sg) ->
+      Mem.load (chunk_for_carrier sz) m b ofs = Some (Vint c) ->
+      Mem.store (chunk_for_carrier sz) m b ofs
+                (Vint (Int.bitfield_insert (first_bit sz pos width) width c n)) = Some m' ->
+      exec_assign m b ofs (Bits sz sg pos width) (Tint sz sg1 attr) (Vint n) m'.
+
+Lemma transl_init_single_sound:
+  forall ty a data f m v1 ty1 m' v b ofs m'',
   transl_init_single ge ty a = OK data ->
   star step ge (ExprState f a Kstop empty_env m) E0 (ExprState f (Eval v1 ty1) Kstop empty_env m') ->
   sem_cast v1 ty1 ty m' = Some v ->
-  access_mode ty = By_value chunk ->
-  Mem.store chunk m' b ofs v = Some m'' ->
-  Genv.store_init_data ge m b ofs data = Some m''.
+  exec_assign m' b ofs Full ty v m'' ->
+  Genv.store_init_data ge m b ofs data = Some m''
+  /\ match data with Init_space _ => False | _ => True end.
 Proof.
-  intros. monadInv H. monadInv EQ. 
+  intros until m''; intros TR STEPS CAST ASG.
+  monadInv TR. monadInv EQ. 
   exploit constval_steps; eauto. intros [A [B C]]. subst m' ty1.
   exploit sem_cast_match; eauto. intros D.
-  unfold Genv.store_init_data.
-  inv D.
+  inv ASG. rename H into A. unfold Genv.store_init_data. inv D.
 - (* int *)
   remember Archi.ptr64 as ptr64.  destruct ty; try discriminate EQ0.
 + destruct i0; inv EQ0.
-  destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_8; auto. auto.
-  destruct s; simpl in H2; inv H2. rewrite <- Mem.store_signed_unsigned_16; auto. auto.
-  simpl in H2; inv H2. assumption.
-  simpl in H2; inv H2. assumption.
-+ destruct ptr64; inv EQ0. simpl in H2; unfold Mptr in H2; rewrite <- Heqptr64 in H2; inv H2. assumption.
+  destruct s; simpl in A; inv A. rewrite <- Mem.store_signed_unsigned_8; auto. auto.
+  destruct s; simpl in A; inv A. rewrite <- Mem.store_signed_unsigned_16; auto. auto.
+  simpl in A; inv A. auto.
+  simpl in A; inv A. auto.
++ destruct ptr64; inv EQ0. simpl in A; unfold Mptr in A; rewrite <- Heqptr64 in A; inv A. auto.
 - (* Long *)
-  remember Archi.ptr64 as ptr64. destruct ty; inv EQ0.
-+ simpl in H2; inv H2. assumption.
-+ simpl in H2; unfold Mptr in H2; destruct Archi.ptr64; inv H4. 
-  inv H2; assumption.
+  remember Archi.ptr64 as ptr64. destruct ty; monadInv EQ0.
++ simpl in A; inv A. auto.
++ simpl in A; unfold Mptr in A; rewrite <- Heqptr64 in A; inv A. auto.
 - (* float *)
   destruct ty; try discriminate.
-  destruct f1; inv EQ0; simpl in H2; inv H2; assumption.
+  destruct f1; inv EQ0; simpl in A; inv A; auto.
 - (* single *)
   destruct ty; try discriminate.
-  destruct f1; inv EQ0; simpl in H2; inv H2; assumption.
+  destruct f1; inv EQ0; simpl in A; inv A; auto.
 - (* pointer *)
   unfold inj in H.
-  assert (data = Init_addrof b1 ofs1 /\ chunk = Mptr).
+  assert (X: data = Init_addrof b1 ofs1 /\ chunk = Mptr).
   { remember Archi.ptr64 as ptr64.
     destruct ty; inversion EQ0.
-    destruct i; inv H5. unfold Mptr. destruct Archi.ptr64; inv H6; inv H2; auto.
-    subst ptr64. unfold Mptr. destruct Archi.ptr64; inv H5; inv H2; auto.
-    inv H2. auto. }
-  destruct H4; subst. destruct (Genv.find_symbol ge b1); inv H.
-  rewrite Ptrofs.add_zero in H3. auto.
+    - destruct i; monadInv H2. unfold Mptr. rewrite <- Heqptr64. inv A; auto.
+    - monadInv H2. unfold Mptr. rewrite <- Heqptr64. inv A; auto.
+    - inv A; auto.
+  }
+  destruct X; subst. destruct (Genv.find_symbol ge b1); inv H.
+  rewrite Ptrofs.add_zero in H0. auto.
 - (* undef *)
   discriminate.
 Qed.
 
-(** Size properties for initializers. *)
-
-Lemma transl_init_single_size:
-  forall ty a data,
-  transl_init_single ge ty a = OK data ->
-  init_data_size data = sizeof ge ty.
-Proof.
-  intros. monadInv H. monadInv EQ. remember Archi.ptr64 as ptr64. destruct x.
-- monadInv EQ0.
-- destruct ty; try discriminate.
-  destruct i0; inv EQ0; auto.
-  destruct ptr64; inv EQ0. 
-Local Transparent sizeof.
-  unfold sizeof. rewrite <- Heqptr64; auto.
-- destruct ty; inv EQ0; auto. 
-  unfold sizeof. destruct Archi.ptr64; inv H0; auto.
-- destruct ty; try discriminate.
-  destruct f0; inv EQ0; auto.
-- destruct ty; try discriminate.
-  destruct f0; inv EQ0; auto.
-- destruct ty; try discriminate.
-  destruct i0; inv EQ0; auto.
-  destruct Archi.ptr64 eqn:SF; inv H0. simpl. rewrite SF; auto.
-  destruct ptr64; inv EQ0. simpl. rewrite <- Heqptr64; auto.
-  inv EQ0. unfold init_data_size, sizeof. auto.
-Qed.
-
-Notation idlsize := init_data_list_size.
-
-Remark padding_size:
-  forall frm to, frm <= to -> idlsize (tr_padding frm to) = to - frm.
-Proof.
-  unfold tr_padding; intros. destruct (zlt frm to).
-  simpl. extlia.
-  simpl. lia.
-Qed.
-
-Remark idlsize_app:
-  forall d1 d2, idlsize (d1 ++ d2) = idlsize d1 + idlsize d2.
-Proof.
-  induction d1; simpl; intros.
-  auto.
-  rewrite IHd1. lia.
-Qed.
-
-Remark union_field_size:
-  forall f ty fl, field_type f fl = OK ty -> sizeof ge ty <= sizeof_union ge fl.
-Proof.
-  induction fl as [|m fl]; simpl; intros.
-- inv H.
-- destruct (ident_eq f (name_member m)).
-  + inv H. extlia.
-  + specialize (IHfl H). extlia.
-Qed.
-
-Hypothesis ce_consistent: composite_env_consistent ge.
-
-Lemma tr_init_size:
-  forall i ty data,
-  tr_init ty i data ->
-  idlsize data = sizeof ge ty
-with tr_init_array_size:
-  forall ty il sz data,
-  tr_init_array ty il sz data ->
-  idlsize data = sizeof ge ty * sz
-with tr_init_struct_size:
-  forall ty fl il pos data,
-  tr_init_struct ty fl il pos data ->
-  sizeof_struct ge pos fl <= sizeof ge ty ->
-  idlsize data + pos = sizeof ge ty.
-Proof.
-Local Opaque sizeof.
-- destruct 1; simpl.
-+ erewrite transl_init_single_size by eauto. lia.
-+ Local Transparent sizeof. simpl. eapply tr_init_array_size; eauto. 
-+ replace (idlsize d) with (idlsize d + 0) by lia.
-  eapply tr_init_struct_size; eauto. simpl.
-  unfold lookup_composite in H. destruct (ge.(genv_cenv)!id) as [co'|] eqn:?; inv H.
-  erewrite co_consistent_sizeof by (eapply ce_consistent; eauto).
-  unfold sizeof_composite. rewrite H0. apply align_le.
-  destruct (co_alignof_two_p co) as [n EQ]. rewrite EQ. apply two_power_nat_pos.
-+ rewrite idlsize_app, padding_size. 
-  exploit tr_init_size; eauto. intros EQ; rewrite EQ. lia.
-  simpl. unfold lookup_composite in H. destruct (ge.(genv_cenv)!id) as [co'|] eqn:?; inv H.
-  apply Z.le_trans with (sizeof_union ge (co_members co)).
-  eapply union_field_size; eauto.
-  erewrite co_consistent_sizeof by (eapply ce_consistent; eauto).
-  unfold sizeof_composite. rewrite H0. apply align_le.
-  destruct (co_alignof_two_p co) as [n EQ]. rewrite EQ. apply two_power_nat_pos.
-
-- destruct 1; simpl.
-+ lia.
-+ rewrite Z.mul_comm.
-  assert (0 <= sizeof ge ty * sz).
-  { apply Zmult_gt_0_le_0_compat. lia. generalize (sizeof_pos ge ty); lia. }
-  extlia.
-+ rewrite idlsize_app. 
-  erewrite tr_init_size by eauto. 
-  erewrite tr_init_array_size by eauto.
-  ring.
-
-- destruct 1; simpl; intros.
-+ rewrite padding_size by auto. lia.
-+ rewrite ! idlsize_app, padding_size. 
-  erewrite tr_init_size by eauto. 
-  rewrite <- (tr_init_struct_size _ _ _ _ _ H0 H1). lia.
-  unfold pos1. apply align_le. apply alignof_pos. 
-Qed.
+(* Hypothesis ce_consistent: composite_env_consistent ge. *)
 
 (** A semantics for general initializers *)
 
 Definition dummy_function := mkfunction Tvoid cc_default nil nil Sskip.
 
-Fixpoint fields_of_struct (fl: members) (pos: Z) : list (Z * type) :=
-  match fl with
-  | nil => nil
-  | (id1, ty1) :: fl' =>
-      (align pos (alignof ge ty1), ty1) :: fields_of_struct fl' (align pos (alignof ge ty1) + sizeof ge ty1)
+Fixpoint initialized_fields_of_struct (ms: members) (pos: Z) : res (list (Z * bitfield * type)) :=
+  match ms with
+  | nil =>
+      OK nil
+  | m :: ms' =>
+      let pos' := next_field ge.(genv_cenv) pos m in
+      if member_not_initialized m
+      then initialized_fields_of_struct ms' pos'
+      else
+        do ofs_bf <- layout_field ge.(genv_cenv) pos m;
+        do l <- initialized_fields_of_struct ms' pos';
+        OK ((ofs_bf, type_member m) :: l)
   end.
 
-Inductive exec_init: mem -> block -> Z -> type -> initializer -> mem -> Prop :=
-  | exec_init_single: forall m b ofs ty a v1 ty1 chunk m' v m'',
+Inductive exec_init: mem -> block -> Z -> bitfield -> type -> initializer -> mem -> Prop :=
+  | exec_init_single_: forall m b ofs bf ty a v1 ty1 m' v m'',
       star step ge (ExprState dummy_function a Kstop empty_env m)
                 E0 (ExprState dummy_function (Eval v1 ty1) Kstop empty_env m') ->
       sem_cast v1 ty1 ty m' = Some v ->
-      access_mode ty = By_value chunk ->
-      Mem.store chunk m' b ofs v = Some m'' ->
-      exec_init m b ofs ty (Init_single a) m''
+      exec_assign m' b ofs bf ty v m'' ->
+      exec_init m b ofs bf ty (Init_single a) m''
   | exec_init_array_: forall m b ofs ty sz a il m',
       exec_init_array m b ofs ty sz il m' ->
-      exec_init m b ofs (Tarray ty sz a) (Init_array il) m'
-  | exec_init_struct: forall m b ofs id a il co m',
+      exec_init m b ofs Full (Tarray ty sz a) (Init_array il) m'
+  | exec_init_struct_: forall m b ofs id a il co flds m',
       ge.(genv_cenv)!id = Some co -> co_su co = Struct ->
-      exec_init_list m b ofs (fields_of_struct (co_members co) 0) il m' ->
-      exec_init m b ofs (Tstruct id a) (Init_struct il) m'
-  | exec_init_union: forall m b ofs id a f i ty co m',
+      initialized_fields_of_struct (co_members co) 0 = OK flds ->
+      exec_init_struct m b ofs flds il m' ->
+      exec_init m b ofs Full (Tstruct id a) (Init_struct il) m'
+  | exec_init_union_: forall m b ofs id a f i co ty pos bf m',
       ge.(genv_cenv)!id = Some co -> co_su co = Union ->
       field_type f (co_members co) = OK ty ->
-      exec_init m b ofs ty i m' ->
-      exec_init m b ofs (Tunion id a) (Init_union f i) m'
+      union_field_offset ge f (co_members co) = OK (pos, bf) ->
+      exec_init m b (ofs + pos) bf ty i m' ->
+      exec_init m b ofs Full (Tunion id a) (Init_union f i) m'
 
 with exec_init_array: mem -> block -> Z -> type -> Z -> initializer_list -> mem -> Prop :=
   | exec_init_array_nil: forall m b ofs ty sz,
       sz >= 0 ->
       exec_init_array m b ofs ty sz Init_nil m
   | exec_init_array_cons: forall m b ofs ty sz i1 il m' m'',
-      exec_init m b ofs ty i1 m' ->
+      exec_init m b ofs Full ty i1 m' ->
       exec_init_array m' b (ofs + sizeof ge ty) ty (sz - 1) il m'' ->
       exec_init_array m b ofs ty sz (Init_cons i1 il) m''
 
-with exec_init_list: mem -> block -> Z -> list (Z * type) -> initializer_list -> mem -> Prop :=
-  | exec_init_list_nil: forall m b ofs,
-      exec_init_list m b ofs nil Init_nil m
-  | exec_init_list_cons: forall m b ofs pos ty l i1 il m' m'',
-      exec_init m b (ofs + pos) ty i1 m' ->
-      exec_init_list m' b ofs l il m'' ->
-      exec_init_list m b ofs ((pos, ty) :: l) (Init_cons i1 il) m''.
+with exec_init_struct: mem -> block -> Z -> list (Z * bitfield * type) -> initializer_list -> mem -> Prop :=
+  | exec_init_struct_nil: forall m b ofs,
+      exec_init_struct m b ofs nil Init_nil m
+  | exec_init_struct_cons: forall m b ofs pos bf ty l i1 il m' m'',
+      exec_init m b (ofs + pos) bf ty i1 m' ->
+      exec_init_struct m' b ofs l il m'' ->
+      exec_init_struct m b ofs ((pos, bf, ty) :: l) (Init_cons i1 il) m''.
 
 Scheme exec_init_ind3 := Minimality for exec_init Sort Prop
   with exec_init_array_ind3 := Minimality for exec_init_array Sort Prop
-  with exec_init_list_ind3 := Minimality for exec_init_list Sort Prop.
-Combined Scheme exec_init_scheme from exec_init_ind3, exec_init_array_ind3, exec_init_list_ind3.
+  with exec_init_struct_ind3 := Minimality for exec_init_struct Sort Prop.
+Combined Scheme exec_init_scheme from exec_init_ind3, exec_init_array_ind3, exec_init_struct_ind3.
 
 Remark exec_init_array_length:
   forall m b ofs ty sz il m',
@@ -1146,91 +1240,95 @@ Proof.
   induction 1; lia.
 Qed.
 
-Lemma store_init_data_list_app:
-  forall data1 m b ofs m' data2 m'',
-  Genv.store_init_data_list ge m b ofs data1 = Some m' ->
-  Genv.store_init_data_list ge m' b (ofs + idlsize data1) data2 = Some m'' ->
-  Genv.store_init_data_list ge m b ofs (data1 ++ data2) = Some m''.
+Lemma transl_init_rec_sound:
+   (forall m b ofs bf ty i m',
+    exec_init m b ofs bf ty i m' ->
+    forall s s',
+    match_state s m b ->
+    match bf with
+    | Full => transl_init_rec ge s ty i ofs
+    | Bits sz sg p w => transl_init_bitfield ge s ty sz p w i ofs
+    end = OK s' ->
+    match_state s' m' b)
+/\ (forall m b ofs ty sz il m',
+    exec_init_array m b ofs ty sz il m' ->
+    forall s s',
+    match_state s m b ->
+    transl_init_array ge s ty il ofs = OK s' ->
+    match_state s' m' b)
+/\ (forall m b ofs flds il m',
+    exec_init_struct m b ofs flds il m' ->
+    forall s s' ms pos,
+    match_state s m b ->
+    initialized_fields_of_struct ms pos = OK flds ->
+    transl_init_struct ge s ms il ofs pos = OK s' ->
+    match_state s' m' b).
 Proof.
-  induction data1; simpl; intros.
-  inv H. rewrite Z.add_0_r in H0. auto.
-  destruct (Genv.store_init_data ge m b ofs a); try discriminate.
-  rewrite Z.add_assoc in H0. eauto.
-Qed.
-
-Remark store_init_data_list_padding:
-  forall frm to b ofs m,
-  Genv.store_init_data_list ge m b ofs (tr_padding frm to) = Some m.
-Proof.
-  intros. unfold tr_padding. destruct (zlt frm to); auto.
-Qed.
-
-Lemma tr_init_sound:
-  (forall m b ofs ty i m', exec_init m b ofs ty i m' ->
-   forall data, tr_init ty i data ->
-   Genv.store_init_data_list ge m b ofs data = Some m')
-/\(forall m b ofs ty sz il m', exec_init_array m b ofs ty sz il m' ->
-   forall data, tr_init_array ty il sz data ->
-   Genv.store_init_data_list ge m b ofs data = Some m')
-/\(forall m b ofs l il m', exec_init_list m b ofs l il m' ->
-   forall ty fl data pos,
-   l = fields_of_struct fl pos ->
-   tr_init_struct ty fl il pos data ->
-   Genv.store_init_data_list ge m b (ofs + pos) data = Some m').
-Proof.
-Local Opaque sizeof.
-  apply exec_init_scheme; simpl; intros.
+  apply exec_init_scheme.
 - (* single *)
-  inv H3. simpl. erewrite transl_init_single_steps by eauto. auto.
+  intros until m''; intros STEP CAST ASG s s' MS TR. destruct bf; monadInv TR.
+  + (* full *)
+    exploit transl_init_single_sound; eauto. intros [P Q].
+    eapply store_data_correct; eauto. 
+  + (* bitfield *)
+    destruct x; monadInv EQ0. monadInv EQ.
+    exploit constval_steps; eauto. intros [A [B C]]. subst m' ty1.
+    exploit sem_cast_match; eauto. intros D.
+    inv ASG. inv D.
+    set (f := first_bit sz pos width) in *.
+    assert (E: Vint c = Vint x) by (eapply load_int_correct; eauto).
+    inv E.
+    eapply store_int_correct; eauto.
 - (* array *)
-  inv H1. replace (Z.max 0 sz) with sz in H7. eauto.
-  assert (sz >= 0) by (eapply exec_init_array_length; eauto). extlia.
+  intros. monadInv H2. eauto.
 - (* struct *)
-  inv H3. unfold lookup_composite in H7. rewrite H in H7. inv H7. 
-  replace ofs with (ofs + 0) by lia. eauto.
+  intros. monadInv H5. unfold lookup_composite in EQ. rewrite H in EQ. inv EQ.
+  rewrite H0 in EQ0. eauto.
 - (* union *)
-  inv H4. unfold lookup_composite in H9. rewrite H in H9. inv H9. rewrite H1 in H12; inv H12. 
-  eapply store_init_data_list_app. eauto.
-  apply store_init_data_list_padding.
-
-- (* array, empty *)
-  inv H0; auto.
-- (* array, nonempty *)
-  inv H3.
-  eapply store_init_data_list_app.
+  intros. monadInv H6. unfold lookup_composite in EQ. rewrite H in EQ. inv EQ. rewrite H0 in EQ0.
+  rewrite H1, H2 in EQ0. simpl in EQ0. eauto.
+- (* array nil *)
+  intros. monadInv H1. auto.
+- (* array cons *)
+  intros. monadInv H4. eauto.
+- (* struct nil *)
+  intros. monadInv H1. auto.
+- (* struct cons *)
+  intros. simpl in H5. revert H4 H5. generalize pos0. induction ms as [ | m1 ms]. discriminate.
+  simpl. destruct (member_not_initialized m1).
+  intros; eapply IHms; eauto.
+  clear IHms. intros. monadInv H5. rewrite EQ in H4. monadInv H4. inv EQ0.
   eauto.
-  rewrite (tr_init_size _ _ _ H7). eauto.
-
-- (* struct, empty *)
-  inv H0. apply store_init_data_list_padding.
-- (* struct, nonempty *)
-  inv H4. simpl in H3; inv H3. 
-  eapply store_init_data_list_app. apply store_init_data_list_padding.
-  rewrite padding_size.
-  replace (ofs + pos0 + (pos2 - pos0)) with (ofs + pos2) by lia.
-  eapply store_init_data_list_app.
-  eauto.
-  rewrite (tr_init_size _ _ _ H9).
-  rewrite <- Z.add_assoc. eapply H2. eauto. eauto.
-  apply align_le. apply alignof_pos.
 Qed.
-
-*)
 
 End SOUNDNESS.
 
-(*
 Theorem transl_init_sound:
-  forall p m b ty i m' data,
-  exec_init (globalenv p) m b 0 ty i m' ->
+  forall p m b ty i m1 data,
+  let sz := sizeof (prog_comp_env p) ty in
+  Mem.range_perm m b 0 sz Cur Writable ->
+  reads_as_zeros m b 0 sz ->
+  exec_init (globalenv p) m b 0 Full ty i m1 ->
   transl_init (prog_comp_env p) ty i = OK data ->
-  Genv.store_init_data_list (globalenv p) m b 0 data = Some m'.
+  exists m2,
+     Genv.store_init_data_list (globalenv p) m b 0 data = Some m2
+  /\ Mem.loadbytes m2 b 0 (init_data_list_size data) = Mem.loadbytes m1 b 0 sz.
 Proof.
   intros.
   set (ge := globalenv p) in *.
-  change (prog_comp_env p) with (genv_cenv ge) in H0.
-  destruct (tr_init_sound ge) as (A & B & C).
-  eapply build_composite_env_consistent. apply prog_comp_env_eq.
-  eapply A; eauto. apply transl_init_spec; auto.
+  change (prog_comp_env p) with (genv_cenv ge) in *.
+  unfold transl_init in H2; monadInv H2.
+  fold sz in EQ. set (s0 := initial_state sz) in *.
+  assert (match_state ge s0 m b).
+  { constructor; simpl.
+  - generalize (sizeof_pos ge ty). fold sz. lia.
+  - apply Mem.loadbytes_empty. lia.
+  - auto.
+  - assumption.
+  }
+  assert (match_state ge x m1 b).
+  { eapply (proj1 (transl_init_rec_sound ge)); eauto. }
+  assert (total_size x = sz).
+  { change sz with s0.(total_size). eapply total_size_transl_init_rec; eauto. }
+  rewrite <- H4. eapply init_data_list_of_state_correct; eauto; rewrite H4; auto.
 Qed.
-*)
