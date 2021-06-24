@@ -17,7 +17,6 @@ let linker_options = ref ([]: string list)
 let assembler_options = ref ([]: string list)
 let option_flongdouble = ref false
 let option_fstruct_passing = ref false
-let option_fbitfields = ref false
 let option_fvararg_calls = ref true
 let option_funprototyped = ref true
 let option_fpacked_structs = ref false

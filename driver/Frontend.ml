@@ -80,7 +80,6 @@ let parse_c_file sourcename ifile =
   let simplifs =
     "b" (* blocks: mandatory *)
   ^ (if !option_fstruct_passing then "s" else "")
-  ^ (if !option_fbitfields then "f" else "")
   ^ (if !option_fpacked_structs then "p" else "")
   in
   (* Parsing and production of a simplified C AST *)
