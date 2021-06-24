@@ -1704,7 +1704,7 @@ Proof.
   destruct i; destruct s; discriminate.
   destruct f; discriminate.
 - (* bitfield *)
-  inv H0. constructor.
+  inv H. constructor.
   apply wt_bitfield_normalize. lia. auto.
 Qed.
 
@@ -1714,7 +1714,7 @@ Lemma wt_assign_loc:
   wt_val v ty -> wt_val v' ty.
 Proof.
   induction 1; intros; auto.
-- inv H0. constructor.
+- inv H. constructor.
   apply wt_bitfield_normalize. lia. auto.
 Qed.
 

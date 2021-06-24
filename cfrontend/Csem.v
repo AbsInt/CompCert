@@ -73,7 +73,6 @@ Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs) :
       access_mode ty = By_copy ->
       deref_loc ty m b ofs Full E0 (Vptr b ofs)
   | deref_loc_bitfield: forall sz sg pos width v,
-      type_is_volatile ty = false ->
       load_bitfield ty sz sg pos width m (Vptr b ofs) v ->
       deref_loc ty m b ofs (Bits sz sg pos width) E0 v.
 
@@ -111,7 +110,6 @@ Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs):
       Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
       assign_loc ty m b ofs Full (Vptr b' ofs') E0 m' (Vptr b' ofs')
   | assign_loc_bitfield: forall sz sg pos width v m' v',
-      type_is_volatile ty = false ->
       store_bitfield ty sz sg pos width m (Vptr b ofs) v m' v' ->
       assign_loc ty m b ofs (Bits sz sg pos width) v E0 m' v'.
 

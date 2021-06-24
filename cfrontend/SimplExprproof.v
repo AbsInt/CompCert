@@ -208,7 +208,7 @@ Proof (proj2 tr_simple_nil).
 Remark deref_loc_translated:
   forall ty m b ofs bf t v,
   Csem.deref_loc ge ty m b ofs bf t v ->
-  match chunk_for_volatile_type ty with
+  match chunk_for_volatile_type ty bf with
   | None => t = E0 /\ Clight.deref_loc ty m b ofs bf v
   | Some chunk => bf = Full /\ volatile_load tge chunk m b ofs t v
   end.
@@ -223,13 +223,13 @@ Proof.
 - (* By copy *)
   rewrite H0. destruct (type_is_volatile ty); split; auto; eapply deref_loc_copy; eauto.
 - (* Bitfield *)
-  rewrite H0. split; auto. apply deref_loc_bitfield; auto.
+  destruct (type_is_volatile ty); [destruct (access_mode ty)|]; auto using deref_loc_bitfield.
 Qed.
 
 Remark assign_loc_translated:
   forall ty m b ofs bf v t m' v',
   Csem.assign_loc ge ty m b ofs bf v t m' v' ->
-  match chunk_for_volatile_type ty with
+  match chunk_for_volatile_type ty bf with
   | None => t = E0 /\ Clight.assign_loc tge ty m b ofs bf v m'
   | Some chunk => bf = Full /\ volatile_store tge chunk m b ofs v t m'
   end.
@@ -243,7 +243,7 @@ Proof.
   rewrite H0. rewrite <- comp_env_preserved in *.
   destruct (type_is_volatile ty); split; auto; eapply assign_loc_copy; eauto.
 - (* Bitfield *)
-  rewrite H0. split; auto. eapply assign_loc_bitfield; eauto.
+  destruct (type_is_volatile ty); [destruct (access_mode ty)|]; eauto using assign_loc_bitfield.
 Qed.
 
 (** Bitfield accesses *)
@@ -284,7 +284,7 @@ Lemma make_assign_value_sound:
   eval_expr tge e le m'' (make_assign_value bf r) v'.
 Proof.
   unfold make_assign_value; destruct 1; intros; auto.
-  inv H0. eapply eval_make_normalize; eauto. lia.
+  inv H. eapply eval_make_normalize; eauto. lia.
 Qed.
 
 Lemma typeof_make_assign_value: forall bf r,
@@ -639,7 +639,7 @@ Ltac UNCHANGED :=
   red; auto.
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
-  auto. auto. auto.
+  auto. auto. auto. auto.
 + (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1. rewrite app_ass. eauto.
@@ -647,8 +647,8 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   auto. auto. auto. auto. auto. auto.
-  eapply typeof_context; eauto.
-  auto. auto.
+  eapply typeof_context. eauto. auto. eauto.
+  auto.
 - (* assign right *)
   inv H2.
 + (* for effects *)
@@ -659,7 +659,7 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. change (sl3 ++ sl2') with (nil ++ (sl3 ++ sl2')). rewrite app_ass.
   econstructor.
   eapply tr_expr_invariant; eauto. UNCHANGED.
-  apply S; auto. auto. auto. auto.
+  apply S; auto. auto. auto. auto. auto.
 + (* for val *)
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
@@ -679,7 +679,7 @@ Ltac UNCHANGED :=
   intros. rewrite <- app_ass. econstructor. apply S; auto.
   eapply tr_expr_invariant; eauto. UNCHANGED.
   symmetry; eapply typeof_context; eauto. eauto.
-  auto. auto. auto. auto. auto. auto.
+  auto. auto. auto. auto. auto. auto. auto.
 + (* for val *)
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
   TR. subst sl1. rewrite app_ass. eauto.
@@ -697,7 +697,7 @@ Ltac UNCHANGED :=
   red; auto.
   intros. rewrite <- app_ass. change (sl0 ++ sl2') with (nil ++ sl0 ++ sl2'). rewrite app_ass. econstructor.
   eapply tr_expr_invariant; eauto. UNCHANGED.
-  apply S; auto. auto. eauto. auto. auto. auto. auto. auto. auto.
+  apply S; auto. auto. eauto. auto. auto. auto. auto. auto. auto. auto.
 + (* for val *)
   assert (sl1 = nil) by (eapply tr_simple_expr_nil; eauto). subst sl1; simpl.
   exploit H1; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
@@ -858,8 +858,6 @@ Proof.
   intros. apply tr_top_base. apply S; auto.
 Qed.
 
-End TRANSLATION.
-
 (** Semantics of smart constructors *)
 
 Remark sem_cast_deterministic:
@@ -927,11 +925,11 @@ Lemma step_make_set:
   Csem.deref_loc ge ty m b ofs bf t v ->
   eval_lvalue tge e le m a b ofs bf ->
   typeof a = ty ->
-  step1 tge (State f (make_set id a) k e le m)
+  step1 tge (State f (make_set bf id a) k e le m)
           t (State f Sskip k e (PTree.set id v le) m).
 Proof.
   intros. exploit deref_loc_translated; eauto. rewrite <- H1.
-  unfold make_set. destruct (chunk_for_volatile_type (typeof a)) as [chunk|].
+  unfold make_set. destruct (chunk_for_volatile_type (typeof a) bf) as [chunk|].
 (* volatile case *)
   intros [A B]. subst bf.
   change (PTree.set id v le) with (set_opttemp (Some id) v le). econstructor.
@@ -949,11 +947,11 @@ Lemma step_make_assign:
   eval_expr tge e le m a2 v2 ->
   sem_cast v2 (typeof a2) ty m = Some v ->
   typeof a1 = ty ->
-  step1 tge (State f (make_assign a1 a2) k e le m)
+  step1 tge (State f (make_assign bf a1 a2) k e le m)
           t (State f Sskip k e le m').
 Proof.
   intros. exploit assign_loc_translated; eauto. rewrite <- H3.
-  unfold make_assign. destruct (chunk_for_volatile_type (typeof a1)) as [chunk|].
+  unfold make_assign. destruct (chunk_for_volatile_type (typeof a1) bf) as [chunk|].
 (* volatile case *)
   intros [A B]. subst bf. change le with (set_opttemp None Vundef le) at 2. econstructor.
   econstructor. constructor. eauto.
@@ -992,7 +990,7 @@ Lemma step_tr_rvalof:
   forall ty m b ofs bf t v e le a sl a' tmp f k,
   Csem.deref_loc ge ty m b ofs bf t v ->
   eval_lvalue tge e le m a b ofs bf ->
-  tr_rvalof ty a sl a' tmp ->
+  tr_rvalof ce ty a sl a' tmp ->
   typeof a = ty ->
   exists le',
     star step1 tge (State f Sskip (Kseqlist sl k) e le m)
@@ -1009,12 +1007,17 @@ Proof.
   split. eapply eval_Elvalue; eauto.
   auto.
   (* volatile *)
-  intros. exists (PTree.set t0 v le); split.
+  intros.
+  exploit is_bitfield_access_sound; eauto. intros EQ; subst bf0. 
+  exists (PTree.set t0 v le); split.
   simpl. eapply star_two. econstructor. eapply step_make_set; eauto. traceEq.
   split. constructor. apply PTree.gss.
   split. auto.
   intros. apply PTree.gso. congruence.
 Qed.
+
+End TRANSLATION.
+
 
 (** Matching between continuations *)
 
@@ -1231,21 +1234,21 @@ Proof.
 Qed.
 
 Lemma make_set_nolabel:
-  forall t a, nolabel (make_set t a).
+  forall bf t a, nolabel (make_set bf t a).
 Proof.
   unfold make_set; intros; red; intros.
-  destruct (chunk_for_volatile_type (typeof a)); auto.
+  destruct (chunk_for_volatile_type (typeof a) bf); auto.
 Qed.
 
 Lemma make_assign_nolabel:
-  forall l r, nolabel (make_assign l r).
+  forall bf l r, nolabel (make_assign bf l r).
 Proof.
   unfold make_assign; intros; red; intros.
-  destruct (chunk_for_volatile_type (typeof l)); auto.
+  destruct (chunk_for_volatile_type (typeof l) bf); auto.
 Qed.
 
 Lemma tr_rvalof_nolabel:
-  forall ty a sl a' tmp, tr_rvalof ty a sl a' tmp -> nolabel_list sl.
+  forall ce ty a sl a' tmp, tr_rvalof ce ty a sl a' tmp -> nolabel_list sl.
 Proof.
   destruct 1; simpl; intuition. apply make_set_nolabel.
 Qed.
@@ -1271,8 +1274,8 @@ Ltac NoLabelTac :=
   | [ H: _ -> nolabel_list ?x |- nolabel_list ?x ] => apply H; NoLabelTac
   | [ |- nolabel (makeseq _) ] => apply makeseq_nolabel; NoLabelTac
   | [ |- nolabel (makeif _ _ _) ] => apply makeif_nolabel; NoLabelTac
-  | [ |- nolabel (make_set _ _) ] => apply make_set_nolabel
-  | [ |- nolabel (make_assign _ _) ] => apply make_assign_nolabel
+  | [ |- nolabel (make_set _ _ _) ] => apply make_set_nolabel
+  | [ |- nolabel (make_assign _ _ _) ] => apply make_assign_nolabel
   | [ |- nolabel _ ] => red; intros; simpl; auto
   | [ |- _ /\ _ ] => split; NoLabelTac
   | _ => auto
@@ -1568,13 +1571,14 @@ Ltac NOTIN :=
   intros [dst' [sl1 [sl2 [a' [tmp' [P [Q [R S]]]]]]]].
   inv P. inv H2. inv H7; try congruence.
   exploit tr_simple_lvalue; eauto. intros [SL [TY EV]]. subst sl0; simpl.
+  exploit is_bitfield_access_sound; eauto. intros EQ; subst bf0.
   econstructor; split.
   left. eapply plus_two. constructor. eapply step_make_set; eauto. traceEq.
   econstructor; eauto.
   change (final dst' (Etempvar t0 (Csyntax.typeof l)) ++ sl2) with (nil ++ (final dst' (Etempvar t0 (Csyntax.typeof l)) ++ sl2)).
   apply S. apply tr_val_gen. auto.
-  intros. constructor. rewrite H5; auto. apply PTree.gss.
-  intros. apply PTree.gso. red; intros; subst; elim H5; auto.
+  intros. constructor. rewrite H7; auto. apply PTree.gss.
+  intros. apply PTree.gso. red; intros; subst; elim H7; auto.
   auto.
 - (* seqand true *)
   exploit tr_top_leftcontext; eauto. clear TR.
@@ -1796,6 +1800,7 @@ Ltac NOTIN :=
 + (* for effects *)
   exploit tr_simple_rvalue; eauto. intros [SL2 [TY2 EV2]].
   exploit tr_simple_lvalue; eauto. intros [SL1 [TY1 EV1]].
+  assert (bf0 = bf) by (eapply is_bitfield_access_sound; eauto).
   subst; simpl Kseqlist.
   econstructor; split.
   left. eapply plus_left. constructor.
@@ -1835,6 +1840,7 @@ Ltac NOTIN :=
   intros. apply INV. NOTIN. intros [? [? EV1']].
   exploit tr_simple_rvalue. eauto. eapply tr_expr_invariant with (le := le) (le' := le'). eauto.
   intros. apply INV. NOTIN. simpl. intros [SL2 [TY2 EV2]].
+  assert (bf0 = bf) by (eapply is_bitfield_access_sound; eauto).
   subst; simpl Kseqlist.
   econstructor; split.
   left. eapply star_plus_trans. rewrite app_ass. rewrite Kseqlist_app. eexact EXEC.
@@ -1906,6 +1912,7 @@ Ltac NOTIN :=
   exploit step_tr_rvalof; eauto. intros [le' [EXEC [EV3 [TY3 INV]]]].
   exploit tr_simple_lvalue. eauto. eapply tr_expr_invariant with (le := le) (le' := le'). eauto.
   intros. apply INV. NOTIN. intros [? [? EV1']].
+  assert (bf0 = bf) by (eapply is_bitfield_access_sound; eauto).
   subst; simpl Kseqlist.
   econstructor; split.
   left. rewrite app_ass; rewrite Kseqlist_app.
@@ -1925,6 +1932,7 @@ Ltac NOTIN :=
     eapply tr_expr_invariant with (le' := PTree.set t v1 le). eauto.
     intros. apply PTree.gso. intuition congruence.
   intros [SL2 [TY2 EV2]].
+  assert (bf0 = bf) by (eapply is_bitfield_access_sound; eauto).
   subst; simpl Kseqlist.
   econstructor; split.
   left. eapply plus_four. constructor.
@@ -1957,6 +1965,7 @@ Ltac NOTIN :=
   constructor.
 + (* for value *)
   exploit tr_simple_lvalue; eauto. intros [SL1 [TY1 EV1]].
+  assert (bf0 = bf) by (eapply is_bitfield_access_sound; eauto).
   subst. simpl Kseqlist.
   econstructor; split.
   left. eapply plus_two. constructor. eapply step_make_set; eauto.

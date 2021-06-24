@@ -287,7 +287,6 @@ Definition do_deref_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs) 
     | _ => None
     end
   | Bits sz sg pos width =>
-    check (negb (type_is_volatile ty));
     match ty with
     | Tint sz1 sg1 _ =>
       check (intsize_eq sz1 sz &&
@@ -352,7 +351,6 @@ Definition do_assign_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs)
     | _ => None
     end
   | Bits sz sg pos width =>
-    check (negb (type_is_volatile ty));
     check (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
     match ty, v, Mem.loadv (chunk_for_carrier sz) m (Vptr b ofs) with
     | Tint sz1 sg1 _, Vint n, Some (Vint c) =>
@@ -377,8 +375,7 @@ Proof.
   split. eapply deref_loc_value; eauto. constructor.
   split. eapply deref_loc_reference; eauto. constructor.
   split. eapply deref_loc_copy; eauto. constructor.
-- mydestr. apply negb_true_iff in Heqb0.
-  destruct ty; mydestr. InvBooleans. subst i. destruct v0; mydestr.
+- mydestr. destruct ty; mydestr. InvBooleans. subst i. destruct v0; mydestr.
   split. eapply deref_loc_bitfield; eauto. econstructor; eauto. constructor.
 Qed.
 
@@ -392,9 +389,9 @@ Proof.
 - rewrite H1; rewrite H2. apply do_volatile_load_complete; auto.
 - inv H0. rewrite H1. auto.
 - inv H0. rewrite H1. auto.
-- inv H0. inv H2. rewrite H1; simpl.
+- inv H0. inv H1.
   unfold proj_sumbool; rewrite ! dec_eq_true, ! zle_true, ! zlt_true by lia. cbn.
-  cbn in H5; rewrite H5. auto. 
+  cbn in H4; rewrite H4. auto. 
 Qed.
 
 Lemma do_assign_loc_sound:
@@ -409,7 +406,7 @@ Proof.
   split. eapply assign_loc_value; eauto. constructor.
   destruct v; mydestr. destruct a as [P [Q R]].
   split. eapply assign_loc_copy; eauto. constructor.
-- mydestr. apply negb_true_iff in Heqb0. InvBooleans.
+- mydestr. InvBooleans.
   destruct ty; mydestr. destruct v; mydestr. destruct v; mydestr. InvBooleans. subst s i.
   split. eapply assign_loc_bitfield; eauto. econstructor; eauto. constructor.
 Qed.
@@ -425,10 +422,10 @@ Proof.
 - rewrite H1. destruct (check_assign_copy ty b ofs b' ofs').
   inv H0. rewrite H5; rewrite H6; auto.
   elim n. red; tauto.
-- inv H0. inv H2. rewrite H1; simpl. 
+- inv H0. inv H1. 
   unfold proj_sumbool; rewrite ! zle_true, ! zlt_true by lia. cbn.
   rewrite ! dec_eq_true.
-  cbn in H5; rewrite H5. cbn in H6; rewrite H6. auto.
+  cbn in H4; rewrite H4. cbn in H5; rewrite H5. auto.
 Qed.
 
 (** External calls *)

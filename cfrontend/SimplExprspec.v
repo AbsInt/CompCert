@@ -42,14 +42,6 @@ Definition final (dst: destination) (a: expr) : list statement :=
   | For_set sd => do_set sd a
   end.
 
-Inductive tr_rvalof: type -> expr -> list statement -> expr -> list ident -> Prop :=
-  | tr_rvalof_nonvol: forall ty a tmp,
-      type_is_volatile ty = false ->
-      tr_rvalof ty a nil a tmp
-  | tr_rvalof_vol: forall ty a t tmp,
-      type_is_volatile ty = true -> In t tmp ->
-      tr_rvalof ty a (make_set t a :: nil) (Etempvar t ty) tmp.
-
 Definition tr_is_bitfield_access (l: expr) (bf: bitfield) : Prop :=
   match l with
   | Efield r f _ =>
@@ -63,6 +55,15 @@ Definition tr_is_bitfield_access (l: expr) (bf: bitfield) : Prop :=
       end
   | _ => bf = Full
   end.
+
+Inductive tr_rvalof: type -> expr -> list statement -> expr -> list ident -> Prop :=
+  | tr_rvalof_nonvol: forall ty a tmp,
+      type_is_volatile ty = false ->
+      tr_rvalof ty a nil a tmp
+  | tr_rvalof_vol: forall ty a t bf tmp,
+      type_is_volatile ty = true -> In t tmp ->
+      tr_is_bitfield_access a bf ->
+      tr_rvalof ty a (make_set bf t a :: nil) (Etempvar t ty) tmp.
 
 Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> expr -> list ident -> Prop :=
   | tr_var: forall le dst id ty tmp,
@@ -216,13 +217,14 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       tr_expr le (For_set sd) (Csyntax.Econdition e1 e2 e3 ty)
                        (sl1 ++ makeif a1 (makeseq sl2) (makeseq sl3) :: nil)
                        any tmp
-  | tr_assign_effects: forall le e1 e2 ty sl1 a1 tmp1 sl2 a2 tmp2 any tmp,
+  | tr_assign_effects: forall le e1 e2 ty sl1 a1 tmp1 sl2 a2 tmp2 bf any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le For_val e2 sl2 a2 tmp2 ->
       list_disjoint tmp1 tmp2 ->
       incl tmp1 tmp -> incl tmp2 tmp ->
+      tr_is_bitfield_access a1 bf ->
       tr_expr le For_effects (Csyntax.Eassign e1 e2 ty)
-                      (sl1 ++ sl2 ++ make_assign a1 a2 :: nil)
+                      (sl1 ++ sl2 ++ make_assign bf a1 a2 :: nil)
                       any tmp
   | tr_assign_val: forall le dst e1 e2 ty sl1 a1 tmp1 sl2 a2 tmp2 t tmp ty1 ty2 bf,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
@@ -236,18 +238,19 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       tr_expr le dst (Csyntax.Eassign e1 e2 ty)
                    (sl1 ++ sl2 ++
                     Sset t (Ecast a2 ty1) ::
-                    make_assign a1 (Etempvar t ty1) ::
+                    make_assign bf a1 (Etempvar t ty1) ::
                     final dst (make_assign_value bf (Etempvar t ty1)))
                    (make_assign_value bf (Etempvar t ty1)) tmp
-  | tr_assignop_effects: forall le op e1 e2 tyres ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 any tmp,
+  | tr_assignop_effects: forall le op e1 e2 tyres ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 bf sl3 a3 tmp3 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_expr le For_val e2 sl2 a2 tmp2 ->
       ty1 = Csyntax.typeof e1 ->
       tr_rvalof ty1 a1 sl3 a3 tmp3 ->
       list_disjoint tmp1 tmp2 -> list_disjoint tmp1 tmp3 -> list_disjoint tmp2 tmp3 ->
       incl tmp1 tmp -> incl tmp2 tmp -> incl tmp3 tmp ->
+      tr_is_bitfield_access a1 bf ->
       tr_expr le For_effects (Csyntax.Eassignop op e1 e2 tyres ty)
-                      (sl1 ++ sl2 ++ sl3 ++ make_assign a1 (Ebinop op a3 a2 tyres) :: nil)
+                      (sl1 ++ sl2 ++ sl3 ++ make_assign bf a1 (Ebinop op a3 a2 tyres) :: nil)
                       any tmp
   | tr_assignop_val: forall le dst op e1 e2 tyres ty sl1 a1 tmp1 sl2 a2 tmp2 sl3 a3 tmp3 t bf tmp ty1,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
@@ -261,25 +264,27 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       tr_expr le dst (Csyntax.Eassignop op e1 e2 tyres ty)
                    (sl1 ++ sl2 ++ sl3 ++
                     Sset t (Ecast (Ebinop op a3 a2 tyres) ty1) ::
-                    make_assign a1 (Etempvar t ty1) ::
+                    make_assign bf a1 (Etempvar t ty1) ::
                     final dst (make_assign_value bf (Etempvar t ty1)))
                    (make_assign_value bf (Etempvar t ty1)) tmp
-  | tr_postincr_effects: forall le id e1 ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 any tmp,
+  | tr_postincr_effects: forall le id e1 ty ty1 sl1 a1 tmp1 sl2 a2 tmp2 bf any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       tr_rvalof ty1 a1 sl2 a2 tmp2 ->
       ty1 = Csyntax.typeof e1 ->
       incl tmp1 tmp -> incl tmp2 tmp ->
       list_disjoint tmp1 tmp2 ->
+      tr_is_bitfield_access a1 bf ->
       tr_expr le For_effects (Csyntax.Epostincr id e1 ty)
-                      (sl1 ++ sl2 ++ make_assign a1 (transl_incrdecr id a2 ty1) :: nil)
+                      (sl1 ++ sl2 ++ make_assign bf a1 (transl_incrdecr id a2 ty1) :: nil)
                       any tmp
-  | tr_postincr_val: forall le dst id e1 ty sl1 a1 tmp1 t ty1 tmp,
+  | tr_postincr_val: forall le dst id e1 ty sl1 a1 tmp1 bf t ty1 tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
       incl tmp1 tmp -> In t tmp -> ~In t tmp1 ->
       ty1 = Csyntax.typeof e1 ->
+      tr_is_bitfield_access a1 bf ->
       tr_expr le dst (Csyntax.Epostincr id e1 ty)
-                   (sl1 ++ make_set t a1 ::
-                    make_assign a1 (transl_incrdecr id (Etempvar t ty1) ty1) ::
+                   (sl1 ++ make_set bf t a1 ::
+                    make_assign bf a1 (transl_incrdecr id (Etempvar t ty1) ty1) ::
                     final dst (Etempvar t ty1))
                    (Etempvar t ty1) tmp
   | tr_comma: forall le dst e1 e2 ty sl1 a1 tmp1 sl2 a2 tmp2 tmp,
@@ -764,17 +769,6 @@ Proof.
   intros. apply tr_expr_monotone with tmps; auto. apply add_dest_incl.
 Qed.
 
-Lemma transl_valof_meets_spec:
-  forall ty a g sl b g' I,
-  transl_valof ty a g = Res (sl, b) g' I ->
-  exists tmps, tr_rvalof ty a sl b tmps /\ contained tmps g g'.
-Proof.
-  unfold transl_valof; intros.
-  destruct (type_is_volatile ty) eqn:?; monadInv H.
-  exists (x :: nil); split; eauto with gensym. econstructor; eauto with coqlib.
-  exists (@nil ident); split; eauto with gensym. constructor; auto.
-Qed.
-
 Lemma is_bitfield_access_meets_spec: forall l g bf g' I,
   is_bitfield_access ce l g = Res bf g' I ->
   tr_is_bitfield_access l bf.
@@ -789,6 +783,18 @@ Proof.
     destruct (fn ce i (co_members co)) as [[ofs1 bf1]|] eqn:FN; inv H0.
     exists co, ofs1; auto. }
   destruct (typeof l); try discriminate; apply AUX; auto.
+Qed.
+
+Lemma transl_valof_meets_spec:
+  forall ty a g sl b g' I,
+  transl_valof ce ty a g = Res (sl, b) g' I ->
+  exists tmps, tr_rvalof ty a sl b tmps /\ contained tmps g g'.
+Proof.
+  unfold transl_valof; intros.
+  destruct (type_is_volatile ty) eqn:?; monadInv H.
+  exists (x :: nil); split; eauto with gensym.
+  econstructor; eauto using is_bitfield_access_meets_spec with coqlib.
+  exists (@nil ident); split; eauto with gensym. constructor; auto.
 Qed.
 
 Scheme expr_ind2 := Induction for Csyntax.expr Sort Prop
@@ -954,10 +960,10 @@ Opaque makeif.
 - (* assign *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
-  destruct dst; monadInv EQ2; simpl add_dest in *.
+  apply is_bitfield_access_meets_spec in EQ0.
+  destruct dst; monadInv EQ3; simpl add_dest in *.
 + (* for value *)
-  apply is_bitfield_access_meets_spec in EQ2.
-  exists (x1 :: tmp1 ++ tmp2); split.
+  exists (x2 :: tmp1 ++ tmp2); split.
   intros. eapply tr_assign_val with (dst := For_val); eauto with gensym.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
@@ -966,8 +972,7 @@ Opaque makeif.
   econstructor; eauto with gensym.
   apply contained_app; eauto with gensym.
 + (* for set *)
-  apply is_bitfield_access_meets_spec in EQ2.
-  exists (x1 :: tmp1 ++ tmp2); split.
+  exists (x2 :: tmp1 ++ tmp2); split.
   repeat rewrite app_ass. simpl.
   intros. eapply tr_assign_val with (dst := For_set sd); eauto with gensym.
   apply contained_cons. eauto with gensym.
@@ -976,39 +981,39 @@ Opaque makeif.
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   exploit H0; eauto. intros [tmp2 [Csyntax D]].
   exploit transl_valof_meets_spec; eauto. intros [tmp3 [E F]].
-  destruct dst; monadInv EQ3; simpl add_dest in *.
+  apply is_bitfield_access_meets_spec in EQ2.
+  destruct dst; monadInv EQ4; simpl add_dest in *.
 + (* for value *)
-  apply is_bitfield_access_meets_spec in EQ3.
-  exists (x2 :: tmp1 ++ tmp2 ++ tmp3); split.
-  intros. eapply tr_assignop_val with (dst := For_val); eauto with gensym.
-  apply contained_cons. eauto with gensym.
-  apply contained_app; eauto with gensym.
+  exists (x3 :: tmp1 ++ tmp2 ++ tmp3); split.
+  intros. eapply tr_assignop_val with (dst := For_val); eauto 6 with gensym.
+  apply contained_cons. eauto 6 with gensym.
+  apply contained_app; eauto 6 with gensym.
 + (* for effects *)
   exists (tmp1 ++ tmp2 ++ tmp3); split.
   econstructor; eauto with gensym.
   apply contained_app; eauto with gensym.
 + (* for set *)
-  apply is_bitfield_access_meets_spec in EQ3.
-  exists (x2 :: tmp1 ++ tmp2 ++ tmp3); split.
+  exists (x3 :: tmp1 ++ tmp2 ++ tmp3); split.
   repeat rewrite app_ass. simpl.
-  intros. eapply tr_assignop_val with (dst := For_set sd); eauto with gensym.
-  apply contained_cons. eauto with gensym.
-  apply contained_app; eauto with gensym.
+  intros. eapply tr_assignop_val with (dst := For_set sd); eauto 6 with gensym.
+  apply contained_cons. eauto 6 with gensym.
+  apply contained_app; eauto 6 with gensym.
 - (* postincr *)
   monadInv H0. exploit H; eauto. intros [tmp1 [A B]].
-  destruct dst; monadInv EQ0; simpl add_dest in *.
+  apply is_bitfield_access_meets_spec in EQ1.
+  destruct dst; monadInv EQ2; simpl add_dest in *.
 + (* for value *)
-  exists (x0 :: tmp1); split.
+  exists (x1 :: tmp1); split.
   econstructor; eauto with gensym.
   apply contained_cons; eauto with gensym.
 + (* for effects *)
-  exploit transl_valof_meets_spec; eauto. intros [tmp2 [Csyntax D]].
+  exploit transl_valof_meets_spec; eauto. intros [tmp2 [C D]].
   exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
   eauto with gensym.
 + (* for set *)
   repeat rewrite app_ass; simpl.
-  exists (x0 :: tmp1); split.
+  exists (x1 :: tmp1); split.
   econstructor; eauto with gensym.
   apply contained_cons; eauto with gensym.
 - (* comma *)
