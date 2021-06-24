@@ -805,6 +805,11 @@ let convertFloat f kind =
 
 (** Expressions *)
 
+let check_volatile_bitfield env e =
+  if Cutil.is_bitfield env e
+  && List.mem AVolatile (Cutil.attributes_of_type env e.etyp) then
+    warning Diagnostics.Unnamed "access to a volatile bit field, the 'volatile' qualifier is ignored"
+
 let ezero = Eval(Vint(coqint_of_camlint 0l), type_int32s)
 
 let ewrap = function
@@ -819,6 +824,7 @@ let rec convertExpr env e =
   | C.EUnop((C.Oderef|C.Odot _|C.Oarrow _), _)
   | C.EBinop(C.Oindex, _, _, _) ->
       let l = convertLvalue env e in
+      check_volatile_bitfield env e;
       ewrap (Ctyping.evalof l)
 
   | C.EConst(C.CInt(i, k, _)) ->
@@ -888,6 +894,7 @@ let rec convertExpr env e =
       if Cutil.is_composite_type env e2.etyp
       && List.mem AVolatile (Cutil.attributes_of_type env e2.etyp) then
         warning Diagnostics.Unnamed "assignment of a value of volatile composite type, the 'volatile' qualifier is ignored";
+      check_volatile_bitfield env e1;
       ewrap (Ctyping.eassign e1' e2')
   | C.EBinop((C.Oadd_assign|C.Osub_assign|C.Omul_assign|C.Odiv_assign|
               C.Omod_assign|C.Oand_assign|C.Oor_assign|C.Oxor_assign|
@@ -908,6 +915,7 @@ let rec convertExpr env e =
         | _ -> assert false in
       let e1' = convertLvalue env e1 in
       let e2' = convertExpr env e2 in
+      check_volatile_bitfield env e1;
       ewrap (Ctyping.eassignop op' e1' e2')
   | C.EBinop(C.Ocomma, e1, e2, _) ->
       ewrap (Ctyping.ecomma (convertExpr env e1) (convertExpr env e2))
