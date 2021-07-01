@@ -51,7 +51,7 @@ then
       exit 0
     else
       echo "$name: WRONG OUTPUT (diff follows)"
-      diff -u "$ref" "$out"
+      diff -a -u "$ref" "$out"
       exit 2
     fi
   else

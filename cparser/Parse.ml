@@ -28,7 +28,6 @@ let transform_program t p =
       p
   in
     p
-    |> run_pass Bitfields.program 'f'
     |> run_pass Unblock.program 'b'
     |> run_pass PackedStructs.program 'p'
     |> run_pass StructPassing.program 's'
@@ -40,7 +39,6 @@ let parse_transformations s =
   String.iter
     (function 'b' -> set "b"
             | 's' -> set "s"
-            | 'f' -> set "bf"
             | 'p' -> set "bp"
             |  _  -> ())
     s;

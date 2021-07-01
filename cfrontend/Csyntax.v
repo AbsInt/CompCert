@@ -56,7 +56,7 @@ Inductive expr : Type :=
                                              (**r function call [r1(rargs)] *)
   | Ebuiltin (ef: external_function) (tyargs: typelist) (rargs: exprlist) (ty: type)
                                                  (**r builtin function call *)
-  | Eloc (b: block) (ofs: ptrofs) (ty: type)
+  | Eloc (b: block) (ofs: ptrofs) (bf: bitfield) (ty: type)
                        (**r memory location, result of evaluating a l-value *)
   | Eparen (r: expr) (tycast: type) (ty: type)   (**r marked subexpression *)
 
@@ -117,7 +117,7 @@ Definition Eselection (r1 r2 r3: expr) (ty: type) :=
 
 Definition typeof (a: expr) : type :=
   match a with
-  | Eloc _ _ ty => ty
+  | Eloc _ _ _ ty => ty
   | Evar _ ty => ty
   | Ederef _ ty => ty
   | Efield _ _ ty => ty

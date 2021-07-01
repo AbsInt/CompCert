@@ -46,49 +46,59 @@ Section SEMANTICS.
 
 Variable ge: genv.
 
-(** [deref_loc ty m b ofs t v] computes the value of a datum
-  of type [ty] residing in memory [m] at block [b], offset [ofs].
+(** [deref_loc ty m b ofs bf t v] computes the value of a datum
+  of type [ty] residing in memory [m] at block [b], offset [ofs],
+  and bitfield designation [bf].
   If the type [ty] indicates an access by value, the corresponding
   memory load is performed.  If the type [ty] indicates an access by
   reference, the pointer [Vptr b ofs] is returned.  [v] is the value
   returned, and [t] the trace of observables (nonempty if this is
   a volatile access). *)
 
-Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs) : trace -> val -> Prop :=
+Inductive deref_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs) :
+                                       bitfield -> trace -> val -> Prop :=
   | deref_loc_value: forall chunk v,
       access_mode ty = By_value chunk ->
       type_is_volatile ty = false ->
       Mem.loadv chunk m (Vptr b ofs) = Some v ->
-      deref_loc ty m b ofs E0 v
+      deref_loc ty m b ofs Full E0 v
   | deref_loc_volatile: forall chunk t v,
       access_mode ty = By_value chunk -> type_is_volatile ty = true ->
       volatile_load ge chunk m b ofs t v ->
-      deref_loc ty m b ofs t v
+      deref_loc ty m b ofs Full t v
   | deref_loc_reference:
       access_mode ty = By_reference ->
-      deref_loc ty m b ofs E0 (Vptr b ofs)
+      deref_loc ty m b ofs Full E0 (Vptr b ofs)
   | deref_loc_copy:
       access_mode ty = By_copy ->
-      deref_loc ty m b ofs E0 (Vptr b ofs).
+      deref_loc ty m b ofs Full E0 (Vptr b ofs)
+  | deref_loc_bitfield: forall sz sg pos width v,
+      load_bitfield ty sz sg pos width m (Vptr b ofs) v ->
+      deref_loc ty m b ofs (Bits sz sg pos width) E0 v.
 
-(** Symmetrically, [assign_loc ty m b ofs v t m'] returns the
+(** Symmetrically, [assign_loc ty m b ofs bf v t m' v'] returns the
   memory state after storing the value [v] in the datum
-  of type [ty] residing in memory [m] at block [b], offset [ofs].
+  of type [ty] residing in memory [m] at block [b], offset [ofs],
+  and bitfield designation [bf].
   This is allowed only if [ty] indicates an access by value or by copy.
   [m'] is the updated memory state and [t] the trace of observables
-  (nonempty if this is a volatile store). *)
+  (nonempty if this is a volatile store).
+  [v'] is the result value of the assignment.  It is equal to [v]
+  if [bf] is [Full], and to [v] normalized to the width and signedness
+  of the bitfield [bf] otherwise.
+*)
 
 Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs):
-                                            val -> trace -> mem -> Prop :=
+                              bitfield -> val -> trace -> mem -> val -> Prop :=
   | assign_loc_value: forall v chunk m',
       access_mode ty = By_value chunk ->
       type_is_volatile ty = false ->
       Mem.storev chunk m (Vptr b ofs) v = Some m' ->
-      assign_loc ty m b ofs v E0 m'
+      assign_loc ty m b ofs Full v E0 m' v
   | assign_loc_volatile: forall v chunk t m',
       access_mode ty = By_value chunk -> type_is_volatile ty = true ->
       volatile_store ge chunk m b ofs v t m' ->
-      assign_loc ty m b ofs v t m'
+      assign_loc ty m b ofs Full v t m' v
   | assign_loc_copy: forall b' ofs' bytes m',
       access_mode ty = By_copy ->
       (alignof_blockcopy ge ty | Ptrofs.unsigned ofs') ->
@@ -98,7 +108,10 @@ Inductive assign_loc (ty: type) (m: mem) (b: block) (ofs: ptrofs):
               \/ Ptrofs.unsigned ofs + sizeof ge ty <= Ptrofs.unsigned ofs' ->
       Mem.loadbytes m b' (Ptrofs.unsigned ofs') (sizeof ge ty) = Some bytes ->
       Mem.storebytes m b (Ptrofs.unsigned ofs) bytes = Some m' ->
-      assign_loc ty m b ofs (Vptr b' ofs') E0 m'.
+      assign_loc ty m b ofs Full (Vptr b' ofs') E0 m' (Vptr b' ofs')
+  | assign_loc_bitfield: forall sz sg pos width v m' v',
+      store_bitfield ty sz sg pos width m (Vptr b ofs) v m' v' ->
+      assign_loc ty m b ofs (Bits sz sg pos width) v E0 m' v'.
 
 (** Allocation of function-local variables.
   [alloc_variables e1 m1 vars e2 m2] allocates one memory block
@@ -131,9 +144,9 @@ Inductive bind_parameters (e: env):
       forall m,
       bind_parameters e m nil nil m
   | bind_parameters_cons:
-      forall m id ty params v1 vl b m1 m2,
+      forall m id ty params v1 vl v1' b m1 m2,
       PTree.get id e = Some(b, ty) ->
-      assign_loc ty m b Ptrofs.zero v1 E0 m1 ->
+      assign_loc ty m b Ptrofs.zero Full v1 E0 m1 v1' ->
       bind_parameters e m1 params vl m2 ->
       bind_parameters e m ((id, ty) :: params) (v1 :: vl) m2.
 
@@ -202,34 +215,35 @@ Inductive lred: expr -> mem -> expr -> mem -> Prop :=
   | red_var_local: forall x ty m b,
       e!x = Some(b, ty) ->
       lred (Evar x ty) m
-           (Eloc b Ptrofs.zero ty) m
+           (Eloc b Ptrofs.zero Full ty) m
   | red_var_global: forall x ty m b,
       e!x = None ->
       Genv.find_symbol ge x = Some b ->
       lred (Evar x ty) m
-           (Eloc b Ptrofs.zero ty) m
+           (Eloc b Ptrofs.zero Full ty) m
   | red_deref: forall b ofs ty1 ty m,
       lred (Ederef (Eval (Vptr b ofs) ty1) ty) m
-           (Eloc b ofs ty) m
-  | red_field_struct: forall b ofs id co a f ty m delta,
+           (Eloc b ofs Full ty) m
+  | red_field_struct: forall b ofs id co a f ty m delta bf,
       ge.(genv_cenv)!id = Some co ->
-      field_offset ge f (co_members co) = OK delta ->
+      field_offset ge f (co_members co) = OK (delta, bf) ->
       lred (Efield (Eval (Vptr b ofs) (Tstruct id a)) f ty) m
-           (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) ty) m
-  | red_field_union: forall b ofs id co a f ty m,
+           (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) bf ty) m
+  | red_field_union: forall b ofs id co a f ty m delta bf,
       ge.(genv_cenv)!id = Some co ->
+      union_field_offset ge f (co_members co) = OK (delta, bf) ->
       lred (Efield (Eval (Vptr b ofs) (Tunion id a)) f ty) m
-           (Eloc b ofs ty) m.
+           (Eloc b (Ptrofs.add ofs (Ptrofs.repr delta)) bf ty) m.
 
 (** Head reductions for r-values *)
 
 Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
-  | red_rvalof: forall b ofs ty m t v,
-      deref_loc ty m b ofs t v ->
-      rred (Evalof (Eloc b ofs ty) ty) m
+  | red_rvalof: forall b ofs bf ty m t v,
+      deref_loc ty m b ofs bf t v ->
+      rred (Evalof (Eloc b ofs bf ty) ty) m
          t (Eval v ty) m
   | red_addrof: forall b ofs ty1 ty m,
-      rred (Eaddrof (Eloc b ofs ty1) ty) m
+      rred (Eaddrof (Eloc b ofs Full ty1) ty) m
         E0 (Eval (Vptr b ofs) ty) m
   | red_unop: forall op v1 ty1 ty m v,
       sem_unary_operation op v1 ty1 m = Some v ->
@@ -269,21 +283,21 @@ Inductive rred: expr -> mem -> trace -> expr -> mem -> Prop :=
   | red_alignof: forall ty1 ty m,
       rred (Ealignof ty1 ty) m
         E0 (Eval (Vptrofs (Ptrofs.repr (alignof ge ty1))) ty) m
-  | red_assign: forall b ofs ty1 v2 ty2 m v t m',
+  | red_assign: forall b ofs ty1 bf v2 ty2 m v t m' v',
       sem_cast v2 ty2 ty1 m = Some v ->
-      assign_loc ty1 m b ofs v t m' ->
-      rred (Eassign (Eloc b ofs ty1) (Eval v2 ty2) ty1) m
-         t (Eval v ty1) m'
-  | red_assignop: forall op b ofs ty1 v2 ty2 tyres m t v1,
-      deref_loc ty1 m b ofs t v1 ->
-      rred (Eassignop op (Eloc b ofs ty1) (Eval v2 ty2) tyres ty1) m
-         t (Eassign (Eloc b ofs ty1)
+      assign_loc ty1 m b ofs bf v t m' v' ->
+      rred (Eassign (Eloc b ofs bf ty1) (Eval v2 ty2) ty1) m
+         t (Eval v' ty1) m'
+  | red_assignop: forall op b ofs ty1 bf v2 ty2 tyres m t v1,
+      deref_loc ty1 m b ofs bf t v1 ->
+      rred (Eassignop op (Eloc b ofs bf ty1) (Eval v2 ty2) tyres ty1) m
+         t (Eassign (Eloc b ofs bf ty1)
                     (Ebinop op (Eval v1 ty1) (Eval v2 ty2) tyres) ty1) m
-  | red_postincr: forall id b ofs ty m t v1 op,
-      deref_loc ty m b ofs t v1 ->
+  | red_postincr: forall id b ofs ty bf m t v1 op,
+      deref_loc ty m b ofs bf t v1 ->
       op = match id with Incr => Oadd | Decr => Osub end ->
-      rred (Epostincr id (Eloc b ofs ty) ty) m
-         t (Ecomma (Eassign (Eloc b ofs ty)
+      rred (Epostincr id (Eloc b ofs bf ty) ty) m
+         t (Ecomma (Eassign (Eloc b ofs bf ty)
                             (Ebinop op (Eval v1 ty)
                                        (Eval (Vint Int.one) type_int32s)
                                        (incrdecr_type ty))
@@ -409,8 +423,8 @@ with contextlist: kind -> (expr -> exprlist) -> Prop :=
 Inductive imm_safe: kind -> expr -> mem -> Prop :=
   | imm_safe_val: forall v ty m,
       imm_safe RV (Eval v ty) m
-  | imm_safe_loc: forall b ofs ty m,
-      imm_safe LV (Eloc b ofs ty) m
+  | imm_safe_loc: forall b ofs bf ty m,
+      imm_safe LV (Eloc b ofs bf ty) m
   | imm_safe_lred: forall to C e m e' m',
       lred e m e' m' ->
       context LV to C ->
@@ -839,10 +853,10 @@ Lemma semantics_single_events:
 Proof.
   unfold semantics; intros; red; simpl; intros.
   set (ge := globalenv p) in *.
-  assert (DEREF: forall chunk m b ofs t v, deref_loc ge chunk m b ofs t v -> (length t <= 1)%nat).
-    intros. inv H0; simpl; try lia. inv H3; simpl; try lia.
-  assert (ASSIGN: forall chunk m b ofs t v m', assign_loc ge chunk m b ofs v t m' -> (length t <= 1)%nat).
-    intros. inv H0; simpl; try lia. inv H3; simpl; try lia.
+  assert (DEREF: forall chunk m b ofs bf t v, deref_loc ge chunk m b ofs bf t v -> (length t <= 1)%nat).
+  { intros. inv H0; simpl; try lia. inv H3; simpl; try lia. }
+  assert (ASSIGN: forall chunk m b ofs bf t v m' v', assign_loc ge chunk m b ofs bf v t m' v' -> (length t <= 1)%nat).
+  { intros. inv H0; simpl; try lia. inv H3; simpl; try lia. }
   destruct H.
   inv H; simpl; try lia. inv H0; eauto; simpl; try lia.
   eapply external_call_trace_length; eauto.

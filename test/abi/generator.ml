@@ -439,7 +439,7 @@ let _ =
        " <seed> use the given seed for randomization"
   ]
   (fun s -> raise (Arg.Bad ("don't know what to do with " ^ s)))
-  "Usage: gencalls [options]\n\nOptions are:";
+  "Usage: generator [options]\n\nOptions are:";
   let oc0 = open_out (!output_prefix ^ "_decl.h")
   and oc1 = open_out (!output_prefix ^ "_def.c")
   and oc2 = open_out (!output_prefix ^ "_use.c") in

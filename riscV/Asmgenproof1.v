@@ -1010,14 +1010,14 @@ Opaque Int.eq.
   split; intros; Simpl.
   assert (A: Int.ltu (Int.repr 24) Int.iwordsize = true) by auto.
   destruct (rs x0); auto; simpl. rewrite A; simpl. rewrite A. 
-  apply Val.lessdef_same. f_equal. apply Int.sign_ext_shr_shl. split; reflexivity.
+  apply Val.lessdef_same. f_equal. apply Int.sign_ext_shr_shl. compute; intuition congruence.
 - (* cast16signed *)
   econstructor; split.
   eapply exec_straight_two. simpl;eauto. simpl;eauto. auto. auto.
   split; intros; Simpl.
   assert (A: Int.ltu (Int.repr 16) Int.iwordsize = true) by auto.
   destruct (rs x0); auto; simpl. rewrite A; simpl. rewrite A. 
-  apply Val.lessdef_same. f_equal. apply Int.sign_ext_shr_shl. split; reflexivity.
+  apply Val.lessdef_same. f_equal. apply Int.sign_ext_shr_shl. compute; intuition congruence.
 - (* addimm *)
   exploit (opimm32_correct Paddw Paddiw Val.add); auto. instantiate (1 := x0); eauto with asmgen.
   intros (rs' & A & B & C).

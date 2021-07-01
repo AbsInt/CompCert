@@ -17,8 +17,8 @@ char tbl[sizeof(struct s)];
 */
 
 struct bits1 {
-  unsigned a: 1;
-  unsigned b: 6;
+  unsigned char a: 1;
+  unsigned char b: 6;
 };
 
 char b1[sizeof(struct bits1)];  /* should be 1 */
