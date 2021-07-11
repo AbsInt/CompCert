@@ -985,13 +985,13 @@ Lemma eval_funcall_exec_stmt_steps:
    eval_funcall ge m fd args t m' res ->
    forall k,
    is_call_cont k ->
-   star step ge (Callstate fd args k m)
-              t (Returnstate res k m'))
+   star (step ge) (Callstate fd args k m)
+                t (Returnstate res k m'))
 /\(forall f sp e m s t e' m' out,
    exec_stmt ge f sp e m s t e' m' out ->
    forall k,
    exists S,
-   star step ge (State f s k sp e m) t S
+   star (step ge) (State f s k sp e m) t S
    /\ outcome_state_match sp e' m' f k out S).
 Proof.
   apply eval_funcall_exec_stmt_ind2; intros.
@@ -1147,8 +1147,8 @@ Lemma eval_funcall_steps:
    eval_funcall ge m fd args t m' res ->
    forall k,
    is_call_cont k ->
-   star step ge (Callstate fd args k m)
-              t (Returnstate res k m').
+   star (step ge) (Callstate fd args k m)
+                t (Returnstate res k m').
 Proof (proj1 eval_funcall_exec_stmt_steps).
 
 Lemma exec_stmt_steps:
@@ -1156,19 +1156,19 @@ Lemma exec_stmt_steps:
    exec_stmt ge f sp e m s t e' m' out ->
    forall k,
    exists S,
-   star step ge (State f s k sp e m) t S
+   star (step ge) (State f s k sp e m) t S
    /\ outcome_state_match sp e' m' f k out S.
 Proof (proj2 eval_funcall_exec_stmt_steps).
 
 Lemma evalinf_funcall_forever:
   forall m fd args T k,
   evalinf_funcall ge m fd args T ->
-  forever_plus step ge (Callstate fd args k m) T.
+  forever_plus (step ge) (Callstate fd args k m) T.
 Proof.
   cofix CIH_FUN.
   assert (forall sp e m s T f k,
           execinf_stmt ge f sp e m s T ->
-          forever_plus step ge (State f s k sp e m) T).
+          forever_plus (step ge) (State f s k sp e m) T).
   cofix CIH_STMT.
   intros. inv H.
 

@@ -206,7 +206,7 @@ Qed.
 Lemma reacts_forever_reactive:
   exists T, Forever_reactive L s0 T.
 Proof.
-  exists (traceinf_of_traceinf' (build_traceinf' (star_refl (step L) (globalenv L) s0))).
+  exists (traceinf_of_traceinf' (build_traceinf' (star_refl (step L) s0))).
   apply reacts_forever_reactive_rec.
 Qed.
 
@@ -422,7 +422,7 @@ Lemma backward_simulation_forever_silent:
 Proof.
   assert (forall i s1 s2,
          Forever_silent L2 s2 -> match_states i s1 s2 -> safe L1 s1 ->
-         forever_silent_N (step L1) order (globalenv L1) i s1).
+         forever_silent_N (step L1) order i s1).
     cofix COINDHYP; intros.
     inv H.  destruct (bsim_simulation S _ _ _ H2 _ H0 H1) as [i' [s2' [A B]]].
     destruct A as [C | [C D]].
@@ -693,14 +693,11 @@ Unset Implicit Arguments.
 
 Section INF_SEQ_DECOMP.
 
-Variable genv: Type.
 Variable state: Type.
-Variable step: genv -> state -> trace -> state -> Prop.
-
-Variable ge: genv.
+Variable step: state -> trace -> state -> Prop.
 
 Inductive tstate: Type :=
-  ST: forall (s: state) (T: traceinf), forever step ge s T -> tstate.
+  ST: forall (s: state) (T: traceinf), forever step s T -> tstate.
 
 Definition state_of_tstate (S: tstate): state :=
   match S with ST s T F => s end.
@@ -709,7 +706,7 @@ Definition traceinf_of_tstate (S: tstate) : traceinf :=
 
 Inductive tstep: trace -> tstate -> tstate -> Prop :=
   | tstep_intro: forall s1 t T s2 S F,
-      tstep t (ST s1 (t *** T) (@forever_intro genv state step ge s1 t s2 T S F))
+      tstep t (ST s1 (t *** T) (@forever_intro state step s1 t s2 T S F))
               (ST s2 T F).
 
 Inductive tsteps: tstate -> tstate -> Prop :=
@@ -749,7 +746,7 @@ Qed.
 
 Lemma tsteps_star:
   forall S1 S2, tsteps S1 S2 ->
-  exists t, star step ge (state_of_tstate S1) t (state_of_tstate S2)
+  exists t, star step (state_of_tstate S1) t (state_of_tstate S2)
          /\ traceinf_of_tstate S1 = t *** traceinf_of_tstate S2.
 Proof.
   induction 1.
@@ -762,7 +759,7 @@ Qed.
 
 Lemma tsilent_forever_silent:
   forall S,
-  tsilent S -> forever_silent step ge (state_of_tstate S).
+  tsilent S -> forever_silent step (state_of_tstate S).
 Proof.
   cofix COINDHYP; intro S. case S. intros until f. simpl. case f. intros.
   assert (tstep t (ST s1 (t *** T0) (forever_intro s1 t s0 f0))
@@ -778,7 +775,7 @@ Qed.
 
 Lemma treactive_forever_reactive:
   forall S,
-  treactive S -> forever_reactive step ge (state_of_tstate S) (traceinf_of_tstate S).
+  treactive S -> forever_reactive step (state_of_tstate S) (traceinf_of_tstate S).
 Proof.
   cofix COINDHYP; intros.
   destruct (H S) as [S1 [S2 [t [A [B C]]]]]. apply tsteps_refl.
@@ -787,7 +784,7 @@ Proof.
   apply forever_reactive_intro with s2.
   eapply star_right; eauto.
   red; intros. destruct (Eapp_E0_inv _ _ H0). contradiction.
-  change (forever_reactive step ge (state_of_tstate (ST s2 T F)) (traceinf_of_tstate (ST s2 T F))).
+  change (forever_reactive step (state_of_tstate (ST s2 T F)) (traceinf_of_tstate (ST s2 T F))).
   apply COINDHYP.
   red; intros. apply H.
   eapply tsteps_trans. eauto.
@@ -796,15 +793,15 @@ Qed.
 
 Theorem forever_silent_or_reactive:
   forall s T,
-  forever step ge s T ->
-  forever_reactive step ge s T \/
+  forever step s T ->
+  forever_reactive step s T \/
   exists t, exists s', exists T',
-  star step ge s t s' /\ forever_silent step ge s' /\ T = t *** T'.
+  star step s t s' /\ forever_silent step s' /\ T = t *** T'.
 Proof.
   intros.
   destruct (treactive_or_tsilent (ST s T H)).
   left.
-  change (forever_reactive step ge (state_of_tstate (ST s T H)) (traceinf_of_tstate (ST s T H))).
+  change (forever_reactive step (state_of_tstate (ST s T H)) (traceinf_of_tstate (ST s T H))).
   apply treactive_forever_reactive. auto.
   destruct H0 as [S' [A B]].
   exploit tsteps_star; eauto. intros [t [C D]]. simpl in *.

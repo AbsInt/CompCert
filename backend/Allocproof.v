@@ -1847,8 +1847,8 @@ Lemma exec_moves:
   satisf rs ls e' ->
   wt_regset env rs ->
   exists ls',
-    star step tge (Block s f sp (expand_moves mv bb) ls m)
-               E0 (Block s f sp bb ls' m)
+    star (step tge) (Block s f sp (expand_moves mv bb) ls m)
+                 E0 (Block s f sp bb ls' m)
   /\ satisf rs ls' e.
 Proof.
 Opaque destroyed_by_op.
@@ -1908,8 +1908,8 @@ Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signa
            Val.has_type v (env res) ->
            agree_callee_save ls ls1 ->
            exists ls2,
-           star LTL.step tge (Block ts tf sp bb ls1 m)
-                          E0 (State ts tf sp pc ls2 m)
+           star (LTL.step tge) (Block ts tf sp bb ls1 m)
+                            E0 (State ts tf sp pc ls2 m)
            /\ satisf (rs#res <- v) ls2 e),
       match_stackframes
         (RTL.Stackframe res f sp pc rs :: s)
@@ -1990,7 +1990,7 @@ Qed.
 Lemma step_simulation:
   forall S1 t S2, RTL.step ge S1 t S2 -> wt_state S1 ->
   forall S1', match_states S1 S1' ->
-  exists S2', plus LTL.step tge S1' t S2' /\ match_states S2 S2'.
+  exists S2', plus (LTL.step tge) S1' t S2' /\ match_states S2 S2'.
 Proof.
   induction 1; intros WT S1' MS; inv MS; try UseShape.
 

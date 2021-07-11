@@ -408,12 +408,12 @@ Local Hint Resolve context_compose contextlist_compose : core.
   if it cannot get stuck by doing silent transitions only. *)
 
 Definition safe (s: Csem.state) : Prop :=
-  forall s', star Csem.step ge s E0 s' ->
+  forall s', star (Csem.step ge) s E0 s' ->
   (exists r, final_state s' r) \/ (exists t, exists s'', Csem.step ge s' t s'').
 
 Lemma safe_steps:
   forall s s',
-  safe s -> star Csem.step ge s E0 s' -> safe s'.
+  safe s -> star (Csem.step ge) s E0 s' -> safe s'.
 Proof.
   intros; red; intros.
   eapply H. eapply star_trans; eauto.
@@ -421,16 +421,16 @@ Qed.
 
 Lemma star_safe:
   forall s1 s2 t s3,
-  safe s1 -> star Csem.step ge s1 E0 s2 -> (safe s2 -> star Csem.step ge s2 t s3) ->
-  star Csem.step ge s1 t s3.
+  safe s1 -> star (Csem.step ge) s1 E0 s2 -> (safe s2 -> star (Csem.step ge) s2 t s3) ->
+  star (Csem.step ge) s1 t s3.
 Proof.
   intros. eapply star_trans; eauto. apply H1. eapply safe_steps; eauto. auto.
 Qed.
 
 Lemma plus_safe:
   forall s1 s2 t s3,
-  safe s1 -> star Csem.step ge s1 E0 s2 -> (safe s2 -> plus Csem.step ge s2 t s3) ->
-  plus Csem.step ge s1 t s3.
+  safe s1 -> star (Csem.step ge) s1 E0 s2 -> (safe s2 -> plus (Csem.step ge) s2 t s3) ->
+  plus (Csem.step ge) s1 t s3.
 Proof.
   intros. eapply star_plus_trans; eauto. apply H1. eapply safe_steps; eauto. auto.
 Qed.
@@ -707,12 +707,12 @@ Variable m: mem.
 Lemma eval_simple_steps:
    (forall a v, eval_simple_rvalue e m a v ->
     forall C, context RV RV C ->
-    star Csem.step ge (ExprState f (C a) k e m)
-                   E0 (ExprState f (C (Eval v (typeof a))) k e m))
+    star (Csem.step ge) (ExprState f (C a) k e m)
+                     E0 (ExprState f (C (Eval v (typeof a))) k e m))
 /\ (forall a b ofs, eval_simple_lvalue e m a b ofs ->
     forall C, context LV RV C ->
-    star Csem.step ge (ExprState f (C a) k e m)
-                   E0 (ExprState f (C (Eloc b ofs (typeof a))) k e m)).
+    star (Csem.step ge) (ExprState f (C a) k e m)
+                     E0 (ExprState f (C (Eloc b ofs (typeof a))) k e m)).
 Proof.
 
 Ltac Steps REC C' := eapply star_trans; [apply (REC C'); eauto | idtac | simpl; reflexivity].
@@ -755,15 +755,15 @@ Qed.
 Lemma eval_simple_rvalue_steps:
   forall a v, eval_simple_rvalue e m a v ->
   forall C, context RV RV C ->
-  star Csem.step ge (ExprState f (C a) k e m)
-                E0 (ExprState f (C (Eval v (typeof a))) k e m).
+  star (Csem.step ge) (ExprState f (C a) k e m)
+                   E0 (ExprState f (C (Eval v (typeof a))) k e m).
 Proof (proj1 eval_simple_steps).
 
 Lemma eval_simple_lvalue_steps:
   forall a b ofs, eval_simple_lvalue e m a b ofs ->
   forall C, context LV RV C ->
-  star Csem.step ge (ExprState f (C a) k e m)
-                E0 (ExprState f (C (Eloc b ofs (typeof a))) k e m).
+  star (Csem.step ge) (ExprState f (C a) k e m)
+                   E0 (ExprState f (C (Eloc b ofs (typeof a))) k e m).
 Proof (proj2 eval_simple_steps).
 
 Corollary eval_simple_rvalue_safe:
@@ -981,8 +981,8 @@ Local Hint Resolve contextlist'_head contextlist'_tail : core.
 Lemma eval_simple_list_steps:
   forall rl vl, eval_simple_list' rl vl ->
   forall C, contextlist' C ->
-  star Csem.step ge (ExprState f (C rl) k e m)
-                E0 (ExprState f (C (rval_list vl rl)) k e m).
+  star (Csem.step ge) (ExprState f (C rl) k e m)
+                   E0 (ExprState f (C (rval_list vl rl)) k e m).
 Proof.
   induction 1; intros.
 (* nil *)
@@ -1143,7 +1143,7 @@ End DECOMPOSITION.
 
 Lemma estep_simulation:
   forall S t S',
-  estep S t S' -> plus Csem.step ge S t S'.
+  estep S t S' -> plus (Csem.step ge) S t S'.
 Proof.
   intros. inv H.
 (* simple *)
@@ -1396,7 +1396,7 @@ Qed.
 
 Theorem step_simulation:
   forall S1 t S2,
-  step S1 t S2 -> plus Csem.step ge S1 t S2.
+  step S1 t S2 -> plus (Csem.step ge) S1 t S2.
 Proof.
   intros. inv H.
   apply estep_simulation; auto.
@@ -1435,7 +1435,7 @@ End STRATEGY.
 
 Definition semantics (p: program) :=
   let ge := globalenv p in
-  Semantics_gen step (initial_state p) final_state ge ge.
+  Semantics_gen (step ge) (initial_state p) final_state ge.
 
 (** This semantics is receptive to changes in events. *)
 
@@ -2184,34 +2184,34 @@ Lemma bigstep_to_steps:
   (forall e m a t m' v,
    eval_expression e m a t m' v ->
    forall f k,
-   star step ge (ExprState f a k e m) t (ExprState f (Eval v (typeof a)) k e m'))
+   star (step ge) (ExprState f a k e m) t (ExprState f (Eval v (typeof a)) k e m'))
 /\(forall e m K a t m' a',
    eval_expr e m K a t m' a' ->
    forall C f k, leftcontext K RV C ->
    simple a' = true /\ typeof a' = typeof a /\
-   star step ge (ExprState f (C a) k e m) t (ExprState f (C a') k e m'))
+   star (step ge) (ExprState f (C a) k e m) t (ExprState f (C a') k e m'))
 /\(forall e m al t m' al',
    eval_exprlist e m al t m' al' ->
    forall a1 al2 ty C f k, leftcontext RV RV C -> simple a1 = true -> simplelist al2 = true ->
    simplelist al' = true /\
-   star step ge (ExprState f (C (Ecall a1 (exprlist_app al2 al) ty)) k e m)
-              t (ExprState f (C (Ecall a1 (exprlist_app al2 al') ty)) k e m'))
+   star (step ge) (ExprState f (C (Ecall a1 (exprlist_app al2 al) ty)) k e m)
+                t (ExprState f (C (Ecall a1 (exprlist_app al2 al') ty)) k e m'))
 /\(forall e m s t m' out,
    exec_stmt e m s t m' out ->
    forall f k,
    exists S,
-   star step ge (State f s k e m) t S /\ outcome_state_match e m' f k out S)
+   star (step ge) (State f s k e m) t S /\ outcome_state_match e m' f k out S)
 /\(forall m fd args t m' res,
    eval_funcall m fd args t m' res ->
    forall k,
    is_call_cont k ->
-   star step ge (Callstate fd args k m) t (Returnstate res k m')).
+   star (step ge) (Callstate fd args k m) t (Returnstate res k m')).
 Proof.
   apply bigstep_induction; intros.
 (* expression, general *)
   exploit (H0 (fun x => x) f k). constructor. intros [A [B C]].
   assert (match a' with Eval _ _ => False | _ => True end ->
-          star step ge (ExprState f a k e m) t (ExprState f (Eval v (typeof a)) k e m')).
+          star (step ge) (ExprState f a k e m) t (ExprState f (Eval v (typeof a)) k e m')).
    intro. eapply star_right. eauto. left. eapply step_expr; eauto. traceEq.
   destruct a'; auto.
   simpl in B. rewrite B in C. inv H1. auto.
@@ -2618,7 +2618,7 @@ Lemma eval_expression_to_steps:
    forall e m a t m' v,
    eval_expression e m a t m' v ->
    forall f k,
-   star step ge (ExprState f a k e m) t (ExprState f (Eval v (typeof a)) k e m').
+   star (step ge) (ExprState f a k e m) t (ExprState f (Eval v (typeof a)) k e m').
 Proof (proj1 bigstep_to_steps).
 
 Lemma eval_expr_to_steps:
@@ -2626,7 +2626,7 @@ Lemma eval_expr_to_steps:
    eval_expr e m K a t m' a' ->
    forall C f k, leftcontext K RV C ->
    simple a' = true /\ typeof a' = typeof a /\
-   star step ge (ExprState f (C a) k e m) t (ExprState f (C a') k e m').
+   star (step ge) (ExprState f (C a) k e m) t (ExprState f (C a') k e m').
 Proof (proj1 (proj2 bigstep_to_steps)).
 
 Lemma eval_exprlist_to_steps:
@@ -2634,8 +2634,8 @@ Lemma eval_exprlist_to_steps:
    eval_exprlist e m al t m' al' ->
    forall a1 al2 ty C f k, leftcontext RV RV C -> simple a1 = true -> simplelist al2 = true ->
    simplelist al' = true /\
-   star step ge (ExprState f (C (Ecall a1 (exprlist_app al2 al) ty)) k e m)
-              t (ExprState f (C (Ecall a1 (exprlist_app al2 al') ty)) k e m').
+   star (step ge) (ExprState f (C (Ecall a1 (exprlist_app al2 al) ty)) k e m)
+                t (ExprState f (C (Ecall a1 (exprlist_app al2 al') ty)) k e m').
 Proof (proj1 (proj2 (proj2 bigstep_to_steps))).
 
 Lemma exec_stmt_to_steps:
@@ -2643,7 +2643,7 @@ Lemma exec_stmt_to_steps:
    exec_stmt e m s t m' out ->
    forall f k,
    exists S,
-   star step ge (State f s k e m) t S /\ outcome_state_match e m' f k out S.
+   star (step ge) (State f s k e m) t S /\ outcome_state_match e m' f k out S.
 Proof (proj1 (proj2 (proj2 (proj2 bigstep_to_steps)))).
 
 Lemma eval_funcall_to_steps:
@@ -2651,7 +2651,7 @@ Lemma eval_funcall_to_steps:
   eval_funcall m fd args t m' res ->
   forall k,
   is_call_cont k ->
-  star step ge (Callstate fd args k m) t (Returnstate res k m').
+  star (step ge) (Callstate fd args k m) t (Returnstate res k m').
 Proof (proj2 (proj2 (proj2 (proj2 bigstep_to_steps)))).
 
 Fixpoint esize (a: expr) : nat :=
@@ -2709,28 +2709,28 @@ Qed.
 Lemma evalinf_funcall_steps:
   forall m fd args t k,
   evalinf_funcall m fd args t ->
-  forever_N step lt ge O (Callstate fd args k m) t.
+  forever_N (step ge) lt O (Callstate fd args k m) t.
 Proof.
   cofix COF.
 
   assert (COS:
     forall e m s t f k,
     execinf_stmt e m s t ->
-    forever_N step lt ge O (State f s k e m) t).
+    forever_N (step ge) lt O (State f s k e m) t).
   cofix COS.
 
   assert (COE:
     forall e m K a t C f k,
     evalinf_expr e m K a t ->
     leftcontext K RV C ->
-    forever_N step lt ge (esize a) (ExprState f (C a) k e m) t).
+    forever_N (step ge) lt (esize a) (ExprState f (C a) k e m) t).
   cofix COE.
 
   assert (COEL:
     forall e m a t C f k a1 al ty,
     evalinf_exprlist e m a t ->
     leftcontext RV RV C -> simple a1 = true -> simplelist al = true ->
-    forever_N step lt ge (esizelist a)
+    forever_N (step ge) lt (esizelist a)
                    (ExprState f (C (Ecall a1 (exprlist_app al a) ty)) k e m) t).
   cofix COEL.
   intros. inv H.

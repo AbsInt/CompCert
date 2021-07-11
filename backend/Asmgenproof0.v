@@ -860,7 +860,7 @@ Lemma exec_straight_steps_1:
   rs#PC = Vptr b ofs ->
   Genv.find_funct_ptr ge b = Some (Internal fn) ->
   code_tail (Ptrofs.unsigned ofs) (fn_code fn) c ->
-  plus step ge (State rs m) E0 (State rs' m').
+  plus (step ge) (State rs m) E0 (State rs' m').
 Proof.
   induction 1; intros.
   apply plus_one.
