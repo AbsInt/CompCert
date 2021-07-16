@@ -148,6 +148,8 @@ let gnu_prepro_actions = [
   Exact "-MP", Self gnu_prepro_opt;
   Exact "-MT", String (gnu_prepro_opt_key "-MT");
   Exact "-MQ", String (gnu_prepro_opt_key "-MQ");
+  Exact "-MD", String (gnu_prepro_opt_key "-MD");
+  Exact "-MMD", String (gnu_prepro_opt_key "-MMD");
   Exact "-nostdinc", Self (fun s -> gnu_prepro_opt s; use_standard_headers := false);
   Exact "-imacros", String (gnu_prepro_opt_key "-imacros");
   Exact "-idirafter", String (gnu_prepro_opt_key "-idirafter");
@@ -185,6 +187,9 @@ let gnu_prepro_help =
   -MT <target>   Change the target of the rule emitted by dependency
                  generation
   -MQ <target>   Like -MT but quotes <target>
+  -MD            Generates dependencies on the fly (similar to
+                 -M -MF without -E)
+  -MMD           Like -MD but no system header files are listed.
   -nostdinc      Do not search the standard system directories for
                  header files
   -imacros <file> Like -include but throws output produced by
