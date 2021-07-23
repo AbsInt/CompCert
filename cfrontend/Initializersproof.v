@@ -365,6 +365,22 @@ Proof.
   intros. eapply bool_val_inj; eauto. intros. rewrite mem_empty_not_weak_valid_pointer in H2; discriminate.
 Qed.
 
+Lemma add_offset_match:
+  forall v b ofs delta,
+  Val.inject inj v (Vptr b ofs) ->
+  Val.inject inj
+    (if Archi.ptr64
+     then Val.addl v (Vlong (Int64.repr delta))
+     else Val.add v (Vint (Int.repr delta)))
+    (Vptr b (Ptrofs.add ofs (Ptrofs.repr delta))).
+Proof.
+  intros. inv H.
+- rewrite Ptrofs.add_assoc. rewrite (Ptrofs.add_commut (Ptrofs.repr delta0)).
+  unfold Val.addl, Val.add; destruct Archi.ptr64 eqn:SF;
+  econstructor; eauto; rewrite ! Ptrofs.add_assoc; f_equal; f_equal; symmetry; auto with ptrofs.
+- unfold Val.addl, Val.add; destruct Archi.ptr64; auto.
+Qed.
+
 (** Soundness of [constval] with respect to the big-step semantics *)
 
 Lemma constval_rvalue:
@@ -450,15 +466,15 @@ Proof.
   unfold lookup_composite in EQ0; rewrite H1 in EQ0; monadInv EQ0.
   exploit constval_rvalue; eauto. intro MV.
   split. congruence.
-  replace x with delta by congruence. 
-  apply (Val.offset_ptr_inject inj _ _ _ MV).
+  replace x with delta by congruence.
+  apply (add_offset_match _ _ _ _ MV).
   (* field union *)
   rewrite H0 in EQ. monadInv EQ. destruct x0; monadInv EQ2.
   unfold lookup_composite in EQ0; rewrite H1 in EQ0; monadInv EQ0.
   exploit constval_rvalue; eauto. intro MV.
   split. congruence.
   replace x with delta by congruence. 
-  apply (Val.offset_ptr_inject inj _ _ _ MV).
+  apply (add_offset_match _ _ _ _ MV).
 Qed.
 
 Lemma constval_simple:

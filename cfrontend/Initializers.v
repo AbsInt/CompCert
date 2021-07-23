@@ -126,7 +126,9 @@ Fixpoint constval (ce: composite_env) (a: expr) : res val :=
       do v <- constval ce l;
       match bf with
       | Full =>
-          OK (Val.offset_ptr v (Ptrofs.repr delta))
+          OK (if Archi.ptr64
+              then Val.addl v (Vlong (Int64.repr delta))
+              else Val.add v (Vint (Int.repr delta)))
       | Bits _ _ _ _ =>
           Error(msg "taking the address of a bitfield")
       end
