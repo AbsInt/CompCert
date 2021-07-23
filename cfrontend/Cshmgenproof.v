@@ -936,13 +936,12 @@ Proof.
 Qed.
 
 Remark first_bit_range: forall sz pos width,
-  0 <= pos -> 0 < width -> pos + width <= bitsize_intsize sz ->
+  0 <= pos -> 0 < width -> pos + width <= bitsize_carrier sz ->
      0 <= first_bit sz pos width < Int.zwordsize
   /\ 0 <= Int.zwordsize - first_bit sz pos width - width < Int.zwordsize.
 Proof.
   intros.
   assert (bitsize_carrier sz <= Int.zwordsize) by (destruct sz; compute; congruence).
-  assert (bitsize_intsize sz <= bitsize_carrier sz) by (destruct sz; simpl; lia).
   unfold first_bit; destruct Archi.big_endian; lia.
 Qed.
 
@@ -964,10 +963,10 @@ Proof.
 - (* by bitfield *)
   inv H.
   unfold make_extract_bitfield in MKLOAD. unfold bitfield_extract.
-  exploit (first_bit_range sz pos width); eauto. intros [A1 A2].
+  exploit (first_bit_range sz pos width); eauto. lia. intros [A1 A2].
   set (amount1 := Int.repr (Int.zwordsize - first_bit sz pos width - width)) in MKLOAD.
   set (amount2 := Int.repr (Int.zwordsize - width)) in MKLOAD.
-  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)); inv MKLOAD.
+  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_carrier sz)); inv MKLOAD.
   set (e1 := Eload (chunk_for_carrier sz) addr).
   assert (E1: eval_expr ge e le m e1 (Vint c)) by (econstructor; eauto).
   set (e2 := Ebinop Oshl e1 (make_intconst amount1)).
@@ -992,9 +991,9 @@ Lemma make_store_bitfield_correct:
 Proof.
   intros until s; intros DST SRC ASG MK.
   inv ASG. inv H5. unfold make_store_bitfield in MK.
-  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz)); inv MK.
+  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_carrier sz)); inv MK.
   econstructor; eauto.
-  exploit (first_bit_range sz pos width); eauto. intros [A1 A2].
+  exploit (first_bit_range sz pos width); eauto. lia. intros [A1 A2].
   rewrite Int.bitfield_insert_alternative by lia.
   set (amount := first_bit sz pos width).
   set (mask := Int.shl (Int.repr (two_p width - 1)) (Int.repr amount)).
@@ -1565,7 +1564,7 @@ Proof.
   destruct x0.
   destruct (access_mode (typeof e)); monadInv EQ3; auto.
   unfold make_store_bitfield in EQ3.
-  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
+  destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_carrier sz));
   monadInv EQ3; auto.
 - (* set *)
   auto.
@@ -1669,7 +1668,7 @@ Proof.
     destruct x0.
     destruct (access_mode (typeof a1)); monadInv EQ3; auto.
     unfold make_store_bitfield in EQ3.
-    destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
+    destruct (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_carrier sz));
     monadInv EQ3; auto.
   }
   destruct SAME; subst ts' tk'.

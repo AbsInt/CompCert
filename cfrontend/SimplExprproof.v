@@ -284,7 +284,7 @@ Lemma make_assign_value_sound:
   eval_expr tge e le m'' (make_assign_value bf r) v'.
 Proof.
   unfold make_assign_value; destruct 1; intros; auto.
-  inv H. eapply eval_make_normalize; eauto. lia.
+  inv H. eapply eval_make_normalize; eauto; lia.
 Qed.
 
 Lemma typeof_make_assign_value: forall bf r,

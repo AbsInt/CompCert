@@ -291,7 +291,7 @@ Definition do_deref_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs) 
     | Tint sz1 sg1 _ =>
       check (intsize_eq sz1 sz &&
              signedness_eq sg1 (if zlt width (bitsize_intsize sz) then Signed else sg) &&
-             zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
+             zle 0 pos && zlt 0 width && zle width (bitsize_intsize sz) && zle (pos + width) (bitsize_carrier sz));
       match Mem.loadv (chunk_for_carrier sz) m (Vptr b ofs) with
       | Some (Vint c) => Some (w, E0, Vint (bitfield_extract sz sg pos width c))
       | _ => None
@@ -351,7 +351,7 @@ Definition do_assign_loc (w: world) (ty: type) (m: mem) (b: block) (ofs: ptrofs)
     | _ => None
     end
   | Bits sz sg pos width =>
-    check (zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz));
+    check (zle 0 pos && zlt 0 width && zle width (bitsize_intsize sz) && zle (pos + width) (bitsize_carrier sz));
     match ty, v, Mem.loadv (chunk_for_carrier sz) m (Vptr b ofs) with
     | Tint sz1 sg1 _, Vint n, Some (Vint c) =>
         check (intsize_eq sz1 sz &&

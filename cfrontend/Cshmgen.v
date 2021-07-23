@@ -376,7 +376,7 @@ Definition make_cmp (c: comparison) (e1: expr) (ty1: type) (e2: expr) (ty2: type
 
 Definition make_extract_bitfield (sz: intsize) (sg: signedness) (pos width: Z)
                                  (addr: expr) : res expr :=
-  if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz) then
+  if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_carrier sz) then
     let amount1 := Int.repr (Int.zwordsize - first_bit sz pos width - width) in
     let amount2 := Int.repr (Int.zwordsize - width) in
     let e1 := Eload (chunk_for_carrier sz) addr in
@@ -412,7 +412,7 @@ Definition make_load (addr: expr) (ty_res: type) (bf: bitfield) :=
 
 Definition make_store_bitfield (sz: intsize) (sg: signedness) (pos width: Z)
                                (addr val: expr) : res stmt :=
-  if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_intsize sz) then
+  if zle 0 pos && zlt 0 width && zle (pos + width) (bitsize_carrier sz) then
     let amount := first_bit sz pos width in
     let mask := Int.shl (Int.repr (two_p width - 1)) (Int.repr amount) in
     let e1 := Eload (chunk_for_carrier sz) addr in
