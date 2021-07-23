@@ -466,12 +466,12 @@ Definition next_field (pos: Z) (m: member) : Z :=
       align pos (bitalignof t) + bitsizeof t
   | Member_bitfield _ sz _ _ w _ =>
       let s := bitalignof_intsize sz in
-      let curr := floor pos s in
-      let next := curr + s in
-      if zlt 0 w then
-        if zle (pos + w) next then pos + w else next + w
+      if zle w 0 then
+        align pos s
       else
-        next
+        let curr := floor pos s in
+        let next := curr + s in
+        if zle (pos + w) next then pos + w else next + w
   end.
 
 Definition layout_field (pos: Z) (m: member) : res (Z * bitfield) :=
@@ -512,9 +512,11 @@ Proof.
   lia.
 - set (s := bitalignof_intsize sz).
   assert (A: s > 0) by (apply bitalignof_intsize_pos).
-  generalize (floor_interval pos s A). 
+  destruct (zle width 0).
++ apply align_le; auto.
++ generalize (floor_interval pos s A). 
   set (start := floor pos s). intros B.
-  destruct (zlt 0 width); [ destruct (zle (pos + width) (start + s)) | ]; lia.
+  destruct (zle (pos + width) (start + s)); lia.
 Qed.
 
 Definition layout_start (p: Z) (bf: bitfield) :=
@@ -542,7 +544,7 @@ Proof.
   { destruct D as (n & E). rewrite E. rewrite Z.div_mul by lia. auto. }
   rewrite E. lia.
 - unfold next_field.
-  destruct (zle width 0); try discriminate. rewrite zlt_true by lia.
+  destruct (zle width 0); try discriminate.
   destruct (zlt (bitsize_intsize sz) width); try discriminate.
   set (s := bitalignof_intsize sz) in *.
   assert (A: s > 0) by (apply bitalignof_intsize_pos).

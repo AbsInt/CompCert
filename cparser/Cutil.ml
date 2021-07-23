@@ -612,7 +612,7 @@ let sizeof_layout_struct env members ma =
               let curr = pos / (a * 8) * (a * 8) in
               let next = curr + s * 8 in
               let pos' =
-                if width <= 0 then next
+                if width <= 0 then align pos (a * 8)
                 else if pos + width <= next then pos + width
                 else next + width in
               sizeof_rec pos' accu rem
