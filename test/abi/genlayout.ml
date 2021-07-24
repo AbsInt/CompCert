@@ -1,6 +1,6 @@
 open Printf
 
-type typ = Char | Short | Int
+type typ = Bool | Char | Short | Int
 
 type field =
   | Plain of typ
@@ -12,11 +12,13 @@ type struct_ = field list
 (* Concise description of a struct *)
 
 let print_typ oc = function
+  | Bool -> fprintf oc "b"
   | Char -> fprintf oc "c"
   | Short -> fprintf oc "s"
   | Int -> fprintf oc "i"
 
 let print_padding_typ oc = function
+  | Bool -> fprintf oc "B"
   | Char -> fprintf oc "C"
   | Short -> fprintf oc "S"
   | Int -> fprintf oc "I"
@@ -33,6 +35,7 @@ let rec print_struct oc = function
 (* Printing a struct in C syntax *)
 
 let c_typ oc = function
+  | Bool -> fprintf oc "_Bool"
   | Char -> fprintf oc "char"
   | Short -> fprintf oc "short"
   | Int -> fprintf oc "int"
@@ -92,12 +95,13 @@ let random_1_32 () =
 
 let random_field () =
   let (t, w) =
-    match Random.int 4 with
-    | 0 -> (Char, random_1_8())
-    | 1 -> (Short, random_1_16())
+    match Random.int 9 with
+    | 0   -> (Bool, 1)
+    | 1|2 -> (Char, random_1_8())
+    | 3|4 -> (Short, random_1_16())
     | _ -> (Int, random_1_32()) in
   match Random.int 10 with
-  | 0 -> Padding(t, w)
+  | 0 -> Padding(t, (if Random.int 3 = 0 then 0 else w))
   | 1 | 2 -> Plain t
   | _ -> Bitfield(t, w)
 
@@ -111,7 +115,7 @@ let rec random_struct len =
    ELF says that padding fields are ignored to determine struct alignment,
    but ARM does otherwise. *)
 
-let alignof = function Char -> 1 | Short -> 2 | Int -> 4
+let alignof = function Bool -> 1 | Char -> 1 | Short -> 2 | Int -> 4
 
 let unstable_alignment str =
   let rec alignments al_data al_padding = function
