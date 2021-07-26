@@ -542,6 +542,43 @@ Proof.
   lia.
 Qed.
 
+(** Floor: [floor n amount] returns the greatest multiple of [amount]
+    less than or equal to [n]. *)
+
+Definition floor (n: Z) (amount: Z) := (n / amount) * amount.
+
+Lemma floor_interval:
+  forall x y, y > 0 -> floor x y <= x < floor x y + y.
+Proof.
+  unfold floor; intros.
+  generalize (Z_div_mod_eq x y H) (Z_mod_lt x y H).
+  set (q := x / y). set (r := x mod y). intros. lia.
+Qed.
+
+Lemma floor_divides:
+  forall x y, y > 0 -> (y | floor x y).
+Proof.
+  unfold floor; intros. exists (x / y); auto.
+Qed.
+
+Lemma floor_same:
+  forall x y, y > 0 -> (y | x) -> floor x y = x.
+Proof.
+  unfold floor; intros. rewrite (Zdivide_Zdiv_eq y x) at 2; auto; lia.
+Qed.
+
+Lemma floor_align_interval:
+  forall x y, y > 0 ->
+  floor x y <= align x y <= floor x y + y.
+Proof.
+  unfold floor, align; intros.
+  replace (x / y * y + y) with ((x + 1 * y) / y * y).
+  assert (A: forall a b, a <= b -> a / y * y <= b / y * y).
+  { intros. apply Z.mul_le_mono_nonneg_r. lia. apply Z.div_le_mono; lia. }
+  split; apply A; lia.
+  rewrite Z.div_add by lia. lia.
+Qed.
+
 (** * Definitions and theorems on the data types [option], [sum] and [list] *)
 
 Set Implicit Arguments.
