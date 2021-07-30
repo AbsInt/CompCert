@@ -22,38 +22,20 @@ open Driveraux
 open Frontend
 open Diagnostics
 
-let tool_name = "Clight generator"
+let tool_name = "Csyntax generator"
 
-(* clightgen-specific options *)
+(* csyntaxgen-specific options *)
 
-let option_normalize = ref false
-
-(* From CompCert C AST to Clight *)
+(* Export CompCert C AST *)
 
 let compile_c_ast sourcename csyntax ofile =
-  let loc = file_loc sourcename in
-  let clight =
-    match SimplExpr.transl_program csyntax with
-    | Errors.OK p ->
-        begin match SimplLocals.transf_program p with
-        | Errors.OK p' ->
-            if !option_normalize
-            then Clightnorm.norm_program p'
-            else p'
-        | Errors.Error msg ->
-          fatal_error loc "%a" print_error  msg
-        end
-    | Errors.Error msg ->
-      fatal_error loc "%a" print_error msg in
-  (* Dump Clight in C syntax if requested *)
-  PrintClight.print_if_2 clight;
-  (* Print Clight in Coq syntax *)
+  (* Print Csyntax in Coq syntax *)
   let oc = open_out ofile in
-  ExportClight.print_program (Format.formatter_of_out_channel oc)
-                             clight sourcename !option_normalize;
+  ExportCsyntax.print_program (Format.formatter_of_out_channel oc)
+                             csyntax sourcename;
   close_out oc
 
-(* From C source to Clight *)
+(* Export CompCert C AST parsed from C source *)
 
 let compile_c_file sourcename ifile ofile =
   let set_dest dst opt ext =
@@ -61,7 +43,6 @@ let compile_c_file sourcename ifile ofile =
       else None in
   set_dest Cprint.destination option_dparse ".parsed.c";
   set_dest PrintCsyntax.destination option_dcmedium ".compcert.c";
-  set_dest PrintClight.destination option_dclight ".light.c";
   compile_c_ast sourcename (parse_c_file sourcename ifile) ofile
 
 let output_filename sourcename suff =
@@ -93,12 +74,11 @@ let process_i_file sourcename =
 
 let usage_string =
   version_string tool_name ^
-{|Usage: clightgen [options] <source files>
+{|Usage: csyntaxgen [options] <source files>
 Recognized source files:
   .c             C source file
   .i or .p       C source file that should not be preprocessed
 Processing options:
-  -normalize     Normalize the generated Clight code w.r.t. loads in expressions
   -canonical-idents  Use canonical numbers to represent identifiers  (default)
   -short-idents  Use small, non-canonical numbers to represent identifiers
   -E             Preprocess only, send result to standard output
@@ -110,7 +90,6 @@ language_support_help ^
   -dprepro       Save C file after preprocessing in <file>.i
   -dparse        Save C file after parsing and elaboration in <file>.parsed.c
   -dc            Save generated Compcert C in <file>.compcert.c
-  -dclight       Save generated Clight in <file>.light.c
   -dall          Save all generated intermediate files in <file>.<ext>
 |} ^
   general_help ^
@@ -144,7 +123,6 @@ let cmdline_actions =
  @ version_options tool_name @
 (* Processing options *)
  [ Exact "-E", Set option_E;
-  Exact "-normalize", Set option_normalize;
   Exact "-canonical-idents", Set Camlcoq.use_canonical_atoms;
   Exact "-short-idents", Unset Camlcoq.use_canonical_atoms;
   Exact "-o", String(fun s -> option_o := Some s);
@@ -156,12 +134,10 @@ let cmdline_actions =
   [ Exact "-dprepro", Set option_dprepro;
    Exact "-dparse", Set option_dparse;
    Exact "-dc", Set option_dcmedium;
-   Exact "-dclight", Set option_dclight;
    Exact "-dall", Self (fun _ ->
        option_dprepro := true;
        option_dparse := true;
-       option_dcmedium := true;
-       option_dclight := true;);
+       option_dcmedium := true;);
  ]
   @ general_options
 (* Diagnostic options *)

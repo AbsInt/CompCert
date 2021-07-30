@@ -26,6 +26,7 @@ target=''
 has_runtime_lib=true
 has_standard_headers=true
 clightgen=false
+csyntaxgen=false
 install_coqdev=false
 ignore_coq_version=false
 library_Flocq=local
@@ -95,7 +96,8 @@ Options:
   -no-runtime-lib      Do not compile nor install the runtime support library
   -no-standard-headers Do not install nor use the standard .h headers
   -clightgen           Also compile and install the clightgen tool
-  -install-coqdev      Also install the Coq development (implied by -clightgen)
+  -csyntaxgen          Also compile and install the csyntaxgen tool
+  -install-coqdev      Also install the Coq development (implied by -clightgen and -csyntaxgen)
   -ignore-coq-version  Accept to use experimental or unsupported versions of Coq
 '
 
@@ -129,6 +131,9 @@ while : ; do
         has_standard_headers=false;;
     -clightgen)
         clightgen=true
+        install_coqdev=true;;
+    -csyntaxgen)
+        csyntaxgen=true
         install_coqdev=true;;
     -ignore-coq-version|--ignore-coq-version)
         ignore_coq_version=true;;
@@ -639,6 +644,7 @@ CASM_OPTIONS=$casm_options
 CASMRUNTIME=$casmruntime
 CC=$cc $cc_options
 CLIGHTGEN=$clightgen
+CSYNTAXGEN=$csyntaxgen
 CLINKER=$clinker
 CLINKER_OPTIONS=$clinker_options
 CPREPRO=$cprepro
@@ -750,6 +756,9 @@ ASM_SUPPORTS_CFI=false
 # Turn on/off compilation of clightgen
 CLIGHTGEN=false
 
+# Turn on/off compilation of csyntaxgen
+CSYNTAXGEN=false
+
 # Whether the other tools support responsefiles in GNU syntax or Diab syntax
 RESPONSEFILE=gnu  # diab
 
@@ -771,6 +780,7 @@ S cfrontend
 S driver
 S debug
 S exportclight
+S exportcsyntax
 S cparser
 S extraction
 
@@ -782,6 +792,7 @@ B cfrontend
 B driver
 B debug
 B exportclight
+B exportcsyntax
 B cparser
 B extraction
 EOF

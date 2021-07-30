@@ -2,24 +2,24 @@
 
 
 ## Overview
-"clightgen" is an experimental tool that transforms C source files
-into Clight abstract syntax, pretty-printed in Coq format in .v files.
+"csyntaxgen" is an experimental tool that transforms C source files
+into CompCert C abstract syntax, pretty-printed in Coq format in .v files.
 These generated .v files can be loaded in a Coq session for
-interactive verification, typically.
+verification, typically.
 
 
 ## How to build
 
 Change to the top-level CompCert directory and issue
 ```
-   make clightgen
+   make csyntaxgen
 ```
 
 ## Usage
 ```
-   clightgen [options] <C source files>
+   csyntaxgen [options] <C source files>
 ```
-For each source file `src.c`, its Clight abstract syntax is generated
+For each source file `src.c`, its CompCert C abstract syntax is generated
 in `src.v`.
 
 The options recognized are a subset of those of the CompCert compiler ccomp

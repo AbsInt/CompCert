@@ -21,6 +21,8 @@
 /ccomp.prof
 /clightgen
 /clightgen.byte
+/csyntaxgen
+/csyntaxgen.byte
 /tools/ndfun
 /tools/modorder
 /Makefile.config

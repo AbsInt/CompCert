@@ -28,7 +28,7 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
-DIRS := lib common $(ARCHDIRS) backend cfrontend driver exportclight cparser
+DIRS := lib common $(ARCHDIRS) backend cfrontend driver exportclight exportcsyntax cparser
 
 COQINCLUDES := $(foreach d, $(DIRS), -R $(d) compcert.$(d))
 
@@ -179,6 +179,9 @@ endif
 ifeq ($(CLIGHTGEN),true)
 	$(MAKE) clightgen
 endif
+ifeq ($(CSYNTAXGEN),true)
+	$(MAKE) csyntaxgen
+endif
 ifeq ($(INSTALL_COQDEV),true)
 	$(MAKE) compcert.config
 endif
@@ -207,6 +210,11 @@ clightgen: .depend.extr compcert.ini exportclight/Clightdefs.vo driver/Version.m
 	$(MAKE) -f Makefile.extr clightgen
 clightgen.byte: .depend.extr compcert.ini exportclight/Clightdefs.vo driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen.byte
+
+csyntaxgen: .depend.extr compcert.ini exportcsyntax/Csyntaxdefs.vo driver/Version.ml FORCE
+	$(MAKE) -f Makefile.extr csyntaxgen
+csyntaxgen.byte: .depend.extr compcert.ini exportcsyntax/Csyntaxdefs.vo driver/Version.ml FORCE
+	$(MAKE) -f Makefile.extr csyntaxgen.byte
 
 runtime:
 	$(MAKE) -C runtime
@@ -309,6 +317,9 @@ install:
 	$(MAKE) -C runtime install
 ifeq ($(CLIGHTGEN),true)
 	install -m 0755 ./clightgen $(DESTDIR)$(BINDIR)
+endif
+ifeq ($(CSYNTAXGEN),true)
+	install -m 0755 ./csyntaxgen $(DESTDIR)$(BINDIR)
 endif
 ifeq ($(INSTALL_COQDEV),true)
 	install -d $(DESTDIR)$(COQDEVDIR)
