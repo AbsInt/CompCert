@@ -4,6 +4,9 @@ DIRS=c compression raytracer spass regression abi
 ifeq ($(CLIGHTGEN),true)
 DIRS+=clightgen
 endif
+ifeq ($(CSYNTAXGEN),true)
+DIRS+=csyntaxgen
+endif
 
 all:
 	set -e; for i in $(DIRS); do $(MAKE) CCOMPOPTS='$(CCOMPOPTS)' -C $$i all; done

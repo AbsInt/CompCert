@@ -5,14 +5,14 @@ ARCHDIRS=$(ARCH)
 else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
-RECDIRS := lib common $(ARCHDIRS) cfrontend  exportclight
+RECDIRS := lib common $(ARCHDIRS) cfrontend  exportcsyntax
 COQINCLUDES := $(foreach d, $(RECDIRS), -R ../../$(d) compcert.$(d))
 ifeq ($(LIBRARY_FLOCQ),local)
 COQINCLUDES += -R ../../flocq Flocq
 endif
 
 
-CLIGHTGEN=../../clightgen
+CSYNTAXGEN=../../csyntaxgen
 COQC=coqc
 
 # Regression tests in the current directory
@@ -30,22 +30,20 @@ CFLAGS=-DSYSTEM_$(SYSTEM)
 
 aes.vo almabench.vo binarytrees.vo bisect.vo chomp.vo: CFLAGS += -short-idents
 
-fft.vo fftsp.vo fftw.vo fib.vo integr.vo knucleotide.vo: CFLAGS += -short-idents -normalize
-
-qsort.vo sha1.vo sha3.vo siphash24.vo spectral.vo vmach.vo: CFLAGS += -normalize
+fft.vo fftsp.vo fftw.vo fib.vo integr.vo knucleotide.vo: CFLAGS += -short-idents
 
 all: $(SRC:.c=.vo)
 
 test:
 
 %.v: %.c
-	$(CLIGHTGEN) $(CFLAGS) -o $@ $<
+	$(CSYNTAXGEN) $(CFLAGS) -o $@ $<
 
 %.v: ../c/%.c
-	$(CLIGHTGEN) $(CFLAGS) -o $@ $<
+	$(CSYNTAXGEN) $(CFLAGS) -o $@ $<
 
 %.v: ../raytracer/%.c
-	$(CLIGHTGEN) -I../raytracer -fall $(CFLAGS) -o $@ $<
+	$(CSYNTAXGEN) -I../raytracer -fall $(CFLAGS) -o $@ $<
 
 %.vo: %.v
 	$(COQC) $(COQINCLUDES) -noglob $<
