@@ -310,7 +310,7 @@ Remark transl_memory_access_label:
   (forall r1 r2, nolabel (mk2 r1 r2)) ->
   tail_nolabel k c.
 Proof.
-  unfold transl_memory_access; intros; destruct addr; TailNoLabel.
+  unfold transl_memory_access, aindexed, aindexed2, aglobal, abased, ainstack; intros; destruct addr; TailNoLabel.
   destruct (unaligned || Int.eq (Int.mods i (Int.repr 4)) Int.zero). destruct (Int.eq (high_s i) Int.zero); TailNoLabel.
   eapply tail_nolabel_trans. apply loadimm_label. TailNoLabel.
   destruct (symbol_is_small_data i i0). destruct (unaligned || symbol_ofs_word_aligned i i0); TailNoLabel. destruct (symbol_is_rel_data i i0); TailNoLabel.

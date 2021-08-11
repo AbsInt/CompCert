@@ -730,6 +730,82 @@ Definition symbol_ofs_word_aligned symb ofs :=
   let ofs := Ptrofs.to_int ofs in
   symbol_is_aligned symb 4 && (Int.eq (Int.mods ofs (Int.repr 4)) Int.zero).
 
+Definition aindexed
+     (mk1: constant -> ireg -> code -> code)
+     (mk2: ireg -> ireg -> code -> code)
+     (unaligned : bool) (r1 temp: ireg) (ofs: int) (k: code) :=
+  if unaligned || Int.eq (Int.mods ofs (Int.repr 4)) Int.zero then
+    if Int.eq (high_s ofs) Int.zero then
+      mk1 (Cint ofs) r1 k
+    else
+      Paddis temp r1 (Cint (high_s ofs)) ::
+             mk1 (Cint (low_s ofs)) temp k
+  else
+    (loadimm GPR0 ofs (mk2 r1 GPR0 k)).
+
+Definition aindexed2
+     (mk: ireg -> ireg -> code -> code)
+     (r1 r2: ireg) (k: code) :=
+  mk r1 r2 k.
+
+Definition aglobal
+     (mk1: constant -> ireg -> code -> code)
+     (mk2: ireg -> ireg -> code -> code)
+     (unaligned : bool) (temp: ireg)
+     symb ofs k :=
+  if symbol_is_small_data symb ofs then
+    if unaligned || symbol_ofs_word_aligned symb ofs then
+      mk1 (Csymbol_sda symb ofs) GPR0 k
+    else
+      Paddi temp GPR0 (Csymbol_sda symb ofs) ::
+      mk1 (Cint Int.zero) temp k
+  else if symbol_is_rel_data symb ofs then
+    Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
+    Paddi temp temp (Csymbol_rel_low symb ofs) ::
+    mk1 (Cint Int.zero) temp k
+  else if  unaligned || symbol_ofs_word_aligned symb ofs then
+    Paddis temp GPR0 (Csymbol_high symb ofs) ::
+    mk1 (Csymbol_low symb ofs) temp k
+  else
+    Paddis temp GPR0 (Csymbol_high symb ofs) ::
+    Paddi temp temp (Csymbol_low symb ofs) ::
+    mk1 (Cint Int.zero) temp k.
+
+Definition abased
+     (mk1: constant -> ireg -> code -> code)
+     (mk2: ireg -> ireg -> code -> code)
+     (unaligned : bool) (r1 temp: ireg)
+     symb ofs k :=
+  if symbol_is_small_data symb ofs then
+    Paddi GPR0 GPR0 (Csymbol_sda symb ofs) ::
+    mk2 r1 GPR0 k
+  else if symbol_is_rel_data symb ofs then
+    Pmr GPR0 r1 ::
+    Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
+    Paddi temp temp (Csymbol_rel_low symb ofs) ::
+    mk2 temp GPR0 k
+  else if  unaligned || symbol_ofs_word_aligned symb ofs then
+    Paddis temp r1 (Csymbol_high symb ofs) ::
+    mk1 (Csymbol_low symb ofs) temp k
+  else
+    Pmr GPR0 r1 ::
+    Paddis temp GPR0 (Csymbol_high symb ofs) ::
+    Paddi temp temp (Csymbol_low symb ofs) ::
+    mk2 temp GPR0 k.
+
+Definition ainstack
+     (mk1 : constant -> ireg -> code -> code)
+     (mk2 : ireg -> ireg -> code -> code)
+     (unaligned : bool) (temp: ireg) ofs k :=
+  if  unaligned || Int.eq (Int.mods ofs (Int.repr 4)) Int.zero then
+    if Int.eq (high_s ofs) Int.zero then
+      mk1 (Cint ofs) GPR1 k
+    else
+      Paddis temp GPR1 (Cint (high_s ofs)) ::
+      mk1 (Cint (low_s ofs)) temp k
+  else
+    addimm temp GPR1 ofs (mk1 (Cint Int.zero) temp k).
+
 Definition transl_memory_access
      (mk1: constant -> ireg -> instruction)
      (mk2: ireg -> ireg -> instruction)
@@ -739,63 +815,18 @@ Definition transl_memory_access
   match addr, args with
   | Aindexed ofs, a1 :: nil =>
       do r1 <- ireg_of a1;
-      OK (if unaligned || Int.eq (Int.mods ofs (Int.repr 4)) Int.zero then
-            if Int.eq (high_s ofs) Int.zero then
-               mk1 (Cint ofs) r1 :: k
-             else
-               Paddis temp r1 (Cint (high_s ofs)) ::
-               mk1 (Cint (low_s ofs)) temp :: k
-          else
-            (loadimm GPR0 ofs (mk2 r1 GPR0 :: k)))
+      OK (aindexed (fun c r k => mk1 c r :: k) (fun r1 r2 k => mk2 r1 r2 :: k) unaligned r1 temp ofs k)
   | Aindexed2, a1 :: a2 :: nil =>
       do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-      OK (mk2 r1 r2 :: k)
+      OK (aindexed2 (fun r1 r2 k => mk2 r1 r2 :: k) r1 r2 k)
   | Aglobal symb ofs, nil =>
-       OK (if symbol_is_small_data symb ofs then
-             if unaligned || symbol_ofs_word_aligned symb ofs then
-               mk1 (Csymbol_sda symb ofs) GPR0 :: k
-             else
-               Paddi temp GPR0 (Csymbol_sda symb ofs) ::
-               mk1 (Cint Int.zero) temp :: k
-         else if symbol_is_rel_data symb ofs then
-           Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
-           Paddi temp temp (Csymbol_rel_low symb ofs) ::
-           mk1 (Cint Int.zero) temp :: k
-         else if  unaligned || symbol_ofs_word_aligned symb ofs then
-           Paddis temp GPR0 (Csymbol_high symb ofs) ::
-           mk1 (Csymbol_low symb ofs) temp :: k
-         else
-           Paddis temp GPR0 (Csymbol_high symb ofs) ::
-           Paddi temp temp (Csymbol_low symb ofs) ::
-           mk1 (Cint Int.zero) temp :: k)
+      OK (aglobal (fun c r k => mk1 c r :: k) (fun r1 r2 k => mk2 r1 r2 :: k) unaligned temp symb ofs k)
   | Abased symb ofs, a1 :: nil =>
       do r1 <- ireg_of a1;
-      OK (if symbol_is_small_data symb ofs then
-            Paddi GPR0 GPR0 (Csymbol_sda symb ofs) ::
-            mk2 r1 GPR0 :: k
-          else if symbol_is_rel_data symb ofs then
-            Pmr GPR0 r1 ::
-            Paddis temp GPR0 (Csymbol_rel_high symb ofs) ::
-            Paddi temp temp (Csymbol_rel_low symb ofs) ::
-            mk2 temp GPR0 :: k
-          else if  unaligned || symbol_ofs_word_aligned symb ofs then
-            Paddis temp r1 (Csymbol_high symb ofs) ::
-            mk1 (Csymbol_low symb ofs) temp :: k
-          else
-            Pmr GPR0 r1 ::
-            Paddis temp GPR0 (Csymbol_high symb ofs) ::
-            Paddi temp temp (Csymbol_low symb ofs) ::
-            mk2 temp GPR0 :: k)
+      OK (abased (fun c r k => mk1 c r :: k) (fun r1 r2 k => mk2 r1 r2 :: k) unaligned r1 temp symb ofs k)
   | Ainstack ofs, nil =>
       let ofs := Ptrofs.to_int ofs in
-      OK (if  unaligned || Int.eq (Int.mods ofs (Int.repr 4)) Int.zero then
-            if Int.eq (high_s ofs) Int.zero then
-              mk1 (Cint ofs) GPR1 :: k
-            else
-              Paddis temp GPR1 (Cint (high_s ofs)) ::
-              mk1 (Cint (low_s ofs)) temp :: k
-          else
-             addimm temp GPR1 ofs (mk1 (Cint Int.zero) temp :: k))
+      OK (ainstack (fun c r k => mk1 c r :: k) (fun r1 r2 k => mk2 r1 r2 :: k) unaligned temp ofs k)
   | _, _ =>
       Error(msg "Asmgen.transl_memory_access")
   end.

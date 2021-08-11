@@ -1564,6 +1564,7 @@ Proof.
   intros until m'; intros TR ADDR TEMP MK1 MK2.
   unfold transl_memory_access in TR; destruct addr; ArgsInv; simpl in ADDR; inv ADDR.
   - (* Aindexed *)
+    unfold aindexed.
     destruct (unaligned || Int.eq (Int.mods i (Int.repr 4)) Int.zero); [destruct (Int.eq (high_s i) Int.zero) |].
     + (* Aindexed 4 aligned short *)
       apply MK1. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
@@ -1590,6 +1591,7 @@ Proof.
   - (* Aindexed2 *)
     apply MK2. rewrite gpr_or_zero_not_zero; eauto with asmgen. auto.
   - (* Aglobal *)
+    unfold aglobal in *.
     destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ]; inv TR.
     + (* Aglobal from small data 4 aligned *)
       case (unaligned || symbol_ofs_word_aligned i i0).
@@ -1643,7 +1645,8 @@ Proof.
       apply exec_straight_step with rs2 m; auto. simpl. unfold rs2.
       rewrite gpr_or_zero_not_zero; auto. f_equal. f_equal. f_equal.
       unfold rs1; Simpl. apply low_high_half_zero. eexact EX'. auto.
-  -(* Abased *)
+  - (* Abased *)
+  unfold abased in *.
   destruct (symbol_is_small_data i i0) eqn:SISD; [ | destruct (symbol_is_rel_data i i0) ].
   + (* Abased from small data *)
     set (rs1 := nextinstr (rs#GPR0 <- (Genv.symbol_address ge i i0))).
@@ -1700,6 +1703,7 @@ Proof.
     unfold rs2; Simpl. apply low_high_half_zero.
     eexact EX'. auto.
   - (* Ainstack *)
+    unfold ainstack in *.
     set (ofs := Ptrofs.to_int i) in *.
     assert (L: Val.lessdef (Val.offset_ptr (rs GPR1) i) (Val.add (rs GPR1) (Vint ofs))).
     { destruct (rs GPR1); simpl; auto. unfold ofs; rewrite Ptrofs.of_int_to_int; auto. }
