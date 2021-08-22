@@ -25,6 +25,7 @@ Require Import Integers.
 Require Import Smallstep.
 
 Set Implicit Arguments.
+Set Asymmetric Patterns.
 
 (** * Behaviors for program executions *)
 

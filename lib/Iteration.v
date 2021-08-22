@@ -20,6 +20,8 @@ Require Import Axioms.
 Require Import Coqlib.
 Require Import Wfsimpl.
 
+Set Asymmetric Patterns.
+
 (** This modules defines several Coq encodings of a general "while" loop.
   The loop is presented in functional style as the iteration
   of a [step] function of type [A -> B + A]:

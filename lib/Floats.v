@@ -26,6 +26,7 @@ Import ListNotations.
 
 Close Scope R_scope.
 Open Scope Z_scope.
+Set Asymmetric Patterns.
 
 Definition float := binary64. (**r the type of IEE754 double-precision FP numbers *)
 Definition float32 := binary32. (**r the type of IEE754 single-precision FP numbers *)
