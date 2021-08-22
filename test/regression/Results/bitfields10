@@ -1,0 +1,14 @@
+loc_s = { a = 11, b = 2 }
+loc_t = { c = 11, d = 1, e = 2 }
+loc_u_u = { u = -5 }
+loc_u_v = { v = 3 }
+compound_s = { a = 2, b = 3 }
+compound_t = { c = 2, d = 1, e = -11 }
+compound_u = { u = 2 }
+loc_s = { a = 7, b = 2 }
+loc_t = { c = 7, d = 1, e = 50 }
+loc_u_u = { u = 7 }
+loc_u_v = { v = 2 }
+compound_s = { a = -14, b = 3 }
+compound_t = { c = 50, d = 1, e = -7 }
+compound_u = { u = 2 }

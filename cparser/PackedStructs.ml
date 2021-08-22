@@ -61,10 +61,10 @@ let set_alignas_attr al attrs =
 (* Rewriting field declarations *)
 
 let transf_field_decl mfa swapped loc env struct_id f =
-  if f.fld_bitfield <> None then
-    error loc "bitfields in packed structs not allowed";
   (* Register as byte-swapped if needed *)
   if swapped then begin
+    if f.fld_bitfield <> None then
+      error loc "byte-swapped bit fields are not supported";
     let (can_swap, must_swap) = can_byte_swap env f.fld_typ in
     if not can_swap then
       fatal_error loc "cannot byte-swap field of type '%a'"
@@ -74,6 +74,8 @@ let transf_field_decl mfa swapped loc env struct_id f =
   end;
   (* Reduce alignment if requested *)
   if mfa = 0 then f else begin
+    if f.fld_bitfield <> None then
+      error loc "bit fields in packed structs are not supported";
     let al = safe_alignof loc env f.fld_typ in
     { f with fld_typ =
          change_attributes_type env (set_alignas_attr (min mfa al)) f.fld_typ }

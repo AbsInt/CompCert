@@ -32,7 +32,7 @@ let version_options tool_name =
 (* Language support options *)
 
 let all_language_support_options = [
-  option_fbitfields; option_flongdouble;
+  option_flongdouble;
   option_fstruct_passing; option_fvararg_calls; option_funprototyped;
   option_fpacked_structs; option_finline_asm
 ]
@@ -44,11 +44,11 @@ let unset_all opts () = List.iter (fun r -> r := false) opts
 
 let language_support_options =
   [ Exact "-fall", Unit (set_all all_language_support_options);
-    Exact "-fnone", Unit (unset_all all_language_support_options);]
+    Exact "-fnone", Unit (unset_all all_language_support_options);
+    Exact "-fbitfields", Unit (fun () -> ()); ]
   @ f_opt "longdouble" option_flongdouble
   @ f_opt "struct-return" option_fstruct_passing
   @ f_opt "struct-passing" option_fstruct_passing
-  @ f_opt "bitfields" option_fbitfields
   @ f_opt "vararg-calls" option_fvararg_calls
   @ f_opt "unprototyped" option_funprototyped
   @ f_opt "packed-structs" option_fpacked_structs
@@ -56,7 +56,6 @@ let language_support_options =
 
 let language_support_help =
   {|Language support options (use -fno-<opt> to turn off -f<opt>) :
-  -fbitfields    Emulate bit fields in structs [off]
   -flongdouble   Treat 'long double' as 'double' [off]
   -fstruct-passing  Support passing structs and unions by value as function
                     results or function arguments [off]
@@ -67,6 +66,7 @@ let language_support_help =
   -finline-asm   Support inline 'asm' statements [off]
   -fall          Activate all language support options above
   -fnone         Turn off all language support options above
+  -fbitfields    Ignored (bit fields are now implemented natively)
 |}
 
 (* General options *)

@@ -2,7 +2,10 @@
 *.c
 *.h
 *.compcert
+*.cc
 *.cc2compcert
 *.compcert2cc
 *.light.c
 *.s
+!layout.c
+!staticlayout.c

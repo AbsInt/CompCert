@@ -79,11 +79,11 @@ Inductive exec_stmt: env -> temp_env -> mem -> statement -> trace -> temp_env ->
   | exec_Sskip:   forall e le m,
       exec_stmt e le m Sskip
                E0 le m Out_normal
-  | exec_Sassign:   forall e le m a1 a2 loc ofs v2 v m',
-      eval_lvalue ge e le m a1 loc ofs ->
+  | exec_Sassign:   forall e le m a1 a2 loc ofs bf v2 v m',
+      eval_lvalue ge e le m a1 loc ofs bf ->
       eval_expr ge e le m a2 v2 ->
       sem_cast v2 (typeof a2) (typeof a1) m = Some v ->
-      assign_loc ge (typeof a1) m loc ofs v m' ->
+      assign_loc ge (typeof a1) m loc ofs bf v m' ->
       exec_stmt e le m (Sassign a1 a2)
                E0 le m' Out_normal
   | exec_Sset:     forall e le m id a v,

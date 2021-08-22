@@ -1218,7 +1218,7 @@ Proof.
   split. unfold rs2; Simpl. unfold rs1; Simpl.
   unfold Val.shr, Val.shl; destruct (rs x0); auto.
   change (Int.ltu (Int.repr 24) Int.iwordsize) with true; simpl.
-  f_equal. symmetry. apply (Int.sign_ext_shr_shl 8). compute; auto.
+  f_equal. symmetry. apply (Int.sign_ext_shr_shl 8). compute; intuition congruence.
   intros. unfold rs2, rs1; Simpl.
   (* Ocast16signed *)
   destruct Archi.thumb2_support.
@@ -1231,7 +1231,7 @@ Proof.
   split. unfold rs2; Simpl. unfold rs1; Simpl.
   unfold Val.shr, Val.shl; destruct (rs x0); auto.
   change (Int.ltu (Int.repr 16) Int.iwordsize) with true; simpl.
-  f_equal. symmetry. apply (Int.sign_ext_shr_shl 16). compute; auto.
+  f_equal. symmetry. apply (Int.sign_ext_shr_shl 16). compute; intuition congruence.
   intros. unfold rs2, rs1; Simpl.
   (* Oaddimm *)
   generalize (addimm_correct x x0 i k rs m).

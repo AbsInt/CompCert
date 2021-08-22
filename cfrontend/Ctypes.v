@@ -20,6 +20,8 @@ Require Import Axioms Coqlib Maps Errors.
 Require Import AST Linking.
 Require Archi.
 
+Local Open Scope error_monad_scope.
+
 (** * Syntax of types *)
 
 (** Compcert C types are similar to those of C.  They include numeric types,
@@ -84,21 +86,28 @@ Proof.
   decide equality.
 Defined.
 
+Lemma signedness_eq: forall (s1 s2: signedness), {s1=s2} + {s1<>s2}.
+Proof.
+  decide equality.
+Defined.
+
+Lemma attr_eq: forall (a1 a2: attr), {a1=a2} + {a1<>a2}.
+Proof.
+  decide equality. decide equality. apply N.eq_dec. apply bool_dec.
+Defined.
+
 Lemma type_eq: forall (ty1 ty2: type), {ty1=ty2} + {ty1<>ty2}
 with typelist_eq: forall (tyl1 tyl2: typelist), {tyl1=tyl2} + {tyl1<>tyl2}.
 Proof.
-  assert (forall (x y: signedness), {x=y} + {x<>y}) by decide equality.
   assert (forall (x y: floatsize), {x=y} + {x<>y}) by decide equality.
-  assert (forall (x y: attr), {x=y} + {x<>y}).
-  { decide equality. decide equality. apply N.eq_dec. apply bool_dec. }
-  generalize ident_eq zeq bool_dec ident_eq intsize_eq; intros.
+  generalize ident_eq zeq bool_dec ident_eq intsize_eq signedness_eq attr_eq; intros.
   decide equality.
   decide equality.
   decide equality.
   decide equality.
 Defined.
 
-Opaque type_eq typelist_eq.
+Global Opaque intsize_eq signedness_eq attr_eq type_eq typelist_eq.
 
 (** Extract the attributes of a type. *)
 
@@ -150,16 +159,52 @@ Definition attr_union (a1 a2: attr) : attr :=
 Definition merge_attributes (ty: type) (a: attr) : type :=
   change_attributes (attr_union a) ty.
 
+(** Maximal size in bits of a bitfield of type [sz]. *)
+
+Definition bitsize_intsize (sz: intsize) : Z :=
+  match sz with
+  | I8 => 8
+  | I16 => 16
+  | I32 => 32
+  | IBool => 1
+  end.
+
 (** Syntax for [struct] and [union] definitions.  [struct] and [union]
   are collectively called "composites".  Each compilation unit
   comes with a list of top-level definitions of composites. *)
 
 Inductive struct_or_union : Type := Struct | Union.
 
-Definition members : Type := list (ident * type).
+Inductive member : Type :=
+  | Member_plain (id: ident) (t: type)
+  | Member_bitfield (id: ident) (sz: intsize) (sg: signedness) (a: attr)
+                    (width: Z) (padding: bool).
+
+Definition members : Type := list member.
 
 Inductive composite_definition : Type :=
   Composite (id: ident) (su: struct_or_union) (m: members) (a: attr).
+
+Definition name_member (m: member) : ident :=
+  match m with
+  | Member_plain id _ => id
+  | Member_bitfield id _ _ _ _ _ => id
+  end.
+
+Definition type_member (m: member) : type :=
+  match m with
+  | Member_plain _ t => t
+  | Member_bitfield _ sz sg a w _ =>
+      (* An unsigned bitfield of width < size of type reads with a signed type *)
+      let sg' := if zlt w (bitsize_intsize sz) then Signed else sg in
+      Tint sz sg' a
+  end.
+
+Definition member_is_padding (m: member) : bool :=
+  match m with
+  | Member_plain _ _ => false
+  | Member_bitfield _ _ _ _ _ p => p
+  end.
 
 Definition name_composite_def (c: composite_definition) : ident :=
   match c with Composite id su m a => id end.
@@ -168,7 +213,9 @@ Definition composite_def_eq (x y: composite_definition): {x=y} + {x<>y}.
 Proof.
   decide equality.
 - decide equality. decide equality. apply N.eq_dec. apply bool_dec.
-- apply list_eq_dec. decide equality. apply type_eq. apply ident_eq.
+- apply list_eq_dec. decide equality.
+  apply type_eq. apply ident_eq.
+  apply bool_dec. apply zeq. apply attr_eq. apply signedness_eq. apply intsize_eq. apply ident_eq.
 - decide equality.
 - apply ident_eq.
 Defined.
@@ -193,6 +240,13 @@ Record composite : Type := {
 }.
 
 Definition composite_env : Type := PTree.t composite.
+
+(** Access modes for members of structs or unions: either a plain field
+    or a bitfield *)
+
+Inductive bitfield : Type :=
+  | Full
+  | Bits (sz: intsize) (sg: signedness) (pos: Z) (width: Z).
 
 (** * Operations over types *)
 
@@ -389,41 +443,205 @@ Proof.
 - destruct (env!i). apply co_sizeof_alignof. apply Z.divide_0_r.
 Qed.
 
+(** ** Layout of struct fields *)
+
+Section LAYOUT.
+
+Variable env: composite_env.
+
+Definition bitalignof (t: type) := alignof env t * 8.
+
+Definition bitsizeof  (t: type) := sizeof env t * 8.
+
+Definition bitalignof_intsize (sz: intsize) : Z :=
+  match sz with
+  | I8 | IBool => 8
+  | I16 => 16
+  | I32 => 32
+  end.
+
+Definition next_field (pos: Z) (m: member) : Z :=
+  match m with
+  | Member_plain _ t =>
+      align pos (bitalignof t) + bitsizeof t
+  | Member_bitfield _ sz _ _ w _ =>
+      let s := bitalignof_intsize sz in
+      if zle w 0 then
+        align pos s
+      else
+        let curr := floor pos s in
+        let next := curr + s in
+        if zle (pos + w) next then pos + w else next + w
+  end.
+
+Definition layout_field (pos: Z) (m: member) : res (Z * bitfield) :=
+  match m with
+  | Member_plain _ t =>
+      OK (align pos (bitalignof t) / 8, Full)
+  | Member_bitfield _ sz sg _ w _ =>
+      if zle w 0 then Error (msg "accessing zero-width bitfield")
+      else if zlt (bitsize_intsize sz) w then Error (msg "bitfield too wide")
+      else
+        let s := bitalignof_intsize sz in
+        let start := floor pos s in
+        let next := start + s in
+        if zle (pos + w) next then
+          OK (start / 8, Bits sz sg (pos - start) w)
+        else
+          OK (next / 8, Bits sz sg 0 w)
+  end.
+
+(** Some properties *)
+
+Lemma bitalignof_intsize_pos:
+  forall sz, bitalignof_intsize sz > 0.
+Proof.
+  destruct sz; simpl; lia.
+Qed.
+
+Lemma next_field_incr:
+  forall pos m, pos <= next_field pos m.
+Proof.
+  intros. unfold next_field. destruct m.
+- set (al := bitalignof t).
+  assert (A: al > 0).
+  { unfold al, bitalignof. generalize (alignof_pos env t). lia. }
+  assert (pos <= align pos al) by (apply align_le; auto).
+  assert (bitsizeof t >= 0).
+  { unfold bitsizeof. generalize (sizeof_pos env t). lia. } 
+  lia.
+- set (s := bitalignof_intsize sz).
+  assert (A: s > 0) by (apply bitalignof_intsize_pos).
+  destruct (zle width 0).
++ apply align_le; auto.
++ generalize (floor_interval pos s A). 
+  set (start := floor pos s). intros B.
+  destruct (zle (pos + width) (start + s)); lia.
+Qed.
+
+Definition layout_start (p: Z) (bf: bitfield) :=
+  p * 8 + match bf with Full => 0 | Bits sz sg pos w => pos end.
+
+Definition layout_width (t: type) (bf: bitfield) :=
+  match bf with Full => bitsizeof t | Bits sz sg pos w => w end.
+
+Lemma layout_field_range: forall pos m ofs bf,
+  layout_field pos m = OK (ofs, bf) ->
+  pos <= layout_start ofs bf 
+  /\ layout_start ofs bf + layout_width (type_member m) bf <= next_field pos m.
+Proof.
+  intros until bf; intros L. unfold layout_start, layout_width. destruct m; simpl in L.
+- inv L. simpl.
+  set (al := bitalignof t).
+  set (q := align pos al).
+  assert (A: al > 0).
+  { unfold al, bitalignof. generalize (alignof_pos env t). lia. }
+  assert (B: pos <= q) by (apply align_le; auto).
+  assert (C: (al | q)) by (apply align_divides; auto).
+  assert (D: (8 | q)). 
+  { apply Z.divide_transitive with al; auto. apply Z.divide_factor_r. }
+  assert (E: q / 8 * 8 = q).
+  { destruct D as (n & E). rewrite E. rewrite Z.div_mul by lia. auto. }
+  rewrite E. lia.
+- unfold next_field.
+  destruct (zle width 0); try discriminate.
+  destruct (zlt (bitsize_intsize sz) width); try discriminate.
+  set (s := bitalignof_intsize sz) in *.
+  assert (A: s > 0) by (apply bitalignof_intsize_pos).
+  generalize (floor_interval pos s A). set (p := floor pos s) in *. intros B.
+  assert (C: (s | p)) by (apply floor_divides; auto).
+  assert (D: (8 | s)).
+  { exists (s / 8). unfold s. destruct sz; reflexivity. }
+  assert (E: (8 | p)) by (apply Z.divide_transitive with s; auto).
+  assert (F: (8 | p + s)) by (apply Z.divide_add_r; auto).
+  assert (G: p / 8 * 8 = p).
+  { destruct E as (n & EQ). rewrite EQ. rewrite Z.div_mul by lia. auto. }
+  assert (H: (p + s) / 8 * 8 = p + s).
+  { destruct F as (n & EQ). rewrite EQ. rewrite Z.div_mul by lia. auto. }
+  destruct (zle (pos + width) (p + s)); inv L; lia.
+Qed.
+
+Definition layout_alignment (t: type) (bf: bitfield) :=
+  match bf with
+  | Full => alignof env t
+  | Bits sz _ _ _ => bitalignof_intsize sz / 8
+  end.
+
+Lemma layout_field_alignment: forall pos m ofs bf,
+  layout_field pos m = OK (ofs, bf) ->
+  (layout_alignment (type_member m) bf | ofs).
+Proof.
+  intros until bf; intros L. destruct m; simpl in L.
+- inv L; simpl. 
+  set (q := align pos (bitalignof t)).
+  assert (A: (bitalignof t | q)).
+  { apply align_divides. unfold bitalignof. generalize (alignof_pos env t). lia. }
+  destruct A as [n E]. exists n. rewrite E. unfold bitalignof. rewrite Z.mul_assoc, Z.div_mul by lia. auto.
+- destruct (zle width 0); try discriminate.
+  destruct (zlt (bitsize_intsize sz) width); try discriminate.
+  set (s := bitalignof_intsize sz) in *.
+  assert (A: s > 0) by (apply bitalignof_intsize_pos).
+  set (p := floor pos s) in *.
+  assert (C: (s | p)) by (apply floor_divides; auto).
+  assert (D: (8 | s)).
+  { exists (s / 8). unfold s. destruct sz; reflexivity. }
+  assert (E: forall n, (s | n) -> (s / 8 | n / 8)).
+  { intros. destruct H as [n1 E1], D as [n2 E2]. rewrite E1, E2.
+    rewrite Z.mul_assoc, ! Z.div_mul by lia. exists n1; auto. }
+  destruct (zle (pos + width) (p + s)); inv L; simpl; fold s.
+  + apply E. auto.
+  + apply E. apply Z.divide_add_r; auto using Z.divide_refl.
+Qed.
+
+End LAYOUT.
+
 (** ** Size and alignment for composite definitions *)
 
 (** The alignment for a structure or union is the max of the alignment
-  of its members. *)
+  of its members.  Padding bitfields are ignored. *)
 
-Fixpoint alignof_composite (env: composite_env) (m: members) : Z :=
-  match m with
+Fixpoint alignof_composite (env: composite_env) (ms: members) : Z :=
+  match ms with
   | nil => 1
-  | (id, t) :: m' => Z.max (alignof env t) (alignof_composite env m')
+  | m :: ms => 
+     if member_is_padding m
+     then alignof_composite env ms
+     else Z.max (alignof env (type_member m)) (alignof_composite env ms)
   end.
 
 (** The size of a structure corresponds to its layout: fields are
   laid out consecutively, and padding is inserted to align
-  each field to the alignment for its type. *)
+  each field to the alignment for its type.  Bitfields are packed
+  as described above. *)
 
-Fixpoint sizeof_struct (env: composite_env) (cur: Z) (m: members) : Z :=
-  match m with
+Fixpoint bitsizeof_struct (env: composite_env) (cur: Z) (ms: members) : Z :=
+  match ms with
   | nil => cur
-  | (id, t) :: m' => sizeof_struct env (align cur (alignof env t) + sizeof env t) m'
+  | m :: ms => bitsizeof_struct env (next_field env cur m) ms
   end.
+
+Definition bytes_of_bits (n: Z) := (n + 7) / 8.
+
+Definition sizeof_struct (env: composite_env) (m: members) : Z :=
+  bytes_of_bits (bitsizeof_struct env 0 m).
 
 (** The size of an union is the max of the sizes of its members. *)
 
-Fixpoint sizeof_union (env: composite_env) (m: members) : Z :=
-  match m with
+Fixpoint sizeof_union (env: composite_env) (ms: members) : Z :=
+  match ms with
   | nil => 0
-  | (id, t) :: m' => Z.max (sizeof env t) (sizeof_union env m')
+  | m :: ms => Z.max (sizeof env (type_member m)) (sizeof_union env ms)
   end.
+
+(** Some properties *)
 
 Lemma alignof_composite_two_p:
   forall env m, exists n, alignof_composite env m = two_power_nat n.
 Proof.
-  induction m as [|[id t]]; simpl.
+  induction m; simpl.
 - exists 0%nat; auto.
-- apply Z.max_case; auto. apply alignof_two_p.
+- destruct (member_is_padding a); auto.
+  apply Z.max_case; auto. apply alignof_two_p.
 Qed.
 
 Lemma alignof_composite_pos:
@@ -435,94 +653,113 @@ Proof.
   rewrite EQ; apply two_power_nat_pos.
 Qed.
 
-Lemma sizeof_struct_incr:
-  forall env m cur, cur <= sizeof_struct env cur m.
+Lemma bitsizeof_struct_incr:
+  forall env m cur, cur <= bitsizeof_struct env cur m.
 Proof.
-  induction m as [|[id t]]; simpl; intros.
+  induction m; simpl; intros.
 - lia.
-- apply Z.le_trans with (align cur (alignof env t)).
-  apply align_le. apply alignof_pos.
-  apply Z.le_trans with (align cur (alignof env t) + sizeof env t).
-  generalize (sizeof_pos env t); lia.
-  apply IHm.
+- apply Z.le_trans with (next_field env cur a).
+  apply next_field_incr. apply IHm.
 Qed.
 
 Lemma sizeof_union_pos:
   forall env m, 0 <= sizeof_union env m.
 Proof.
-  induction m as [|[id t]]; simpl; extlia.
+  induction m; simpl; extlia.
 Qed.
 
-(** ** Byte offset for a field of a structure *)
+(** ** Byte offset and bitfield designator for a field of a structure *)
+
+Fixpoint field_type (id: ident) (ms: members) {struct ms} : res type :=
+  match ms with
+  | nil => Error (MSG "Unknown field " :: CTX id :: nil)
+  | m :: ms => if ident_eq id (name_member m) then OK (type_member m) else field_type id ms
+  end.
 
 (** [field_offset env id fld] returns the byte offset for field [id]
-  in a structure whose members are [fld].  Fields are laid out
-  consecutively, and padding is inserted to align each field to the
-  alignment for its type. *)
+  in a structure whose members are [fld].  It also returns a
+  bitfield designator, giving the location of the bits to access
+  within the storage unit for the bitfield. *)
 
-Fixpoint field_offset_rec (env: composite_env) (id: ident) (fld: members) (pos: Z)
-                          {struct fld} : res Z :=
-  match fld with
+Fixpoint field_offset_rec (env: composite_env) (id: ident) (ms: members) (pos: Z)
+                          {struct ms} : res (Z * bitfield) :=
+  match ms with
   | nil => Error (MSG "Unknown field " :: CTX id :: nil)
-  | (id', t) :: fld' =>
-      if ident_eq id id'
-      then OK (align pos (alignof env t))
-      else field_offset_rec env id fld' (align pos (alignof env t) + sizeof env t)
+  | m :: ms =>
+      if ident_eq id (name_member m)
+      then layout_field env pos m
+      else field_offset_rec env id ms (next_field env pos m)
   end.
 
-Definition field_offset (env: composite_env) (id: ident) (fld: members) : res Z :=
-  field_offset_rec env id fld 0.
-
-Fixpoint field_type (id: ident) (fld: members) {struct fld} : res type :=
-  match fld with
-  | nil => Error (MSG "Unknown field " :: CTX id :: nil)
-  | (id', t) :: fld' => if ident_eq id id' then OK t else field_type id fld'
-  end.
+Definition field_offset (env: composite_env) (id: ident) (ms: members) : res (Z * bitfield) :=
+  field_offset_rec env id ms 0.
 
 (** Some sanity checks about field offsets.  First, field offsets are
   within the range of acceptable offsets. *)
 
 Remark field_offset_rec_in_range:
-  forall env id ofs ty fld pos,
-  field_offset_rec env id fld pos = OK ofs -> field_type id fld = OK ty ->
-  pos <= ofs /\ ofs + sizeof env ty <= sizeof_struct env pos fld.
+  forall env id ofs bf ty ms pos,
+  field_offset_rec env id ms pos = OK (ofs, bf) -> field_type id ms = OK ty ->
+  pos <= layout_start ofs bf
+  /\ layout_start ofs bf + layout_width env ty bf <= bitsizeof_struct env pos ms.
 Proof.
-  intros until ty. induction fld as [|[i t]]; simpl; intros.
+  induction ms as [ | m ms]; simpl; intros.
 - discriminate.
-- destruct (ident_eq id i); intros.
-  inv H. inv H0. split.
-  apply align_le. apply alignof_pos. apply sizeof_struct_incr.
-  exploit IHfld; eauto. intros [A B]. split; auto.
-  eapply Z.le_trans; eauto. apply Z.le_trans with (align pos (alignof env t)).
-  apply align_le. apply alignof_pos. generalize (sizeof_pos env t). lia.
+- destruct (ident_eq id (name_member m)).
+  + inv H0. 
+    exploit layout_field_range; eauto.
+    generalize (bitsizeof_struct_incr env ms (next_field env pos m)).
+    lia.
+  + exploit IHms; eauto.
+    generalize (next_field_incr env pos m).
+    lia.
 Qed.
 
-Lemma field_offset_in_range:
-  forall env fld id ofs ty,
-  field_offset env id fld = OK ofs -> field_type id fld = OK ty ->
-  0 <= ofs /\ ofs + sizeof env ty <= sizeof_struct env 0 fld.
+Lemma field_offset_in_range_gen:
+  forall env ms id ofs bf ty,
+  field_offset env id ms = OK (ofs, bf) -> field_type id ms = OK ty ->
+  0 <= layout_start ofs bf
+  /\ layout_start ofs bf + layout_width env ty bf <= bitsizeof_struct env 0 ms.
 Proof.
   intros. eapply field_offset_rec_in_range; eauto.
+Qed.
+
+Corollary field_offset_in_range:
+  forall env ms id ofs ty,
+  field_offset env id ms = OK (ofs, Full) -> field_type id ms = OK ty ->
+  0 <= ofs /\ ofs + sizeof env ty <= sizeof_struct env ms.
+Proof.
+  intros. exploit field_offset_in_range_gen; eauto. 
+  unfold layout_start, layout_width, bitsizeof, sizeof_struct. intros [A B].
+  assert (C: forall x y, x * 8 <= y -> x <= bytes_of_bits y).
+  { unfold bytes_of_bits; intros. 
+    assert (P: 8 > 0) by lia.
+    generalize (Z_div_mod_eq (y + 7) 8 P) (Z_mod_lt (y + 7) 8 P).
+    lia. }
+  split. lia. apply C. lia.
 Qed.
 
 (** Second, two distinct fields do not overlap *)
 
 Lemma field_offset_no_overlap:
-  forall env id1 ofs1 ty1 id2 ofs2 ty2 fld,
-  field_offset env id1 fld = OK ofs1 -> field_type id1 fld = OK ty1 ->
-  field_offset env id2 fld = OK ofs2 -> field_type id2 fld = OK ty2 ->
+  forall env id1 ofs1 bf1 ty1 id2 ofs2 bf2 ty2 fld,
+  field_offset env id1 fld = OK (ofs1, bf1) -> field_type id1 fld = OK ty1 ->
+  field_offset env id2 fld = OK (ofs2, bf2) -> field_type id2 fld = OK ty2 ->
   id1 <> id2 ->
-  ofs1 + sizeof env ty1 <= ofs2 \/ ofs2 + sizeof env ty2 <= ofs1.
+  layout_start ofs1 bf1 + layout_width env ty1 bf1 <= layout_start ofs2 bf2
+  \/ layout_start ofs2 bf2 + layout_width env ty2 bf2 <= layout_start ofs1 bf1.
 Proof.
   intros until fld. unfold field_offset. generalize 0 as pos.
-  induction fld as [|[i t]]; simpl; intros.
+  induction fld as [|m fld]; simpl; intros.
 - discriminate.
-- destruct (ident_eq id1 i); destruct (ident_eq id2 i).
+- destruct (ident_eq id1 (name_member m)); destruct (ident_eq id2 (name_member m)).
 + congruence.
-+ subst i. inv H; inv H0.
-  exploit field_offset_rec_in_range. eexact H1. eauto. tauto.
-+ subst i. inv H1; inv H2.
-  exploit field_offset_rec_in_range. eexact H. eauto. tauto.
++ inv H0.
+  exploit field_offset_rec_in_range; eauto.
+  exploit layout_field_range; eauto. lia.
++ inv H2.
+  exploit field_offset_rec_in_range; eauto.
+  exploit layout_field_range; eauto. lia.
 + eapply IHfld; eauto.
 Qed.
 
@@ -530,29 +767,88 @@ Qed.
     are the same. *)
 
 Lemma field_offset_prefix:
-  forall env id ofs fld2 fld1,
-  field_offset env id fld1 = OK ofs ->
-  field_offset env id (fld1 ++ fld2) = OK ofs.
+  forall env id ofs bf fld2 fld1,
+  field_offset env id fld1 = OK (ofs, bf) ->
+  field_offset env id (fld1 ++ fld2) = OK (ofs, bf).
 Proof.
   intros until fld1. unfold field_offset. generalize 0 as pos.
-  induction fld1 as [|[i t]]; simpl; intros.
+  induction fld1 as [|m fld1]; simpl; intros.
 - discriminate.
-- destruct (ident_eq id i); auto.
+- destruct (ident_eq id (name_member m)); auto.
 Qed.
 
 (** Fourth, the position of each field respects its alignment. *)
 
-Lemma field_offset_aligned:
-  forall env id fld ofs ty,
-  field_offset env id fld = OK ofs -> field_type id fld = OK ty ->
-  (alignof env ty | ofs).
+Lemma field_offset_aligned_gen:
+  forall env id fld ofs bf ty,
+  field_offset env id fld = OK (ofs, bf) -> field_type id fld = OK ty ->
+  (layout_alignment env ty bf | ofs).
 Proof.
   intros until ty. unfold field_offset. generalize 0 as pos. revert fld.
-  induction fld as [|[i t]]; simpl; intros.
+  induction fld as [|m fld]; simpl; intros.
 - discriminate.
-- destruct (ident_eq id i).
-+ inv H; inv H0. apply align_divides. apply alignof_pos.
+- destruct (ident_eq id (name_member m)).
++ inv H0. eapply layout_field_alignment; eauto.
 + eauto.
+Qed.
+
+Corollary field_offset_aligned:
+  forall env id fld ofs ty,
+  field_offset env id fld = OK (ofs, Full) -> field_type id fld = OK ty ->
+  (alignof env ty | ofs).
+Proof.
+  intros. exploit field_offset_aligned_gen; eauto.
+Qed.
+
+(** [union_field_offset env id ms] returns the byte offset and
+    bitfield designator for accessing a member named [id] of a union
+    whose members are [ms].  The byte offset is always 0. *)
+
+Fixpoint union_field_offset (env: composite_env) (id: ident) (ms: members)
+                          {struct ms} : res (Z * bitfield) :=
+  match ms with
+  | nil => Error (MSG "Unknown field " :: CTX id :: nil)
+  | m :: ms =>
+      if ident_eq id (name_member m)
+      then layout_field env 0 m
+      else union_field_offset env id ms
+  end.
+
+(** Some sanity checks about union field offsets.  First, field offsets
+    fit within the size of the union. *)
+
+Lemma union_field_offset_in_range_gen:
+  forall env id ofs bf ty ms,
+  union_field_offset env id ms = OK (ofs, bf) -> field_type id ms = OK ty ->
+  ofs = 0 /\ 0 <= layout_start ofs bf /\ layout_start ofs bf + layout_width env ty bf <= sizeof_union env ms * 8.
+Proof.
+  induction ms as [ | m ms]; simpl; intros.
+- discriminate.
+- destruct (ident_eq id (name_member m)).
+  + inv H0. set (ty := type_member m) in *.
+    destruct m; simpl in H.
+    * inv H. unfold layout_start, layout_width. 
+      rewrite align_same. change (0 / 8) with 0. unfold bitsizeof. lia.
+      unfold bitalignof. generalize (alignof_pos env t). lia.
+      apply Z.divide_0_r.
+    * destruct (zle width 0); try discriminate.
+      destruct (zlt (bitsize_intsize sz) width); try discriminate.
+      assert (A: bitsize_intsize sz <= bitalignof_intsize sz <= sizeof env ty * 8).
+      { unfold ty, type_member; destruct sz; simpl; lia. }
+      rewrite zle_true in H by lia. inv H.
+      unfold layout_start, layout_width.
+      unfold floor; rewrite Z.div_0_l by lia.
+      lia.
+  + exploit IHms; eauto. lia.
+Qed.
+
+Corollary union_field_offset_in_range:
+  forall env ms id ofs ty,
+  union_field_offset env id ms = OK (ofs, Full) -> field_type id ms = OK ty ->
+  ofs = 0 /\ sizeof env ty <= sizeof_union env ms.
+Proof.
+  intros. exploit union_field_offset_in_range_gen; eauto. 
+  unfold layout_start, layout_width, bitsizeof. lia.
 Qed.
 
 (** ** Access modes *)
@@ -712,7 +1008,8 @@ Fixpoint rank_type (ce: composite_env) (t: type) : nat :=
 Fixpoint rank_members (ce: composite_env) (m: members) : nat :=
   match m with
   | nil => 0%nat
-  | (id, t) :: m => Init.Nat.max (rank_type ce t) (rank_members ce m)
+  | Member_plain _ t :: m => Init.Nat.max (rank_type ce t) (rank_members ce m)
+  | Member_bitfield _ _ _ _ _ _ :: m => rank_members ce m
   end.
 
 (** ** C types and back-end types *)
@@ -766,7 +1063,7 @@ Definition signature_of_type (args: typelist) (res: type) (cc: calling_conventio
 
 Definition sizeof_composite (env: composite_env) (su: struct_or_union) (m: members) : Z :=
   match su with
-  | Struct => sizeof_struct env 0 m
+  | Struct => sizeof_struct env m
   | Union  => sizeof_union env m
   end.
 
@@ -774,21 +1071,23 @@ Lemma sizeof_composite_pos:
   forall env su m, 0 <= sizeof_composite env su m.
 Proof.
   intros. destruct su; simpl.
-  apply sizeof_struct_incr.
-  apply sizeof_union_pos.
+- unfold sizeof_struct, bytes_of_bits.
+  assert (0 <= bitsizeof_struct env 0 m) by apply bitsizeof_struct_incr.
+  change 0 with (0 / 8) at 1. apply Z.div_le_mono; lia.
+- apply sizeof_union_pos.
 Qed.
 
-Fixpoint complete_members (env: composite_env) (m: members) : bool :=
-  match m with
+Fixpoint complete_members (env: composite_env) (ms: members) : bool :=
+  match ms with
   | nil => true
-  | (id, t) :: m' => complete_type env t && complete_members env m'
+  | m :: ms => complete_type env (type_member m) && complete_members env ms
   end.
 
 Lemma complete_member:
-  forall env id t m,
-  In (id, t) m -> complete_members env m = true -> complete_type env t = true.
+  forall env m ms,
+  In m ms -> complete_members env ms = true -> complete_type env (type_member m) = true.
 Proof.
-  induction m as [|[id1 t1] m]; simpl; intuition auto.
+  induction ms as [|m1 ms]; simpl; intuition auto.
   InvBooleans; inv H1; auto.
   InvBooleans; eauto.
 Qed.
@@ -852,8 +1151,6 @@ Defined.
   must precede all uses of this composite, unless the use is under
   a pointer or function type. *)
 
-Local Open Scope error_monad_scope.
-
 Fixpoint add_composite_definitions (env: composite_env) (defs: list composite_definition) : res composite_env :=
   match defs with
   | nil => OK env
@@ -916,52 +1213,88 @@ Proof.
 Qed.
 
 Lemma alignof_composite_stable:
-  forall m, complete_members env m = true -> alignof_composite env' m = alignof_composite env m.
+  forall ms, complete_members env ms = true -> alignof_composite env' ms = alignof_composite env ms.
 Proof.
-  induction m as [|[id t]]; simpl; intros.
+  induction ms as [|m ms]; simpl; intros.
   auto.
-  InvBooleans. rewrite alignof_stable by auto. rewrite IHm by auto. auto.
+  InvBooleans. rewrite alignof_stable by auto. rewrite IHms by auto. auto.
 Qed.
 
-Lemma sizeof_struct_stable:
-  forall m pos, complete_members env m = true -> sizeof_struct env' pos m = sizeof_struct env pos m.
+Remark next_field_stable: forall pos m,
+  complete_type env (type_member m) = true -> next_field env' pos m = next_field env pos m.
 Proof.
-  induction m as [|[id t]]; simpl; intros.
+  destruct m; simpl; intros.
+- unfold bitalignof, bitsizeof. rewrite alignof_stable, sizeof_stable by auto. auto.
+- auto.
+Qed.
+
+Lemma bitsizeof_struct_stable:
+  forall ms pos, complete_members env ms = true -> bitsizeof_struct env' pos ms = bitsizeof_struct env pos ms.
+Proof.
+  induction ms as [|m ms]; simpl; intros.
   auto.
-  InvBooleans. rewrite alignof_stable by auto. rewrite sizeof_stable by auto.
-  rewrite IHm by auto. auto.
+  InvBooleans. rewrite next_field_stable by auto. apply IHms; auto.
 Qed.
 
 Lemma sizeof_union_stable:
-  forall m, complete_members env m = true -> sizeof_union env' m = sizeof_union env m.
+  forall ms, complete_members env ms = true -> sizeof_union env' ms = sizeof_union env ms.
 Proof.
-  induction m as [|[id t]]; simpl; intros.
+  induction ms as [|m ms]; simpl; intros.
   auto.
-  InvBooleans. rewrite sizeof_stable by auto. rewrite IHm by auto. auto.
+  InvBooleans. rewrite sizeof_stable by auto. rewrite IHms by auto. auto.
 Qed.
 
 Lemma sizeof_composite_stable:
-  forall su m, complete_members env m = true -> sizeof_composite env' su m = sizeof_composite env su m.
+  forall su ms, complete_members env ms = true -> sizeof_composite env' su ms = sizeof_composite env su ms.
 Proof.
   intros. destruct su; simpl.
-  apply sizeof_struct_stable; auto.
+  unfold sizeof_struct. f_equal. apply bitsizeof_struct_stable; auto.
   apply sizeof_union_stable; auto.
 Qed.
 
 Lemma complete_members_stable:
-  forall m, complete_members env m = true -> complete_members env' m = true.
+  forall ms, complete_members env ms = true -> complete_members env' ms = true.
 Proof.
-  induction m as [|[id t]]; simpl; intros.
+  induction ms as [|m ms]; simpl; intros.
   auto.
-  InvBooleans. rewrite complete_type_stable by auto. rewrite IHm by auto. auto.
+  InvBooleans. rewrite complete_type_stable by auto. rewrite IHms by auto. auto.
 Qed.
 
 Lemma rank_members_stable:
-  forall m, complete_members env m = true -> rank_members env' m = rank_members env m.
+  forall ms, complete_members env ms = true -> rank_members env' ms = rank_members env ms.
 Proof.
-  induction m as [|[id t]]; simpl; intros.
+  induction ms as [|m ms]; simpl; intros.
   auto.
-  InvBooleans. f_equal; auto. apply rank_type_stable; auto.
+  InvBooleans. destruct m; auto. f_equal; auto. apply rank_type_stable; auto.
+Qed.
+
+Remark layout_field_stable: forall pos m,
+  complete_type env (type_member m) = true -> layout_field env' pos m = layout_field env pos m.
+Proof.
+  destruct m; simpl; intros.
+- unfold bitalignof. rewrite alignof_stable by auto. auto.
+- auto.
+Qed.
+
+Lemma field_offset_stable:
+  forall f ms, complete_members env ms = true -> field_offset env' f ms = field_offset env f ms.
+Proof.
+  intros until ms. unfold field_offset. generalize 0.
+  induction ms as [|m ms]; simpl; intros.
+- auto.
+- InvBooleans. destruct (ident_eq f (name_member m)).
+  apply layout_field_stable; auto.
+  rewrite next_field_stable by auto. apply IHms; auto.
+Qed.
+
+Lemma union_field_offset_stable:
+  forall f ms, complete_members env ms = true -> union_field_offset env' f ms = union_field_offset env f ms.
+Proof.
+  induction ms as [|m ms]; simpl; intros.
+- auto.
+- InvBooleans. destruct (ident_eq f (name_member m)).
+  apply layout_field_stable; auto.
+  apply IHms; auto.
 Qed.
 
 End STABILITY.
@@ -1091,19 +1424,23 @@ Qed.
   is strictly greater than the ranks of its member types. *)
 
 Remark rank_type_members:
-  forall ce id t m, In (id, t) m -> (rank_type ce t <= rank_members ce m)%nat.
+  forall ce m ms, In m ms -> (rank_type ce (type_member m) <= rank_members ce ms)%nat.
 Proof.
-  induction m; simpl; intros; intuition auto.
-  subst a. extlia.
-  extlia.
+  induction ms; simpl; intros.
+- tauto.
+- destruct a; destruct H; subst; simpl.
+  + lia.
+  + apply IHms in H. lia.
+  + lia.
+  + apply IHms; auto.
 Qed.
 
 Lemma rank_struct_member:
-  forall ce id a co id1 t1,
+  forall ce id a co m,
   composite_env_consistent ce ->
   ce!id = Some co ->
-  In (id1, t1) (co_members co) ->
-  (rank_type ce t1 < rank_type ce (Tstruct id a))%nat.
+  In m (co_members co) ->
+  (rank_type ce (type_member m) < rank_type ce (Tstruct id a))%nat.
 Proof.
   intros; simpl. rewrite H0.
   erewrite co_consistent_rank by eauto.
@@ -1112,11 +1449,11 @@ Proof.
 Qed.
 
 Lemma rank_union_member:
-  forall ce id a co id1 t1,
+  forall ce id a co m,
   composite_env_consistent ce ->
   ce!id = Some co ->
-  In (id1, t1) (co_members co) ->
-  (rank_type ce t1 < rank_type ce (Tunion id a))%nat.
+  In m (co_members co) ->
+  (rank_type ce (type_member m) < rank_type ce (Tunion id a))%nat.
 Proof.
   intros; simpl. rewrite H0.
   erewrite co_consistent_rank by eauto.
@@ -1516,6 +1853,57 @@ Global Opaque Linker_program.
 
 (** ** Commutation between linking and program transformations *)
 
+Section LINK_MATCH_PROGRAM_GEN.
+
+Context {F G: Type}.
+Variable match_fundef: program F -> fundef F -> fundef G -> Prop.
+
+Hypothesis link_match_fundef:
+  forall ctx1 ctx2 f1 tf1 f2 tf2 f,
+  link f1 f2 = Some f ->
+  match_fundef ctx1 f1 tf1 -> match_fundef ctx2 f2 tf2 ->
+  exists tf, link tf1 tf2 = Some tf /\ (match_fundef ctx1 f tf \/ match_fundef ctx2 f tf).
+
+Let match_program (p: program F) (tp: program G) : Prop :=
+    Linking.match_program_gen match_fundef eq p p tp
+ /\ prog_types tp = prog_types p.
+
+Theorem link_match_program_gen:
+  forall p1 p2 tp1 tp2 p,
+  link p1 p2 = Some p -> match_program p1 tp1 -> match_program p2 tp2 ->
+  exists tp, link tp1 tp2 = Some tp /\ match_program p tp.
+Proof.
+  intros until p; intros L [M1 T1] [M2 T2].
+  exploit link_linkorder; eauto. intros [LO1 LO2]. 
+Local Transparent Linker_program.
+  simpl in L; unfold link_program in L.
+  destruct (link (program_of_program p1) (program_of_program p2)) as [pp|] eqn:LP; try discriminate.
+  assert (A: exists tpp,
+               link (program_of_program tp1) (program_of_program tp2) = Some tpp
+             /\ Linking.match_program_gen match_fundef eq p pp tpp).
+  { eapply Linking.link_match_program; eauto.
+  - intros.
+    Local Transparent Linker_types.
+    simpl in *. destruct (type_eq v1 v2); inv H. exists v; rewrite dec_eq_true; auto.
+  }
+  destruct A as (tpp & TLP & MP).
+  simpl; unfold link_program. rewrite TLP.
+  destruct (lift_option (link (prog_types p1) (prog_types p2))) as [[typs EQ]|EQ]; try discriminate.
+  destruct (link_build_composite_env (prog_types p1) (prog_types p2) typs
+           (prog_comp_env p1) (prog_comp_env p2) (prog_comp_env_eq p1)
+           (prog_comp_env_eq p2) EQ) as (env & P & Q). 
+  rewrite <- T1, <- T2 in EQ.
+  destruct (lift_option (link (prog_types tp1) (prog_types tp2))) as [[ttyps EQ']|EQ']; try congruence.
+  assert (ttyps = typs) by congruence. subst ttyps. 
+  destruct (link_build_composite_env (prog_types tp1) (prog_types tp2) typs
+         (prog_comp_env tp1) (prog_comp_env tp2) (prog_comp_env_eq tp1)
+         (prog_comp_env_eq tp2) EQ') as (tenv & R & S).
+  assert (tenv = env) by congruence. subst tenv.
+  econstructor; split; eauto. inv L. split; auto.
+Qed.
+
+End LINK_MATCH_PROGRAM_GEN.
+
 Section LINK_MATCH_PROGRAM.
 
 Context {F G: Type}.
@@ -1571,3 +1959,4 @@ Local Transparent Linker_program.
 Qed.
 
 End LINK_MATCH_PROGRAM.
+

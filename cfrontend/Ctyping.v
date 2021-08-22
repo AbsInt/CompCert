@@ -410,8 +410,8 @@ Inductive wt_rvalue : expr -> Prop :=
       wt_rvalue (Eparen r tycast ty)
 
 with wt_lvalue : expr -> Prop :=
-  | wt_Eloc: forall b ofs ty,
-      wt_lvalue (Eloc b ofs ty)
+  | wt_Eloc: forall b ofs bf ty,
+      wt_lvalue (Eloc b ofs bf ty)
   | wt_Evar: forall x ty,
       e!x = Some ty ->
       wt_lvalue (Evar x ty)
@@ -440,7 +440,7 @@ Definition wt_expr_kind (k: kind) (a: expr) :=
 
 Definition expr_kind (a: expr) : kind :=
   match a with
-  | Eloc _ _ _ => LV
+  | Eloc _ _ _ _ => LV
   | Evar _ _ => LV
   | Ederef _ _ => LV
   | Efield _ _ _ => LV
@@ -596,7 +596,7 @@ Fixpoint check_arguments (el: exprlist) (tyl: typelist) : res unit :=
 
 Definition check_rval (e: expr) : res unit :=
   match e with
-  | Eloc _ _ _ | Evar _ _ | Ederef _ _ | Efield _ _ _ =>
+  | Eloc _ _ _ _ | Evar _ _ | Ederef _ _ | Efield _ _ _ =>
       Error (msg "not a r-value")
   | _ =>
       OK tt
@@ -604,7 +604,7 @@ Definition check_rval (e: expr) : res unit :=
 
 Definition check_lval (e: expr) : res unit :=
   match e with
-  | Eloc _ _ _ | Evar _ _ | Ederef _ _ | Efield _ _ _ =>
+  | Eloc _ _ _ _ | Evar _ _ | Ederef _ _ | Efield _ _ _ =>
       OK tt
   | _ =>
       Error (msg "not a l-value")
@@ -846,7 +846,7 @@ Fixpoint retype_expr (ce: composite_env) (e: typenv) (a: expr) : res expr :=
       do r1' <- retype_expr ce e r1; do rl' <- retype_exprlist ce e rl; ecall r1' rl'
   | Ebuiltin ef tyargs rl tyres =>
       do rl' <- retype_exprlist ce e rl; ebuiltin ef tyargs rl' tyres
-  | Eloc _ _ _ =>
+  | Eloc _ _ _ _ =>
       Error (msg "Eloc in source")
   | Eparen _ _ _ =>
       Error (msg "Eparen in source")
@@ -984,6 +984,7 @@ Lemma binarith_type_cast:
   forall t1 t2 m t,
   binarith_type t1 t2 m = OK t -> wt_cast t1 t /\ wt_cast t2 t.
 Proof.
+Local Transparent Ctypes.intsize_eq.
   unfold wt_cast, binarith_type, classify_binarith; intros; DestructCases;
   simpl; split; try congruence;
   try (destruct Archi.ptr64; congruence).
@@ -1656,9 +1657,31 @@ Proof.
   unfold Mptr in *. destruct Archi.ptr64 eqn:SF; auto with ty.
 Qed.
 
+Remark wt_bitfield_normalize: forall sz sg width sg1 n,
+  0 < width <= bitsize_intsize sz ->
+  sg1 = (if zlt width (bitsize_intsize sz) then Signed else sg) ->
+  wt_int (bitfield_normalize sz sg width n) sz sg1.
+Proof.
+  intros. destruct sz; cbn in *.
+  + destruct sg.
+    * replace sg1 with Signed by (destruct zlt; auto).
+      apply Int.sign_ext_widen; lia.
+    * subst sg1; destruct zlt.
+      ** apply Int.sign_zero_ext_widen; lia.
+      ** apply Int.zero_ext_widen; lia.
+  + destruct sg.
+    * replace sg1 with Signed by (destruct zlt; auto).
+      apply Int.sign_ext_widen; lia.
+    * subst sg1; destruct zlt.
+      ** apply Int.sign_zero_ext_widen; lia.
+      ** apply Int.zero_ext_widen; lia.
+  + auto.
+  + apply Int.zero_ext_widen; lia.
+Qed.
+
 Lemma wt_deref_loc:
-  forall ge ty m b ofs t v,
-  deref_loc ge ty m b ofs t v ->
+  forall ge ty m b ofs bf t v,
+  deref_loc ge ty m b ofs bf t v ->
   wt_val v ty.
 Proof.
   induction 1.
@@ -1680,6 +1703,19 @@ Proof.
   destruct ty; simpl in H; try discriminate; auto with ty.
   destruct i; destruct s; discriminate.
   destruct f; discriminate.
+- (* bitfield *)
+  inv H. constructor.
+  apply wt_bitfield_normalize. lia. auto.
+Qed.
+
+Lemma wt_assign_loc:
+  forall ge ty m b ofs bf v t m' v',
+  assign_loc ge ty m b ofs bf v t m' v' ->
+  wt_val v ty -> wt_val v' ty.
+Proof.
+  induction 1; intros; auto.
+- inv H. constructor.
+  apply wt_bitfield_normalize. lia. auto.
 Qed.
 
 Lemma wt_cast_self:
@@ -1770,7 +1806,7 @@ Proof.
 - (* condition *) constructor. destruct b; auto. destruct b; auto. red; auto.
 - (* sizeof *)  unfold size_t, Vptrofs; destruct Archi.ptr64; constructor; auto with ty.
 - (* alignof *)  unfold size_t, Vptrofs; destruct Archi.ptr64; constructor; auto with ty.
-- (* assign *) inversion H5. constructor. eapply pres_sem_cast; eauto.
+- (* assign *) inversion H5. constructor. eapply wt_assign_loc; eauto. eapply pres_sem_cast; eauto.
 - (* assignop *) subst tyres l r. constructor. auto.
   constructor. constructor. eapply wt_deref_loc; eauto.
   auto. auto. auto.

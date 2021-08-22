@@ -525,6 +525,60 @@ Proof.
   intros. unfold align. apply Z.divide_factor_r.
 Qed.
 
+Lemma align_lt: forall x y, y > 0 -> align x y < x + y.
+Proof.
+  intros. unfold align.
+  generalize (Z_div_mod_eq (x + y - 1) y H); intro.
+  generalize (Z_mod_lt (x + y - 1) y H); intro.
+  lia.
+Qed.
+
+Lemma align_same:
+  forall x y, y > 0 -> (y | x) -> align x y = x.
+Proof.
+  unfold align; intros. destruct H0 as [k E].
+  replace (x  + y - 1) with (x + (y - 1)) by lia.
+  rewrite E, Z.div_add_l, Z.div_small by lia.
+  lia.
+Qed.
+
+(** Floor: [floor n amount] returns the greatest multiple of [amount]
+    less than or equal to [n]. *)
+
+Definition floor (n: Z) (amount: Z) := (n / amount) * amount.
+
+Lemma floor_interval:
+  forall x y, y > 0 -> floor x y <= x < floor x y + y.
+Proof.
+  unfold floor; intros.
+  generalize (Z_div_mod_eq x y H) (Z_mod_lt x y H).
+  set (q := x / y). set (r := x mod y). intros. lia.
+Qed.
+
+Lemma floor_divides:
+  forall x y, y > 0 -> (y | floor x y).
+Proof.
+  unfold floor; intros. exists (x / y); auto.
+Qed.
+
+Lemma floor_same:
+  forall x y, y > 0 -> (y | x) -> floor x y = x.
+Proof.
+  unfold floor; intros. rewrite (Zdivide_Zdiv_eq y x) at 2; auto; lia.
+Qed.
+
+Lemma floor_align_interval:
+  forall x y, y > 0 ->
+  floor x y <= align x y <= floor x y + y.
+Proof.
+  unfold floor, align; intros.
+  replace (x / y * y + y) with ((x + 1 * y) / y * y).
+  assert (A: forall a b, a <= b -> a / y * y <= b / y * y).
+  { intros. apply Z.mul_le_mono_nonneg_r. lia. apply Z.div_le_mono; lia. }
+  split; apply A; lia.
+  rewrite Z.div_add by lia. lia.
+Qed.
+
 (** * Definitions and theorems on the data types [option], [sum] and [list] *)
 
 Set Implicit Arguments.
@@ -771,6 +825,32 @@ Proof.
   destruct l; simpl in H; inv H.
   exploit IHm1; eauto. intros [l1 [l2 [P [Q R]]]]. subst l.
   exists (a0 :: l1); exists l2; intuition. simpl; congruence.
+Qed.
+
+(** Properties of [List.app] (concatenation) *)
+
+Lemma list_append_injective_l:
+  forall (A: Type) (l1 l2 l1' l2': list A),
+  l1 ++ l2 = l1' ++ l2' -> List.length l1 = List.length l1' -> l1 = l1' /\ l2 = l2'.
+Proof.
+  intros until l2'. revert l1 l1'. induction l1 as [ | a l1]; destruct l1' as [ | a' l1']; simpl; intros.
+- auto.
+- discriminate.
+- discriminate.
+- destruct (IHl1 l1'). congruence. congruence. split; congruence.
+Qed.
+
+Lemma list_append_injective_r:
+  forall (A: Type) (l1 l2 l1' l2': list A),
+  l1 ++ l2 = l1' ++ l2' -> List.length l2 = List.length l2' -> l1 = l1' /\ l2 = l2'.
+Proof.
+  intros.
+  assert (X: rev l2 = rev l2' /\ rev l1 = rev l1').
+  { apply list_append_injective_l.
+    rewrite <- ! rev_app_distr. congruence.
+    rewrite ! rev_length; auto. }
+  rewrite <- (rev_involutive l1), <- (rev_involutive l1'), <- (rev_involutive l2), <- (rev_involutive l2').
+  intuition congruence.
 Qed.
 
 (** Folding a function over a list *)
