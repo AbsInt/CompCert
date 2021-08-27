@@ -109,6 +109,15 @@ let offset_addressing (Addrmode(base, ofs, cst)) delta =
 let linear_addr reg ofs = Addrmode(Some reg, None, Coq_inl ofs)
 let global_addr id ofs = Addrmode(None, None, Coq_inr(id, ofs))
 
+(* Emit a 64-bit immediate add [dst <- src + imm]. *)
+
+let emit_addimm64 dst src imm =
+  if Op.offset_in_range imm then
+    emit (Pleaq(dst, linear_addr src imm))
+  else begin
+    emit (Pmov_rr(dst, src)); emit (Paddq_ri(dst, Integers.Int64.repr imm))
+  end
+
 (* Translate a builtin argument into an addressing mode *)
 
 let addressing_of_builtin_arg = function
@@ -289,9 +298,9 @@ let expand_builtin_va_start_elf64 r =
   emit (Pmovl_mr (linear_addr r _0z, RAX));
   emit (Pmovl_ri (RAX, coqint_of_camlint fp_offset));
   emit (Pmovl_mr (linear_addr r _4z, RAX));
-  emit (Pleaq (RAX, linear_addr RSP (Z.of_uint64 overflow_arg_area)));
+  emit_addimm64 RAX RSP (Z.of_uint64 overflow_arg_area);
   emit (Pmovq_mr (linear_addr r _8z, RAX));
-  emit (Pleaq (RAX, linear_addr RSP (Z.of_uint64 reg_save_area)));
+  emit_addimm64 RAX RSP (Z.of_uint64 reg_save_area);
   emit (Pmovq_mr (linear_addr r _16z, RAX))
 
 let expand_builtin_va_start_win64 r =
@@ -302,7 +311,7 @@ let expand_builtin_va_start_win64 r =
   let ofs =
     Int64.(add !current_function_stacksize
                (mul 8L (of_int num_args))) in
-  emit (Pleaq (RAX, linear_addr RSP (Z.of_uint64 ofs)));
+  emit_addimm64 RAX RSP (Z.of_uint64 ofs);
   emit (Pmovq_mr (linear_addr r _0z, RAX))
 
 (* FMA operations *)
@@ -550,10 +559,8 @@ let expand_instruction instr =
        emit (Psubl_ri (RSP, sz'));
        emit (Pcfi_adjust sz');
        (* Stack chaining *)
-       let addr1 = linear_addr RSP (Z.of_uint (sz + 8)) in
-       let addr2 = linear_addr RSP ofs_link in
-       emit (Pleaq (RAX,addr1));
-       emit (Pmovq_mr (addr2, RAX));
+       emit_addimm64 RAX RSP (Z.of_uint (sz + 8));
+       emit (Pmovq_mr (linear_addr RSP ofs_link, RAX));
        current_function_stacksize := Int64.of_int (sz + 8)
      end else if Archi.ptr64 then begin
        let (sz, save_regs) = sp_adjustment_elf64 sz in
@@ -563,16 +570,14 @@ let expand_instruction instr =
        emit (Pcfi_adjust sz');
        if save_regs >= 0 then begin
          (* Save the registers *)
-         emit (Pleaq (R10, linear_addr RSP (Z.of_uint save_regs)));
+         emit_addimm64 R10 RSP (Z.of_uint save_regs);
          emit (Pcall_s (intern_string "__compcert_va_saveregs",
                         {sig_args = []; sig_res = Tvoid; sig_cc = cc_default}))
        end;
        (* Stack chaining *)
        let fullsz = sz + 8 in
-       let addr1 = linear_addr RSP (Z.of_uint fullsz) in
-       let addr2 = linear_addr RSP ofs_link in
-       emit (Pleaq (RAX, addr1));
-       emit (Pmovq_mr (addr2, RAX));
+       emit_addimm64 RAX RSP (Z.of_uint fullsz);
+       emit (Pmovq_mr (linear_addr RSP ofs_link, RAX));
        current_function_stacksize := Int64.of_int fullsz
      end else begin
        let sz = sp_adjustment_32 sz in
