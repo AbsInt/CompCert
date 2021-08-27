@@ -39,11 +39,6 @@ let _16z = Z.of_sint 16
 
 let stack_alignment () = 16
 
-(* Pseudo instructions for 32/64 bit compatibility *)
-
-let _Plea (r, addr) =
-  if Archi.ptr64 then Pleaq (r, addr) else Pleal (r, addr)
-
 (* SP adjustment to allocate or free a stack frame. *)
 
 let align n a =
@@ -109,14 +104,20 @@ let offset_addressing (Addrmode(base, ofs, cst)) delta =
 let linear_addr reg ofs = Addrmode(Some reg, None, Coq_inl ofs)
 let global_addr id ofs = Addrmode(None, None, Coq_inr(id, ofs))
 
-(* Emit a 64-bit immediate add [dst <- src + imm]. *)
+(* A "leaq" instruction that does not overflow *)
 
-let emit_addimm64 dst src imm =
-  if Op.offset_in_range imm then
-    emit (Pleaq(dst, linear_addr src imm))
-  else begin
-    emit (Pmov_rr(dst, src)); emit (Paddq_ri(dst, Integers.Int64.repr imm))
-  end
+let emit_leaq r addr =
+  match Asmgen.normalize_addrmode_64 addr with
+  | (addr, None) ->
+      emit (Pleaq (r, addr))
+  | (addr, Some delta) ->
+      emit (Pleaq (r, addr));
+      emit (Paddq_ri (r, delta))
+
+(* Pseudo "lea" instruction for 32/64 bit compatibility *)
+
+let emit_lea r addr =
+  if Archi.ptr64 then emit_leaq r addr else emit (Pleal (r, addr))
 
 (* Translate a builtin argument into an addressing mode *)
 
@@ -159,8 +160,8 @@ let expand_builtin_memcpy_small sz al src dst =
   copy (addressing_of_builtin_arg src) (addressing_of_builtin_arg dst) sz
 
 let expand_builtin_memcpy_big sz al src dst =
-  if src <> BA (IR RSI) then emit (_Plea (RSI, addressing_of_builtin_arg src));
-  if dst <> BA (IR RDI) then emit (_Plea (RDI, addressing_of_builtin_arg dst));
+  if src <> BA (IR RSI) then emit_lea RSI (addressing_of_builtin_arg src);
+  if dst <> BA (IR RDI) then emit_lea RDI (addressing_of_builtin_arg dst);
   (* TODO: movsq? *)
   emit (Pmovl_ri (RCX,coqint_of_camlint (Int32.of_int (sz / 4))));
   emit Prep_movsl;
@@ -298,9 +299,9 @@ let expand_builtin_va_start_elf64 r =
   emit (Pmovl_mr (linear_addr r _0z, RAX));
   emit (Pmovl_ri (RAX, coqint_of_camlint fp_offset));
   emit (Pmovl_mr (linear_addr r _4z, RAX));
-  emit_addimm64 RAX RSP (Z.of_uint64 overflow_arg_area);
+  emit_leaq RAX (linear_addr RSP (Z.of_uint64 overflow_arg_area));
   emit (Pmovq_mr (linear_addr r _8z, RAX));
-  emit_addimm64 RAX RSP (Z.of_uint64 reg_save_area);
+  emit_leaq RAX (linear_addr RSP (Z.of_uint64 reg_save_area));
   emit (Pmovq_mr (linear_addr r _16z, RAX))
 
 let expand_builtin_va_start_win64 r =
@@ -311,7 +312,7 @@ let expand_builtin_va_start_win64 r =
   let ofs =
     Int64.(add !current_function_stacksize
                (mul 8L (of_int num_args))) in
-  emit_addimm64 RAX RSP (Z.of_uint64 ofs);
+  emit_leaq RAX (linear_addr RSP (Z.of_uint64 ofs));
   emit (Pmovq_mr (linear_addr r _0z, RAX))
 
 (* FMA operations *)
@@ -559,8 +560,10 @@ let expand_instruction instr =
        emit (Psubl_ri (RSP, sz'));
        emit (Pcfi_adjust sz');
        (* Stack chaining *)
-       emit_addimm64 RAX RSP (Z.of_uint (sz + 8));
-       emit (Pmovq_mr (linear_addr RSP ofs_link, RAX));
+       let addr1 = linear_addr RSP (Z.of_uint (sz + 8)) in
+       let addr2 = linear_addr RSP ofs_link in
+       emit_leaq RAX addr1;
+       emit (Pmovq_mr (addr2, RAX));
        current_function_stacksize := Int64.of_int (sz + 8)
      end else if Archi.ptr64 then begin
        let (sz, save_regs) = sp_adjustment_elf64 sz in
@@ -570,14 +573,16 @@ let expand_instruction instr =
        emit (Pcfi_adjust sz');
        if save_regs >= 0 then begin
          (* Save the registers *)
-         emit_addimm64 R10 RSP (Z.of_uint save_regs);
+         emit_leaq R10 (linear_addr RSP (Z.of_uint save_regs));
          emit (Pcall_s (intern_string "__compcert_va_saveregs",
                         {sig_args = []; sig_res = Tvoid; sig_cc = cc_default}))
        end;
        (* Stack chaining *)
        let fullsz = sz + 8 in
-       emit_addimm64 RAX RSP (Z.of_uint fullsz);
-       emit (Pmovq_mr (linear_addr RSP ofs_link, RAX));
+       let addr1 = linear_addr RSP (Z.of_uint fullsz) in
+       let addr2 = linear_addr RSP ofs_link in
+       emit_leaq RAX addr1;
+       emit (Pmovq_mr (addr2, RAX));
        current_function_stacksize := Int64.of_int fullsz
      end else begin
        let sz = sp_adjustment_32 sz in
