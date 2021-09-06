@@ -47,22 +47,35 @@ Definition platform_builtin_table : list (string * platform_builtin) :=
 
 Definition platform_builtin_sig (b: platform_builtin) : signature :=
   match b with
-  | BI_isel | BI_uisel | BI_bsel =>
+  | BI_isel | BI_uisel =>
      mksignature (Tint :: Tint :: Tint :: nil) Tint cc_default
   | BI_isel64 | BI_uisel64 =>
      mksignature (Tint :: Tlong :: Tlong :: nil) Tlong cc_default
+  | BI_bsel =>
+     mksignature (Tint :: Tint :: Tint :: nil) Tint8unsigned cc_default
   | BI_mulhw | BI_mulhwu =>
      mksignature (Tint :: Tint :: nil) Tint cc_default
   | BI_mulhd | BI_mulhdu =>
      mksignature (Tlong :: Tlong :: nil) Tlong cc_default
   end.
 
+Definition isel {A: Type} (c: int) (n1 n2: A) : A :=
+  if Int.eq c Int.zero then n2 else n1.
+
+Program Definition bsel (c n1 n2: int) : { n : int | n = Int.zero_ext 8 n } :=
+  Int.zero_ext 8 (isel c n1 n2).
+Next Obligation.
+  symmetry. apply Int.zero_ext_idem. lia.
+Qed.
+
 Definition platform_builtin_sem (b: platform_builtin) : builtin_sem (sig_res (platform_builtin_sig b)) :=
   match b with
-  | BI_isel | BI_uisel | BI_bsel =>
-    mkbuiltin_n3t Tint Tint Tint Tint (fun c n1 n2 => if Int.eq c Int.zero then n2 else n1)
+  | BI_isel | BI_uisel =>
+    mkbuiltin_n3t Tint Tint Tint Tint isel
   | BI_isel64 | BI_uisel64 =>
-    mkbuiltin_n3t Tint Tlong Tlong Tlong (fun c n1 n2 => if Int.eq c Int.zero then n2 else n1)
+    mkbuiltin_n3t Tint Tlong Tlong Tlong isel
+  | BI_bsel =>
+    mkbuiltin_n3t Tint Tint Tint Tint8unsigned bsel
   | BI_mulhw =>
     mkbuiltin_n2t Tint Tint Tint Int.mulhs
   | BI_mulhwu =>
