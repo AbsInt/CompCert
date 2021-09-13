@@ -51,7 +51,7 @@ INCLUDES=$(patsubst %,-I %, $(DIRS))
 
 # Control of warnings:
 
-WARNINGS=-w +a-4-9-27
+WARNINGS=-w +a-4-9-27-70
 extraction/%.cmx: WARNINGS +=-w -20-27-32..34-39-41-44..45-60-67
 extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45-60-67
 cparser/pre_parser.cmx: WARNINGS += -w -41
