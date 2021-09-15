@@ -869,7 +869,7 @@ Infix ":::" := pass_cons (at level 60, right associativity) : linking_scope.
 Fixpoint compose_passes (l l': Language) (passes: Passes l l') : Pass l l' :=
   match passes in Passes l l' return Pass l l' with
   | pass_nil l => pass_identity l
-  | pass_cons l1 l2 l3 pass1 passes => pass_compose pass1 (compose_passes passes)
+  | pass_cons pass1 passes => pass_compose pass1 (compose_passes passes)
   end.
 
 (** Some more lemmas about [nlist_forall2]. *)

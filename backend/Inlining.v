@@ -293,10 +293,13 @@ Inductive inline_decision (ros: reg + ident) : Type :=
   | Cannot_inline
   | Can_inline (id: ident) (f: function) (P: ros = inr reg id) (Q: fenv!id = Some f).
 
+Arguments Cannot_inline {ros}.
+Arguments Can_inline {ros}.
+
 Program Definition can_inline (ros: reg + ident): inline_decision ros :=
   match ros with
-  | inl r => Cannot_inline _
-  | inr id => match fenv!id with Some f => Can_inline _ id f _ _ | None => Cannot_inline _ end
+  | inl r => Cannot_inline
+  | inr id => match fenv!id with Some f => Can_inline id f _ _ | None => Cannot_inline end
   end.
 
 (** Inlining of a call to function [f].  An appropriate context is

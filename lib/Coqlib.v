@@ -25,8 +25,6 @@ Require Export List.
 Require Export Bool.
 Require Export Lia.
 
-Global Set Asymmetric Patterns.
-
 (** * Useful tactics *)
 
 Ltac inv H := inversion H; clear H; subst.

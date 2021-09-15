@@ -21,6 +21,7 @@ Require Import Coqlib.
 
 Open Scope nat_scope.
 Set Implicit Arguments.
+Set Asymmetric Patterns.
 
 (* To avoid useless definitions of inductors in extracted code. *)
 Local Unset Elimination Schemes.

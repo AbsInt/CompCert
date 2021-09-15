@@ -20,6 +20,8 @@ Require Import Axioms Coqlib Maps Errors.
 Require Import AST Linking.
 Require Archi.
 
+Set Asymmetric Patterns.
+
 Local Open Scope error_monad_scope.
 
 (** * Syntax of types *)
