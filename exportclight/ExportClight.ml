@@ -90,23 +90,22 @@ let coqstring p s =
 
 exception Not_an_identifier
 
+let sanitize_char = function
+  | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' as c -> c
+  | ' ' | '$' -> '_'
+  | _ -> raise Not_an_identifier
+
 let sanitize s =
-  let s' = Bytes.create (String.length s) in
-  for i = 0 to String.length s - 1 do
-    Bytes.set  s' i
-    (match String.get s i with
-      | 'A'..'Z' | 'a'..'z' | '0'..'9' | '_' as c -> c
-      | ' ' | '$' -> '_'
-      | _ -> raise Not_an_identifier)
-  done;
-  Bytes.to_string s'
+  if s <> ""
+  then "_" ^ String.map sanitize_char s
+  else "empty_ident"
 
 let temp_names : (ident, string) Hashtbl.t = Hashtbl.create 17
 
 let ident p id =
   try
     let s = Hashtbl.find string_of_atom id in
-    fprintf p "_%s" (sanitize s)
+    fprintf p "%s" (sanitize s)
   with Not_found | Not_an_identifier ->
   try
     let s = Hashtbl.find temp_names id in
@@ -125,10 +124,10 @@ let define_idents p =
     (fun (id, name) ->
       try
         if !use_canonical_atoms && id = pos_of_string name then
-          fprintf p "Definition _%s : ident := $\"%s\".@ "
+          fprintf p "Definition %s : ident := $\"%s\".@ "
                     (sanitize name) name
         else
-          fprintf p "Definition _%s : ident := %a.@ "
+          fprintf p "Definition %s : ident := %a.@ "
                     (sanitize name) positive id
       with Not_an_identifier ->
         ());
@@ -415,7 +414,7 @@ and lblstmts p = function
               (print_option coqZ) lbl stmt s lblstmts ls
 
 let print_function p (id, f) =
-  fprintf p "Definition f_%s := {|@ " (sanitize (extern_atom id));
+  fprintf p "Definition f%s := {|@ " (sanitize (extern_atom id));
   fprintf p "  fn_return := %a;@ " typ f.fn_return;
   fprintf p "  fn_callconv := %a;@ " callconv f.fn_callconv;
   fprintf p "  fn_params := %a;@ " (print_list (print_pair ident typ)) f.fn_params;
@@ -436,7 +435,7 @@ let init_data p = function
   | Init_addrof(id,ofs) -> fprintf p "Init_addrof %a %a" ident id coqptrofs ofs
 
 let print_variable p (id, v) =
-  fprintf p "Definition v_%s := {|@ " (sanitize (extern_atom id));
+  fprintf p "Definition v%s := {|@ " (sanitize (extern_atom id));
   fprintf p "  gvar_info := %a;@ " typ v.gvar_info;
   fprintf p "  gvar_init := %a;@ " (print_list init_data) v.gvar_init;
   fprintf p "  gvar_readonly := %B;@ " v.gvar_readonly;
@@ -451,12 +450,12 @@ let print_globdef p (id, gd) =
 
 let print_ident_globdef p = function
   | (id, Gfun(Ctypes.Internal f)) ->
-      fprintf p "(%a, Gfun(Internal f_%s))" ident id (sanitize (extern_atom id))
+      fprintf p "(%a, Gfun(Internal f%s))" ident id (sanitize (extern_atom id))
   | (id, Gfun(Ctypes.External(ef, targs, tres, cc))) ->
       fprintf p "@[<hov 2>(%a,@ @[<hov 2>Gfun(External %a@ %a@ %a@ %a))@]@]"
         ident id external_function ef typlist targs typ tres callconv cc
   | (id, Gvar v) ->
-      fprintf p "(%a, Gvar v_%s)" ident id (sanitize (extern_atom id))
+      fprintf p "(%a, Gvar v%s)" ident id (sanitize (extern_atom id))
 
 (* Composite definitions *)
 
