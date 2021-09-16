@@ -17,6 +17,7 @@
 open Format
 open Camlcoq
 open AST
+open Values
 
 (* Options, lists, pairs *)
 
@@ -239,9 +240,19 @@ let print_variable print_info p (id, v) =
   fprintf p "  gvar_volatile := %B@ " v.gvar_volatile;
   fprintf p "|}.@ @ "
 
-(* Information about this run of clightgen *)
+(* Values *)
 
-let print_clightgen_info ~sourcefile ?normalized p =
+let val_ p = function
+  | Vundef -> fprintf p "Vundef"
+  | Vint i -> fprintf p "(Vint %a)" coqint i
+  | Vlong l -> fprintf p "(Vlong %a)" coqint64 l
+  | Vfloat f -> fprintf p "(Vfloat %a)" coqfloat f
+  | Vsingle s -> fprintf p "(Vsingle %a)" coqsingle s
+  | Vptr(b, o) -> fprintf p "(Vptr %a %a)" positive b coqptrofs o
+
+(* Information about this run of clightgen or csyntaxgen *)
+
+let print_gen_info ~sourcefile ?normalized p =
   fprintf p "@[<v 2>Module Info.";
   fprintf p "@ Definition version := %S." Version.version;
   fprintf p "@ Definition build_number := %S." Version.buildnr;

@@ -112,7 +112,7 @@ ccomp.byte: $(CCOMP_OBJS:.cmx=.cmo)
 	@echo "Linking $@"
 	@$(OCAMLC) -o $@ $(LIBS_BYTE) $+
 
-CLIGHTGEN_OBJS:=$(shell $(MODORDER) export/Clightgen.cmx)
+CLIGHTGEN_OBJS:=$(shell $(MODORDER) export/ExportDriver.cmx)
 
 ifeq ($(OCAML_NATIVE_COMP),true)
 clightgen: $(CLIGHTGEN_OBJS)

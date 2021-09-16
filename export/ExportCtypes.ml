@@ -98,6 +98,16 @@ and typlist p = function
   | Tcons(t, tl) ->
       fprintf p "@[<hov 2>(Tcons@ %a@ %a)@]" typ t typlist tl
 
+(* Access modes for members of structs or unions *)
+
+let bitfield p = function
+  | Full ->
+      fprintf p "Full"
+  | Bits(sz, sg, pos, width) ->
+      fprintf p "@[<hov 2>(Bits@ %a@ %a@ %a@ %a)@]"
+                intsize sz signedness sg
+                coqZ pos coqZ width
+
 (* Composite definitions *)
 
 let print_member p = function
@@ -119,4 +129,3 @@ let print_composite_definition p (Composite(id, su, m, a)) =
     (match su with Struct -> "Struct" | Union -> "Union")
     (print_list print_member) m
     attribute a
-
