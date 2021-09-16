@@ -5,7 +5,7 @@ ARCHDIRS=$(ARCH)
 else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
-RECDIRS := lib common $(ARCHDIRS) cfrontend  exportclight
+RECDIRS := lib common $(ARCHDIRS) cfrontend export
 COQINCLUDES := $(foreach d, $(RECDIRS), -R ../../$(d) compcert.$(d))
 ifeq ($(LIBRARY_FLOCQ),local)
 COQINCLUDES += -R ../../flocq Flocq

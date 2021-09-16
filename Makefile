@@ -28,7 +28,7 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
-DIRS := lib common $(ARCHDIRS) backend cfrontend driver exportclight cparser
+DIRS := lib common $(ARCHDIRS) backend cfrontend driver export cparser
 
 COQINCLUDES := $(foreach d, $(DIRS), -R $(d) compcert.$(d))
 
@@ -203,9 +203,9 @@ ccomp: .depend.extr compcert.ini driver/Version.ml FORCE
 ccomp.byte: .depend.extr compcert.ini driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr ccomp.byte
 
-clightgen: .depend.extr compcert.ini exportclight/Clightdefs.vo driver/Version.ml FORCE
+clightgen: .depend.extr compcert.ini export/Clightdefs.vo driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen
-clightgen.byte: .depend.extr compcert.ini exportclight/Clightdefs.vo driver/Version.ml FORCE
+clightgen.byte: .depend.extr compcert.ini export/Clightdefs.vo driver/Version.ml FORCE
 	$(MAKE) -f Makefile.extr clightgen.byte
 
 runtime:
@@ -295,7 +295,7 @@ cparser/Parser.v: cparser/Parser.vy
 
 depend: $(GENERATED) depend1
 
-depend1: $(FILES) exportclight/Clightdefs.v
+depend1: $(FILES) export/Clightdefs.v
 	@echo "Analyzing Coq dependencies"
 	@$(COQDEP) $^ > .depend
 
