@@ -353,6 +353,10 @@ Module PTree <: TREE.
     forall (A: Type) (i: positive), get i (empty A) = None.
   Proof. reflexivity. Qed.
 
+  Lemma gEmpty:
+    forall (A: Type) (i: positive), get i (@Empty A) = None.
+  Proof. reflexivity. Qed.
+
   Lemma gss0: forall {A} p (x: A), get' p (set0 p x) = Some x.
   Proof. induction p; simpl; auto. Qed.
 
@@ -417,9 +421,9 @@ Module PTree <: TREE.
 
   Theorem grspec:
     forall (A: Type) (i j: elt) (m: t A),
-    get i (remove j m) = if peq i j then None else get i m.
+    get i (remove j m) = if elt_eq i j then None else get i m.
   Proof.
-    intros. destruct (peq i j). subst j. apply grs. apply gro; auto.
+    intros. destruct (elt_eq i j). subst j. apply grs. apply gro; auto.
   Qed.
 
 (** ** Custom case analysis principles and induction principles *)
@@ -510,8 +514,8 @@ Module PTree <: TREE.
 
   Context {A B C: Type}
           (base: C)
-          (base1: tree' B -> C) 
-          (base2: tree' A -> C)
+          (base1: tree B -> C) 
+          (base2: tree A -> C)
           (nodes: forall (l1: tree A) (o1: option A) (r1: tree A)
                          (l2: tree B) (o2: option B) (r2: tree B)
                          (lrec: C) (rrec: C), C).
@@ -527,20 +531,36 @@ Module PTree <: TREE.
     | solve [ exact (Nodes l2) | exact Empty ]
     | solve [ exact (Some x2)  | exact None ]
     | solve [ exact (Nodes r2) | exact Empty ]
-    | solve [ exact (tree_rec2' l1 l2) | exact (base2 l1) | exact (base1 l2) | exact base ]
-    | solve [ exact (tree_rec2' r1 r2) | exact (base2 r1) | exact (base1 r2) | exact base ]
+    | solve [ exact (tree_rec2' l1 l2) | exact (base2 (Nodes l1)) | exact (base1 (Nodes l2)) | exact base ]
+    | solve [ exact (tree_rec2' r1 r2) | exact (base2 (Nodes r1)) | exact (base1 (Nodes r2)) | exact base ]
     ]).
   Defined.
 
   Definition tree_rec2 (a: tree A) (b: tree B) : C :=
     match a, b with
     | Empty, Empty => base
-    | Empty, Nodes b' => base1 b'
-    | Nodes a', Empty => base2 a'
+    | Empty, _ => base1 b
+    | _, Empty => base2 a
     | Nodes a', Nodes b' => tree_rec2' a' b'
     end.
 
-  Lemma unroll_tree_rec2:
+  Lemma unroll_tree_rec2_NE:
+    forall l1 o1 r1,
+    not_trivially_empty l1 o1 r1 ->
+    tree_rec2 (Node l1 o1 r1) Empty = base2 (Node l1 o1 r1).
+  Proof.
+    intros. destruct l1, o1, r1; try contradiction; reflexivity.
+  Qed.
+
+  Lemma unroll_tree_rec2_EN:
+    forall l2 o2 r2,
+    not_trivially_empty l2 o2 r2 ->
+    tree_rec2 Empty (Node l2 o2 r2) = base1 (Node l2 o2 r2).
+  Proof.
+    intros. destruct l2, o2, r2; try contradiction; reflexivity.
+  Qed.
+
+  Lemma unroll_tree_rec2_NN:
     forall l1 o1 r1 l2 o2 r2,
     not_trivially_empty l1 o1 r1 -> not_trivially_empty l2 o2 r2 ->
     tree_rec2 (Node l1 o1 r1) (Node l2 o2 r2) =
@@ -810,39 +830,23 @@ Local Transparent Node.
     revert i; induction m; destruct i; simpl; auto.
   Qed.
 
-  Fixpoint map_filter1' {A B} (f: A -> option B) (m: tree' A) : tree B :=
-    match m with
-    | Node001 r => Node Empty None (map_filter1' f r)
-    | Node010 x => Node Empty (f x) Empty
-    | Node011 x r => Node Empty (f x) (map_filter1' f r)
-    | Node100 l => Node (map_filter1' f l) None Empty
-    | Node101 l r => Node (map_filter1' f l) None (map_filter1' f r)
-    | Node110 l x => Node (map_filter1' f l) (f x) Empty
-    | Node111 l x r => Node (map_filter1' f l) (f x) (map_filter1' f r)
-    end.
+  Definition map_filter1_nonopt {A B} (f: A -> option B) (m: tree A) : tree B :=
+    tree_rec
+      Empty
+      (fun l lrec o r rrec => Node lrec (match o with None => None | Some a => f a end) rrec)
+      m.
 
-  Definition map_filter1'_opt := Eval cbv [map_filter1' Node] in @map_filter1'.
+  Definition map_filter1 :=
+    Eval cbv [map_filter1_nonopt tree_rec tree_rec' Node] in @map_filter1_nonopt.
 
-  Definition map_filter1 {A B} (f: A -> option B) (m: t A) : t B :=
-    match m with
-    | Empty => Empty
-    | Nodes m' => map_filter1'_opt f m'
-    end.
-
-  Lemma gmap_filter1':
-    forall {A B} (f: A -> option B) (m: tree' A) (i: positive),
-    get i (map_filter1' f m) = match get' i m with None => None | Some a => f a end.
-  Proof.
-    induction m; intros; simpl; rewrite gNode; destruct i; simpl; auto.
-  Qed.
-
-  Theorem gmap_filter1:
+  Lemma gmap_filter1:
     forall {A B} (f: A -> option B) (m: tree A) (i: positive),
     get i (map_filter1 f m) = match get i m with None => None | Some a => f a end.
   Proof.
-    intros. destruct m as [ | m]; simpl. auto.
-    change (map_filter1'_opt f m) with (map_filter1' f m).
-    apply gmap_filter1'.
+    change @map_filter1 with @map_filter1_nonopt. unfold map_filter1_nonopt.
+    intros until f. induction m using tree_ind; intros.
+  - auto.
+  - rewrite unroll_tree_rec by auto. rewrite ! gNode; destruct i; auto.
   Qed.
 
   Definition filter1 {A} (pred: A -> bool) (m: t A) : t A :=
@@ -862,28 +866,31 @@ Local Transparent Node.
   Variable f: option A -> option B -> option C.
   Hypothesis f_none_none: f None None = None.
 
-  Definition combine'_l := map_filter1' (fun a => f (Some a) None).
-  Definition combine'_r := map_filter1' (fun b => f None (Some b)).
+  Let combine_l := map_filter1 (fun a => f (Some a) None).
+  Let combine_r := map_filter1 (fun b => f None (Some b)).
 
-  Definition combine_nonopt (m1: tree A) (m2: tree B) : tree C :=
+  Let combine_nonopt (m1: tree A) (m2: tree B) : tree C :=
     tree_rec2
       Empty
-      combine'_r
-      combine'_l
-      (fun l1 o1 r1 l2 o2 r2 lrec rrec => Node lrec (f o1 o2) rrec)
+      combine_r
+      combine_l
+      (fun l1 o1 r1 l2 o2 r2 lrec rrec =>
+        Node lrec
+             (match o1, o2 with None, None => None | _, _ => f o1 o2 end)
+             rrec)
       m1 m2.
 
   Definition combine :=
     Eval cbv [combine_nonopt tree_rec2 tree_rec2'] in combine_nonopt.
 
-  Lemma gcombine'_l: forall m i, get i (combine'_l m) = f (get' i m) None.
+  Lemma gcombine_l: forall m i, get i (combine_l m) = f (get i m) None.
   Proof.
-    intros; unfold combine'_l; rewrite gmap_filter1'. destruct (get' i m); auto.
+    intros; unfold combine_l; rewrite gmap_filter1. destruct (get i m); auto.
   Qed.
 
-  Lemma gcombine'_r: forall m i, get i (combine'_r m) = f None (get' i m).
+  Lemma gcombine_r: forall m i, get i (combine_r m) = f None (get i m).
   Proof.
-    intros; unfold combine'_r; rewrite gmap_filter1'. destruct (get' i m); auto.
+    intros; unfold combine_r; rewrite gmap_filter1. destruct (get i m); auto.
   Qed.
 
   Theorem gcombine:
@@ -891,36 +898,24 @@ Local Transparent Node.
       get i (combine m1 m2) = f (get i m1) (get i m2).
   Proof.
     change combine with combine_nonopt.
-    induction m1 using tree_ind; [ | induction m2 using tree_ind ]; intros.
-  - simpl. destruct m2; auto. apply gcombine'_r.
-  - destruct (Node l o r); simpl; auto. apply gcombine'_l.
-  - unfold combine_nonopt; rewrite unroll_tree_rec2 by auto.
-    rewrite ! gNode; destruct i; auto.
+    induction m1 using tree_ind; induction m2 using tree_ind; intros.
+  - auto.
+  - unfold combine_nonopt; rewrite unroll_tree_rec2_EN by auto. apply gcombine_r.
+  - unfold combine_nonopt; rewrite unroll_tree_rec2_NE by auto. apply gcombine_l.
+  - unfold combine_nonopt; rewrite unroll_tree_rec2_NN by auto.
+    rewrite ! gNode; destruct i; auto. destruct o, o0; auto.
   Qed.
 
   End COMBINE.
 
   Theorem combine_commut:
     forall (A B: Type) (f g: option A -> option A -> option B),
+    f None None = None -> g None None = None ->
     (forall (i j: option A), f i j = g j i) ->
     forall (m1 m2: t A),
     combine f m1 m2 = combine g m2 m1.
   Proof.
-    intros until g; intros EQ.
-    change @combine with @combine_nonopt.
-    induction m1 using tree_ind; [|induction m2 using tree_ind]; intros.
-  - destruct m2; simpl; auto.
-    apply extensionality; intros x.
-    unfold combine'_r, combine'_l. rewrite ! gmap_filter1'.
-    destruct (get' x t0); auto.
-  - destruct (Node l o r); simpl; auto.
-    apply extensionality; intros x.
-    unfold combine'_r, combine'_l. rewrite ! gmap_filter1'.
-    destruct (get' x t0); auto.
-  - unfold combine_nonopt; rewrite ! unroll_tree_rec2 by auto. f_equal.
-    apply IHm1.
-    apply EQ.
-    apply IHm0.
+    intros. apply extensionality; intros i. rewrite ! gcombine by auto. auto.
   Qed.
 
 (** ** List of all bindings *)

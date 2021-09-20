@@ -203,7 +203,7 @@ Inductive changed: Type := Unchanged | Chempty | Changed (m: PTree.tree' L.t).
 
 (** This is like [Node] but uses [Chempty] and [Changed] instead of [Empty] and [Nodes]. *)
 
-Definition Node1 (l: PTree.t L.t) (o: option L.t) (r: PTree.t L.t) : changed := 
+Let Node1 (l: PTree.t L.t) (o: option L.t) (r: PTree.t L.t) : changed := 
   match l,o,r with
   | PTree.Empty, None, PTree.Empty => Chempty
   | PTree.Empty, None, PTree.Nodes r' => Changed (PTree.Node001 r')
@@ -215,7 +215,7 @@ Definition Node1 (l: PTree.t L.t) (o: option L.t) (r: PTree.t L.t) : changed :=
   | PTree.Nodes l', Some x, PTree.Nodes r' => Changed (PTree.Node111 l' x r')
   end.
 
-Definition Node_share1 (l1: PTree.t L.t) (lres: changed) (o1: option L.t)
+Let Node_share1 (l1: PTree.t L.t) (lres: changed) (o1: option L.t)
                        (r1: PTree.t L.t) (rres: changed) : changed :=
   let o' := f o1 in
   match lres, rres with
@@ -248,7 +248,7 @@ Lemma gmap_filter: forall m i,
 Proof.
   change map_filter with (PTree.tree_rec Unchanged Node_share1).
   induction m using PTree.tree_ind; intros.
-- simpl. rewrite f_None; auto.
+- simpl. rewrite PTree.gEmpty, f_None; auto.
 - rename m1 into l; rename m2 into r. rewrite PTree.unroll_tree_rec by auto.
   destruct (PTree.tree_rec Unchanged Node_share1 l) as [ | | l'];
   destruct (PTree.tree_rec Unchanged Node_share1 r) as [ | | r'];
@@ -276,7 +276,7 @@ Inductive changed2 : Type :=
   | CC0
   | CC (m: PTree.tree' L.t).
 
-Definition Node2 (l: PTree.t L.t) (o: option L.t) (r: PTree.t L.t) : changed2 := 
+Let Node2 (l: PTree.t L.t) (o: option L.t) (r: PTree.t L.t) : changed2 := 
   match l,o,r with
   | PTree.Empty, None, PTree.Empty => CC0
   | PTree.Empty, None, PTree.Nodes r' => CC (PTree.Node001 r')
@@ -288,7 +288,7 @@ Definition Node2 (l: PTree.t L.t) (o: option L.t) (r: PTree.t L.t) : changed2 :=
   | PTree.Nodes l', Some x, PTree.Nodes r' => CC (PTree.Node111 l' x r')
   end.
 
-Definition Node_share2
+Let Node_share2
              (l1: PTree.t L.t) (o1: option L.t) (r1: PTree.t L.t)
              (l2: PTree.t L.t) (o2: option L.t) (r2: PTree.t L.t)
              (lres: changed2) (rres: changed2) : changed2 :=
@@ -344,6 +344,7 @@ Definition xcombine_r (m: PTree.t L.t) : changed2 :=
 Definition xcombine :=
   Eval cbv beta iota delta [Node_share2 Node2] in
   PTree.tree_rec2
+    Same
     xcombine_r
     xcombine_l
     Node_share2.
@@ -386,14 +387,15 @@ Local Hint Resolve gNode2 : combine.
 Lemma gxcombine: forall m1 m2, xcombine_spec m1 m2 (xcombine m1 m2).
 Proof.
   Local Opaque opt_eq.
-  change xcombine with (PTree.tree_rec2 xcombine_r xcombine_l Node_share2).
-  induction m1 using PTree.tree_ind; [ | induction m2 using PTree.tree_ind]; intros.
-- simpl. unfold xcombine_r. 
+  change xcombine with (PTree.tree_rec2 Same xcombine_r xcombine_l Node_share2).
+  induction m1 using PTree.tree_ind; induction m2 using PTree.tree_ind; intros.
+- constructor; red; intros; rewrite ! PTree.gEmpty, f_none_none; auto with combine.
+- rewrite PTree.unroll_tree_rec2_EN by auto. set (m2 := PTree.Node l o r). unfold xcombine_r. 
   generalize (gmap_filter (fun o => f None o) f_none_none m2).
   destruct (map_filter (fun o => f None o) m2); auto with combine.
-- rewrite PTree.unroll_tree_rec2_NE by auto. unfold xcombine_l.
-  generalize (gmap_filter (fun o => f o None) f_none_none (PTree.Node l o r)).
-  destruct (map_filter (fun o => f o None) (PTree.Node l o r)); auto with combine.
+- rewrite PTree.unroll_tree_rec2_NE by auto. set (m1 := PTree.Node l o r). unfold xcombine_l.
+  generalize (gmap_filter (fun o => f o None) f_none_none m1).
+  destruct (map_filter (fun o => f o None) m1); auto with combine.
 - rewrite PTree.unroll_tree_rec2_NN by auto.
   clear IHm2 IHm3. specialize (IHm1 l0). specialize (IHm0 r0).
   inv IHm1; inv IHm0; unfold Node_share2; auto with combine;
