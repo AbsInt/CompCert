@@ -1402,14 +1402,18 @@ module I = struct
     | TStruct(id, _), Init_struct(id', (fld1, i1) :: flds) ->
         OK(Zstruct(z, id, [], fld1, flds), i1)
     | TUnion(id, _), Init_union(id', fld, i) ->
-        begin match (Env.find_union env id).Env.ci_members with
+      let rec first_named = function
         | [] -> NotFound
-        | fld1 :: _ ->
+        | fld1 :: fl ->
+          if fld1.fld_name = "" then
+            first_named fl
+          else begin
             OK(Zunion(z, id, fld1),
                if fld.fld_name = fld1.fld_name
                then i
                else default_init env fld1.fld_typ)
-        end
+          end in
+      first_named (Env.find_union env id).Env.ci_members
     | (TStruct _ | TUnion _), Init_single a ->
         (* This is a previous whole-struct initialization that we
            are going to overwrite.  Hard to support correctly

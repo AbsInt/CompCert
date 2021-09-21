@@ -1263,11 +1263,16 @@ let rec default_init env ty =
       let ci = Env.find_struct env id in
       Init_struct(id, default_init_fields ci.ci_members)
   | TUnion(id, _) ->
-      let ci = Env.find_union env id in
-      begin match ci.ci_members with
+    let ci = Env.find_union env id in
+    let rec default_init_field = function
       | [] -> raise No_default_init
-      | fld :: _ -> Init_union(id, fld, default_init env fld.fld_typ)
-      end
+      | fld :: fl ->
+        if fld.fld_name = "" then
+          default_init_field fl
+        else
+          Init_union(id, fld, default_init env fld.fld_typ)
+    in
+    default_init_field ci.ci_members
   | _ ->
       raise No_default_init
 
