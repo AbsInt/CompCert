@@ -191,47 +191,6 @@ Qed.
 
 Local Hint Resolve opt_beq_correct opt_eq_refl opt_eq_sym : combine.
 
-(** A [map_filter] operation over the type [PTree.t L.t] that attempts
-  to share its result with its arguments. *)
-
-Section MAP_FILTER.
-
-Variable f: option L.t -> option L.t.
-Hypothesis f_None: f None = None.
-
-Inductive changed: Type := Unchanged | Changed (m: PTree.t L.t).
-
-Let Node_share1 (l1: PTree.t L.t) (lres: changed) (o1: option L.t)
-                       (r1: PTree.t L.t) (rres: changed) : changed :=
-  let o' := f o1 in
-  match lres, rres with
-  | Unchanged, Unchanged =>
-      if opt_beq o' o1 then Unchanged else Changed (PTree.Node l1 o' r1)
-  | Unchanged, Changed r' => Changed (PTree.Node l1 o' r')
-  | Changed l', Unchanged => Changed (PTree.Node l' o' r1)
-  | Changed l', Changed r' => Changed (PTree.Node l' o' r')
-  end.
-
-Definition map_filter := PTree.tree_rec Unchanged Node_share1.
-
-Lemma gmap_filter: forall m i,
-  opt_eq (match map_filter m with Unchanged => m | Changed m' => m' end ! i)
-         (f m!i).
-Proof.
-  unfold map_filter.
-  induction m using PTree.tree_ind; intros.
-- simpl. rewrite PTree.gEmpty, f_None; auto.
-- rename m1 into l; rename m2 into r. rewrite PTree.unroll_tree_rec by auto.
-  destruct (PTree.tree_rec Unchanged Node_share1 l) as [ | l'];
-  destruct (PTree.tree_rec Unchanged Node_share1 r) as [ | r'];
-  unfold Node_share1; rewrite ? PTree.gNode;
-  try (destruct i; now auto with combine).
-  destruct (opt_beq (f o) o) eqn:BEQ;
-  rewrite PTree.gNode; destruct i; auto with combine.
-Qed.
-
-End MAP_FILTER.
-
 (** A [combine] operation over the type [PTree.t L.t] that attempts
   to share its result with its arguments. *)
 
@@ -240,16 +199,46 @@ Section COMBINE.
 Variable f: option L.t -> option L.t -> option L.t.
 Hypothesis f_none_none: f None None = None.
 
-Inductive changed2 : Type :=
+Inductive changed : Type :=
   | Same
   | Same1
   | Same2
-  | CC (m: PTree.t L.t).
+  | Changed (m: PTree.t L.t).
 
-Let Node_share2
+Let Node_combine_l (l1: PTree.t L.t) (lres: changed) (o1: option L.t)
+                   (r1: PTree.t L.t) (rres: changed) : changed :=
+  let o' := f o1 None in
+  match lres, rres with
+  | Same1, Same1 =>
+      if opt_beq o' o1 then Same1 else Changed (PTree.Node l1 o' r1)
+  | Same1, Changed r' => Changed (PTree.Node l1 o' r')
+  | Changed l', Same1 => Changed (PTree.Node l' o' r1)
+  | Changed l', Changed r' => Changed (PTree.Node l' o' r')
+  | _, _ => Same (**r impossible cases *)
+  end.
+
+Let xcombine_l (m: PTree.t L.t) : changed :=
+  PTree.tree_rec Same1 Node_combine_l m.
+
+Let Node_combine_r (l1: PTree.t L.t) (lres: changed) (o1: option L.t)
+                   (r1: PTree.t L.t) (rres: changed) : changed :=
+  let o' := f None o1 in
+  match lres, rres with
+  | Same2, Same2 =>
+      if opt_beq o' o1 then Same2 else Changed (PTree.Node l1 o' r1)
+  | Same2, Changed r' => Changed (PTree.Node l1 o' r')
+  | Changed l', Same2 => Changed (PTree.Node l' o' r1)
+  | Changed l', Changed r' => Changed (PTree.Node l' o' r')
+  | _, _ => Same (**r impossible cases *)
+  end.
+
+Let xcombine_r (m: PTree.t L.t) : changed :=
+  PTree.tree_rec Same2 Node_combine_r m.
+
+Let Node_combine_2
              (l1: PTree.t L.t) (o1: option L.t) (r1: PTree.t L.t)
              (l2: PTree.t L.t) (o2: option L.t) (r2: PTree.t L.t)
-             (lres: changed2) (rres: changed2) : changed2 :=
+             (lres: changed) (rres: changed) : changed :=
   let o := f o1 o2 in
   match lres, rres with
   | Same, Same =>
@@ -257,39 +246,24 @@ Let Node_share2
       | true, true => Same
       | true, false => Same1
       | false, true => Same2
-      | false, false => CC (PTree.Node l1 o r1)
+      | false, false => Changed (PTree.Node l1 o r1)
       end
   | Same, Same1
   | Same1, Same
   | Same1, Same1 =>
-      if opt_beq o o1 then Same1 else CC (PTree.Node l1 o r1)
+      if opt_beq o o1 then Same1 else Changed (PTree.Node l1 o r1)
   | Same, Same2
   | Same2, Same
   | Same2, Same2 =>
-      if opt_beq o o2 then Same2 else CC (PTree.Node l2 o r2)
-  | Same, CC m2 => CC (PTree.Node l1 o m2)
-  | Same1, Same2 => CC (PTree.Node l1 o r2)
-  | Same1, CC m2 => CC (PTree.Node l1 o m2)
-  | Same2, Same1 => CC (PTree.Node l2 o r1)
-  | Same2, CC m2 => CC (PTree.Node l2 o m2)
-  | CC m1, (Same|Same1) => CC (PTree.Node m1 o r1)
-  | CC m1, Same2 => CC (PTree.Node m1 o r2)
-  | CC m1, CC m2 => CC (PTree.Node m1 o m2)
-  end.
-
-Let f_l := fun o => f o None.
-Let f_r := fun o => f None o.
-
-Let xcombine_l (m: PTree.t L.t) : changed2 :=
-  match map_filter f_l m with
-  | Unchanged => Same1
-  | Changed m' => CC m'
-  end.
-
-Let xcombine_r (m: PTree.t L.t) : changed2 :=
-  match map_filter f_r m with
-  | Unchanged => Same2
-  | Changed m' => CC m'
+      if opt_beq o o2 then Same2 else Changed (PTree.Node l2 o r2)
+  | Same, Changed m2 => Changed (PTree.Node l1 o m2)
+  | Same1, Same2 => Changed (PTree.Node l1 o r2)
+  | Same1, Changed m2 => Changed (PTree.Node l1 o m2)
+  | Same2, Same1 => Changed (PTree.Node l2 o r1)
+  | Same2, Changed m2 => Changed (PTree.Node l2 o m2)
+  | Changed m1, (Same|Same1) => Changed (PTree.Node m1 o r1)
+  | Changed m1, Same2 => Changed (PTree.Node m1 o r2)
+  | Changed m1, Changed m2 => Changed (PTree.Node m1 o m2)
   end.
 
 Definition xcombine :=
@@ -297,7 +271,7 @@ Definition xcombine :=
     Same
     xcombine_r
     xcombine_l
-    Node_share2.
+    Node_combine_2.
 
 Definition tree_agree (m1 m2 m: PTree.t L.t) : Prop :=
   forall i, opt_eq m!i (f m1!i m2!i).
@@ -311,15 +285,51 @@ Qed.
 
 Local Hint Resolve tree_agree_node : combine.
 
-Inductive xcombine_spec (m1 m2: PTree.t L.t) : changed2 -> Prop :=
+Lemma gxcombine_l: forall m,
+  match xcombine_l m with
+  | Same1 => forall i, opt_eq m!i (f m!i None)
+  | Changed m' => forall i, opt_eq m'!i (f m!i None)
+  | _ => False
+  end.
+Proof.
+  unfold xcombine_l. induction m using PTree.tree_ind.
+- simpl; intros. rewrite PTree.gempty, f_none_none. auto.
+- rewrite PTree.unroll_tree_rec by auto.
+  destruct (PTree.tree_rec Same1 Node_combine_l l);
+  destruct (PTree.tree_rec Same1 Node_combine_l r);
+  try contradiction;
+  unfold Node_combine_l;
+  try (intros i; rewrite ! PTree.gNode; destruct i; auto with combine).
+  destruct (opt_beq (f o None) o) eqn:BEQ; intros i; rewrite ! PTree.gNode; destruct i; auto with combine.
+Qed.
+
+Lemma gxcombine_r: forall m,
+  match xcombine_r m with
+  | Same2 => forall i, opt_eq m!i (f None m!i)
+  | Changed m' => forall i, opt_eq m'!i (f None m!i)
+  | _ => False
+  end.
+Proof.
+  unfold xcombine_r. induction m using PTree.tree_ind.
+- simpl; intros. rewrite PTree.gempty, f_none_none. auto.
+- rewrite PTree.unroll_tree_rec by auto.
+  destruct (PTree.tree_rec Same2 Node_combine_r l);
+  destruct (PTree.tree_rec Same2 Node_combine_r r);
+  try contradiction;
+  unfold Node_combine_r;
+  try (intros i; rewrite ! PTree.gNode; destruct i; auto with combine).
+  destruct (opt_beq (f None o) o) eqn:BEQ; intros i; rewrite ! PTree.gNode; destruct i; auto with combine.
+Qed.
+
+Inductive xcombine_spec (m1 m2: PTree.t L.t) : changed -> Prop :=
   | XCS_Same:
       tree_agree m1 m2 m1 -> tree_agree m1 m2 m2 -> xcombine_spec m1 m2 Same
   | XCS_Same1:
       tree_agree m1 m2 m1 -> xcombine_spec m1 m2 Same1
   | XCS_Same2:
       tree_agree m1 m2 m2 -> xcombine_spec m1 m2 Same2
-  | XCS_CC: forall m',
-      tree_agree m1 m2 m' -> xcombine_spec m1 m2 (CC m').
+  | XCS_Changed: forall m',
+      tree_agree m1 m2 m' -> xcombine_spec m1 m2 (Changed m').
 
 Local Hint Constructors xcombine_spec : combine.
 
@@ -329,15 +339,15 @@ Proof.
   unfold xcombine.
   induction m1 using PTree.tree_ind; induction m2 using PTree.tree_ind; intros.
 - constructor; red; intros; rewrite ! PTree.gEmpty, f_none_none; auto with combine.
-- rewrite PTree.unroll_tree_rec2_EN by auto. set (m2 := PTree.Node l o r). unfold xcombine_r, f_r. 
-  generalize (gmap_filter (fun o => f None o) f_none_none m2).
-  destruct (map_filter (fun o => f None o) m2); auto with combine.
-- rewrite PTree.unroll_tree_rec2_NE by auto. set (m1 := PTree.Node l o r). unfold xcombine_l, f_l.
-  generalize (gmap_filter (fun o => f o None) f_none_none m1).
-  destruct (map_filter (fun o => f o None) m1); auto with combine.
+- rewrite PTree.unroll_tree_rec2_EN by auto. set (m2 := PTree.Node l o r).
+  generalize (gxcombine_r m2); destruct (xcombine_r m2); 
+  try contradiction; constructor; auto.
+- rewrite PTree.unroll_tree_rec2_NE by auto. set (m1 := PTree.Node l o r).
+  generalize (gxcombine_l m1); destruct (xcombine_l m1); 
+  try contradiction; constructor; auto.
 - rewrite PTree.unroll_tree_rec2_NN by auto.
   clear IHm2 IHm3. specialize (IHm1 l0). specialize (IHm0 r0).
-  inv IHm1; inv IHm0; unfold Node_share2; auto with combine;
+  inv IHm1; inv IHm0; unfold Node_combine_2; auto with combine;
   destruct (opt_beq (f o o0) o) eqn:E1; destruct (opt_beq (f o o0) o0) eqn:E2;
   auto with combine.
 Qed.
@@ -346,7 +356,7 @@ Definition combine (m1 m2: PTree.t L.t) : PTree.t L.t :=
   match xcombine m1 m2 with
   | Same|Same1 => m1
   | Same2 => m2
-  | CC m => m
+  | Changed m => m
   end.
 
 Theorem gcombine:
