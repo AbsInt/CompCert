@@ -192,8 +192,8 @@ let memcpy_small_arg sz arg tmp =
       assert false
 
 let expand_builtin_memcpy_small sz al src dst =
-  let (tsrc, tdst) =
-    if dst <> BA (IR X17) then (X17, X29) else (X29, X17) in
+  let tsrc = if dst <> BA (IR X17) then X17 else X29 in
+  let tdst = if src <> BA (IR X29) then X29 else X17 in
   let (rsrc, osrc) = memcpy_small_arg sz src tsrc in
   let (rdst, odst) = memcpy_small_arg sz dst tdst in
   let rec copy osrc odst sz =
