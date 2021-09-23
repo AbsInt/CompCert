@@ -185,6 +185,7 @@ let memcpy_small_arg sz arg tmp =
   | BA_addrstack ofs ->
       if offset_in_range ofs
       && offset_in_range (Ptrofs.add ofs (Ptrofs.repr (Z.of_uint sz)))
+      && Int64.rem (Z.to_int64 ofs) 8L = 0L
       then (XSP, ofs)
       else begin expand_addimm64 (RR1 tmp) XSP ofs; (RR1 tmp, _0) end
   | _ ->
