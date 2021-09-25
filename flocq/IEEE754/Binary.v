@@ -2472,9 +2472,9 @@ case f.
     now revert Hover; unfold B2R, F2R; simpl; rewrite Rmult_assoc, bpow_plus.
 Qed.
 
-(** This hypothesis is needed to implement Bfrexp
+(** This hypothesis is needed to implement [Bfrexp]
     (otherwise, we have emin > - prec
-     and Bfrexp cannot fit the mantissa in interval [0.5, 1)) *)
+     and [Bfrexp] cannot fit the mantissa in interval #[0.5, 1)#) *)
 Hypothesis Hemax : (3 <= emax)%Z.
 
 Definition Ffrexp_core_binary s m e :=

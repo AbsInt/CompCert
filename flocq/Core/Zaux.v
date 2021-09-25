@@ -327,18 +327,10 @@ Theorem Zmod_mod_mult :
   forall n a b, (0 < a)%Z -> (0 <= b)%Z ->
   Zmod (Zmod n (a * b)) b = Zmod n b.
 Proof.
-intros n a [|b|b] Ha Hb.
-now rewrite 2!Zmod_0_r.
-rewrite (Zmod_eq n (a * Zpos b)).
-rewrite Zmult_assoc.
-unfold Zminus.
-rewrite Zopp_mult_distr_l.
-apply Z_mod_plus.
-easy.
-apply Zmult_gt_0_compat.
-now apply Z.lt_gt.
-easy.
-now elim Hb.
+  intros n a b Ha Hb. destruct (Zle_lt_or_eq _ _ Hb) as [H'b|H'b].
+  - rewrite (Z.mul_comm a b), Z.rem_mul_r, Z.add_mod, Z.mul_mod, Z.mod_same,
+      Z.mul_0_l, Z.mod_0_l, Z.add_0_r, !Z.mod_mod; lia.
+  - subst. now rewrite Z.mul_0_r, !Zmod_0_r.
 Qed.
 
 Theorem ZOmod_eq :
@@ -370,24 +362,14 @@ Theorem Zdiv_mod_mult :
   (Z.div (Zmod n (a * b)) a) = Zmod (Z.div n a) b.
 Proof.
 intros n a b Ha Hb.
-destruct (Zle_lt_or_eq _ _ Ha) as [Ha'|Ha'].
-destruct (Zle_lt_or_eq _ _ Hb) as [Hb'|Hb'].
-rewrite (Zmod_eq n (a * b)).
-rewrite (Zmult_comm a b) at 2.
-rewrite Zmult_assoc.
-unfold Zminus.
-rewrite Zopp_mult_distr_l.
-rewrite Z_div_plus by now apply Z.lt_gt.
-rewrite <- Zdiv_Zdiv by easy.
-apply sym_eq.
-apply Zmod_eq.
-now apply Z.lt_gt.
-now apply Zmult_gt_0_compat ; apply Z.lt_gt.
-rewrite <- Hb'.
-rewrite Zmult_0_r, 2!Zmod_0_r.
-apply Zdiv_0_l.
-rewrite <- Ha'.
-now rewrite 2!Zdiv_0_r, Zmod_0_l.
+destruct (Zle_lt_or_eq _ _ Ha) as [Ha'|<-].
+- destruct (Zle_lt_or_eq _ _ Hb) as [Hb'|<-].
+  + rewrite Z.rem_mul_r, Z.add_comm, Z.mul_comm, Z.div_add_l by lia.
+    rewrite (Zdiv_small (Zmod n a)).
+    apply Z.add_0_r.
+    now apply Z.mod_pos_bound.
+  + now rewrite Z.mul_0_r, !Zmod_0_r, ?Zdiv_0_l.
+- now rewrite Z.mul_0_l, !Zdiv_0_r, Zmod_0_l.
 Qed.
 
 Theorem ZOdiv_mod_mult :
@@ -856,7 +838,7 @@ Definition Zfast_div_eucl (a b : Z) :=
   | Z0 => (0, 0)%Z
   | Zpos a' =>
     match b with
-    | Z0 => (0, 0)%Z
+    | Z0 => (0, (match (1 mod 0) with | 0 => 0 | _ => a end))%Z
     | Zpos b' => Zpos_div_eucl_aux a' b'
     | Zneg b' =>
       let (q, r) := Zpos_div_eucl_aux a' b' in
@@ -868,7 +850,7 @@ Definition Zfast_div_eucl (a b : Z) :=
     end
   | Zneg a' =>
     match b with
-    | Z0 => (0, 0)%Z
+    | Z0 => (0, (match (1 mod 0) with | 0 => 0 | _ => a end))%Z
     | Zpos b' =>
       let (q, r) := Zpos_div_eucl_aux a' b' in
       match r with

@@ -18,7 +18,7 @@ COPYING file for more details.
 *)
 
 (** * Missing definitions/lemmas *)
-Require Export Psatz.
+Require Import Psatz.
 Require Export Reals ZArith.
 Require Export Zaux.
 
@@ -1277,7 +1277,7 @@ Theorem Zfloor_div :
   Zfloor (IZR x / IZR y) = (x / y)%Z.
 Proof.
 intros x y Zy.
-generalize (Z_div_mod_eq_full x y Zy).
+generalize (Z.div_mod x y Zy).
 intros Hx.
 rewrite Hx at 1.
 assert (Zy': IZR y <> 0%R).

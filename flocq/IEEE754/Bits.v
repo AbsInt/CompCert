@@ -163,11 +163,11 @@ Proof.
 intros x Hx.
 unfold split_bits, join_bits.
 rewrite Z.shiftl_mul_pow2 by now apply Zlt_le_weak.
-pattern x at 4 ; rewrite Z_div_mod_eq_full with x (2^mw)%Z.
+pattern x at 4 ; rewrite Z.div_mod with x (2^mw)%Z.
 apply (f_equal (fun v => (v + _)%Z)).
 rewrite Zmult_comm.
 apply f_equal.
-pattern (x / (2^mw))%Z at 2 ; rewrite Z_div_mod_eq_full with (x / (2^mw))%Z (2^ew)%Z.
+pattern (x / (2^mw))%Z at 2 ; rewrite Z.div_mod with (x / (2^mw))%Z (2^ew)%Z.
 apply (f_equal (fun v => (v + _)%Z)).
 replace (x / 2 ^ mw / 2 ^ ew)%Z with (if Zle_bool (2 ^ mw * 2 ^ ew) x then 1 else 0)%Z.
 case Zle_bool.
