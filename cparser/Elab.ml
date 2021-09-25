@@ -125,14 +125,15 @@ let rec mmap f env = function
       let (tl', env2) = mmap f env1 tl in
       (hd' :: tl', env2)
 
-let rec mmap2 f env l1 l2 =
+let rec mmap2_filter f env l1 l2 =
   match l1,l2 with
-  | [],[] -> [],env
-  | a1::l1,a2::l2 ->
-    let hd,env1 = f env a1 a2 in
-    let tl,env2 = mmap2 f env1 l1 l2 in
-    (hd::tl,env2)
-  | _, _ -> invalid_arg "mmap2"
+  | [], [] -> ([], env)
+  | a1 :: l1, a2 :: l2 ->
+      let (opt_hd, env1) = f env a1 a2 in
+      let (tl, env2) = mmap2_filter f env1 l1 l2 in
+      ((match opt_hd with Some hd -> hd :: tl | None -> tl), env2)
+  | _, _ ->
+      invalid_arg "mmap2_filter"
 
 (* To detect redefinitions within the same scope *)
 
@@ -1034,11 +1035,15 @@ and elab_field_group env = function
     if is_qualified_array ty then
       error loc "type qualifier used in array declarator outside of function prototype";
     let anon_composite = is_anonymous_composite ty in
-    if id = "" && not anon_composite && optbitsize = None  then
+    if id = "" && not anon_composite && optbitsize = None  then begin
       warning loc Missing_declarations "declaration does not declare anything";
-    { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize'; fld_anonymous = id = "" && anon_composite},env'
+      None, env'
+    end else
+      Some { fld_name = id; fld_typ = ty; fld_bitfield = optbitsize';
+             fld_anonymous = id = "" && anon_composite},
+      env'
   in
-  (mmap2 elab_bitfield env' fieldlist names)
+  (mmap2_filter elab_bitfield env' fieldlist names)
 
 | Field_group_static_assert(exp, loc_exp, msg, loc_msg, loc) ->
     elab_static_assert env exp loc_exp msg loc_msg loc;
