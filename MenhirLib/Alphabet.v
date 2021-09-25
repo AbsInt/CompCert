@@ -11,7 +11,7 @@
 (*                                                                          *)
 (****************************************************************************)
 
-From Coq Require Import Omega List Relations RelationClasses.
+From Coq Require Import ZArith List Relations RelationClasses.
 Import ListNotations.
 
 Local Obligation Tactic := intros.
