@@ -1530,7 +1530,7 @@ Unset Implicit Arguments.
 
 (** ** Linking types *)
 
-Program Instance Linker_types : Linker type := {
+Global Program Instance Linker_types : Linker type := {
   link := fun t1 t2 => if type_eq t1 t2 then Some t1 else None;
   linkorder := fun t1 t2 => t1 = t2
 }.
@@ -1579,7 +1579,7 @@ Proof.
   assert (x = y) by eauto. subst y. auto.
 Qed.
 
-Program Instance Linker_composite_defs : Linker (list composite_definition) := {
+Global Program Instance Linker_composite_defs : Linker (list composite_definition) := {
   link := link_composite_defs;
   linkorder := @List.incl composite_definition
 }.
@@ -1765,7 +1765,7 @@ Inductive linkorder_fundef {F: Type}: fundef F -> fundef F -> Prop :=
   | linkorder_fundef_ext_int: forall f id sg targs tres cc,
       linkorder_fundef (External (EF_external id sg) targs tres cc) (Internal f).
 
-Program Instance Linker_fundef (F: Type): Linker (fundef F) := {
+Global Program Instance Linker_fundef (F: Type): Linker (fundef F) := {
   link := link_fundef;
   linkorder := linkorder_fundef
 }.
@@ -1828,7 +1828,7 @@ Definition linkorder_program {F: Type} (p1 p2: program F) : Prop :=
      linkorder (program_of_program p1) (program_of_program p2)
   /\ (forall id co, p1.(prog_comp_env)!id = Some co -> p2.(prog_comp_env)!id = Some co).
 
-Program Instance Linker_program (F: Type): Linker (program F) := {
+Global Program Instance Linker_program (F: Type): Linker (program F) := {
   link := link_program;
   linkorder := linkorder_program
 }.

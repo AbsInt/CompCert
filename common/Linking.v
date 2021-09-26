@@ -60,7 +60,7 @@ Inductive linkorder_fundef {F: Type}: fundef F -> fundef F -> Prop :=
   | linkorder_fundef_refl: forall fd, linkorder_fundef fd fd
   | linkorder_fundef_ext_int: forall f id sg, linkorder_fundef (External (EF_external id sg)) (Internal f).
 
-Program Instance Linker_fundef (F: Type): Linker (fundef F) := {
+Global Program Instance Linker_fundef (F: Type): Linker (fundef F) := {
   link := link_fundef;
   linkorder := linkorder_fundef
 }.
@@ -114,7 +114,7 @@ Inductive linkorder_varinit: list init_data -> list init_data -> Prop :=
       il <> nil -> init_data_list_size il = sz ->
       linkorder_varinit (Init_space sz :: nil) il.
 
-Program Instance Linker_varinit : Linker (list init_data) := {
+Global Program Instance Linker_varinit : Linker (list init_data) := {
   link := link_varinit;
   linkorder := linkorder_varinit
 }.
@@ -163,7 +163,7 @@ Inductive linkorder_vardef {V: Type} {LV: Linker V}: globvar V -> globvar V -> P
       linkorder i1 i2 ->
       linkorder_vardef (mkglobvar info1 i1 ro vo) (mkglobvar info2 i2 ro vo).
 
-Program Instance Linker_vardef (V: Type) {LV: Linker V}: Linker (globvar V) := {
+Global Program Instance Linker_vardef (V: Type) {LV: Linker V}: Linker (globvar V) := {
   link := link_vardef;
   linkorder := linkorder_vardef
 }.
@@ -189,7 +189,7 @@ Global Opaque Linker_vardef.
 
 (** A trivial linker for the trivial var info [unit]. *)
 
-Program Instance Linker_unit: Linker unit := {
+Global Program Instance Linker_unit: Linker unit := {
   link := fun x y => Some tt;
   linkorder := fun x y => True
 }.
@@ -215,7 +215,7 @@ Inductive linkorder_def {F V: Type} {LF: Linker F} {LV: Linker V}: globdef F V -
       linkorder v1 v2 ->
       linkorder_def (Gvar v1) (Gvar v2).
 
-Program Instance Linker_def (F V: Type) {LF: Linker F} {LV: Linker V}: Linker (globdef F V) := {
+Global Program Instance Linker_def (F V: Type) {LF: Linker F} {LV: Linker V}: Linker (globdef F V) := {
   link := link_def;
   linkorder := linkorder_def
 }.
@@ -332,7 +332,7 @@ Qed.
 
 End LINKER_PROG.
 
-Program Instance Linker_prog (F V: Type) {LF: Linker F} {LV: Linker V} : Linker (program F V) := {
+Global Program Instance Linker_prog (F V: Type) {LF: Linker F} {LV: Linker V} : Linker (program F V) := {
   link := link_prog;
   linkorder := fun p1 p2 =>
      p1.(prog_main) = p2.(prog_main)
@@ -699,7 +699,7 @@ Local Transparent Linker_fundef.
 - destruct (external_function_eq ef1 ef2); inv H. exists (External ef2); split; auto. simpl. rewrite dec_eq_true; auto.
 Qed.
 
-Instance TransfPartialContextualLink
+Global Instance TransfPartialContextualLink
            {A B C V: Type} {LV: Linker V}
            (tr_fun: C -> A -> res B)
            (ctx_for: program (fundef A) V -> C):
@@ -714,7 +714,7 @@ Proof.
 - intros; subst. exists v; auto.
 Qed.
 
-Instance TransfPartialLink
+Global Instance TransfPartialLink
            {A B V: Type} {LV: Linker V}
            (tr_fun: A -> res B):
   TransfLink (fun (p1: program (fundef A) V) (p2: program (fundef B) V) =>
@@ -728,7 +728,7 @@ Proof.
 - intros; subst. exists v; auto.
 Qed.
 
-Instance TransfTotallContextualLink
+Global Instance TransfTotallContextualLink
            {A B C V: Type} {LV: Linker V}
            (tr_fun: C -> A -> B)
            (ctx_for: program (fundef A) V -> C):
@@ -747,7 +747,7 @@ Proof.
 - intros; subst. exists v; auto.
 Qed.
 
-Instance TransfTotalLink
+Global Instance TransfTotalLink
            {A B V: Type} {LV: Linker V}
            (tr_fun: A -> B):
   TransfLink (fun (p1: program (fundef A) V) (p2: program (fundef B) V) =>

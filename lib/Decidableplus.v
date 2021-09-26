@@ -27,14 +27,14 @@ Ltac decide_goal := eapply Decidable_sound; reflexivity.
 
 (** Deciding logical connectives *)
 
-Program Instance Decidable_not (P: Prop) (dP: Decidable P) : Decidable (~ P) := {
+Global Program Instance Decidable_not (P: Prop) (dP: Decidable P) : Decidable (~ P) := {
   Decidable_witness := negb (@Decidable_witness P dP)
 }.
 Next Obligation.
   rewrite negb_true_iff. split. apply Decidable_complete_alt. apply Decidable_sound_alt.
 Qed.
 
-Program Instance Decidable_equiv (P Q: Prop) (dP: Decidable P) (dQ: Decidable Q) : Decidable (P <-> Q) := {
+Global Program Instance Decidable_equiv (P Q: Prop) (dP: Decidable P) (dQ: Decidable Q) : Decidable (P <-> Q) := {
   Decidable_witness := Bool.eqb (@Decidable_witness P dP) (@Decidable_witness Q dQ)
 }.
 Next Obligation.
@@ -46,21 +46,21 @@ Next Obligation.
   eapply Decidable_sound_alt; rewrite H; eapply Decidable_complete_alt; eauto.
 Qed.
 
-Program Instance Decidable_and (P Q: Prop) (dP: Decidable P) (dQ: Decidable Q) : Decidable (P /\ Q) := {
+Global Program Instance Decidable_and (P Q: Prop) (dP: Decidable P) (dQ: Decidable Q) : Decidable (P /\ Q) := {
   Decidable_witness := @Decidable_witness P dP && @Decidable_witness Q dQ
 }.
 Next Obligation.
   rewrite andb_true_iff. rewrite ! Decidable_spec. tauto.
 Qed.
 
-Program Instance Decidable_or (P Q: Prop) (dP: Decidable P) (dQ: Decidable Q) : Decidable (P \/ Q) := {
+Global Program Instance Decidable_or (P Q: Prop) (dP: Decidable P) (dQ: Decidable Q) : Decidable (P \/ Q) := {
   Decidable_witness := @Decidable_witness P dP || @Decidable_witness Q dQ
 }.
 Next Obligation.
   rewrite orb_true_iff. rewrite ! Decidable_spec. tauto.
 Qed.
 
-Program Instance Decidable_implies (P Q: Prop) (dP: Decidable P) (dQ: Decidable Q) : Decidable (P -> Q) := {
+Global Program Instance Decidable_implies (P Q: Prop) (dP: Decidable P) (dQ: Decidable Q) : Decidable (P -> Q) := {
   Decidable_witness := if @Decidable_witness P dP then @Decidable_witness Q dQ else true
 }.
 Next Obligation.
@@ -79,28 +79,28 @@ Next Obligation.
   split; intros. InvBooleans. auto. subst y. apply dec_eq_true.
 Qed.
 
-Program Instance Decidable_eq_bool : forall (x y : bool), Decidable (eq x y) := {
+Global Program Instance Decidable_eq_bool : forall (x y : bool), Decidable (eq x y) := {
   Decidable_witness := Bool.eqb x y
 }.
 Next Obligation.
   apply eqb_true_iff.
 Qed.
 
-Program Instance Decidable_eq_nat : forall (x y : nat), Decidable (eq x y) := {
+Global Program Instance Decidable_eq_nat : forall (x y : nat), Decidable (eq x y) := {
   Decidable_witness := Nat.eqb x y
 }.
 Next Obligation.
   apply Nat.eqb_eq.
 Qed.
 
-Program Instance Decidable_eq_positive : forall (x y : positive), Decidable (eq x y) := {
+Global Program Instance Decidable_eq_positive : forall (x y : positive), Decidable (eq x y) := {
   Decidable_witness := Pos.eqb x y
 }.
 Next Obligation.
   apply Pos.eqb_eq.
 Qed.
 
-Program Instance Decidable_eq_Z : forall (x y : Z), Decidable (eq x y) := {
+Global Program Instance Decidable_eq_Z : forall (x y : Z), Decidable (eq x y) := {
   Decidable_witness := Z.eqb x y
 }.
 Next Obligation.
@@ -109,35 +109,35 @@ Qed.
 
 (** Deciding order on Z *)
 
-Program Instance Decidable_le_Z : forall (x y: Z), Decidable (x <= y) := {
+Global Program Instance Decidable_le_Z : forall (x y: Z), Decidable (x <= y) := {
   Decidable_witness := Z.leb x y
 }.
 Next Obligation.
   apply Z.leb_le.
 Qed.
 
-Program Instance Decidable_lt_Z : forall (x y: Z), Decidable (x < y) := {
+Global Program Instance Decidable_lt_Z : forall (x y: Z), Decidable (x < y) := {
   Decidable_witness := Z.ltb x y
 }.
 Next Obligation.
   apply Z.ltb_lt.
 Qed.
 
-Program Instance Decidable_ge_Z : forall (x y: Z), Decidable (x >= y) := {
+Global Program Instance Decidable_ge_Z : forall (x y: Z), Decidable (x >= y) := {
   Decidable_witness := Z.geb x y
 }.
 Next Obligation.
   rewrite Z.geb_le. intuition lia.
 Qed.
 
-Program Instance Decidable_gt_Z : forall (x y: Z), Decidable (x > y) := {
+Global Program Instance Decidable_gt_Z : forall (x y: Z), Decidable (x > y) := {
   Decidable_witness := Z.gtb x y
 }.
 Next Obligation.
   rewrite Z.gtb_lt. intuition lia.
 Qed.
 
-Program Instance Decidable_divides : forall (x y: Z), Decidable (x | y) := {
+Global Program Instance Decidable_divides : forall (x y: Z), Decidable (x | y) := {
   Decidable_witness := Z.eqb y ((y / x) * x)%Z
 }.
 Next Obligation.
@@ -153,7 +153,7 @@ Qed.
 
 (** Deciding properties over lists *)
 
-Program Instance Decidable_forall_in_list :
+Global Program Instance Decidable_forall_in_list :
       forall (A: Type) (l: list A) (P: A -> Prop) (dP: forall x:A, Decidable (P x)),
       Decidable (forall x:A, In x l -> P x) := {
   Decidable_witness := List.forallb (fun x => @Decidable_witness (P x) (dP x)) l
@@ -164,7 +164,7 @@ Next Obligation.
 - eapply Decidable_complete; eauto.
 Qed.
 
-Program Instance Decidable_exists_in_list :
+Global Program Instance Decidable_exists_in_list :
       forall (A: Type) (l: list A) (P: A -> Prop) (dP: forall x:A, Decidable (P x)),
       Decidable (exists x:A, In x l /\ P x) := {
   Decidable_witness := List.existsb (fun x => @Decidable_witness (P x) (dP x)) l
@@ -184,7 +184,7 @@ Class Finite (T: Type) := {
 
 (** Deciding forall and exists quantification over finite types. *)
 
-Program Instance Decidable_forall : forall (T: Type) (fT: Finite T) (P: T -> Prop) (dP: forall x:T, Decidable (P x)), Decidable (forall x, P x) := {
+Global Program Instance Decidable_forall : forall (T: Type) (fT: Finite T) (P: T -> Prop) (dP: forall x:T, Decidable (P x)), Decidable (forall x, P x) := {
   Decidable_witness := List.forallb (fun x => @Decidable_witness (P x) (dP x)) (@Finite_elements T fT)
 }.
 Next Obligation.
@@ -193,7 +193,7 @@ Next Obligation.
 - eapply Decidable_complete; eauto.
 Qed.
 
-Program Instance Decidable_exists : forall (T: Type) (fT: Finite T) (P: T -> Prop) (dP: forall x:T, Decidable (P x)), Decidable (exists x, P x) := {
+Global Program Instance Decidable_exists : forall (T: Type) (fT: Finite T) (P: T -> Prop) (dP: forall x:T, Decidable (P x)), Decidable (exists x, P x) := {
   Decidable_witness := List.existsb (fun x => @Decidable_witness (P x) (dP x)) (@Finite_elements T fT)
 }.
 Next Obligation.
@@ -204,21 +204,21 @@ Qed.
 
 (** Some examples of finite types. *)
 
-Program Instance Finite_bool : Finite bool := {
+Global Program Instance Finite_bool : Finite bool := {
   Finite_elements := false :: true :: nil
 }.
 Next Obligation.
   destruct x; auto.
 Qed.
 
-Program Instance Finite_pair : forall (A B: Type) (fA: Finite A) (fB: Finite B), Finite (A * B) := {
+Global Program Instance Finite_pair : forall (A B: Type) (fA: Finite A) (fB: Finite B), Finite (A * B) := {
   Finite_elements := list_prod (@Finite_elements A fA) (@Finite_elements B fB)
 }.
 Next Obligation.
   apply List.in_prod; eapply Finite_elements_spec.
 Qed.
 
-Program Instance Finite_option : forall (A: Type) (fA: Finite A), Finite (option A) := {
+Global Program Instance Finite_option : forall (A: Type) (fA: Finite A), Finite (option A) := {
   Finite_elements := None :: List.map (@Some A) (@Finite_elements A fA)
 }.
 Next Obligation.

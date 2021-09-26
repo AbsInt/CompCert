@@ -2320,7 +2320,7 @@ End PRESERVATION.
 
 (** ** Commutation with linking *)
 
-Instance TransfSimplLocalsLink : TransfLink match_prog.
+Global Instance TransfSimplLocalsLink : TransfLink match_prog.
 Proof.
   red; intros. eapply Ctypes.link_match_program; eauto. 
 - intros.
