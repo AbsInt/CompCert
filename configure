@@ -770,7 +770,7 @@ S backend
 S cfrontend
 S driver
 S debug
-S exportclight
+S export
 S cparser
 S extraction
 
@@ -781,7 +781,7 @@ B backend
 B cfrontend
 B driver
 B debug
-B exportclight
+B export
 B cparser
 B extraction
 EOF

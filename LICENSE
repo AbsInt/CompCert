@@ -44,7 +44,7 @@ Foundation GNU Lesser General Public License, either version 2.1 or
 
   all files in the cparser/ directory
 
-  all files in the exportclight/ directory
+  all files in the export/ directory
 
   the Archi.v, Builtins1.v, CBuiltins.ml, and extractionMachdep.v files
   in directories aarch64, arm, powerpc, riscV, x86, x86_32, x86_64

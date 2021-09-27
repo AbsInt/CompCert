@@ -2,7 +2,7 @@ include ../Makefile.config
 
 DIRS=c compression raytracer spass regression abi
 ifeq ($(CLIGHTGEN),true)
-DIRS+=clightgen
+DIRS+=export
 endif
 
 all:
