@@ -960,7 +960,7 @@ Qed.
 
 Lemma forward_simulation_determ: forward_simulation L1 L2.
 Proof.
-  apply Forward_simulation with (order0 := lex_ord order lt) (match_states0 := match_states_later);
+  apply @Forward_simulation with (order := lex_ord order lt) (match_states := match_states_later);
   constructor.
 - apply wf_lex_ord. apply wf_order. apply lt_wf.
 - intros. exploit match_initial_states; eauto. intros (i & s2 & A & B).
