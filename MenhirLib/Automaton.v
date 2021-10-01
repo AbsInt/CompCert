@@ -23,10 +23,10 @@ Module Type AutInit.
 
   (** The set of non initial state is considered as an alphabet. **)
   Parameter noninitstate : Type.
-  Declare Instance NonInitStateAlph : Alphabet noninitstate.
+  Global Declare Instance NonInitStateAlph : Alphabet noninitstate.
 
   Parameter initstate : Type.
-  Declare Instance InitStateAlph : Alphabet initstate.
+  Global Declare Instance InitStateAlph : Alphabet initstate.
 
   (** When we are at this state, we know that this symbol is the top of the
      stack. **)
@@ -41,7 +41,7 @@ Module Types(Import Init:AutInit).
     | Init: initstate -> state
     | Ninit: noninitstate -> state.
 
-  Program Instance StateAlph : Alphabet state :=
+  Global Program Instance StateAlph : Alphabet state :=
     { AlphabetComparable := {| compare := fun x y =>
         match x, y return comparison with
           | Init _, Ninit _ => Lt
