@@ -18,8 +18,8 @@ Require Import Alphabet.
 (** The terminal non-terminal alphabets of the grammar. **)
 Module Type Alphs.
   Parameters terminal nonterminal : Type.
-  Declare Instance TerminalAlph: Alphabet terminal.
-  Declare Instance NonTerminalAlph: Alphabet nonterminal.
+  Global Declare Instance TerminalAlph: Alphabet terminal.
+  Global Declare Instance NonTerminalAlph: Alphabet nonterminal.
 End Alphs.
 
 (** Definition of the alphabet of symbols, given the alphabet of terminals
@@ -30,7 +30,7 @@ Module Symbol(Import A:Alphs).
     | T: terminal -> symbol
     | NT: nonterminal -> symbol.
 
-  Program Instance SymbolAlph : Alphabet symbol :=
+  Global Program Instance SymbolAlph : Alphabet symbol :=
     { AlphabetComparable := {| compare := fun x y =>
         match x, y return comparison with
           | T _, NT _ => Gt
@@ -74,7 +74,7 @@ Module Type T.
 
   (** The type of productions identifiers **)
   Parameter production : Type.
-  Declare Instance ProductionAlph : Alphabet production.
+  Global Declare Instance ProductionAlph : Alphabet production.
 
   (** Accessors for productions: left hand side, right hand side,
      and semantic action. The semantic actions are given in the form

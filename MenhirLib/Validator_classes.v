@@ -19,26 +19,26 @@ Class IsValidator (P : Prop) (b : bool) :=
   is_validator : b = true -> P.
 Global Hint Mode IsValidator + - : typeclass_instances.
 
-Instance is_validator_true : IsValidator True true.
+Global Instance is_validator_true : IsValidator True true.
 Proof. done. Qed.
 
-Instance is_validator_false : IsValidator False false.
+Global Instance is_validator_false : IsValidator False false.
 Proof. done. Qed.
 
-Instance is_validator_eq_true b :
+Global Instance is_validator_eq_true b :
   IsValidator (b = true) b.
 Proof. done. Qed.
 
-Instance is_validator_and P1 b1 P2 b2 `{IsValidator P1 b1} `{IsValidator P2 b2}:
+Global Instance is_validator_and P1 b1 P2 b2 `{IsValidator P1 b1} `{IsValidator P2 b2}:
   IsValidator (P1 /\ P2) (if b1 then b2 else false).
 Proof. by split; destruct b1, b2; apply is_validator. Qed.
 
-Instance is_validator_comparable_leibniz_eq A (C:Comparable A) (x y : A) :
+Global Instance is_validator_comparable_leibniz_eq A (C:Comparable A) (x y : A) :
   ComparableLeibnizEq C ->
   IsValidator (x = y) (compare_eqb x y).
 Proof. intros ??. by apply compare_eqb_iff. Qed.
 
-Instance is_validator_comparable_eq_impl A `(Comparable A) (x y : A) P b :
+Global Instance is_validator_comparable_eq_impl A `(Comparable A) (x y : A) P b :
   IsValidator P b ->
   IsValidator (x = y -> P) (if compare_eqb x y then b else true).
 Proof.
