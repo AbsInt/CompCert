@@ -2120,12 +2120,12 @@ Lemma wt_find_label:
   wt_stmt ge e f.(fn_return) s' /\ wt_stmt_cont e f k'.
 Proof.
   intros lbl e f s0 WTS0. pattern s0.
-  apply (wt_stmt_ind2 ge e f.(fn_return)) with
-    (P0 := fun ls => wt_lblstmts ge e f.(fn_return) ls ->
+  apply (wt_stmt_ind2 ge e f.(fn_return) _
+    (fun ls => wt_lblstmts ge e f.(fn_return) ls ->
            forall k s' k',
            find_label_ls lbl ls k = Some (s', k') ->
            wt_stmt_cont e f k ->
-           wt_stmt ge e f.(fn_return) s' /\ wt_stmt_cont e f k');
+           wt_stmt ge e f.(fn_return) s' /\ wt_stmt_cont e f k'));
   simpl; intros; try discriminate.
   + destruct (find_label lbl s1 (Kseq s2 k)) as [[sx kx] | ] eqn:F.
     inv H3. eauto with ty.
