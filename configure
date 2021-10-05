@@ -347,7 +347,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cc_options="-m64"
         casm_options="-m64 -c"
         clinker_options="-m64"
-        cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
+        cprepro_options="-std=c99 -m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
         system="bsd"
         ;;
     linux)
@@ -355,7 +355,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cc_options="-m64"
         casm_options="-m64 -c"
         clinker_options="-m64"
-        cprepro_options="-std=c99 -m64 -U__GNUC__ -E"
+        cprepro_options="-std=c99 -m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
         system="linux"
         ;;
     macos|macosx)
@@ -364,7 +364,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         casm_options="-arch x86_64 -c"
         clinker_options="-arch x86_64"
         clinker_needs_no_pie=false
-        cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' '-D__DARWIN_OS_INLINE=static inline' -Wno-\\#warnings -E"
+        cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__SIZEOF_INT128__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' '-D__DARWIN_OS_INLINE=static inline' -Wno-\\#warnings -E"
         libmath=""
         system="macos"
         ;;
@@ -373,7 +373,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cc_options="-m64"
         casm_options="-m64 -c"
         clinker_options="-m64"
-        cprepro_options="-std=c99 -m64 -U__GNUC__ '-D__attribute__(x)=' -E"
+        cprepro_options="-std=c99 -m64 -U__GNUC__ -U__SIZEOF_INT128__ '-D__attribute__(x)=' -E"
         system="cygwin"
         ;;
     *)
