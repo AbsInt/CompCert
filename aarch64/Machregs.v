@@ -54,9 +54,9 @@ Proof.
   intros. specialize (H r). InvBooleans. auto.
 Qed.
 
-Instance Decidable_eq_mreg : forall (x y: mreg), Decidable (eq x y) := Decidable_eq mreg_eq.
+Global Instance Decidable_eq_mreg : forall (x y: mreg), Decidable (eq x y) := Decidable_eq mreg_eq.
 
-Instance Finite_mreg : Finite mreg := {
+Global Instance Finite_mreg : Finite mreg := {
   Finite_elements := all_mregs;
   Finite_elements_spec := all_mregs_complete
 }.

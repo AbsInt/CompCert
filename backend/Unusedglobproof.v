@@ -1435,4 +1435,4 @@ Proof.
 * intros. apply PTree.elements_keys_norepet.
 Qed.
 
-Instance TransfSelectionLink : TransfLink match_prog := link_match_program.
+Global Instance TransfSelectionLink : TransfLink match_prog := link_match_program.

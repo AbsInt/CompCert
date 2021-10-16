@@ -1604,7 +1604,7 @@ Proof.
   intros. transitivity a0; auto.
 Qed.
 
-Instance Equal_Equivalence : Equivalence Equal := {
+Global Instance Equal_Equivalence : Equivalence Equal := {
   Equivalence_Reflexive := Equal_refl;
   Equivalence_Symmetric := Equal_sym;
   Equivalence_Transitive := Equal_trans
@@ -1633,7 +1633,7 @@ Next Obligation.
   unfold equiv, complement in H0. congruence.
 Qed.
 
-Instance Equal_EqDec : EqDec (T.t A) Equal := Equal_dec.
+Global Instance Equal_EqDec : EqDec (T.t A) Equal := Equal_dec.
 
 End EXTENSIONAL_EQUALITY.
 

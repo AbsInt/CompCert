@@ -1463,7 +1463,7 @@ End PRESERVATION.
 
 (** ** Commutation with linking *)
 
-Instance TransfSelectionLink : TransfLink match_prog.
+Global Instance TransfSelectionLink : TransfLink match_prog.
 Proof.
   red; intros. destruct (link_linkorder _ _ _ H) as [LO1 LO2].
   eapply link_match_program; eauto.

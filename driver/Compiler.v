@@ -209,7 +209,7 @@ Proof.
   intros. unfold match_if, partial_if in *. destruct (flag tt). auto. congruence.
 Qed.
 
-Instance TransfIfLink {A: Type} {LA: Linker A}
+Global Instance TransfIfLink {A: Type} {LA: Linker A}
                       (flag: unit -> bool) (transf: A -> A -> Prop) (TL: TransfLink transf)
                       : TransfLink (match_if flag transf).
 Proof.
