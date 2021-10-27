@@ -788,7 +788,7 @@ Lemma rolm64_correct:
   /\ forall r': preg, r' <> r1 -> r' <> GPR12 -> important_preg r' = true  -> rs'#r' = rs#r'.
 Proof.
   intros. unfold rolm64.
-  destruct (is_rldl_mask mask || is_rldr_mask mask || is_rldl_mask (Int64.shru' mask amount)).
+  destruct orb.
 - econstructor; split. eapply exec_straight_one. simpl; reflexivity. reflexivity.
   intuition Simpl.
 - edestruct (andimm64_base_correct r1 r1 mask k) as (rs2 & A & B & C); auto.

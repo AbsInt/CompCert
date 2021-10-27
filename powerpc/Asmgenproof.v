@@ -294,10 +294,10 @@ Opaque Int.eq.
 - unfold xorimm64, opimm64. destruct Int64.eq. TailNoLabel.
   destruct ireg_eq; [apply tail_nolabel_cons; unfold nolabel;auto|]; eapply tail_nolabel_trans; TailNoLabel.
 - unfold rolm64, andimm64_base, opimm64.
-  destruct (is_rldl_mask i0 || is_rldr_mask i0 || is_rldl_mask (Int64.shru' i0 i)). TailNoLabel.
-  apply tail_nolabel_cons; unfold nolabel; auto.
+  destruct orb.
+  TailNoLabel.
   destruct Int64.eq. TailNoLabel.
-  destruct ireg_eq; [apply tail_nolabel_cons; unfold nolabel;auto|]; eapply tail_nolabel_trans; TailNoLabel.
+  destruct ireg_eq; TailNoLabel; eapply tail_nolabel_trans; TailNoLabel.
 - eapply transl_cond_op_label; eauto.
 - destruct (preg_of r); monadInv H. eapply transl_select_op_label; eauto. eapply transl_fselect_op_label; eauto.
 Qed.

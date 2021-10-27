@@ -1272,53 +1272,62 @@ Definition is_rlw_mask (x: int) : bool :=
   is_mask_rec rlw_transition rlw_accepting Int.wordsize RLW_S0 (Int.unsigned x).
 
 (** For the 64-bit [rldicl] and [rldicr] instructions, the acceptable
-  masks are [1111100000] and [0000011111], that is, some ones in the
-  high bits and some zeroes in the low bits, or conversely.  All ones
-  is OK, but not all zeroes.  The corresponding automata are:
+  masks are (in big endian):
+- for [rldicl]: masks that clear the leftmost bits (most significant bits),
+  that is, [00000011111], that is, ones in the low bits followed by zeros
+  in the high bits;
+- for [rldicr]: masks that clear the rightmost bits (least significant bits),
+  that is, [11110000000], that is, zeros in the low bits followed by ones
+  in the high bits.
+
+  All ones  is OK, but not all zeroes.
+
+  The corresponding automata for [rldicl] is
 <<
-      0          1
-     / \        / \
-     \ /        \ /          (accepting: [1])
-     [0] --1--> [1]
-
-
                  1          0
                 / \        / \
                 \ /        \ /      (accepting: [1], [2])
      [0] --1--> [1] --0--> [2]
 >>
+  The automata for [rldicr] is
+<<
+      0          1
+     / \        / \
+     \ /        \ /          (accepting: [1])
+     [0] --1--> [1]
+>>
 *)
 
-Inductive rll_state: Type := RLL_S0 | RLL_S1 | RLL_Sbad.
+Inductive rll_state: Type := RLL_S0 | RLL_S1 | RLL_S2 | RLL_Sbad.
 
 Definition rll_transition (s: rll_state) (b: bool) : rll_state :=
   match s, b with
-  | RLL_S0, false => RLL_S0
   | RLL_S0, true => RLL_S1
+  | RLL_S1, false => RLL_S2
   | RLL_S1, true => RLL_S1
+  | RLL_S2, false => RLL_S2
   | _, _ => RLL_Sbad
   end.
 
 Definition rll_accepting (s: rll_state) : bool :=
   match s with
-  | RLL_S1 => true
+  | RLL_S1 | RLL_S2 => true
   | _ => false
   end.
 
-Inductive rlr_state: Type := RLR_S0 | RLR_S1 | RLR_S2 | RLR_Sbad.
+Inductive rlr_state: Type := RLR_S0 | RLR_S1 | RLR_Sbad.
 
 Definition rlr_transition (s: rlr_state) (b: bool) : rlr_state :=
   match s, b with
+  | RLR_S0, false => RLR_S0
   | RLR_S0, true => RLR_S1
-  | RLR_S1, false => RLR_S2
   | RLR_S1, true => RLR_S1
-  | RLR_S2, false => RLR_S2
   | _, _ => RLR_Sbad
   end.
 
 Definition rlr_accepting (s: rlr_state) : bool :=
   match s with
-  | RLR_S1 | RLR_S2 => true
+  | RLR_S1 => true
   | _ => false
   end.
 

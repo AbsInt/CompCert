@@ -183,7 +183,9 @@ Definition andimm64 (r1 r2: ireg) (n: int64) (k : code) :=
     andimm64_base r1 r2 n k.
 
 Definition rolm64 (r1 r2: ireg) (amount: int) (mask: int64) (k: code) :=
-  if is_rldl_mask mask || is_rldr_mask mask || is_rldl_mask (Int64.shru' mask amount) then
+  if is_rldl_mask mask || is_rldr_mask mask
+  || (let mask' := Int64.shru' mask amount in
+      Int64.eq mask (Int64.shl' mask' amount) && is_rldl_mask mask') then
     Prldinm r1 r2 amount mask :: k
   else
     Prldinm r1 r2 amount Int64.mone :: andimm64_base r1 r1 mask k.
