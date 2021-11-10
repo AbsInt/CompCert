@@ -629,6 +629,36 @@ let get_nontype_attrs env ty =
   let nta = List.filter to_be_removed (attributes_of_type_no_expand ty) in
   (remove_attributes_type env nta ty, nta)
 
+(* Auxiliary for elaborating bitfield declarations. *)
+
+let check_bitfield loc env id ty ik n =
+  let max = Int64.of_int(sizeof_ikind ik * 8) in
+  if n < 0L then begin
+    error loc "bit-field '%a' has negative width (%Ld)" pp_field id n;
+    None
+  end else if n >  max then begin
+    error loc "size of bit-field '%a' (%Ld bits) exceeds its type (%Ld bits)" pp_field id n max;
+    None
+  end else if n = 0L && id <> "" then begin
+    error loc "named bit-field '%a' has zero width" pp_field id;
+    None
+  end else begin
+    begin match unroll env ty with
+    | TEnum(eid, _) ->
+      let info = wrap Env.find_enum loc env eid in
+      let w = Int64.to_int n in
+      let representable sg =
+        List.for_all (fun (_, v, _) -> Cutil.int_representable v w sg)
+                     info.Env.ei_members in
+      if not (representable false || representable true) then
+        warning loc Unnamed
+          "not all values of type 'enum %s' can be represented in bit-field '%a' (%d bits are not enough)"
+          eid.C.name pp_field id w
+    | _ -> ()
+    end;
+    Some (Int64.to_int n)
+  end
+
 (* Elaboration of a type specifier.  Returns 6-tuple:
      (storage class, "inline" flag, "noreturn" flag, "typedef" flag,
       elaborated type, new env)
@@ -1011,23 +1041,11 @@ and elab_field_group env = function
             error loc "alignment specified for bit-field '%a'" pp_field id;
             None, env
           end else begin
-            let expr,env' =(!elab_expr_f loc env sz) in
+            let expr,env' = !elab_expr_f loc env sz in
             match Ceval.integer_expr env' expr with
             | Some n ->
-                if n < 0L then begin
-                  error loc "bit-field '%a' has negative width (%Ld)" pp_field id n;
-                  None,env
-                end else
-                  let max = Int64.of_int(sizeof_ikind ik * 8) in
-                  if n >  max then begin
-                    error loc "size of bit-field '%a' (%Ld bits) exceeds its type (%Ld bits)" pp_field id n max;
-                    None,env
-                end else
-                if n = 0L && id <> "" then begin
-                  error loc "named bit-field '%a' has zero width" pp_field id;
-                  None,env
-                end else
-                  Some(Int64.to_int n),env'
+                let bf = check_bitfield loc env' id ty ik n in
+                bf,env'
             | None ->
                 error loc "bit-field '%a' width not an integer constant" pp_field id;
                 None,env
