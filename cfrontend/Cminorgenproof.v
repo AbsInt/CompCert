@@ -1664,6 +1664,12 @@ Proof.
   econstructor; split. apply star_refl. split. exact I. econstructor; eauto.
 Qed.
 
+Lemma call_cont_is_call_cont:
+  forall k, Csharpminor.is_call_cont (Csharpminor.call_cont k).
+Proof.
+  induction k; simpl; auto.
+Qed.
+
 (** Properties of [switch] compilation *)
 
 Inductive lbl_stmt_tail: lbl_stmt -> nat -> lbl_stmt -> Prop :=
@@ -1951,7 +1957,7 @@ Lemma transl_step_correct:
 Proof.
   induction 1; intros T1 MSTATE; inv MSTATE.
 
-(* skip seq *)
+- (* skip seq *)
   monadInv TR. left.
   dependent induction MK.
   econstructor; split.
@@ -1963,7 +1969,7 @@ Proof.
   exploit IHMK; eauto. intros [T2 [A B]].
   exists T2; split. eapply plus_left. constructor. apply plus_star; eauto. traceEq.
   auto.
-(* skip block *)
+- (* skip block *)
   monadInv TR. left.
   dependent induction MK.
   econstructor; split.
@@ -1972,7 +1978,7 @@ Proof.
   exploit IHMK; eauto. intros [T2 [A B]].
   exists T2; split. eapply plus_left. constructor. apply plus_star; eauto. traceEq.
   auto.
-(* skip call *)
+- (* skip call *)
   monadInv TR. left.
   exploit match_is_call_cont; eauto. intros [tk' [A [B C]]].
   exploit match_callstack_freelist; eauto. intros [tm' [P [Q R]]].
@@ -1980,7 +1986,7 @@ Proof.
   eapply plus_right. eexact A. apply step_skip_call. auto. eauto. traceEq.
   econstructor; eauto.
 
-(* set *)
+- (* set *)
   monadInv TR.
   exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
   left; econstructor; split.
@@ -1988,7 +1994,7 @@ Proof.
   econstructor; eauto.
   eapply match_callstack_set_temp; eauto.
 
-(* store *)
+- (* store *)
   monadInv TR.
   exploit transl_expr_correct. eauto. eauto. eexact H. eauto.
   intros [tv1 [EVAL1 VINJ1]].
@@ -2005,7 +2011,7 @@ Proof.
   intros. eapply Mem.perm_store_2; eauto.
   intros. eapply Mem.perm_store_1; eauto.
 
-(* call *)
+- (* call *)
   simpl in H1. exploit functions_translated; eauto. intros [tfd [FIND TRANS]].
   monadInv TR.
   exploit transl_expr_correct; eauto. intros [tvf [EVAL1 VINJ1]].
@@ -2022,7 +2028,24 @@ Proof.
   eapply match_Kcall with (cenv' := cenv); eauto.
   red; auto.
 
-(* builtin *)
+- (* tailcall *)
+  simpl in H1. exploit functions_translated; eauto. intros [tfd [FIND TRANS]].
+  monadInv TR.
+  exploit transl_expr_correct; eauto. intros [tvf [EVAL1 VINJ1]].
+  assert (tvf = vf).
+    exploit match_callstack_match_globalenvs; eauto. intros [bnd MG].
+    eapply val_inject_function_pointer; eauto.
+  subst tvf.
+  exploit transl_exprlist_correct; eauto. intros [tvargs [EVAL2 VINJ2]].
+  exploit match_callstack_freelist; eauto. intros [tm' [P [Q R]]].
+  left; econstructor; split.
+  apply plus_one. eapply step_tailcall; eauto.
+  apply sig_preserved; eauto.
+  econstructor; eauto.
+  eapply match_call_cont; eauto.
+  apply call_cont_is_call_cont.
+
+- (* builtin *)
   monadInv TR.
   exploit transl_exprlist_correct; eauto.
   intros [tvargs [EVAL2 VINJ2]].
@@ -2048,37 +2071,37 @@ Opaque PTree.set.
   eapply match_callstack_set_temp; eauto.
   auto.
 
-(* seq *)
+- (* seq *)
   monadInv TR.
   left; econstructor; split.
   apply plus_one. constructor.
   econstructor; eauto.
   econstructor; eauto.
-(* seq 2 *)
+- (* seq 2 *)
   right. split. auto. split. auto. econstructor; eauto.
 
-(* ifthenelse *)
+- (* ifthenelse *)
   monadInv TR.
   exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
   left; exists (State tfn (if b then x0 else x1) tk (Vptr sp Ptrofs.zero) te tm); split.
   apply plus_one. eapply step_ifthenelse; eauto. eapply bool_of_val_inject; eauto.
   econstructor; eauto. destruct b; auto.
 
-(* loop *)
+- (* loop *)
   monadInv TR.
   left; econstructor; split.
   apply plus_one. constructor.
   econstructor; eauto.
   econstructor; eauto. simpl. rewrite EQ; auto.
 
-(* block *)
+- (* block *)
   monadInv TR.
   left; econstructor; split.
   apply plus_one. constructor.
   econstructor; eauto.
   econstructor; eauto.
 
-(* exit seq *)
+- (* exit seq *)
   monadInv TR. left.
   dependent induction MK.
   econstructor; split.
@@ -2090,7 +2113,7 @@ Opaque PTree.set.
   exists T2; split; auto. eapply plus_left.
   simpl. constructor. apply plus_star; eauto. traceEq.
 
-(* exit block 0 *)
+- (* exit block 0 *)
   monadInv TR. left.
   dependent induction MK.
   econstructor; split.
@@ -2100,7 +2123,7 @@ Opaque PTree.set.
   exists T2; split; auto. simpl.
   eapply plus_left. constructor. apply plus_star; eauto. traceEq.
 
-(* exit block n+1 *)
+- (* exit block n+1 *)
   monadInv TR. left.
   dependent induction MK.
   econstructor; split.
@@ -2110,7 +2133,7 @@ Opaque PTree.set.
   exists T2; split; auto. simpl.
   eapply plus_left. constructor. apply plus_star; eauto. traceEq.
 
-(* switch *)
+- (* switch *)
   simpl in TR. destruct (switch_table cases O) as [tbl dfl] eqn:STBL. monadInv TR.
   exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
   assert (SA: switch_argument islong tv n).
@@ -2129,15 +2152,14 @@ Opaque PTree.set.
   reflexivity. reflexivity. traceEq.
   auto.
 
-(* return none *)
+- (* return none *)
   monadInv TR. left.
   exploit match_callstack_freelist; eauto. intros [tm' [A [B C]]].
   econstructor; split.
   apply plus_one. eapply step_return_0. eauto.
   econstructor; eauto. eapply match_call_cont; eauto.
-  simpl; auto.
 
-(* return some *)
+- (* return some *)
   monadInv TR. left.
   exploit transl_expr_correct; eauto. intros [tv [EVAL VINJ]].
   exploit match_callstack_freelist; eauto. intros [tm' [A [B C]]].
@@ -2145,13 +2167,13 @@ Opaque PTree.set.
   apply plus_one. eapply step_return_1. eauto. eauto.
   econstructor; eauto. eapply match_call_cont; eauto.
 
-(* label *)
+- (* label *)
   monadInv TR.
   left; econstructor; split.
   apply plus_one. constructor.
   econstructor; eauto.
 
-(* goto *)
+- (* goto *)
   monadInv TR.
   exploit transl_find_label_body; eauto.
   intros [ts' [tk' [xenv' [A [B C]]]]].
@@ -2159,7 +2181,7 @@ Opaque PTree.set.
   apply plus_one. apply step_goto. eexact A.
   econstructor; eauto.
 
-(* internal call *)
+- (* internal call *)
   monadInv TR. generalize EQ; clear EQ; unfold transl_function.
   caseEq (build_compilenv f). intros ce sz BC.
   destruct (zle sz Ptrofs.max_unsigned); try congruence.
@@ -2178,7 +2200,7 @@ Opaque PTree.set.
   econstructor. eexact TRBODY. eauto. eexact MINJ2. eexact MCS2.
   inv MK; simpl in ISCC; contradiction || econstructor; eauto.
 
-(* external call *)
+- (* external call *)
   monadInv TR.
   exploit match_callstack_match_globalenvs; eauto. intros [hi MG].
   exploit external_call_mem_inject; eauto.
@@ -2195,7 +2217,7 @@ Opaque PTree.set.
   eapply external_call_nextblock; eauto.
   eapply external_call_nextblock; eauto.
 
-(* return *)
+- (* return *)
   inv MK. simpl.
   left; econstructor; split.
   apply plus_one. econstructor; eauto.

@@ -164,6 +164,10 @@ Fixpoint transl_stmt (cenv: compilenv) (xenv: exit_env) (s: Csharpminor.stmt)
       do te <- transl_expr cenv e;
       do tel <- transl_exprlist cenv el;
       OK (Scall optid sig te tel)
+  | Csharpminor.Stailcall sig e el =>
+      do te <- transl_expr cenv e;
+      do tel <- transl_exprlist cenv el;
+      OK (Stailcall sig te tel)
   | Csharpminor.Sbuiltin optid ef el =>
       do tel <- transl_exprlist cenv el;
       OK (Sbuiltin optid ef tel)
