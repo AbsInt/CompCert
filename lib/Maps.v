@@ -692,7 +692,7 @@ Module PTree <: TREE.
       forall m1 m2,
       beq m1 m2 = true <-> (forall x, beq_optA (get x m1) (get x m2) = true).
     Proof.
-Local Transparent Node.
+      Local Transparent Node.
       assert (beq_NN: forall l1 o1 r1 l2 o2 r2,
               not_trivially_empty l1 o1 r1 ->
               not_trivially_empty l2 o2 r2 ->
@@ -835,6 +835,8 @@ Local Transparent Node.
       Empty
       (fun l lrec o r rrec => Node lrec (match o with None => None | Some a => f a end) rrec)
       m.
+
+  Local Transparent Node.
 
   Definition map_filter1 :=
     Eval cbv [map_filter1_nonopt tree_rec tree_rec' Node] in @map_filter1_nonopt.
