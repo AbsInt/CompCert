@@ -140,7 +140,7 @@ Proof.
 - split; simpl; intros.
   + contradiction.
   + rewrite PTree.gempty in H; discriminate.
-  + rewrite PMap.gi in H; contradiction.
+  + contradiction.
 - contradiction.
 - rewrite PTree.gempty in H; discriminate.
 Qed.
