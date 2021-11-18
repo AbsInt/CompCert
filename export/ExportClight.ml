@@ -95,6 +95,9 @@ let rec stmt p = function
   | Scall(optid, e1, el) ->
       fprintf p "@[<hov 2>(Scall %a@ %a@ %a)@]"
         (print_option ident) optid expr e1 (print_list expr) el
+  | Stailcall(e1, el) ->
+      fprintf p "@[<hov 2>(Stailcall@ %a@ %a)@]"
+        expr e1 (print_list expr) el
   | Sbuiltin(optid, ef, tyl, el) ->
       fprintf p "@[<hov 2>(Sbuiltin %a@ %a@ %a@ %a)@]"
         (print_option ident) optid
@@ -197,6 +200,8 @@ let rec name_stmt = function
   | Sset(id, e2) -> name_temporary id; name_expr e2
   | Scall(optid, e1, el) ->
       name_opt_temporary optid; name_expr e1; List.iter name_expr el
+  | Stailcall(e1, el) ->
+      name_expr e1; List.iter name_expr el
   | Sbuiltin(optid, ef, tyl, el) ->
       name_opt_temporary optid; List.iter name_expr el
   | Ssequence(s1, s2) -> name_stmt s1; name_stmt s2

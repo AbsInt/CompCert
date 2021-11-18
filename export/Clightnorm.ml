@@ -118,6 +118,10 @@ let rec norm_stmt s =
       let (sl1, e') = norm_expr e in
       let (sl2, el') = norm_expr_list el in
       add_sequence (sl1 @ sl2) (Scall(optid, e', el'))  
+  | Stailcall(e, el) ->
+      let (sl1, e') = norm_expr e in
+      let (sl2, el') = norm_expr_list el in
+      add_sequence (sl1 @ sl2) (Stailcall(e', el'))  
   | Sbuiltin(optid, ef, tyl, el) ->
       let (sl, el') = norm_expr_list el in
       add_sequence sl (Sbuiltin(optid, ef, tyl, el'))
