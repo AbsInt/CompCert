@@ -13,6 +13,7 @@
 .*.aux
 *.cmti
 *.cmt
+.coq-native
 # Emacs saves
 *~
 # Executables and configuration
