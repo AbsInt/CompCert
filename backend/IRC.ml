@@ -911,10 +911,10 @@ let location_of_var g v =
 (* The exported interface *)
 
 let add_interf g v1 v2 =
-  addEdge g (nodeOfVar g v1) (nodeOfVar g v2)
+  let n1 = nodeOfVar g v1 in let n2 = nodeOfVar g v2 in addEdge g n1 n2
 
 let add_pref g v1 v2 =
-  addMovePref g (nodeOfVar g v1) (nodeOfVar g v2)
+  let n1 = nodeOfVar g v1 in let n2 = nodeOfVar g v2 in addMovePref g n1 n2
 
 let coloring g =
   initialNodePartition g;
