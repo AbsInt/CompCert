@@ -246,7 +246,7 @@ Next Obligation.
 Qed.
 Next Obligation.
   assert (x = hi - 1 \/ x < hi - 1) by lia.
-  destruct H2. congruence. auto.
+  match goal with [ H : _ \/ _ |- _ ] => destruct H end. congruence. auto.
 Qed.
 Next Obligation.
   exists wildcard'; split; auto. lia.

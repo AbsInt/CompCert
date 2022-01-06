@@ -602,11 +602,12 @@ Next Obligation.
   apply access_max.
 Qed.
 Next Obligation.
-  specialize (nextblock_noaccess m b0 ofs k H0). intros.
+  match goal with [ H : ~ Plt _ _ |- _ ] => assert (Hr := nextblock_noaccess m b0 ofs k H) end. intros.
   rewrite PMap.gsspec. destruct (peq b0 b). subst b0.
   destruct (zle lo ofs). destruct (zlt ofs hi).
-  assert (perm m b ofs k Freeable). apply perm_cur. apply H; auto.
-  unfold perm in H2. rewrite H1 in H2. contradiction.
+  assert (perm m b ofs k Freeable). apply perm_cur.
+  match goal with [ H : range_perm _ _ _ _ _ _ |- _ ] => apply H end; auto.
+  unfold perm in *. rewrite Hr in * |-. contradiction.
   auto. auto. auto.
 Qed.
 Next Obligation.
