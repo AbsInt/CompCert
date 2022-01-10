@@ -198,7 +198,7 @@ Next Obligation.
   elimtype False. elim NE. auto.
 Qed.
 Next Obligation.
-  red; intro. elim (H e). rewrite H0. auto.
+  red; intro; subst; intuition eauto.
 Qed.
 
 CoFixpoint traceinf_of_traceinf' (T': traceinf') : traceinf :=

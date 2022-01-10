@@ -245,8 +245,8 @@ Next Obligation.
   red. lia.
 Qed.
 Next Obligation.
-  assert (x = hi - 1 \/ x < hi - 1) by lia.
-  destruct H2. congruence. auto.
+  assert (EITHER: x = hi - 1 \/ x < hi - 1) by lia.
+  destruct EITHER. congruence. auto.
 Qed.
 Next Obligation.
   exists wildcard'; split; auto. lia.

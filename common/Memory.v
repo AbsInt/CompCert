@@ -602,11 +602,11 @@ Next Obligation.
   apply access_max.
 Qed.
 Next Obligation.
-  specialize (nextblock_noaccess m b0 ofs k H0). intros.
+  exploit (nextblock_noaccess m b0 ofs k). auto. intros NOACC.
   rewrite PMap.gsspec. destruct (peq b0 b). subst b0.
   destruct (zle lo ofs). destruct (zlt ofs hi).
-  assert (perm m b ofs k Freeable). apply perm_cur. apply H; auto.
-  unfold perm in H2. rewrite H1 in H2. contradiction.
+  assert (P: perm m b ofs k Freeable) by auto using perm_cur.
+  unfold perm in P. rewrite NOACC in P. contradiction.
   auto. auto. auto.
 Qed.
 Next Obligation.
