@@ -459,7 +459,7 @@ Inductive cont: Type :=
   | Kstop: cont
   | Kseq: statement -> cont -> cont       (**r [Kseq s2 k] = after [s1] in [s1;s2] *)
   | Kloop1: statement -> statement -> cont -> cont (**r [Kloop1 s1 s2 k] = after [s1] in [Sloop s1 s2] *)
-  | Kloop2: statement -> statement -> cont -> cont (**r [Kloop1 s1 s2 k] = after [s2] in [Sloop s1 s2] *)
+  | Kloop2: statement -> statement -> cont -> cont (**r [Kloop2 s1 s2 k] = after [s2] in [Sloop s1 s2] *)
   | Kswitch: cont -> cont       (**r catches [break] statements arising out of [switch] *)
   | Kcall: option ident ->                  (**r where to store result *)
            function ->                      (**r calling function *)
