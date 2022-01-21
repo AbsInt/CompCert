@@ -42,14 +42,14 @@ Definition platform_builtin_sem (b: platform_builtin) : builtin_sem (sig_res (pl
   | BI_fmin =>
       mkbuiltin_n2t Tfloat Tfloat Tfloat
         (fun f1 f2 => match Float.compare f1 f2 with
-                      | Some Eq | Some Lt => f1
-                      | Some Gt | None => f2
+                      | Some Lt => f1
+                      | Some Eq | Some Gt | None => f2
                       end)
   | BI_fmax =>
       mkbuiltin_n2t Tfloat Tfloat Tfloat
         (fun f1 f2 => match Float.compare f1 f2 with
-                      | Some Eq | Some Gt => f1
-                      | Some Lt | None => f2
+                      | Some Gt => f1
+                      | Some Eq | Some Lt | None => f2
                       end)
   end.
 
