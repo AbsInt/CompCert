@@ -143,6 +143,8 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Osubf, v1::v2::nil => subf v1 v2
   | Omulf, v1::v2::nil => mulf v1 v2
   | Odivf, v1::v2::nil => divf v1 v2
+  | Omaxf, v1::v2::nil =>  binop_float float_max v1 v2
+  | Ominf, v1::v2::nil =>  binop_float float_min v1 v2
   | Onegfs, v1::nil => negfs v1
   | Oabsfs, v1::nil => absfs v1
   | Oaddfs, v1::v2::nil => addfs v1 v2
@@ -258,6 +260,8 @@ Proof.
   destruct (propagate_float_constants tt); constructor.
   eapply eval_static_addressing_32_sound; eauto.
   eapply eval_static_addressing_64_sound; eauto.
+  apply binop_float_sound; auto.
+  apply binop_float_sound; auto.
   apply of_optbool_sound. eapply eval_static_condition_sound; eauto.
   apply select_sound; auto. eapply eval_static_condition_sound; eauto.
 Qed.

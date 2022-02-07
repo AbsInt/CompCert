@@ -585,6 +585,12 @@ Definition transl_op
   | Odivf, a1 :: a2 :: nil =>
       assertion (mreg_eq a1 res);
       do r <- freg_of res; do r2 <- freg_of a2; OK (Pdivd_ff r r2 :: k)
+  | Omaxf, a1 :: a2 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- freg_of res; do r2 <- freg_of a2; OK (Pmaxsd r r2 :: k)
+  | Ominf, a1 :: a2 :: nil =>
+      assertion (mreg_eq a1 res);
+      do r <- freg_of res; do r2 <- freg_of a2; OK (Pminsd r r2 :: k)
   | Onegfs, a1 :: nil =>
       assertion (mreg_eq a1 res);
       do r <- freg_of res; OK (Pnegs r :: k)

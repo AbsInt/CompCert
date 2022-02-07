@@ -579,4 +579,8 @@ Nondetfunction builtin_arg (e: expr) :=
 (** Platform-specific known builtins *)
 
 Definition platform_builtin (b: platform_builtin) (args: exprlist) : option expr :=
-  None.
+  match b, args with
+  | BI_fmax, e1 ::: e2 ::: Enil => Some (Eop Omaxf (e1 ::: e2 ::: Enil))
+  | BI_fmin, e1 ::: e2 ::: Enil => Some (Eop Ominf (e1 ::: e2 ::: Enil))
+  | _, _ => None
+  end.

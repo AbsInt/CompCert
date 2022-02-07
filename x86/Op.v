@@ -149,6 +149,8 @@ Inductive operation : Type :=
   | Osubf                    (**r [rd = r1 - r2] *)
   | Omulf                    (**r [rd = r1 * r2] *)
   | Odivf                    (**r [rd = r1 / r2] *)
+  | Omaxf                    (**r [rd = max(r1,r2)] *)
+  | Ominf                    (**r [rd = min(r1,r2)] *)
   | Onegfs                   (**r [rd = - r1] *)
   | Oabsfs                   (**r [rd = abs(r1)] *)
   | Oaddfs                   (**r [rd = r1 + r2] *)
@@ -197,6 +199,32 @@ Proof.
 Defined.
 
 Global Opaque eq_condition eq_addressing eq_operation.
+
+(** Helper function for floating point maximum and minimum operation *)
+
+Definition float_max f1 f2 :=
+  match Float.compare f1 f2 with
+  | Some Gt => f1
+  | Some Eq | Some Lt| None => f2
+  end.
+
+Definition maxf (v1 v2: val) : val :=
+  match v1, v2 with
+  | Vfloat f1, Vfloat f2 => Vfloat (float_max f1 f2)
+  | _, _ => Vundef
+  end.
+
+Definition float_min f1 f2 :=
+  match Float.compare f1 f2 with
+  | Some Lt => f1
+  | Some Eq | Some Gt| None => f2
+  end.
+
+Definition minf (v1 v2: val) : val :=
+  match v1, v2 with
+  | Vfloat f1, Vfloat f2 => Vfloat (float_min f1 f2)
+  | _, _ => Vundef
+  end.
 
 (** In addressing modes, offsets are 32-bit signed integers, even in
     64-bit mode.  The following function checks that an addressing
@@ -392,6 +420,8 @@ Definition eval_operation
   | Osubf, v1::v2::nil => Some(Val.subf v1 v2)
   | Omulf, v1::v2::nil => Some(Val.mulf v1 v2)
   | Odivf, v1::v2::nil => Some(Val.divf v1 v2)
+  | Omaxf, v1::v2::nil => Some (maxf v1 v2)
+  | Ominf, v1::v2::nil => Some (minf v1 v2)
   | Onegfs, v1::nil => Some(Val.negfs v1)
   | Oabsfs, v1::nil => Some(Val.absfs v1)
   | Oaddfs, v1::v2::nil => Some(Val.addfs v1 v2)
@@ -564,6 +594,8 @@ Definition type_of_operation (op: operation) : list typ * typ :=
   | Osubf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Omulf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Odivf => (Tfloat :: Tfloat :: nil, Tfloat)
+  | Omaxf => (Tfloat :: Tfloat :: nil, Tfloat)
+  | Ominf => (Tfloat :: Tfloat :: nil, Tfloat)
   | Onegfs => (Tsingle :: nil, Tsingle)
   | Oabsfs => (Tsingle :: nil, Tsingle)
   | Oaddfs => (Tsingle :: Tsingle :: nil, Tsingle)
@@ -718,6 +750,8 @@ Proof with (try exact I; try reflexivity).
   eapply type_of_addressing64_sound; eauto.
   destruct v0...
   destruct v0...
+  destruct v0; destruct v1...
+  destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
   destruct v0; destruct v1...
@@ -1286,6 +1320,8 @@ Proof.
   eapply eval_addressing64_inj; eauto.
   inv H4; simpl; auto.
   inv H4; simpl; auto.
+  inv H4; inv H2; simpl; auto.
+  inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.
   inv H4; inv H2; simpl; auto.

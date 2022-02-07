@@ -147,6 +147,8 @@ let print_operation reg pp = function
   | Osubf, [r1;r2] -> fprintf pp "%a -f %a" reg r1 reg r2
   | Omulf, [r1;r2] -> fprintf pp "%a *f %a" reg r1 reg r2
   | Odivf, [r1;r2] -> fprintf pp "%a /f %a" reg r1 reg r2
+  | Omaxf, [r1;r2] -> fprintf pp "max(%a, %a)" reg r1 reg r2
+  | Ominf, [r1;r2] -> fprintf pp "min(%a, %a)" reg r1 reg r2
   | Onegfs, [r1] -> fprintf pp "negfs(%a)" reg r1
   | Oabsfs, [r1] -> fprintf pp "absfs(%a)" reg r1
   | Oaddfs, [r1;r2] -> fprintf pp "%a +fs %a" reg r1 reg r2

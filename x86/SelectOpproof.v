@@ -1021,7 +1021,12 @@ Theorem eval_platform_builtin:
   platform_builtin_sem bf vl = Some v ->
   exists v', eval_expr ge sp e m le a v' /\ Val.lessdef v v'.
 Proof.
-  intros. discriminate.
+  intros until le. intros SEL ARGS SEM.
+  destruct bf; try discriminate.
+  - inv ARGS; try discriminate. inv H0; try discriminate. inv H2; try discriminate.
+    inv SEL. inv SEM. exists (minf v1 v0); split; auto. EvalOp.
+  - inv ARGS; try discriminate. inv H0; try discriminate. inv H2; try discriminate.
+    inv SEL. inv SEM. exists (maxf v1 v0); split; auto. EvalOp.
 Qed.
 
 End CMCONSTR.
