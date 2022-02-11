@@ -520,19 +520,21 @@ let convertFkind k a : coq_type =
       if not !Clflags.option_flongdouble then unsupported "'long double' type";
       Tfloat (F64, a)
 
+let checkResultType env ty =
+  if (not !Clflags.option_fstruct_passing) && Cutil.is_composite_type env ty
+  then unsupported "function returning a struct or union \
+                    (consider adding option [-fstruct-passing])"
+
+let checkArgumentType env ty =
+  if (not !Clflags.option_fstruct_passing) && Cutil.is_composite_type env ty
+  then unsupported "function parameter of struct or union type \
+                    (consider adding option [-fstruct-passing])"
+
 let checkFunctionType env tres targs =
-  if not !Clflags.option_fstruct_passing then begin
-    if Cutil.is_composite_type env tres then
-      unsupported "function returning a struct or union (consider adding option [-fstruct-passing])";
-    begin match targs with
-    | None -> ()
-    | Some l ->
-        List.iter
-          (fun (id, ty) ->
-            if Cutil.is_composite_type env ty then
-              unsupported "function parameter of struct or union type (consider adding option [-fstruct-passing])")
-          l
-    end
+  checkResultType env tres;
+  begin match targs with
+  | None -> ()
+  | Some l -> List.iter (fun (id, ty) -> checkArgumentType env ty) l
   end
 
 let rec convertTyp env ?bitwidth t =
@@ -965,12 +967,13 @@ let rec convertExpr env e =
       | None ->
           error "wrong type for function part of a call"
       | Some(tres, targs, va) ->
-          checkFunctionType env tres targs;
           if targs = None && not !Clflags.option_funprototyped then
             unsupported "call to unprototyped function (consider adding option [-funprototyped])";
           if va && not !Clflags.option_fvararg_calls then
             unsupported "call to variable-argument function (consider adding option [-fvararg-calls])"
       end;
+      checkResultType env e.etyp;
+      List.iter (fun arg -> checkArgumentType env arg.etyp) args;
       ewrap (Ctyping.ecall (convertExpr env fn) (convertExprList env args))
 
 and convertLvalue env e =
