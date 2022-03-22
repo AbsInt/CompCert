@@ -174,7 +174,9 @@ Definition expand_nan s p H : {x | is_nan _ _ x = true} :=
 Definition of_single_nan (f : float32) : { x : float | is_nan _ _ x = true } :=
   match f with
   | B754_nan s p H =>
-    if Archi.float_of_single_preserves_sNaN
+    if Archi.float_conversion_default_nan
+    then default_nan_64
+    else if Archi.float_of_single_preserves_sNaN
     then expand_nan s p H
     else quiet_nan_64 (s, expand_nan_payload p)
   | _ => default_nan_64
@@ -189,7 +191,10 @@ Definition reduce_nan_payload (p: positive) :=
 
 Definition to_single_nan (f : float) : { x : float32 | is_nan _ _ x = true } :=
   match f with
-  | B754_nan s p H => quiet_nan_32 (s, reduce_nan_payload p)
+  | B754_nan s p H =>
+    if Archi.float_conversion_default_nan
+    then default_nan_32
+    else quiet_nan_32 (s, reduce_nan_payload p)
   | _ => default_nan_32
   end.
 
