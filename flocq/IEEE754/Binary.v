@@ -23,12 +23,10 @@ From Coq Require Import ZArith Reals Psatz SpecFloat.
 
 Require Import Core Round Bracket Operations Div Sqrt Relative BinarySingleNaN.
 
-Module BSN := BinarySingleNaN.
-
-Arguments BSN.B754_zero {prec emax}.
-Arguments BSN.B754_infinity {prec emax}.
-Arguments BSN.B754_nan {prec emax}.
-Arguments BSN.B754_finite {prec emax}.
+Arguments BinarySingleNaN.B754_zero {prec emax}.
+Arguments BinarySingleNaN.B754_infinity {prec emax}.
+Arguments BinarySingleNaN.B754_nan {prec emax}.
+Arguments BinarySingleNaN.B754_finite {prec emax}.
 
 Section AnyRadix.
 
@@ -191,12 +189,12 @@ Inductive binary_float :=
   | B754_finite (s : bool) (m : positive) (e : Z) :
     bounded m e = true -> binary_float.
 
-Definition B2BSN (x : binary_float) : BSN.binary_float prec emax :=
+Definition B2BSN (x : binary_float) : BinarySingleNaN.binary_float prec emax :=
   match x with
-  | B754_zero s => BSN.B754_zero s
-  | B754_infinity s => BSN.B754_infinity s
-  | B754_nan _ _ _ => BSN.B754_nan
-  | B754_finite s m e H => BSN.B754_finite s m e H
+  | B754_zero s => BinarySingleNaN.B754_zero s
+  | B754_infinity s => BinarySingleNaN.B754_infinity s
+  | B754_nan _ _ _ => BinarySingleNaN.B754_nan
+  | B754_finite s m e H => BinarySingleNaN.B754_finite s m e H
   end.
 
 Definition FF2B x :=
@@ -231,7 +229,7 @@ Definition B2SF (x : binary_float) :=
 
 Lemma B2SF_B2BSN :
   forall x,
-  BSN.B2SF (B2BSN x) = B2SF x.
+  BinarySingleNaN.B2SF (B2BSN x) = B2SF x.
 Proof.
 now intros [sx|sx|sx px Px|sx mx ex Bx].
 Qed.
@@ -244,7 +242,7 @@ now intros [sx|sx|sx px|sx mx ex] Bx.
 Qed.
 
 Lemma B2R_B2BSN :
-  forall x, BSN.B2R (B2BSN x) = B2R x.
+  forall x, BinarySingleNaN.B2R (B2BSN x) = B2R x.
 Proof.
 intros x.
 now destruct x.
@@ -326,16 +324,7 @@ Theorem canonical_canonical_mantissa :
   canonical radix2 fexp (Float radix2 (cond_Zopp sx (Zpos mx)) ex).
 Proof.
 intros sx mx ex H.
-assert (Hx := Zeq_bool_eq _ _ H). clear H.
-apply sym_eq.
-simpl.
-pattern ex at 2 ; rewrite <- Hx.
-apply (f_equal fexp).
-rewrite mag_F2R_Zdigits.
-rewrite <- Zdigits_abs.
-rewrite Zpos_digits2_pos.
-now case sx.
-now case sx.
+now apply canonical_canonical_mantissa.
 Qed.
 
 Theorem generic_format_B2R :
@@ -345,8 +334,7 @@ Proof.
 intros [sx|sx|sx plx Hx |sx mx ex Hx] ; try apply generic_format_0.
 simpl.
 apply generic_format_canonical.
-apply canonical_canonical_mantissa.
-now destruct (andb_prop _ _ Hx) as (H, _).
+now apply canonical_bounded.
 Qed.
 
 Theorem FLT_format_B2R :
@@ -395,7 +383,7 @@ Definition is_finite_strict f :=
   end.
 
 Lemma is_finite_strict_B2BSN :
-  forall x, BSN.is_finite_strict (B2BSN x) = is_finite_strict x.
+  forall x, BinarySingleNaN.is_finite_strict (B2BSN x) = is_finite_strict x.
 Proof.
 intros x.
 now destruct x.
@@ -429,10 +417,8 @@ assert (mx = my /\ ex = ey).
 refine (_ (canonical_unique _ fexp _ _ _ _ Heq)).
 rewrite Hs.
 now case sy ; intro H ; injection H ; split.
-apply canonical_canonical_mantissa.
-exact (proj1 (andb_prop _ _ Hx)).
-apply canonical_canonical_mantissa.
-exact (proj1 (andb_prop _ _ Hy)).
+now apply canonical_bounded.
+now apply canonical_bounded.
 (* *)
 revert Hx.
 rewrite Hs, (proj1 H), (proj2 H).
@@ -464,7 +450,7 @@ Definition is_finite f :=
   end.
 
 Lemma is_finite_B2BSN :
-  forall x, BSN.is_finite (B2BSN x) = is_finite x.
+  forall x, BinarySingleNaN.is_finite (B2BSN x) = is_finite x.
 Proof.
 intros x.
 now destruct x.
@@ -512,7 +498,7 @@ Definition is_nan f :=
 
 Lemma is_nan_B2BSN :
   forall x,
-  BSN.is_nan (B2BSN x) =  is_nan x.
+  BinarySingleNaN.is_nan (B2BSN x) =  is_nan x.
 Proof.
 now intros [s|s|s p H|s m e H].
 Qed.
@@ -572,12 +558,12 @@ Proof.
 easy.
 Qed.
 
-Definition BSN2B (nan : {x : binary_float | is_nan x = true }) (x : BSN.binary_float prec emax) : binary_float :=
+Definition BSN2B (nan : {x : binary_float | is_nan x = true }) (x : BinarySingleNaN.binary_float prec emax) : binary_float :=
   match x with
-  | BSN.B754_nan => build_nan nan
-  | BSN.B754_zero s => B754_zero s
-  | BSN.B754_infinity s => B754_infinity s
-  | BSN.B754_finite s m e H => B754_finite s m e H
+  | BinarySingleNaN.B754_nan => build_nan nan
+  | BinarySingleNaN.B754_zero s => B754_zero s
+  | BinarySingleNaN.B754_infinity s => B754_infinity s
+  | BinarySingleNaN.B754_finite s m e H => B754_finite s m e H
   end.
 
 Lemma B2BSN_BSN2B :
@@ -588,37 +574,37 @@ now intros nan [s|s| |s m e H].
 Qed.
 
 Lemma B2R_BSN2B :
-  forall nan x, B2R (BSN2B nan x) = BSN.B2R x.
+  forall nan x, B2R (BSN2B nan x) = BinarySingleNaN.B2R x.
 Proof.
 now intros nan [s|s| |s m e H].
 Qed.
 
 Lemma is_finite_BSN2B :
-  forall nan x, is_finite (BSN2B nan x) = BSN.is_finite x.
+  forall nan x, is_finite (BSN2B nan x) = BinarySingleNaN.is_finite x.
 Proof.
 now intros nan [s|s| |s m e H].
 Qed.
 
 Lemma is_nan_BSN2B :
-  forall nan x, is_nan (BSN2B nan x) = BSN.is_nan x.
+  forall nan x, is_nan (BSN2B nan x) = BinarySingleNaN.is_nan x.
 Proof.
 now intros nan [s|s| |s m e H].
 Qed.
 
 Lemma Bsign_B2BSN :
-  forall x, is_nan x = false -> BSN.Bsign (B2BSN x) = Bsign x.
+  forall x, is_nan x = false -> BinarySingleNaN.Bsign (B2BSN x) = Bsign x.
 Proof.
 now intros [s|s| |s m e H].
 Qed.
 
 Lemma Bsign_BSN2B :
-  forall nan x, BSN.is_nan x = false ->
-  Bsign (BSN2B nan x) = BSN.Bsign x.
+  forall nan x, BinarySingleNaN.is_nan x = false ->
+  Bsign (BSN2B nan x) = BinarySingleNaN.Bsign x.
 Proof.
 now intros nan [s|s| |s m e H].
 Qed.
 
-Definition BSN2B' (x : BSN.binary_float prec emax) : BSN.is_nan x = false -> binary_float.
+Definition BSN2B' (x : BinarySingleNaN.binary_float prec emax) : BinarySingleNaN.is_nan x = false -> binary_float.
 Proof.
 destruct x as [sx|sx| |sx mx ex Bx] ; intros H.
 exact (B754_zero sx).
@@ -636,28 +622,28 @@ Qed.
 
 Lemma B2R_BSN2B' :
   forall x Nx,
-  B2R (BSN2B' x Nx) = BSN.B2R x.
+  B2R (BSN2B' x Nx) = BinarySingleNaN.B2R x.
 Proof.
 now intros [sx|sx| |sx mx ex Bx] Nx.
 Qed.
 
 Lemma B2FF_BSN2B' :
   forall x Nx,
-  B2FF (BSN2B' x Nx) = SF2FF (BSN.B2SF x).
+  B2FF (BSN2B' x Nx) = SF2FF (BinarySingleNaN.B2SF x).
 Proof.
 now intros [sx|sx| |sx mx ex Bx] Nx.
 Qed.
 
 Lemma Bsign_BSN2B' :
   forall x Nx,
-  Bsign (BSN2B' x Nx) = BSN.Bsign x.
+  Bsign (BSN2B' x Nx) = BinarySingleNaN.Bsign x.
 Proof.
 now intros [sx|sx| |sx mx ex Bx] Nx.
 Qed.
 
 Lemma is_finite_BSN2B' :
   forall x Nx,
-  is_finite (BSN2B' x Nx) = BSN.is_finite x.
+  is_finite (BSN2B' x Nx) = BinarySingleNaN.is_finite x.
 Proof.
 now intros [sx|sx| |sx mx ex Bx] Nx.
 Qed.
@@ -785,7 +771,7 @@ Qed.
 [Some c] means ordered as per [c]; [None] means unordered. *)
 
 Definition Bcompare (f1 f2 : binary_float) : option comparison :=
-  BSN.Bcompare (B2BSN f1) (B2BSN f2).
+  BinarySingleNaN.Bcompare (B2BSN f1) (B2BSN f2).
 
 Theorem Bcompare_correct :
   forall f1 f2,
@@ -794,7 +780,7 @@ Theorem Bcompare_correct :
 Proof.
   intros f1 f2 H1 H2.
   unfold Bcompare.
-  rewrite BSN.Bcompare_correct.
+  rewrite BinarySingleNaN.Bcompare_correct.
   now rewrite 2!B2R_B2BSN.
   now rewrite is_finite_B2BSN.
   now rewrite is_finite_B2BSN.
@@ -805,7 +791,7 @@ Theorem Bcompare_swap :
   Bcompare y x = match Bcompare x y with Some c => Some (CompOpp c) | None => None end.
 Proof.
   intros.
-  apply BSN.Bcompare_swap.
+  apply BinarySingleNaN.Bcompare_swap.
 Qed.
 
 Theorem bounded_le_emax_minus_prec :
@@ -814,7 +800,7 @@ Theorem bounded_le_emax_minus_prec :
   (F2R (Float radix2 (Zpos mx) ex)
    <= bpow radix2 emax - bpow radix2 (emax - prec))%R.
 Proof.
-now apply BSN.bounded_le_emax_minus_prec.
+now apply BinarySingleNaN.bounded_le_emax_minus_prec.
 Qed.
 
 Theorem bounded_lt_emax :
@@ -876,14 +862,14 @@ Qed.
 
 Notation shr_fexp := (shr_fexp prec emax) (only parsing).
 
-Theorem shr_truncate :
+Theorem shr_fexp_truncate :
   forall m e l,
   (0 <= m)%Z ->
   shr_fexp m e l =
   let '(m', e', l') := truncate radix2 fexp (m, e, l) in (shr_record_of_loc m' l', e').
 Proof.
 intros m e l.
-now apply shr_truncate.
+now apply shr_fexp_truncate.
 Qed.
 
 (** Rounding modes *)
@@ -893,7 +879,7 @@ Definition binary_overflow m s :=
 
 Lemma eq_binary_overflow_FF2SF :
   forall x m s,
-  FF2SF x = BSN.binary_overflow prec emax m s ->
+  FF2SF x = BinarySingleNaN.binary_overflow prec emax m s ->
   x = binary_overflow m s.
 Proof.
 intros x m s H.
@@ -924,7 +910,7 @@ intros mode x mx ex lx Px Bx Ex.
 generalize (binary_round_aux_correct' prec emax _ _ mode x mx ex lx Px Bx Ex).
 unfold binary_round_aux.
 destruct (Rlt_bool (Rabs _) _).
-- now destruct BSN.binary_round_aux as [sz|sz| |sz mz ez].
+- now destruct BinarySingleNaN.binary_round_aux as [sz|sz| |sz mz ez].
 - intros [_ ->].
   split.
   rewrite valid_binary_SF2FF by apply is_nan_binary_overflow.
@@ -948,7 +934,7 @@ intros mode x mx ex lx Bx Ex.
 generalize (binary_round_aux_correct prec emax _ _ mode x mx ex lx Bx Ex).
 unfold binary_round_aux.
 destruct (Rlt_bool (Rabs _) _).
-- now destruct BSN.binary_round_aux as [sz|sz| |sz mz ez].
+- now destruct BinarySingleNaN.binary_round_aux as [sz|sz| |sz mz ez].
 - intros [_ ->].
   split.
   rewrite valid_binary_SF2FF by apply is_nan_binary_overflow.
@@ -973,7 +959,7 @@ Theorem Bmult_correct :
 Proof.
 intros mult_nan mode x y.
 generalize (Bmult_correct prec emax _ _ mode (B2BSN x) (B2BSN y)).
-replace (BSN.Bmult _ _ _) with (B2BSN (Bmult mult_nan mode x y)) by apply B2BSN_BSN2B.
+replace (BinarySingleNaN.Bmult _ _ _) with (B2BSN (Bmult mult_nan mode x y)) by apply B2BSN_BSN2B.
 intros H.
 destruct x as [sx|sx|sx plx Hplx|sx mx ex Hx] ;
   destruct y as [sy|sy|sy ply Hply|sy my ey Hy] ;
@@ -1022,7 +1008,7 @@ generalize (binary_round_correct prec emax _ _ mode sx mx ex).
 simpl.
 unfold binary_round.
 destruct Rlt_bool.
-- now destruct BSN.binary_round.
+- now destruct BinarySingleNaN.binary_round.
 - intros [H1 ->].
   split.
   rewrite valid_binary_SF2FF by apply is_nan_binary_overflow.
@@ -1049,7 +1035,7 @@ Theorem binary_normalize_correct :
 Proof.
 intros mode mx ex szero.
 generalize (binary_normalize_correct prec emax _ _ mode mx ex szero).
-replace (BSN.binary_normalize _ _ _ _ _ _ _ _) with (B2BSN (binary_normalize mode mx ex szero)) by apply B2BSN_BSN2B'.
+replace (BinarySingleNaN.binary_normalize _ _ _ _ _ _ _ _) with (B2BSN (binary_normalize mode mx ex szero)) by apply B2BSN_BSN2B'.
 simpl.
 destruct Rlt_bool.
 - now destruct binary_normalize.
@@ -1083,7 +1069,7 @@ Proof with auto with typeclass_instances.
 intros plus_nan mode x y Fx Fy.
 rewrite <- is_finite_B2BSN in Fx, Fy.
 generalize (Bplus_correct prec emax _ _ mode _ _ Fx Fy).
-replace (BSN.Bplus _ _ _) with (B2BSN (Bplus plus_nan mode x y)) by apply B2BSN_BSN2B.
+replace (BinarySingleNaN.Bplus _ _ _) with (B2BSN (Bplus plus_nan mode x y)) by apply B2BSN_BSN2B.
 rewrite 2!B2R_B2BSN.
 rewrite (Bsign_B2BSN x) by (clear -Fx ; now destruct x).
 rewrite (Bsign_B2BSN y) by (clear -Fy ; now destruct y).
@@ -1120,7 +1106,7 @@ Proof with auto with typeclass_instances.
 intros minus_nan mode x y Fx Fy.
 rewrite <- is_finite_B2BSN in Fx, Fy.
 generalize (Bminus_correct prec emax _ _ mode _ _ Fx Fy).
-replace (BSN.Bminus _ _ _) with (B2BSN (Bminus minus_nan mode x y)) by apply B2BSN_BSN2B.
+replace (BinarySingleNaN.Bminus _ _ _) with (B2BSN (Bminus minus_nan mode x y)) by apply B2BSN_BSN2B.
 rewrite 2!B2R_B2BSN.
 rewrite (Bsign_B2BSN x) by (clear -Fx ; now destruct x).
 rewrite (Bsign_B2BSN y) by (clear -Fy ; now destruct y).
@@ -1161,7 +1147,7 @@ Proof.
 intros fma_nan mode x y z Fx Fy Fz.
 rewrite <- is_finite_B2BSN in Fx, Fy, Fz.
 generalize (Bfma_correct prec emax _ _ mode _ _ _ Fx Fy Fz).
-replace (BSN.Bfma _ _ _ _) with (B2BSN (Bfma fma_nan mode x y z)) by apply B2BSN_BSN2B.
+replace (BinarySingleNaN.Bfma _ _ _ _) with (B2BSN (Bfma fma_nan mode x y z)) by apply B2BSN_BSN2B.
 rewrite 3!B2R_B2BSN.
 cbv zeta.
 destruct Rlt_bool.
@@ -1190,7 +1176,7 @@ Proof.
 intros div_nan mode x y Zy.
 rewrite <- B2R_B2BSN in Zy.
 generalize (Bdiv_correct prec emax _ _ mode (B2BSN x) _ Zy).
-replace (BSN.Bdiv _ _ _) with (B2BSN (Bdiv div_nan mode x y)) by apply B2BSN_BSN2B.
+replace (BinarySingleNaN.Bdiv _ _ _) with (B2BSN (Bdiv div_nan mode x y)) by apply B2BSN_BSN2B.
 unfold Rdiv.
 destruct y as [sy|sy|sy ply|sy my ey Hy] ; try now elim Zy.
 destruct x as [sx|sx|sx plx Hx|sx mx ex Hx] ;
@@ -1215,10 +1201,40 @@ Theorem Bsqrt_correct :
 Proof.
 intros sqrt_nan mode x.
 generalize (Bsqrt_correct prec emax _ _ mode (B2BSN x)).
-replace (BSN.Bsqrt _ _) with (B2BSN (Bsqrt sqrt_nan mode x)) by apply B2BSN_BSN2B.
+replace (BinarySingleNaN.Bsqrt _ _) with (B2BSN (Bsqrt sqrt_nan mode x)) by apply B2BSN_BSN2B.
 intros H.
 destruct x as [sx|[|]|sx plx Hplx|sx mx ex Hx] ; try easy.
 now destruct Bsqrt.
+Qed.
+
+(** NearbyInt and Trunc **)
+
+Definition Bnearbyint nearbyint_nan m x :=
+  BSN2B (nearbyint_nan x) (Bnearbyint m (B2BSN x)).
+
+Theorem Bnearbyint_correct :
+  forall nearbyint_nan md x,
+  B2R (Bnearbyint nearbyint_nan md x) = round radix2 (FIX_exp 0) (round_mode md) (B2R x) /\
+  is_finite (Bnearbyint nearbyint_nan md x) = is_finite x /\
+  (is_nan (Bnearbyint nearbyint_nan md x) = false -> Bsign (Bnearbyint nearbyint_nan md x) = Bsign x).
+Proof.
+intros nearbyint_nan mode x.
+generalize (Bnearbyint_correct prec emax _ mode (B2BSN x)).
+replace (BinarySingleNaN.Bnearbyint _ _) with (B2BSN (Bnearbyint nearbyint_nan mode x)) by apply B2BSN_BSN2B.
+intros H.
+destruct x as [sx|[|]|sx plx Hplx|sx mx ex Hx] ; try easy.
+now destruct Bnearbyint.
+Qed.
+
+Definition Btrunc x := Btrunc (B2BSN x).
+
+Theorem Btrunc_correct :
+  forall x,
+  IZR (Btrunc x) = round radix2 (FIX_exp 0) Ztrunc (B2R x).
+Proof.
+  intros x.
+  rewrite <-B2R_B2BSN.
+  now apply Btrunc_correct.
 Qed.
 
 (** A few values *)
@@ -1255,7 +1271,7 @@ Definition Bmax_float :=
 Definition Bnormfr_mantissa x :=
   Bnormfr_mantissa (B2BSN x).
 
-Definition lift x y (Ny : @BSN.is_nan prec emax y = is_nan x) : binary_float.
+Definition lift x y (Ny : @BinarySingleNaN.is_nan prec emax y = is_nan x) : binary_float.
 Proof.
 destruct (is_nan x).
 exact x.
@@ -1293,7 +1309,7 @@ Theorem Bldexp_correct :
 Proof.
 intros mode x e.
 generalize (Bldexp_correct prec emax _ _ mode (B2BSN x) e).
-replace (BSN.Bldexp _ _ _) with (B2BSN (Bldexp mode x e)) by apply B2BSN_lift.
+replace (BinarySingleNaN.Bldexp _ _ _) with (B2BSN (Bldexp mode x e)) by apply B2BSN_lift.
 rewrite B2R_B2BSN.
 destruct Rlt_bool.
 - destruct x as [sx|sx|sx px Px|sx mx ex Bx] ; try easy.
@@ -1304,7 +1320,7 @@ destruct Rlt_bool.
   rewrite FF2SF_B2FF, H.
   destruct x as [sx|sx|sx px Px|sx mx ex Bx] ; simpl in H ; try easy.
   contradict H.
-  unfold BSN.binary_overflow.
+  unfold BinarySingleNaN.binary_overflow.
   now destruct overflow_to_inf.
 Qed.
 
@@ -1340,7 +1356,7 @@ generalize (Bfrexp_correct prec emax _ (B2BSN x) Fx).
 simpl.
 rewrite <- B2R_B2BSN.
 rewrite B2BSN_lift.
-destruct BSN.Bfrexp as [z e].
+destruct BinarySingleNaN.Bfrexp as [z e].
 rewrite B2R_B2BSN.
 now intros [H1 [H2 H3]].
 Qed.
@@ -1366,7 +1382,7 @@ Proof.
 intros x Fx.
 rewrite <- is_finite_B2BSN in Fx.
 generalize (Bulp_correct prec emax _ _ _ Fx).
-replace (BSN.Bulp (B2BSN x)) with (B2BSN (Bulp x)) by apply B2BSN_lift.
+replace (BinarySingleNaN.Bulp (B2BSN x)) with (B2BSN (Bulp x)) by apply B2BSN_lift.
 rewrite 2!B2R_B2BSN.
 now destruct Bulp.
 Qed.
@@ -1393,7 +1409,7 @@ Proof.
 intros x Fx.
 rewrite <- is_finite_B2BSN in Fx.
 generalize (Bsucc_correct prec emax _ _ _ Fx).
-replace (BSN.Bsucc (B2BSN x)) with (B2BSN (Bsucc x)) by apply B2BSN_lift.
+replace (BinarySingleNaN.Bsucc (B2BSN x)) with (B2BSN (Bsucc x)) by apply B2BSN_lift.
 rewrite 2!B2R_B2BSN.
 destruct Rlt_bool.
 - rewrite (Bsign_B2BSN x) by now destruct x.
@@ -1422,7 +1438,7 @@ Proof.
 intros x Fx.
 rewrite <- is_finite_B2BSN in Fx.
 generalize (Bpred_correct prec emax _ _ _ Fx).
-replace (BSN.Bpred (B2BSN x)) with (B2BSN (Bpred x)) by apply B2BSN_lift.
+replace (BinarySingleNaN.Bpred (B2BSN x)) with (B2BSN (Bpred x)) by apply B2BSN_lift.
 rewrite 2!B2R_B2BSN.
 destruct Rlt_bool.
 - rewrite (Bsign_B2BSN x) by now destruct x.

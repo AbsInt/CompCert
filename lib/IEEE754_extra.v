@@ -950,7 +950,7 @@ Proof.
     destruct (Bmult prec emax _ _ mult_nan mode f (BofZ 2)); reflexivity || discriminate.
   + destruct H0 as (P & Q). apply B2FF_inj. rewrite P, H. auto.
 - destruct f as [sf|sf|sf pf Hf|sf mf ef Hf]; try discriminate.
-  + unfold Bplus. simpl BSN.Bplus. rewrite eqb_true. destruct (BofZ 2) as [| | |s2 m2 e2 H2] eqn:B2; try discriminate; simpl in *.
+  + unfold Bplus. simpl BinarySingleNaN.Bplus. rewrite eqb_true. destruct (BofZ 2) as [| | |s2 m2 e2 H2] eqn:B2; try discriminate; simpl in *.
     assert ((0 = 2)%Z) by (apply eq_IZR; auto). discriminate.
     subst s2. unfold Bmult. simpl. rewrite xorb_false_r. auto.
     auto.
@@ -1121,7 +1121,7 @@ clear H1.
 destruct SFdiv_core_binary as [[mz ez] lz].
 destruct Rlt_bool.
 destruct H2 as [_ [H _]].
-now destruct BSN.binary_round_aux.
+now destruct BinarySingleNaN.binary_round_aux.
 simpl in H2.
 rewrite H2.
 apply is_nan_binary_overflow.

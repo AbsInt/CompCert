@@ -1580,6 +1580,31 @@ apply Zlt_le_succ.
 now apply mag_gt_bpow.
 Qed.
 
+Lemma lt_cexp_pos :
+  forall x y,
+  (0 < y)%R ->
+  (cexp x < cexp y)%Z ->
+  (x < y)%R.
+Proof.
+intros x y Zy He.
+unfold cexp in He.
+apply (lt_mag beta) with (1 := Zy).
+generalize (monotone_exp (mag beta y) (mag beta x)).
+lia.
+Qed.
+
+Theorem lt_cexp :
+  forall x y,
+  (y <> 0)%R ->
+  (cexp x < cexp y)%Z ->
+  (Rabs x < Rabs y)%R.
+Proof.
+intros x y Zy He.
+apply lt_cexp_pos.
+now apply Rabs_pos_lt.
+now rewrite 2!cexp_abs.
+Qed.
+
 Variable rnd : R -> Z.
 Context { valid_rnd : Valid_rnd rnd }.
 

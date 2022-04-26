@@ -773,6 +773,12 @@ End Zcompare.
 
 Section cond_Zopp.
 
+Theorem cond_Zopp_0 :
+  forall sx, cond_Zopp sx 0 = 0%Z.
+Proof.
+now intros [|].
+Qed.
+
 Theorem cond_Zopp_negb :
   forall x y, cond_Zopp (negb x) y = Z.opp (cond_Zopp x y).
 Proof.

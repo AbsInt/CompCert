@@ -102,3 +102,11 @@ right; split; auto.
 Qed.
 
 End RND_FIX.
+
+Theorem round_FIX_IZR :
+  forall f x,
+  round radix2 (FIX_exp 0) f x = IZR (f x).
+Proof.
+  intros f x. unfold round, F2R. simpl. rewrite Rmult_1_r. apply f_equal.
+  apply f_equal. unfold scaled_mantissa. simpl. apply Rmult_1_r.
+Qed.
