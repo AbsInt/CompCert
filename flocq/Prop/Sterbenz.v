@@ -19,7 +19,9 @@ COPYING file for more details.
 
 (** * Sterbenz conditions for exact subtraction *)
 
-Require Import Raux Defs Generic_fmt Operations.
+From Coq Require Import ZArith Reals.
+
+Require Import Zaux Raux Defs Generic_fmt Operations.
 
 Section Fprop_Sterbenz.
 

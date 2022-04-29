@@ -19,8 +19,9 @@ COPYING file for more details.
 
 (** * Helper function and theorem for computing the rounded quotient of two floating-point numbers. *)
 
-From Coq Require Import Lia.
-Require Import Raux Defs Generic_fmt Float_prop Digits Bracket.
+From Coq Require Import ZArith Reals Lia.
+
+Require Import Zaux Raux Defs Generic_fmt Float_prop Digits Bracket.
 
 Set Implicit Arguments.
 Set Strongly Strict Implicit.

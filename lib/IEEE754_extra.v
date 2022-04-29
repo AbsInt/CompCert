@@ -18,8 +18,11 @@
 (** Additional operations and proofs about IEEE-754 binary
     floating-point numbers, on top of the Flocq library. *)
 
+Require Import Reals.
+Require Import SpecFloat.
 From Flocq Require Import Core Digits Operations Round Bracket Sterbenz
-                          Binary Round_odd.
+                          BinarySingleNaN Binary Round_odd.
+Require Import ZArith.
 Require Import Psatz.
 Require Import Bool.
 Require Import Eqdep_dec.
@@ -34,10 +37,10 @@ Section Extra_ops.
 
 Variable prec emax : Z.
 Context (prec_gt_0_ : Prec_gt_0 prec).
-Let emin := (3 - emax - prec)%Z.
-Let fexp := FLT_exp emin prec.
-Hypothesis Hmax : (prec < emax)%Z.
-Let binary_float := binary_float prec emax.
+Context (prec_lt_emax_ : Prec_lt_emax prec emax).
+Notation emin := (emin prec emax).
+Notation fexp := (fexp prec emax).
+Notation binary_float := (binary_float prec emax).
 
 (** Remarks on [is_finite] *)
 
@@ -117,10 +120,12 @@ Defined.
 Definition integer_representable (n: Z): Prop :=
   Z.abs n <= 2^emax - 2^(emax - prec) /\ generic_format radix2 fexp (IZR n).
 
-Let int_upper_bound_eq: 2^emax - 2^(emax - prec) = (2^prec - 1) * 2^(emax - prec).
+Lemma int_upper_bound_eq: 2^emax - 2^(emax - prec) = (2^prec - 1) * 2^(emax - prec).
 Proof.
-  red in prec_gt_0_.
-  ring_simplify. rewrite <- (Zpower_plus radix2) by lia. f_equal. f_equal. lia.
+  red in prec_gt_0_, prec_lt_emax_.
+  ring_simplify.
+  rewrite <- (Zpower_plus radix2) by lia.
+  now replace (emax - prec + prec)%Z with emax by ring.
 Qed.
 
 Lemma integer_representable_n2p:
@@ -129,16 +134,16 @@ Lemma integer_representable_n2p:
   integer_representable (n * 2^p).
 Proof.
   intros; split.
-- red in prec_gt_0_. replace (Z.abs (n * 2^p)) with (Z.abs n * 2^p).
+- red in prec_gt_0_, prec_lt_emax_. replace (Z.abs (n * 2^p)) with (Z.abs n * 2^p).
   rewrite int_upper_bound_eq.
-  apply Zmult_le_compat. zify; lia. apply (Zpower_le radix2); lia.
-  zify; lia. apply (Zpower_ge_0 radix2).
+  apply Zmult_le_compat. lia. apply (Zpower_le radix2); lia.
+  lia. apply (Zpower_ge_0 radix2).
   rewrite Z.abs_mul. f_equal. rewrite Z.abs_eq. auto. apply (Zpower_ge_0 radix2).
 - apply generic_format_FLT. exists (Float radix2 n p).
   unfold F2R; simpl.
   rewrite <- IZR_Zpower by auto. apply mult_IZR.
-  simpl; zify; lia.
-  unfold emin, Fexp; red in prec_gt_0_; lia.
+  simpl; lia.
+  unfold emin, Fexp; red in prec_gt_0_, prec_lt_emax_; lia.
 Qed.
 
 Lemma integer_representable_2p:
@@ -157,7 +162,7 @@ Proof.
   assert (2^(emax - prec) <= 2^(emax - 1)).
   { apply (Zpower_le radix2). lia. }
   lia.
-- red in prec_gt_0_.
+- red in prec_gt_0_, prec_lt_emax_.
   apply generic_format_FLT. exists (Float radix2 1 p).
   unfold F2R; simpl.
   rewrite Rmult_1_l. rewrite <- IZR_Zpower. auto. lia.
@@ -190,7 +195,7 @@ Qed.
 Lemma integer_representable_n:
   forall n, -2^prec <= n <= 2^prec -> integer_representable n.
 Proof.
-  red in prec_gt_0_. intros.
+  red in prec_gt_0_, prec_lt_emax_. intros.
   replace n with (n * 2^0) by (change (2^0) with 1; ring).
   apply integer_representable_n2p_wide. auto. lia. lia.
 Qed.
@@ -200,7 +205,7 @@ Lemma round_int_no_overflow:
   Z.abs n <= 2^emax - 2^(emax-prec) ->
   (Rabs (round radix2 fexp (round_mode mode_NE) (IZR n)) < bpow radix2 emax)%R.
 Proof.
-  intros. red in prec_gt_0_.
+  intros. red in prec_gt_0_, prec_lt_emax_.
   rewrite <- round_NE_abs.
   apply Rle_lt_trans with (IZR (2^emax - 2^(emax-prec))).
   apply round_le_generic. apply fexp_correct; auto. apply valid_rnd_N.
@@ -220,7 +225,7 @@ Qed.
 (** Conversion from an integer.  Round to nearest. *)
 
 Definition BofZ (n: Z) : binary_float :=
-  binary_normalize prec emax prec_gt_0_ Hmax mode_NE n 0 false.
+  binary_normalize prec emax _ _ mode_NE n 0 false.
 
 Theorem BofZ_correct:
   forall n,
@@ -233,7 +238,7 @@ Theorem BofZ_correct:
     B2FF prec emax (BofZ n) = binary_overflow prec emax mode_NE (Z.ltb n 0).
 Proof.
   intros.
-  generalize (binary_normalize_correct prec emax prec_gt_0_ Hmax mode_NE n 0 false).
+  generalize (binary_normalize_correct prec emax _ _ mode_NE n 0 false).
   fold emin; fold fexp; fold (BofZ n).
   replace (F2R {| Fnum := n; Fexp := 0 |}) with (IZR n).
   destruct Rlt_bool.
@@ -287,7 +292,7 @@ Lemma BofZ_finite_pos0:
   Z.abs n <= 2^emax - 2^(emax-prec) -> is_finite_pos0 (BofZ n) = true.
 Proof.
   intros.
-  generalize (binary_normalize_correct prec emax prec_gt_0_ Hmax mode_NE n 0 false).
+  generalize (binary_normalize_correct prec emax _ _ mode_NE n 0 false).
   fold emin; fold fexp; fold (BofZ n).
   replace (F2R {| Fnum := n; Fexp := 0 |}) with (IZR n) by
     (unfold F2R; simpl; ring).
@@ -295,12 +300,13 @@ Proof.
   intros (A & B & C).
   destruct (BofZ n); auto; try discriminate.
   simpl in *. rewrite C. rewrite Rcompare_IZR.
-  generalize (Zcompare_spec n 0); intros SPEC; inversion SPEC; auto.
+  generalize (Zcompare_spec n 0); intros SPEC; destruct SPEC; auto.
   assert ((round radix2 fexp ZnearestE (IZR n) <= -1)%R).
   { apply round_le_generic. apply fexp_correct. auto. apply valid_rnd_N.
     apply (integer_representable_opp 1).
     apply (integer_representable_2p 0).
-    red in prec_gt_0_; lia.
+
+    red in prec_gt_0_, prec_lt_emax_; lia.
     apply IZR_le; lia.
   }
   lra.
@@ -321,12 +327,12 @@ Qed.
 Theorem BofZ_plus:
   forall nan p q,
   integer_representable p -> integer_representable q ->
-  Bplus _ _ _ Hmax nan mode_NE (BofZ p) (BofZ q) = BofZ (p + q).
+  Bplus _ _ _ _ nan mode_NE (BofZ p) (BofZ q) = BofZ (p + q).
 Proof.
   intros.
   destruct (BofZ_representable p) as (A & B & C); auto.
   destruct (BofZ_representable q) as (D & E & F); auto.
-  generalize (Bplus_correct _ _ _ Hmax nan mode_NE (BofZ p) (BofZ q) B E).
+  generalize (Bplus_correct _ _ _ _ nan mode_NE (BofZ p) (BofZ q) B E).
   fold emin; fold fexp.
   rewrite A, D. rewrite <- plus_IZR.
   generalize (BofZ_correct (p + q)). destruct Rlt_bool.
@@ -351,12 +357,12 @@ Qed.
 Theorem BofZ_minus:
   forall nan p q,
   integer_representable p -> integer_representable q ->
-  Bminus _ _ _ Hmax nan mode_NE (BofZ p) (BofZ q) = BofZ (p - q).
+  Bminus _ _ _ _ nan mode_NE (BofZ p) (BofZ q) = BofZ (p - q).
 Proof.
   intros.
   destruct (BofZ_representable p) as (A & B & C); auto.
   destruct (BofZ_representable q) as (D & E & F); auto.
-  generalize (Bminus_correct _ _ _ Hmax nan mode_NE (BofZ p) (BofZ q) B E).
+  generalize (Bminus_correct _ _ _ _ nan mode_NE (BofZ p) (BofZ q) B E).
   fold emin; fold fexp.
   rewrite A, D. rewrite <- minus_IZR.
   generalize (BofZ_correct (p - q)). destruct Rlt_bool.
@@ -385,7 +391,7 @@ Theorem BofZ_mult:
   forall nan p q,
   integer_representable p -> integer_representable q ->
   0 < q ->
-  Bmult _ _ _ Hmax nan mode_NE (BofZ p) (BofZ q) = BofZ (p * q).
+  Bmult _ _ _ _ nan mode_NE (BofZ p) (BofZ q) = BofZ (p * q).
 Proof.
   intros.
   assert (SIGN: xorb (p <? 0) (q <? 0) = (p * q <? 0)).
@@ -397,7 +403,7 @@ Proof.
   }
   destruct (BofZ_representable p) as (A & B & C); auto.
   destruct (BofZ_representable q) as (D & E & F); auto.
-  generalize (Bmult_correct _ _ _ Hmax nan mode_NE (BofZ p) (BofZ q)).
+  generalize (Bmult_correct _ _ _ _ nan mode_NE (BofZ p) (BofZ q)).
   fold emin; fold fexp.
   rewrite A, B, C, D, E, F. rewrite <- mult_IZR.
   generalize (BofZ_correct (p * q)). destruct Rlt_bool.
@@ -415,7 +421,7 @@ Theorem BofZ_mult_2p:
   Z.abs x <= 2^emax - 2^(emax-prec) ->
   2^prec <= Z.abs x ->
   0 <= p <= emax - 1 ->
-  Bmult _ _ _ Hmax nan mode_NE (BofZ x) (BofZ (2^p)) = BofZ (x * 2^p).
+  Bmult _ _ _ _ nan mode_NE (BofZ x) (BofZ (2^p)) = BofZ (x * 2^p).
 Proof.
   intros.
   destruct (Z.eq_dec x 0).
@@ -475,7 +481,7 @@ Proof.
     apply Zlt_bool_true. apply Z.mul_neg_pos; auto.
     apply Zlt_bool_false. apply Z.mul_nonneg_nonneg; lia.
   }
-  generalize (Bmult_correct _ _ _ Hmax nan mode_NE (BofZ x) (BofZ (2^p)))
+  generalize (Bmult_correct _ _ _ _ nan mode_NE (BofZ x) (BofZ (2^p)))
              (BofZ_correct (x * 2^p)).
   fold emin; fold fexp. rewrite A, B, C, D, E, F, H4, H5.
   destruct Rlt_bool.
@@ -524,7 +530,7 @@ Proof.
   {
     unfold cexp, FLT_exp, FIX_exp.
     replace (mag radix2 x - prec') with p by (unfold prec'; lia).
-    apply Z.max_l. unfold emin', emin. red in prec_gt_0_; lia.
+    apply Z.max_l. unfold emin', emin. red in prec_gt_0_, prec_lt_emax_; lia.
   }
   assert (RND: round radix2 (FIX_exp p) Zrnd_odd x =
                round radix2 (FLT_exp emin' prec') Zrnd_odd x).
@@ -806,7 +812,7 @@ Qed.
 Theorem ZofB_minus:
   forall minus_nan m f p q,
   ZofB f = Some p -> 0 <= p < 2*q -> q <= 2^prec -> (IZR q <= B2R _ _ f)%R ->
-  ZofB (Bminus _ _ _ Hmax minus_nan m f (BofZ q)) = Some (p - q).
+  ZofB (Bminus _ _ _ _ minus_nan m f (BofZ q)) = Some (p - q).
 Proof.
   intros.
   assert (Q: -2^prec <= q <= 2^prec).
@@ -820,7 +826,7 @@ Proof.
     apply sterbenz_aux. now apply FLT_exp_valid. apply FLT_exp_monotone. apply generic_format_B2R.
     apply integer_representable_n. auto. lra. }
   destruct (BofZ_exact q Q) as (A & B & C).
-  generalize (Bminus_correct _ _ _ Hmax minus_nan m f (BofZ q) FIN B).
+  generalize (Bminus_correct _ _ _ _ minus_nan m f (BofZ q) FIN B).
   rewrite Rlt_bool_true.
 - fold emin; fold fexp. intros (D & E & F).
   rewrite ZofB_correct. rewrite E. rewrite D. rewrite A. rewrite EXACT.
@@ -870,10 +876,10 @@ Qed.
 Theorem ZofB_range_minus:
   forall minus_nan m f p q,
   ZofB_range f 0 (2 * q - 1) = Some p -> q <= 2^prec -> (IZR q <= B2R _ _ f)%R ->
-  ZofB_range (Bminus _ _ _ Hmax minus_nan m f (BofZ q)) (-q) (q - 1) = Some (p - q).
+  ZofB_range (Bminus _ _ _ _ minus_nan m f (BofZ q)) (-q) (q - 1) = Some (p - q).
 Proof.
   intros. destruct (ZofB_range_inversion _ _ _ _ H) as (A & B & C).
-  set (f' := Bminus prec emax prec_gt_0_ Hmax minus_nan m f (BofZ q)).
+  set (f' := Bminus prec emax _ _ minus_nan m f (BofZ q)).
   assert (D: ZofB f' = Some (p - q)).
   { apply ZofB_minus. auto. lia. auto. auto. }
   unfold ZofB_range. rewrite D. rewrite Zle_bool_true by lia. rewrite Zle_bool_true by lia. auto.
@@ -886,70 +892,30 @@ Qed.
 Theorem Bplus_commut:
   forall plus_nan mode (x y: binary_float),
   plus_nan x y = plus_nan y x ->
-  Bplus _ _ _ Hmax plus_nan mode x y = Bplus _ _ _ Hmax plus_nan mode y x.
+  Bplus _ _ _ _ plus_nan mode x y = Bplus _ _ _ _ plus_nan mode y x.
 Proof.
   intros until y; intros NAN.
-  pose proof (Bplus_correct _ _ _ Hmax plus_nan mode x y).
-  pose proof (Bplus_correct _ _ _ Hmax plus_nan mode y x).
-  unfold Bplus in *; destruct x as [sx|sx|sx px Hx|sx mx ex Hx]; destruct y as [sy|sy|sy py Hy|sy my ey Hy]; auto.
+  unfold Bplus. rewrite NAN. f_equal.
+  destruct x as [sx|sx|sx px Hx|sx mx ex Hx]; destruct y as [sy|sy|sy py Hy|sy my ey Hy]; auto; simpl.
 - rewrite (eqb_sym sy sx). destruct (eqb sx sy) eqn:EQB; auto.
   f_equal; apply eqb_prop; auto.
-- rewrite NAN; auto.
-- rewrite (eqb_sym sy sx). destruct (eqb sx sy) eqn:EQB.
+- rewrite (eqb_sym sy sx). destruct (eqb sx sy) eqn:EQB; auto.
   f_equal; apply eqb_prop; auto.
-  rewrite NAN; auto.
-- rewrite NAN; auto.
-- rewrite NAN; auto.
-- rewrite NAN; auto.
-- rewrite NAN; auto.
-- rewrite NAN; auto.
-- rewrite NAN; auto.
-- generalize (H (eq_refl _) (eq_refl _)); clear H.
-  generalize (H0 (eq_refl _) (eq_refl _)); clear H0.
-  fold emin. fold fexp.
-  set (x := B754_finite prec emax sx mx ex Hx). set (rx := B2R _ _ x).
-  set (y := B754_finite prec emax sy my ey Hy). set (ry := B2R _ _ y).
-  rewrite (Rplus_comm ry rx). destruct Rlt_bool.
-  + intros (A1 & A2 & A3) (B1 & B2 & B3).
-    apply B2R_Bsign_inj; auto. rewrite <- B1 in A1. auto.
-    rewrite Z.add_comm. rewrite Z.min_comm. auto.
-  + intros (A1 & A2) (B1 & B2). apply B2FF_inj. rewrite B2 in B1. rewrite <- B1 in A1. auto.
+- rewrite Z.min_comm. f_equal.
+  apply Zplus_comm.
 Qed.
 
 Theorem Bmult_commut:
   forall mult_nan mode (x y: binary_float),
   mult_nan x y = mult_nan y x ->
-  Bmult _ _ _ Hmax mult_nan mode x y = Bmult _ _ _ Hmax mult_nan mode y x.
+  Bmult _ _ _ _ mult_nan mode x y = Bmult _ _ _ _ mult_nan mode y x.
 Proof.
   intros until y; intros NAN.
-  pose proof (Bmult_correct _ _ _ Hmax mult_nan mode x y).
-  pose proof (Bmult_correct _ _ _ Hmax mult_nan mode y x).
-  unfold Bmult in *; destruct x as [sx|sx|sx px Hx|sx mx ex Hx]; destruct y as [sy|sy|sy py Hy|sy my ey Hy]; auto.
-- rewrite (xorb_comm sx sy); auto.
-- rewrite NAN; auto.
-- rewrite NAN; auto.
-- rewrite (xorb_comm sx sy); auto.
-- rewrite NAN; auto.
-- rewrite (xorb_comm sx sy); auto.
-- rewrite NAN; auto.
-- rewrite (xorb_comm sx sy); auto.
-- rewrite NAN; auto.
-- rewrite NAN; auto.
-- rewrite NAN; auto.
-- rewrite NAN; auto.
-- rewrite (xorb_comm sx sy); auto.
-- rewrite (xorb_comm sx sy); auto.
-- rewrite NAN; auto.
-- revert H H0. fold emin. fold fexp.
-  set (x := B754_finite prec emax sx mx ex Hx). set (rx := B2R _ _ x).
-  set (y := B754_finite prec emax sy my ey Hy). set (ry := B2R _ _ y).
-  rewrite (Rmult_comm ry rx).
-  destruct (Rlt_bool (Rabs (round radix2 fexp (round_mode mode) (rx * ry)))
-                     (bpow radix2 emax)).
-  + intros (A1 & A2 & A3) (B1 & B2 & B3).
-    apply B2R_Bsign_inj; auto. rewrite <- B1 in A1. auto.
-    rewrite ! Bsign_FF2B. f_equal. f_equal. apply xorb_comm. now rewrite Pos.mul_comm. apply Z.add_comm.
-  + intros A B. apply B2FF_inj. etransitivity. eapply A. rewrite xorb_comm. auto.
+  unfold Bmult. rewrite NAN. f_equal.
+  destruct x as [sx|sx|sx px Hx|sx mx ex Hx]; destruct y as [sy|sy|sy py Hy|sy my ey Hy]; auto;
+    simpl; try rewrite xorb_comm; auto.
+  apply B2SF_inj. rewrite 2!B2SF_SF2B.
+  now rewrite xorb_comm, Pos.mul_comm, Zplus_comm.
 Qed.
 
 (** Multiplication by 2 is diagonal addition. *)
@@ -958,15 +924,15 @@ Theorem Bmult2_Bplus:
   forall plus_nan mult_nan mode (f: binary_float),
   (forall (x y: binary_float),
    is_nan _ _ x = true -> is_finite _ _ y = true -> plus_nan x x = mult_nan x y) ->
-  Bplus _ _ _ Hmax plus_nan mode f f = Bmult _ _ _ Hmax mult_nan mode f (BofZ 2%Z).
+  Bplus _ _ _ _ plus_nan mode f f = Bmult _ _ _ _ mult_nan mode f (BofZ 2%Z).
 Proof.
   intros until f; intros NAN.
   destruct (BofZ_representable 2) as (A & B & C).
-  apply (integer_representable_2p 1). red in prec_gt_0_; lia.
-  pose proof (Bmult_correct _ _ _ Hmax mult_nan mode f (BofZ 2%Z)). fold emin in H.
+  apply (integer_representable_2p 1). red in prec_gt_0_, prec_lt_emax_; lia.
+  pose proof (Bmult_correct _ _ _ _ mult_nan mode f (BofZ 2%Z)). fold emin in H.
   rewrite A, B, C in H. rewrite xorb_false_r in H.
   destruct (is_finite _ _ f) eqn:FIN.
-- pose proof (Bplus_correct _ _ _ Hmax plus_nan mode f f FIN FIN). fold emin in H0.
+- pose proof (Bplus_correct _ _ _ _ plus_nan mode f f FIN FIN). fold emin in H0.
   assert (EQ: (B2R prec emax f * IZR 2%Z = B2R prec emax f + B2R prec emax f)%R).
   { ring. }
   rewrite <- EQ in H0. destruct Rlt_bool.
@@ -981,12 +947,12 @@ Proof.
     rewrite Rcompare_F2R. destruct s; auto.
     unfold F2R. simpl. ring.
     apply IZR_lt. lia.
-    destruct (Bmult prec emax prec_gt_0_ Hmax mult_nan mode f (BofZ 2)); reflexivity || discriminate.
+    destruct (Bmult prec emax _ _ mult_nan mode f (BofZ 2)); reflexivity || discriminate.
   + destruct H0 as (P & Q). apply B2FF_inj. rewrite P, H. auto.
 - destruct f as [sf|sf|sf pf Hf|sf mf ef Hf]; try discriminate.
-  + simpl Bplus. rewrite eqb_true. destruct (BofZ 2) as [| | |s2 m2 e2 H2] eqn:B2; try discriminate; simpl in *.
+  + unfold Bplus. simpl BinarySingleNaN.Bplus. rewrite eqb_true. destruct (BofZ 2) as [| | |s2 m2 e2 H2] eqn:B2; try discriminate; simpl in *.
     assert ((0 = 2)%Z) by (apply eq_IZR; auto). discriminate.
-    subst s2. rewrite xorb_false_r. auto.
+    subst s2. unfold Bmult. simpl. rewrite xorb_false_r. auto.
     auto.
   + unfold Bplus, Bmult. rewrite <- NAN by auto. auto.
 Qed.
@@ -1028,9 +994,7 @@ Proof.
   intros. unfold bounded, canonical_mantissa. rewrite andb_true_iff.
   rewrite <- Zeq_is_eq_bool. rewrite <- Zle_is_le_bool.
   rewrite Bexact_inverse_mantissa_digits2_pos.
-  split.
-- intros; split. unfold FLT_exp. unfold emin in H. zify; lia. lia.
-- intros [A B]. unfold FLT_exp in A. unfold emin. zify; lia.
+  unfold fexp, FLT_exp, emin. lia.
 Qed.
 
 Program Definition Bexact_inverse (f: binary_float) : option binary_float :=
@@ -1083,12 +1047,12 @@ Theorem Bdiv_mult_inverse:
    is_nan _ _ x = true -> is_finite _ _ y = true -> is_finite _ _ z = true ->
    div_nan x y = mult_nan x z) ->
   Bexact_inverse y = Some z ->
-  Bdiv _ _ _ Hmax div_nan mode x y = Bmult _ _ _ Hmax mult_nan mode x z.
+  Bdiv _ _ _ _ div_nan mode x y = Bmult _ _ _ _ mult_nan mode x z.
 Proof.
   intros until z; intros NAN; intros. destruct (Bexact_inverse_correct _ _ H) as (A & B & C & D & E).
-  pose proof (Bmult_correct _ _ _ Hmax mult_nan mode x z).
+  pose proof (Bmult_correct _ _ _ _ mult_nan mode x z).
   fold emin in H0. fold fexp in H0.
-  pose proof (Bdiv_correct _ _ _ Hmax div_nan mode x y D).
+  pose proof (Bdiv_correct _ _ _ _ div_nan mode x y D).
   fold emin in H1. fold fexp in H1.
   unfold Rdiv in H1. rewrite <- C in H1.
   destruct (is_finite _ _ x) eqn:FINX.
@@ -1102,8 +1066,8 @@ Proof.
     apply is_finite_not_is_nan. rewrite Q. simpl. apply is_finite_strict_finite; auto.  + apply B2FF_inj. rewrite H0, H1. rewrite E. auto.
 - destruct y; try discriminate. destruct z; try discriminate.
   destruct x; try discriminate; simpl.
-  + simpl in E; congruence.
-  + erewrite NAN; eauto.
+  + simpl in E. now rewrite E.
+  + unfold Bdiv. now rewrite (NAN _ _ (B754_finite prec emax s0 m0 e1 e2)).
 Qed.
 
 (** ** Conversion from scientific notation *)
@@ -1136,7 +1100,7 @@ Qed.
   division with [m].  However, we treat specially very large or very small values of [e],
   when the result is known to be [+infinity] or [0.0] respectively. *)
 
-Definition Bparse (base: positive) (m: positive) (e: Z): binary_float :=
+Program Definition Bparse (base: positive) (m: positive) (e: Z): binary_float :=
   match e with
   | Z0 =>
      BofZ (Zpos m)
@@ -1147,9 +1111,21 @@ Definition Bparse (base: positive) (m: positive) (e: Z): binary_float :=
   | Zneg p =>
      if e * Z.log2 (Zpos base) + Z.log2_up (Zpos m) <? emin
      then B754_zero _ _ false
-     else FF2B prec emax _ (proj1 (Bdiv_correct_aux prec emax prec_gt_0_ Hmax mode_NE
-                                     false m Z0 false (pos_pow base p) Z0))
+     else BSN2B' prec emax (SF2B _ (proj1 (Bdiv_correct_aux prec emax _ _ mode_NE
+                                     false m Z0 false (pos_pow base p) Z0))) _
   end.
+Next Obligation.
+destruct Bdiv_correct_aux as [H1 H2].
+rewrite is_nan_SF2B.
+clear H1.
+destruct SFdiv_core_binary as [[mz ez] lz].
+destruct Rlt_bool.
+destruct H2 as [_ [H _]].
+now destruct BinarySingleNaN.binary_round_aux.
+simpl in H2.
+rewrite H2.
+apply is_nan_binary_overflow.
+Qed.
 
 (** Properties of [Z.log2] and [Z.log2_up]. *)
 
@@ -1209,7 +1185,7 @@ Proof.
   apply generic_format_FLT. exists (Float radix2 1 emax).
   unfold F2R; simpl. ring.
   simpl. apply (Zpower_gt_1 radix2); auto.
-  simpl. unfold emin; red in prec_gt_0_; lia.
+  simpl. unfold emin; red in prec_gt_0_, prec_lt_emax_; lia.
 Qed.
 
 Lemma round_NE_underflows:
@@ -1297,8 +1273,12 @@ Proof.
   replace (Rabs 0)%R with 0%R. apply bpow_gt_0. apply (abs_IZR 0).
   zify; lia.
 + (* no underflow *)
-  generalize (Bdiv_correct_aux prec emax prec_gt_0_ Hmax mode_NE false m 0 false (pos_pow b e) 0).
-  set (f := let '(mz, ez, lz) := Fdiv_core_binary prec emax (Z.pos m) 0 (Z.pos (pos_pow b e)) 0
+  rewrite B2R_BSN2B', B2R_SF2B.
+  rewrite B2FF_BSN2B', B2SF_SF2B.
+  rewrite Bsign_BSN2B', Bsign_SF2B.
+  rewrite is_finite_BSN2B', is_finite_SF2B.
+  generalize (Bdiv_correct_aux prec emax _ _ mode_NE false m 0 false (pos_pow b e) 0).
+  set (f := let '(mz, ez, lz) := SFdiv_core_binary prec emax (Z.pos m) 0 (Z.pos (pos_pow b e)) 0
          in binary_round_aux prec emax mode_NE (xorb false false) mz ez lz).
   fold emin; fold fexp. rewrite ! A. unfold cond_Zopp. rewrite pos_pow_spec.
   assert (B: (IZR (Z.pos m) / IZR (Z.pos b ^ Z.pos e) =
@@ -1311,10 +1291,9 @@ Proof.
            (IZR (Z.pos m) * bpow base (Z.neg e))))
     (bpow radix2 emax)).
 * destruct Q as (Q1 & Q2 & Q3).
-  split. rewrite B2R_FF2B, Q1. auto.
-  split. rewrite is_finite_FF2B. auto.
-  rewrite Bsign_FF2B. auto.
-* rewrite B2FF_FF2B. auto.
+  split. rewrite Q1. auto.
+  split; auto.
+* rewrite Q. auto.
 Qed.
 
 End Extra_ops.
@@ -1391,7 +1370,7 @@ Proof.
   {
     apply round_generic. apply valid_rnd_round_mode. eapply generic_inclusion_le.
     5: apply generic_format_B2R. apply fexp_correct; auto. apply fexp_correct; auto.
-    instantiate (1 := emax2). intros. unfold fexp2, FLT_exp. unfold emin2. zify; lia.
+    instantiate (1 := emax2). intros. unfold fexp, fexp2, FLT_exp. unfold emin, emin2. lia.
     apply Rlt_le; auto.
   }
   rewrite EQ. rewrite Rlt_bool_true by auto. auto.
@@ -1414,7 +1393,8 @@ Proof.
   replace (F2R {| Fnum := n; Fexp := 0 |}) with (IZR n).
   destruct Rlt_bool.
 - intros (P & Q & R) (D & E & F). apply B2R_Bsign_inj; auto.
-  congruence. rewrite F, C, R. rewrite Rcompare_IZR.
+  now rewrite P, D.
+  rewrite F, C, R. rewrite Rcompare_IZR.
   unfold Z.ltb. auto.
 - intros P Q. apply B2FF_inj. rewrite P, Q. rewrite C. f_equal.
   generalize (Zlt_bool_spec n 0); intros LT; inversion LT.

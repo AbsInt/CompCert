@@ -18,9 +18,10 @@ COPYING file for more details.
 *)
 
 (** * Floating-point format without underflow *)
-Require Import Raux Defs Round_pred Generic_fmt Float_prop.
-Require Import FIX Ulp Round_NE.
-Require Import Psatz.
+
+From Coq Require Import ZArith Reals Psatz.
+
+Require Import Zaux Raux Defs Round_pred Generic_fmt Float_prop FIX Ulp Round_NE.
 
 Section RND_FLX.
 

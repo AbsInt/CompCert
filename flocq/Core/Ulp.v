@@ -18,8 +18,10 @@ COPYING file for more details.
 *)
 
 (** * Unit in the Last Place: our definition using fexp and its properties, successor and predecessor *)
-Require Import Reals Psatz.
-Require Import Raux Defs Round_pred Generic_fmt Float_prop.
+
+From Coq Require Import ZArith Reals Psatz.
+
+Require Import Zaux Raux Defs Round_pred Generic_fmt Float_prop.
 
 Section Fcore_ulp.
 
@@ -1100,7 +1102,7 @@ exfalso ; lra.
 intros n Hn H.
 assert (fexp (mag beta eps) = fexp n).
 apply valid_exp; try assumption.
-assert(mag beta eps-1 < fexp n)%Z;[idtac|lia].
+cut (mag beta eps-1 < fexp n)%Z. lia.
 apply lt_bpow with beta.
 apply Rle_lt_trans with (2:=proj2 H).
 destruct (mag beta eps) as (e,He).
@@ -1165,7 +1167,7 @@ lra.
 intros n Hn H.
 assert (fexp (mag beta eps) = fexp n).
 apply valid_exp; try assumption.
-assert(mag beta eps-1 < fexp n)%Z;[idtac|lia].
+cut (mag beta eps-1 < fexp n)%Z. lia.
 apply lt_bpow with beta.
 apply Rle_lt_trans with (2:=H).
 destruct (mag beta eps) as (e,He).
@@ -1919,7 +1921,7 @@ rewrite ulp_neq_0; trivial.
 apply f_equal.
 unfold cexp.
 apply valid_exp; trivial.
-assert (mag beta x -1 < fexp n)%Z;[idtac|lia].
+cut (mag beta x -1 < fexp n)%Z. lia.
 apply lt_bpow with beta.
 destruct (mag beta x) as (e,He).
 simpl.

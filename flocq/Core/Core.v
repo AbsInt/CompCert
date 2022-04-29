@@ -18,5 +18,4 @@ COPYING file for more details.
 *)
 
 (** To ease the import *)
-Require Export Raux Defs Float_prop Round_pred Generic_fmt Round_NE.
-Require Export FIX FLX FLT Ulp.
+Require Export Zaux Raux Defs Digits Float_prop Round_pred Generic_fmt Round_NE FIX FLX FLT Ulp.

@@ -20,7 +20,8 @@ COPYING file for more details.
 (** * Rounding to odd and its properties, including the equivalence
       between rnd_NE and double rounding with rnd_odd and then rnd_NE *)
 
-Require Import Reals Psatz.
+From Coq Require Import ZArith Reals Psatz.
+
 Require Import Core Operations.
 
 Definition Zrnd_odd x :=  match Req_EM_T x (IZR (Zfloor x))  with

@@ -18,9 +18,10 @@ COPYING file for more details.
 *)
 
 (** * Missing definitions/lemmas *)
-Require Import Psatz.
-Require Export Reals ZArith.
-Require Export Zaux.
+
+From Coq Require Import Psatz Reals ZArith.
+
+Require Import Zaux.
 
 Section Rmissing.
 
@@ -65,15 +66,6 @@ Qed.
 Theorem Rabs_eq_R0 x : (Rabs x = 0 -> x = 0)%R.
 Proof. split_Rabs; lra. Qed.
 
-Theorem Rplus_eq_reg_r :
-  forall r r1 r2 : R,
-  (r1 + r = r2 + r)%R -> (r1 = r2)%R.
-Proof.
-intros r r1 r2 H.
-apply Rplus_eq_reg_l with r.
-now rewrite 2!(Rplus_comm r).
-Qed.
-
 Theorem Rmult_lt_compat :
   forall r1 r2 r3 r4,
   (0 <= r1)%R -> (0 <= r3)%R -> (r1 < r2)%R -> (r3 < r4)%R ->
@@ -87,15 +79,6 @@ apply Rle_lt_trans with (r1 * r4)%R.
 - apply Rmult_lt_compat_r.
   + now apply Rle_lt_trans with r3.
   + exact H12.
-Qed.
-
-Theorem Rmult_minus_distr_r :
-  forall r r1 r2 : R,
-  ((r1 - r2) * r = r1 * r - r2 * r)%R.
-Proof.
-intros r r1 r2.
-rewrite <- 3!(Rmult_comm r).
-apply Rmult_minus_distr_l.
 Qed.
 
 Lemma Rmult_neq_reg_r :
@@ -113,7 +96,6 @@ Proof.
 intros r1 r2 r3 H H1 H2.
 now apply H1, Rmult_eq_reg_r with r1.
 Qed.
-
 
 Theorem Rmult_min_distr_r :
   forall r r1 r2 : R,
@@ -242,18 +224,6 @@ Lemma Rsqr_le_abs_0_alt :
 Proof.
 intros x y H.
 apply (Rle_trans _ (Rabs x)); [apply Rle_abs|apply (Rsqr_le_abs_0 _ _ H)].
-Qed.
-
-Theorem Rabs_le :
-  forall x y,
-  (-y <= x <= y)%R -> (Rabs x <= y)%R.
-Proof.
-intros x y (Hyx,Hxy).
-unfold Rabs.
-case Rcase_abs ; intros Hx.
-apply Ropp_le_cancel.
-now rewrite Ropp_involutive.
-exact Hxy.
 Qed.
 
 Theorem Rabs_le_inv :
@@ -1269,8 +1239,6 @@ apply Rmult_lt_compat_r with (2 := H1).
 now apply IZR_lt.
 Qed.
 
-Section Zdiv_Rdiv.
-
 Theorem Zfloor_div :
   forall x y,
   y <> Z0 ->
@@ -1317,9 +1285,9 @@ rewrite Ropp_inv_permute with (1 := Zy').
 rewrite <- 2!opp_IZR.
 rewrite <- Zmod_opp_opp.
 apply H.
-clear -Hy. lia.
+clear -Hy ; lia.
 apply H.
-clear -Zy Hy. lia.
+clear -Zy Hy ; lia.
 (* *)
 split.
 pattern (IZR (x / y)) at 1 ; rewrite <- Rplus_0_r.
@@ -1329,7 +1297,36 @@ apply Rplus_lt_compat_l.
 apply H.
 Qed.
 
-End Zdiv_Rdiv.
+Theorem Ztrunc_div :
+  forall x y, y <> 0%Z ->
+  Ztrunc (IZR x / IZR y) = Z.quot x y.
+Proof.
+  destruct y; [easy | |]; destruct x; intros _.
+  - rewrite Z.quot_0_l; [| easy]. unfold Rdiv. rewrite Rmult_0_l.
+    rewrite Ztrunc_floor; [| apply Rle_refl]. now rewrite Zfloor_IZR.
+  - rewrite Z.quot_div_nonneg; [| easy | easy]. rewrite <-Zfloor_div; [| easy].
+    unfold Ztrunc. rewrite Rlt_bool_false; [reflexivity |].
+    apply Rle_mult_inv_pos; [now apply IZR_le | now apply IZR_lt].
+  - rewrite <-Pos2Z.opp_pos. rewrite Z.quot_opp_l; [| easy].
+    rewrite Z.quot_div_nonneg; [| easy | easy]. rewrite <-Zfloor_div; [| easy].
+    rewrite Ropp_Ropp_IZR. rewrite Ropp_div. unfold Ztrunc. rewrite Rlt_bool_true.
+    + unfold Zceil. now rewrite Ropp_involutive.
+    + apply Ropp_lt_gt_0_contravar. apply Rdiv_lt_0_compat; now apply IZR_lt.
+  - rewrite Z.quot_0_l; [| easy]. unfold Rdiv. rewrite Rmult_0_l.
+    rewrite Ztrunc_floor; [| apply Rle_refl]. now rewrite Zfloor_IZR.
+  - rewrite <-Pos2Z.opp_pos. rewrite Z.quot_opp_r; [| easy].
+    rewrite Z.quot_div_nonneg; [| easy | easy]. rewrite <-Zfloor_div; [| easy].
+    rewrite Ropp_Ropp_IZR. rewrite Ropp_div_den; [| easy]. unfold Ztrunc.
+    rewrite Rlt_bool_true.
+    + unfold Zceil. now rewrite Ropp_involutive.
+    + apply Ropp_lt_gt_0_contravar. apply Rdiv_lt_0_compat; now apply IZR_lt.
+  - rewrite <-2Pos2Z.opp_pos. rewrite Z.quot_opp_l; [| easy]. rewrite Z.quot_opp_r; [| easy].
+    rewrite Z.quot_div_nonneg; [| easy | easy]. rewrite <-Zfloor_div; [| easy].
+    rewrite 2Ropp_Ropp_IZR. rewrite Ropp_div. rewrite Ropp_div_den; [| easy].
+    rewrite Z.opp_involutive. rewrite Ropp_involutive.
+    unfold Ztrunc. rewrite Rlt_bool_false; [reflexivity |].
+    apply Rle_mult_inv_pos; [now apply IZR_le | now apply IZR_lt].
+Qed.
 
 Section pow.
 
@@ -1912,7 +1909,7 @@ apply bpow_le.
 now apply Zlt_le_weak.
 apply IZR_le.
 clear -Zm.
-zify ; lia.
+lia.
 Qed.
 
 Lemma mag_mult :
@@ -2038,6 +2035,33 @@ assert (Hbxy : (bpow (ex - 2) <= x - y)%R).
 apply mag_ge_bpow.
 replace (ex - 1 - 1)%Z with (ex - 2)%Z by ring.
 now apply Rabs_ge; right.
+Qed.
+
+Theorem mag_plus_ge :
+  forall x y,
+  (x <> 0)%R ->
+  (mag y <= mag x - 2)%Z ->
+  (mag x - 1 <= mag (x + y))%Z.
+Proof.
+intros x y Zx.
+destruct (Req_dec y 0) as [Zy|Zy].
+{ intros _.
+  rewrite Zy, Rplus_0_r.
+  lia. }
+rewrite <- (mag_abs x), <- (mag_abs y).
+intros Hm.
+assert (H: Rabs x <> Rabs y).
+{ intros H.
+  apply Zlt_not_le with (2 := Hm).
+  rewrite H.
+  lia. }
+apply mag_minus_lb in Hm ; try now apply Rabs_pos_lt.
+apply Z.le_trans with (1 := Hm).
+apply mag_le_abs.
+now apply Rminus_eq_contra.
+rewrite <- (Ropp_involutive y).
+rewrite Rabs_Ropp.
+apply Rabs_triang_inv2.
 Qed.
 
 Lemma mag_div :
@@ -2181,6 +2205,15 @@ apply sym_eq.
 case Rlt_bool_spec ; intros Hm.
 now apply Rabs_left.
 now apply Rabs_pos_eq.
+Qed.
+
+Theorem Rlt_bool_cond_Ropp :
+  forall x sx, (0 < x)%R ->
+  Rlt_bool (cond_Ropp sx x) 0 = sx.
+Proof.
+  intros x sx Hx. destruct sx; simpl.
+  - apply Rlt_bool_true. now apply Ropp_lt_gt_0_contravar.
+  - apply Rlt_bool_false. now left.
 Qed.
 
 Theorem cond_Ropp_involutive :
@@ -2335,8 +2368,7 @@ refine (Rle_not_lt _ _ (lub (/ (INR (S N) + 1))%R _) _).
   intros Hy.
   refine (H _ _ Py).
   apply INR_lt in Hy.
-  clear -Hy HyN.
-  lia.
+  clear -Hy HyN ; lia.
   now apply Rlt_le, Rinv_0_lt_compat.
 rewrite S_INR, HN.
 ring_simplify (IZR (up (/ l)) - 1 + 1)%R.

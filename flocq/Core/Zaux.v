@@ -18,11 +18,10 @@ COPYING file for more details.
 *)
 
 From Coq Require Import ZArith Lia Zquot.
+From Coq Require SpecFloat.
 
-Require Import SpecFloatCompat.
-
-Notation cond_Zopp := cond_Zopp (only parsing).
-Notation iter_pos := iter_pos (only parsing).
+Notation cond_Zopp := SpecFloat.cond_Zopp (only parsing).
+Notation iter_pos := SpecFloat.iter_pos (only parsing).
 
 Section Zmissing.
 
@@ -535,6 +534,39 @@ now apply He.
 now intros _ _.
 Qed.
 
+Theorem Zeq_bool_diag :
+  forall x, Zeq_bool x x = true.
+Proof.
+intros x.
+now apply Zeq_bool_true.
+Qed.
+
+Theorem Zeq_bool_opp :
+  forall x y,
+  Zeq_bool (Z.opp x) y = Zeq_bool x (Z.opp y).
+Proof.
+intros x y.
+case Zeq_bool_spec.
+- intros <-.
+  apply eq_sym, Zeq_bool_true.
+  apply eq_sym, Z.opp_involutive.
+- intros H.
+  case Zeq_bool_spec.
+  2: easy.
+  intros ->.
+  contradict H.
+  apply Z.opp_involutive.
+Qed.
+
+Theorem Zeq_bool_opp' :
+  forall x y,
+  Zeq_bool (Z.opp x) (Z.opp y) = Zeq_bool x y.
+Proof.
+intros x y.
+rewrite Zeq_bool_opp.
+apply f_equal, Z.opp_involutive.
+Qed.
+
 End Zeq_bool.
 
 Section Zle_bool.
@@ -573,6 +605,32 @@ case Zle_bool ; intros H.
 elim (Z.lt_irrefl x).
 now apply Z.le_lt_trans with y.
 apply refl_equal.
+Qed.
+
+Theorem Zle_bool_opp_l :
+  forall x y,
+  Zle_bool (Z.opp x) y = Zle_bool (Z.opp y) x.
+Proof.
+intros x y.
+case Zle_bool_spec ; intros Hxy ;
+  case Zle_bool_spec ; intros Hyx ; try easy ; lia.
+Qed.
+
+Theorem Zle_bool_opp :
+  forall x y,
+  Zle_bool (Z.opp x) (Z.opp y) = Zle_bool y x.
+Proof.
+intros x y.
+now rewrite Zle_bool_opp_l, Z.opp_involutive.
+Qed.
+
+Theorem Zle_bool_opp_r :
+  forall x y,
+  Zle_bool x (Z.opp y) = Zle_bool y (Z.opp x).
+Proof.
+intros x y.
+rewrite <- (Z.opp_involutive x) at 1.
+apply Zle_bool_opp.
 Qed.
 
 End Zle_bool.
@@ -635,6 +693,33 @@ now rewrite Zle_bool_false.
 now rewrite Zle_bool_true.
 Qed.
 
+Theorem Zlt_bool_opp_l :
+  forall x y,
+  Zlt_bool (Z.opp x) y = Zlt_bool (Z.opp y) x.
+Proof.
+intros x y.
+rewrite <- 2! negb_Zle_bool.
+apply f_equal, Zle_bool_opp_r.
+Qed.
+
+Theorem Zlt_bool_opp_r :
+  forall x y,
+  Zlt_bool x (Z.opp y) = Zlt_bool y (Z.opp x).
+Proof.
+intros x y.
+rewrite <- 2! negb_Zle_bool.
+apply f_equal, Zle_bool_opp_l.
+Qed.
+
+Theorem Zlt_bool_opp :
+  forall x y,
+  Zlt_bool (Z.opp x) (Z.opp y) = Zlt_bool y x.
+Proof.
+intros x y.
+rewrite <- 2! negb_Zle_bool.
+apply f_equal, Zle_bool_opp.
+Qed.
+
 End Zlt_bool.
 
 Section Zcompare.
@@ -688,6 +773,12 @@ End Zcompare.
 
 Section cond_Zopp.
 
+Theorem cond_Zopp_0 :
+  forall sx, cond_Zopp sx 0 = 0%Z.
+Proof.
+now intros [|].
+Qed.
+
 Theorem cond_Zopp_negb :
   forall x y, cond_Zopp (negb x) y = Z.opp (cond_Zopp x y).
 Proof.
@@ -715,6 +806,15 @@ case Zlt_bool_spec ; intros Hm.
 apply Zabs_non_eq.
 now apply Zlt_le_weak.
 now apply Z.abs_eq.
+Qed.
+
+Theorem Zeq_bool_cond_Zopp :
+  forall s m n,
+  Zeq_bool (cond_Zopp s m) n = Zeq_bool m (cond_Zopp s n).
+Proof.
+intros [|] m n ; simpl.
+apply Zeq_bool_opp.
+easy.
 Qed.
 
 End cond_Zopp.
