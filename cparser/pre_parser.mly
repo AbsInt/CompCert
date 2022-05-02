@@ -58,7 +58,7 @@
   AUTO REGISTER INLINE NORETURN CHAR SHORT INT LONG SIGNED UNSIGNED FLOAT DOUBLE
   UNDERSCORE_BOOL CONST VOLATILE VOID STRUCT UNION ENUM CASE DEFAULT IF ELSE
   SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN BUILTIN_VA_ARG ALIGNOF
-  ATTRIBUTE ALIGNAS PACKED ASM BUILTIN_OFFSETOF STATIC_ASSERT
+  ATTRIBUTE ALIGNAS PACKED ASM BUILTIN_OFFSETOF STATIC_ASSERT GENERIC
 
 %token EOF
 
@@ -248,6 +248,21 @@ primary_expression:
 | CONSTANT
 | string_literals_list
 | LPAREN expression RPAREN
+| generic_selection
+    {}
+
+generic_selection:
+| GENERIC LPAREN assignment_expression COMMA generic_assoc_list RPAREN
+    {}
+
+generic_assoc_list:
+| generic_association
+| generic_assoc_list COMMA generic_association
+    {}
+
+generic_association:
+| type_name COLON assignment_expression
+| DEFAULT COLON assignment_expression
     {}
 
 postfix_expression:

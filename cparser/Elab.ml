@@ -1765,6 +1765,32 @@ let elab_expr ctx loc env a =
       let cst' = elab_constant loc cst in
       { edesc = EConst cst'; etyp = type_of_constant cst' },env
 
+(* 6.5.1.1 Generic selection *)
+
+  | GENERIC(a1, assoc) ->
+      let b1,env = elab env a1 in
+      let bssoc,env = elab_generic_association env assoc in
+      let ty = erase_attributes_type env (pointer_decay env b1.etyp) in
+      let exact_match = function
+        | (None, _) -> false
+        | (Some ty', _) -> compatible_types AttrCompat env ty ty'
+      and default_match = function
+        | (None, _) -> true
+        | (Some _, _) -> false in
+      begin match List.filter exact_match bssoc with
+      | (_, b) :: others ->
+          if others <> [] then
+            error "'_Generic' selector of type %a is compatible with several associations"
+                  (print_typ env) ty;
+          (b,env)
+      | [] ->
+          match List.find_opt default_match bssoc with
+          | Some (_, b) -> (b,env)
+          | None ->
+              fatal_error "'_Generic' selector of type %a is not compatible with any association"
+                          (print_typ env) ty
+      end
+
 (* 6.5.2 Postfix expressions *)
 
   | INDEX(a1, a2) ->            (* e1[e2] *)
@@ -2449,6 +2475,36 @@ let elab_expr ctx loc env a =
         end;
         let rest,env = elab_arguments (argno + 1) (argl,env) paraml vararg in
         arg1 :: rest,env
+
+  (* Elaboration of _Generic association lists *)
+  and elab_generic_association env assoc =
+    let rec elab_gen env accu = function
+      | [] -> (List.rev accu, env)
+      | (None, a) :: l ->
+          if List.exists (fun (oty, _) -> oty = None) accu then
+            error "duplicate default generic association";
+          let b,env = elab env a in
+          elab_gen env ((None, b) :: accu) l
+      | (Some(spec, dcl), a) :: l ->
+          let ty,env = elab_type loc env spec dcl in
+          if wrap is_function_type loc env ty then
+            error "function type %a in generic association"
+              (print_typ env) ty
+          else if wrap incomplete_type loc env ty then
+            error "incomplete type %a in generic association"
+              (print_typ env) ty;
+          List.iter
+            (function
+            | (None, _) -> ()
+            | (Some ty', _) ->
+                if compatible_types AttrCompat env ty ty' then
+                  error "type %a in generic association compatible with previously specified type %a"
+                    (print_typ env) ty (print_typ env) ty')
+            accu;
+          let b,env = elab env a in
+          elab_gen env ((Some ty, b) :: accu) l
+    in elab_gen env [] assoc
+
   in elab env a
 
 (* Filling in forward declaration *)

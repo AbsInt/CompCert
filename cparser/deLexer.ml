@@ -48,6 +48,7 @@ let delex (symbol : string) : string =
   | "EXTERN" -> "extern"
   | "FLOAT" -> "float"
   | "FOR" -> "for"
+  | "GENERIC" -> "_Generic"
   | "GOTO" -> "goto"
   | "IF" -> "if"
   | "INT" -> "int"

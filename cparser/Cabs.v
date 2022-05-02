@@ -141,8 +141,10 @@ with expression :=
   | MEMBEROF : expression -> string -> expression
   | MEMBEROFPTR : expression -> string -> expression
 
-    (* Non-standard *)
+    (* C11 *)
   | ALIGNOF : (list spec_elem * decl_type) -> expression
+  | GENERIC : expression -> list (option (list spec_elem * decl_type) * expression) -> expression
+    (* Non-standard *)
   | BUILTIN_OFFSETOF : (list spec_elem * decl_type) -> list initwhat -> expression
 
 with constant :=
@@ -185,6 +187,10 @@ Definition init_name_group := (list spec_elem * list init_name)%type.
  * contain type or storage modifiers *)
 (* e.g.: int x, y; *)
 Definition name_group := (list spec_elem * list name)%type.
+
+(* Useful type abbreviations *)
+Definition type_name := (list spec_elem * decl_type)%type.
+Definition generic_assoc := (option type_name * expression)%type.
 
 (* GCC extended asm *)
 Inductive asm_operand :=

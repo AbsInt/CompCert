@@ -27,7 +27,7 @@ Require Cabs.
 %token<Cabs.constant * Cabs.loc> CONSTANT
 %token<Cabs.loc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
   ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
-  COLON AND ALIGNOF
+  COLON AND ALIGNOF GENERIC
 
 %token<Cabs.loc> MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN SUB_ASSIGN
   LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN XOR_ASSIGN OR_ASSIGN
@@ -47,7 +47,9 @@ Require Cabs.
   shift_expression relational_expression equality_expression AND_expression
   exclusive_OR_expression inclusive_OR_expression logical_AND_expression
   logical_OR_expression conditional_expression assignment_expression
-  constant_expression expression
+  constant_expression expression generic_selection
+%type<list Cabs.generic_assoc> (* Reverse order *) generic_assoc_list
+%type<Cabs.generic_assoc> generic_association
 %type<Cabs.unary_operator * Cabs.loc> unary_operator
 %type<Cabs.binary_operator> assignment_operator
 %type<list Cabs.expression (* Reverse order *)> argument_expression_list
@@ -126,6 +128,26 @@ primary_expression:
       (Cabs.CONSTANT (Cabs.CONST_STRING wide chars), loc) }
 | loc = LPAREN expr = expression RPAREN
     { (fst expr, loc)}
+| sel = generic_selection
+    { sel }
+
+(* 6.5.1.1 *)
+generic_selection:
+| loc = GENERIC LPAREN expr = assignment_expression COMMA
+                       alist = generic_assoc_list RPAREN
+     { (Cabs.GENERIC (fst expr) (rev' alist), loc) }
+
+generic_assoc_list:
+| a = generic_association
+     { [a] }
+| l = generic_assoc_list COMMA a = generic_association
+     { a :: l }
+
+generic_association:
+| tname = type_name COLON expr = assignment_expression
+     { (Some tname, fst expr) }
+| DEFAULT COLON expr = assignment_expression
+     { (None, fst expr) }
 
 (* 6.5.2 *)
 postfix_expression:
