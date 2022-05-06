@@ -1024,9 +1024,9 @@ let type_of_constant = function
   | CStr s ->
     let size = Int64.of_int (String.length s + 1) in
     TArray(TInt(IChar,[]), Some size, [])
-  | CWStr s ->
+  | CWStr(s, ik) ->
     let size = Int64.of_int (List.length s + 1) in
-    TArray(TInt(wchar_ikind(), []), Some size, [])
+    TArray(TInt(ik, []), Some size, [])
   | CEnum(_, _) -> TInt(IInt, [])
 
 (* Check that a C expression is a lvalue *)

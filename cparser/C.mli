@@ -64,7 +64,7 @@ type constant =
   | CInt of int64 * ikind * string      (* as it appeared in the source *)
   | CFloat of float_cst * fkind
   | CStr of string
-  | CWStr of int64 list
+  | CWStr of int64 list * ikind
   | CEnum of ident * int64              (* enum tag, integer value *)
 
 (** Attributes *)

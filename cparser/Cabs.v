@@ -31,6 +31,13 @@ Record floatInfo := {
   suffix_FI:option string
 }.
 
+Inductive encoding :=
+  | EncNone                             (* no prefix *)
+  | EncWide                             (* 'L' prefix *)
+  | EncU16                              (* 'u' prefix *)
+  | EncU32                              (* 'U' prefix *)
+  | EncUTF8.                            (* 'u8' prefix (strings only) *)
+
 Inductive structOrUnion :=
   | STRUCT | UNION.
 
@@ -152,8 +159,8 @@ with constant :=
      the source code. *)
   | CONST_INT : string -> constant
   | CONST_FLOAT : floatInfo -> constant
-  | CONST_CHAR : bool -> list char_code -> constant
-  | CONST_STRING : bool -> list char_code -> constant
+  | CONST_CHAR : encoding -> list char_code -> constant
+  | CONST_STRING : encoding -> list char_code -> constant
 
 with init_expression :=
   | NO_INIT
@@ -194,9 +201,9 @@ Definition generic_assoc := (option type_name * expression)%type.
 
 (* GCC extended asm *)
 Inductive asm_operand :=
-| ASMOPERAND: option string -> bool -> list char_code -> expression -> asm_operand.
+| ASMOPERAND: option string -> encoding -> list char_code -> expression -> asm_operand.
 
-Definition asm_flag := (bool * list char_code)%type.
+Definition asm_flag := (encoding * list char_code)%type.
 
 (*
 ** Declaration definition (at toplevel)
@@ -227,7 +234,7 @@ with statement :=
  | DEFAULT : statement -> loc -> statement
  | LABEL : string -> statement -> loc -> statement
  | GOTO : string -> loc -> statement
- | ASM : list cvspec -> bool -> list char_code -> list asm_operand -> list asm_operand -> list asm_flag -> loc -> statement
+ | ASM : list cvspec -> encoding -> list char_code -> list asm_operand -> list asm_operand -> list asm_flag -> loc -> statement
  | DEFINITION : definition -> statement (*definition or declaration of a variable or type*)
 
 with for_clause :=

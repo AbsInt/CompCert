@@ -72,7 +72,7 @@ let normalize_int n ik =
 type value =
   | I of int64
   | S of string
-  | WS of int64 list
+  | WS of int64 list * ikind
 
 let boolean_value v =
   match v with
@@ -83,7 +83,7 @@ let constant = function
   | CInt(v, ik, _) -> I (normalize_int v ik)
   | CFloat(v, fk) -> raise Notconst
   | CStr s -> S s
-  | CWStr s -> WS s
+  | CWStr(s, ik) -> WS(s, ik)
   | CEnum(id, v) -> I v
 
 let is_signed env ty =
@@ -274,7 +274,7 @@ let constant_expr env ty e =
     | TInt(ik, _), I n -> Some(CInt(n, ik, ""))
     | TPtr(_, _), I n -> Some(CInt(n, ptr_t_ikind (), ""))
     | (TArray(_, _, _) | TPtr(_, _)), S s -> Some(CStr s)
-    | (TArray(_, _, _) | TPtr(_, _)), WS s -> Some(CWStr s)
+    | (TArray(_, _, _) | TPtr(_, _)), WS(s, ik) -> Some(CWStr(s, ik))
     | TEnum(_, _), I n -> Some(CInt(n, enum_ikind, ""))
     | _   -> None
   with Notconst -> None

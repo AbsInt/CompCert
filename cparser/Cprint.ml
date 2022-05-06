@@ -75,7 +75,7 @@ let const pp = function
             else fprintf pp "\\%03o" (Char.code c)
       done;
       fprintf pp "\""
-  | CWStr l ->
+  | CWStr(l, _) ->
       fprintf pp "L\"";
       List.iter
         (fun c ->

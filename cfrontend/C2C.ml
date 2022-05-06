@@ -287,105 +287,6 @@ let attributes = [
 ]
 
 
-(** ** Functions used to handle string literals *)
-
-let stringNum = ref 0   (* number of next global for string literals *)
-let stringTable : (string, AST.ident) Hashtbl.t = Hashtbl.create 47
-let wstringTable : (int64 list, AST.ident) Hashtbl.t = Hashtbl.create 47
-
-let is_C_string s = not (String.contains s '\000')
-
-let name_for_string_literal s =
-  try
-    Hashtbl.find stringTable s
-  with Not_found ->
-    incr stringNum;
-    let name = Printf.sprintf "__stringlit_%d" !stringNum in
-    let id = intern_string name in
-    let mergeable = if is_C_string s then 1 else 0 in
-    Hashtbl.add decl_atom id
-      { a_storage = C.Storage_static;
-        a_alignment = Some 1;
-        a_size = Some (Int64.of_int (String.length s + 1));
-        a_sections = [Sections.for_stringlit mergeable];
-        a_access = Sections.Access_default;
-        a_inline = No_specifier;
-        a_loc = Cutil.no_loc };
-    Hashtbl.add stringTable s id;
-    id
-
-let typeStringLiteral s =
-  let sg = if Machine.((!config).char_signed) then Signed else Unsigned in
-  Tarray(Tint(I8, sg, noattr), Z.of_uint (String.length s + 1), noattr)
-
-let global_for_string s id =
-  let init = ref [] in
-  let add_char c =
-    init := AST.Init_int8(Z.of_uint(Char.code c)) :: !init in
-  add_char '\000';
-  for i = String.length s - 1 downto 0 do add_char s.[i] done;
-  AST.(id, Gvar { gvar_info = typeStringLiteral s;  gvar_init = !init;
-                  gvar_readonly = true;  gvar_volatile = false})
-
-let is_C_wide_string s = not (List.mem 0L s)
-
-let name_for_wide_string_literal s =
-  try
-    Hashtbl.find wstringTable s
-  with Not_found ->
-    incr stringNum;
-    let name = Printf.sprintf "__stringlit_%d" !stringNum in
-    let id = intern_string name in
-    let wchar_size = Machine.((!config).sizeof_wchar) in
-    let mergeable = if is_C_wide_string s then wchar_size else 0 in
-    Hashtbl.add decl_atom id
-      { a_storage = C.Storage_static;
-        a_alignment = Some wchar_size;
-        a_size = Some (Int64.(mul (of_int (List.length s + 1))
-                                  (of_int wchar_size)));
-        a_sections = [Sections.for_stringlit mergeable];
-        a_access = Sections.Access_default;
-        a_inline = No_specifier;
-        a_loc = Cutil.no_loc };
-    Hashtbl.add wstringTable s id;
-    id
-
-let typeWideStringLiteral s =
-  let sz =
-    match Machine.((!config).sizeof_wchar) with
-    | 2 -> I16
-    | 4 -> I32
-    | _ -> assert false in
-  let sg =
-    if Machine.((!config).wchar_signed) then Signed else Unsigned in
-  Tarray(Tint(sz, sg, noattr), Z.of_uint (List.length s + 1), noattr)
-
-let global_for_wide_string s id =
-  let init = ref [] in
-  let init_of_char =
-    match Machine.((!config).sizeof_wchar) with
-    | 2 -> (fun z -> AST.Init_int16 z)
-    | 4 -> (fun z -> AST.Init_int32 z)
-    | _ -> assert false in
-  let add_char c =
-    init := init_of_char(Z.of_uint64 c) :: !init in
-  List.iter add_char s;
-  add_char 0L;
-  AST.(id, Gvar { gvar_info = typeWideStringLiteral s;
-                  gvar_init = List.rev !init;
-                  gvar_readonly = true; gvar_volatile = false})
-
-let globals_for_strings globs =
-  let globs1 =
-    Hashtbl.fold
-      (fun s id l -> global_for_wide_string s id :: l)
-      wstringTable globs in
-  let globs2 =
-    Hashtbl.fold
-      (fun s id l -> global_for_string s id :: l)
-      stringTable globs1 in
-  globs2
-
 (** ** Handling of inlined memcpy functions *)
 
 let constant_size_t a =
@@ -669,6 +570,98 @@ let is_int64 env ty =
   | C.TInt(k, _) -> Cutil.sizeof_ikind k = 8
   | C.TEnum(_, _) -> false
   | _ -> assert false
+
+(** String literals *)
+
+let stringNum = ref 0   (* number of next global for string literals *)
+let stringTable : (string, AST.ident) Hashtbl.t = Hashtbl.create 47
+let wstringTable : (int64 list * ikind, AST.ident) Hashtbl.t = Hashtbl.create 47
+
+let is_C_string s = not (String.contains s '\000')
+
+let name_for_string_literal s =
+  try
+    Hashtbl.find stringTable s
+  with Not_found ->
+    incr stringNum;
+    let name = Printf.sprintf "__stringlit_%d" !stringNum in
+    let id = intern_string name in
+    let mergeable = if is_C_string s then 1 else 0 in
+    Hashtbl.add decl_atom id
+      { a_storage = C.Storage_static;
+        a_alignment = Some 1;
+        a_size = Some (Int64.of_int (String.length s + 1));
+        a_sections = [Sections.for_stringlit mergeable];
+        a_access = Sections.Access_default;
+        a_inline = No_specifier;
+        a_loc = Cutil.no_loc };
+    Hashtbl.add stringTable s id;
+    id
+
+let typeStringLiteral s =
+  let sg = if Machine.((!config).char_signed) then Signed else Unsigned in
+  Tarray(Tint(I8, sg, noattr), Z.of_uint (String.length s + 1), noattr)
+
+let global_for_string s id =
+  let init = ref [] in
+  let add_char c =
+    init := AST.Init_int8(Z.of_uint(Char.code c)) :: !init in
+  add_char '\000';
+  for i = String.length s - 1 downto 0 do add_char s.[i] done;
+  AST.(id, Gvar { gvar_info = typeStringLiteral s;  gvar_init = !init;
+                  gvar_readonly = true;  gvar_volatile = false})
+
+let is_C_wide_string s = not (List.mem 0L s)
+
+let name_for_wide_string_literal s ik =
+  try
+    Hashtbl.find wstringTable (s, ik)
+  with Not_found ->
+    incr stringNum;
+    let name = Printf.sprintf "__stringlit_%d" !stringNum in
+    let id = intern_string name in
+    let wchar_size = Cutil.sizeof_ikind ik in
+    let mergeable = if is_C_wide_string s then wchar_size else 0 in
+    Hashtbl.add decl_atom id
+      { a_storage = C.Storage_static;
+        a_alignment = Some wchar_size;
+        a_size = Some (Int64.(mul (of_int (List.length s + 1))
+                                  (of_int wchar_size)));
+        a_sections = [Sections.for_stringlit mergeable];
+        a_access = Sections.Access_default;
+        a_inline = No_specifier;
+        a_loc = Cutil.no_loc };
+    Hashtbl.add wstringTable (s, ik) id;
+    id
+
+let typeWideStringLiteral s ik =
+  Tarray(convertIkind ik noattr, Z.of_uint (List.length s + 1), noattr)
+
+let global_for_wide_string (s, ik) id =
+  let init = ref [] in
+  let init_of_char =
+    match Cutil.sizeof_ikind ik with
+    | 2 -> (fun z -> AST.Init_int16 z)
+    | 4 -> (fun z -> AST.Init_int32 z)
+    | _ -> assert false in
+  let add_char c =
+    init := init_of_char(Z.of_uint64 c) :: !init in
+  List.iter add_char s;
+  add_char 0L;
+  AST.(id, Gvar { gvar_info = typeWideStringLiteral s ik;
+                  gvar_init = List.rev !init;
+                  gvar_readonly = true; gvar_volatile = false})
+
+let globals_for_strings globs =
+  let globs1 =
+    Hashtbl.fold
+      (fun s id l -> global_for_wide_string s id :: l)
+      wstringTable globs in
+  let globs2 =
+    Hashtbl.fold
+      (fun s id l -> global_for_string s id :: l)
+      stringTable globs1 in
+  globs2
 
 (** Floating point constants *)
 
@@ -1003,9 +996,9 @@ and convertLvalue env e =
   | C.EConst(C.CStr s) ->
       let ty = typeStringLiteral s in
       Evar(name_for_string_literal s, ty)
-  | C.EConst(C.CWStr s) ->
-      let ty = typeWideStringLiteral s in
-      Evar(name_for_wide_string_literal s, ty)
+  | C.EConst(C.CWStr(s, ik)) ->
+      let ty = typeWideStringLiteral s ik in
+      Evar(name_for_wide_string_literal s ik, ty)
   | _ ->
       error "illegal lvalue"; ezero
 

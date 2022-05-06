@@ -160,6 +160,79 @@ let convert_escape = function
   | 't' -> 9L  (* horizontal tab *)
   | 'v' -> 11L (* vertical tab *)
   | c   -> Int64.of_int (Char.code c)
+
+(* Encodings for character and string literals *)
+
+let encoding_of = function
+  | "" -> Cabs.EncNone
+  | "L" -> Cabs.EncWide
+  | "u" -> Cabs.EncU16
+  | "U" -> Cabs.EncU32
+  | "u8" -> Cabs.EncUTF8
+  | _ -> assert false
+
+let combine_encodings loc e1 e2 =
+  if e1 = Cabs.EncNone then e2
+  else if e2 = Cabs.EncNone then e1
+  else if e1 = e2 then e1
+  else Diagnostics.fatal_error
+           Cabs.(loc.filename, loc.lineno)
+           "unsupported non-standard concatenation of string literals"
+
+(* Handling of characters and escapes in string and char constants *)
+
+type chr = Chr of int | Esc of int64
+
+let check_utf8 lexbuf min x =
+  if x > 0x10FFFF || (x >= 0xD800 && x <= 0xDFFF) then begin
+    error lexbuf "Wrong Unicode value U+%X" x; Chr 0
+  end else if x < min then begin
+    error lexbuf "Overlong UTF-8 encoding for Unicode value U+%X" x; Chr 0
+  end else
+    Chr x
+
+let check_universal_character lexbuf x =
+  if x > 0x10FFFF
+  || x >= 0xD800 && x <= 0xDFFF
+  || x < 0xA0 && x <> 0x24 && x <> 0x40 && x <> 0x60
+  then begin
+    error lexbuf "Wrong universal character name U+%X" x; Chr 0
+  end else
+    Chr x
+
+let add_char enc c accu =
+  match c, enc with
+  | Esc x, _ -> (* Escapes are never encoded *)
+      x :: accu
+  | Chr x, (Cabs.EncWide | Cabs.EncU32) -> (* Characters are not encoded *)
+      Int64.of_int x :: accu
+  | Chr x, (Cabs.EncNone | Cabs.EncUTF8) -> (* Characters are encoded in UTF8 *)
+      if x <= 0x007F then
+        Int64.of_int x :: accu
+      else if x <= 0x07FF then
+        Int64.of_int (0x80 lor (x land 0x3F)) ::
+        Int64.of_int (0xC0 lor (x lsr 6)) ::
+        accu
+      else if x <= 0xFFFF then
+        Int64.of_int (0x80 lor (x land 0x3F)) ::
+        Int64.of_int (0x80 lor ((x lsr 6) land 0x3F)) ::
+        Int64.of_int (0xE0 lor (x lsr 12)) ::
+        accu
+      else
+        Int64.of_int (0x80 lor (x land 0x3F)) ::
+        Int64.of_int (0x80 lor ((x lsr 6) land 0x3F)) ::
+        Int64.of_int (0x80 lor ((x lsr 12) land 0x3F)) ::
+        Int64.of_int (0xF0 lor (x lsr 18)) ::
+        accu
+  | Chr x, Cabs.EncU16 -> (* Characters are encoded in UTF16 *)
+      if x <= 0xFFFF then
+        Int64.of_int x :: accu
+      else begin
+        let x = x - 0x10000 in
+        Int64.of_int (0xDC00 lor (x land 0x3FF)) ::
+        Int64.of_int (0xD800 lor (x lsr 10)) ::
+        accu
+      end
 }
 
 (* Identifiers *)
@@ -241,7 +314,7 @@ let preprocessing_number =
   '.'? ['0'-'9']
   (['0'-'9' 'A'-'Z' 'a'-'z' '_' '.'] | ['e' 'E' 'p' 'P']['+' '-'])*
 
-(* Character and string constants *)
+(* Character and string constants.  Escape sequences omit the initial '\\' *)
 let simple_escape_sequence =
   '\\' ( ['\''  '\"'  '?'  '\\'  'a'  'b'  'e'  'f'  'n'  'r'  't'  'v'] as c)
 let octal_escape_sequence =
@@ -249,11 +322,6 @@ let octal_escape_sequence =
          | octal_digit octal_digit
          | octal_digit octal_digit octal_digit) as n)
 let hexadecimal_escape_sequence = "\\x" (hexadecimal_digit+ as n)
-let escape_sequence =
-    simple_escape_sequence
-  | octal_escape_sequence
-  | hexadecimal_escape_sequence
-  | universal_character_name
 
 rule initial = parse
   | '\n'                          { new_line lexbuf; initial_linebegin lexbuf }
@@ -283,16 +351,13 @@ rule initial = parse
                                       currentLoc lexbuf)}
   | preprocessing_number as s     { error lexbuf "invalid numerical constant '%s'@ These characters form a preprocessor number, but not a constant" s;
                                     CONSTANT (Cabs.CONST_INT "0", currentLoc lexbuf) }
-  | "'"                           { let l = char_literal lexbuf.lex_start_p [] lexbuf in
-                                    CONSTANT (Cabs.CONST_CHAR(false, l),
-                                              currentLoc lexbuf) }
-  | "L'"                          { let l = char_literal lexbuf.lex_start_p [] lexbuf in
-                                    CONSTANT (Cabs.CONST_CHAR(true, l),
-                                              currentLoc lexbuf) }
-  | "\""                          { let l = string_literal lexbuf.lex_start_p [] lexbuf in
-                                    STRING_LITERAL(false, l, currentLoc lexbuf) }
-  | "L\""                         { let l = string_literal lexbuf.lex_start_p [] lexbuf in
-                                    STRING_LITERAL(true, l, currentLoc lexbuf) }
+  | (""|"L"|"u"|"U") as e "'"     { let enc = encoding_of e in
+                                    let l = char_literal lexbuf.lex_start_p [] lexbuf in
+                                    CONSTANT (Cabs.CONST_CHAR(enc, l), currentLoc lexbuf) }
+  | (""|"L"|"u"|"U"|"u8") as e "\""
+                                  { let enc = encoding_of e in
+                                    let l = string_literal lexbuf.lex_start_p enc [] lexbuf in
+                                    STRING_LITERAL(enc, l, currentLoc lexbuf) }
   | "..."                         { ELLIPSIS(currentLoc lexbuf) }
   | "+="                          { ADD_ASSIGN(currentLoc lexbuf) }
   | "-="                          { SUB_ASSIGN(currentLoc lexbuf) }
@@ -357,39 +422,56 @@ and initial_linebegin = parse
 and char = parse
   | universal_character_name
       { try
-          Int64.of_string ("0x" ^ n)
+          check_universal_character lexbuf (int_of_string ("0x" ^ n))
         with Failure _ ->
           error lexbuf "overflow in universal character name";
-          0L
+          Chr 0
       }
   | hexadecimal_escape_sequence
       { try
-          Int64.of_string ("0x" ^ n)
+          Esc (Int64.of_string ("0x" ^ n))
         with Failure _ ->
           error lexbuf "overflow in hexadecimal escape sequence";
-          0L
+          Esc 0L
       }
   | octal_escape_sequence
-      { Int64.of_string  ("0o" ^ n) }
+      { Esc (Int64.of_string  ("0o" ^ n)) }
   | simple_escape_sequence
-      { convert_escape c }
+      { Esc (convert_escape c) }
   | '\\' (_ as c)
       { error lexbuf "incorrect escape sequence '\\%c'" c;
-        Int64.of_int (Char.code c) }
+        Esc (Int64.of_int (Char.code c)) }
+  | ['\x00'-'\x7F'] as c1
+      { Chr (Char.code c1) }
+  | (['\xC0'-'\xDF'] as c1) (['\x80'-'\xBF'] as c2)
+      { check_utf8 lexbuf 0x80
+          ( (Char.code c1 land 0b00011111) lsl 6
+          + (Char.code c2 land 0b00111111)) }
+  | (['\xE0'-'\xEF'] as c1) (['\x80'-'\xBF'] as c2) (['\x80'-'\xBF'] as c3)
+      { check_utf8 lexbuf 0x800
+          ( (Char.code c1 land 0b00001111) lsl 12
+          + (Char.code c2 land 0b00111111) lsl 6
+          + (Char.code c3 land 0b00111111) ) }
+  | (['\xF0'-'\xF7'] as c1) (['\x80'-'\xBF'] as c2) (['\x80'-'\xBF'] as c3) (['\x80'-'\xBF'] as c4)
+     { check_utf8 lexbuf 0x10000
+          ( (Char.code c1 land 0b00000111) lsl 18
+          + (Char.code c2 land 0b00111111) lsl 12
+          + (Char.code c3 land 0b00111111) lsl 6
+          + (Char.code c4 land 0b00111111) ) }
   | _ as c
-      { Int64.of_int (Char.code c) }
+     { error lexbuf "Ill-formed UTF8 text (byte 0x%02x)" (Char.code c); Chr 0 }
 
 and char_literal startp accu = parse
   | '\''       { lexbuf.lex_start_p <- startp;
                  List.rev accu }
   | '\n' | eof { fatal_error lexbuf "missing terminating \"'\" character" }
-  | ""         { let c = char lexbuf in char_literal startp (c :: accu) lexbuf }
+  | ""         { let c = char lexbuf in char_literal startp (add_char Cabs.EncU32 c accu) lexbuf }
 
-and string_literal startp accu = parse
+and string_literal startp enc accu = parse
   | '\"'       { lexbuf.lex_start_p <- startp;
                  List.rev accu }
   | '\n' | eof { fatal_error lexbuf "missing terminating '\"' character" }
-  | ""         { let c = char lexbuf in string_literal startp (c :: accu) lexbuf }
+  | ""         { let c = char lexbuf in string_literal startp enc (add_char enc c accu) lexbuf }
 
 (* We assume gcc -E syntax but try to tolerate variations. *)
 and hash = parse
@@ -583,21 +665,21 @@ and singleline_comment = parse
       | Pre_parser.STAR loc -> loop (Parser.STAR loc)
       | Pre_parser.STATIC loc -> loop (Parser.STATIC loc)
       | Pre_parser.STATIC_ASSERT loc -> loop (Parser.STATIC_ASSERT loc)
-      | Pre_parser.STRING_LITERAL (wide, str, loc) ->
+      | Pre_parser.STRING_LITERAL (enc, str, loc) ->
           (* Merge consecutive string literals *)
-          let rec doConcat wide str =
+          let rec doConcat enc str =
             match Queue.peek tokens with
-            | Pre_parser.STRING_LITERAL (wide', str', loc) ->
+            | Pre_parser.STRING_LITERAL (enc', str', loc') ->
                ignore (Queue.pop tokens);
-               let (wide'', str'') = doConcat wide' str' in
+               let (enc'', str'') = doConcat enc' str' in
                if str'' <> []
-               then (wide || wide'', str @ str'')
-               else (wide, str)
-            | _ -> (wide, str)
-            | exception Queue.Empty -> (wide, str)
+               then (combine_encodings loc enc enc'', str @ str'')
+               else (enc, str)
+            | _ -> (enc, str)
+            | exception Queue.Empty -> (enc, str)
           in
-          let (wide', str') = doConcat wide str in
-          loop (Parser.STRING_LITERAL ((wide', str'), loc))
+          let (enc', str') = doConcat enc str in
+          loop (Parser.STRING_LITERAL ((enc', str'), loc))
       | Pre_parser.STRUCT loc -> loop (Parser.STRUCT loc)
       | Pre_parser.SUB_ASSIGN loc -> loop (Parser.SUB_ASSIGN loc)
       | Pre_parser.SWITCH loc -> loop (Parser.SWITCH loc)
