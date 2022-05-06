@@ -27,7 +27,7 @@ val tmp_file: string -> string
        The file will be removed when the program exits.
        Return the absolute path to the file. *)
 
-val output_filename: ?final:bool -> string -> string -> string -> string
+val output_filename: ?final:bool -> string -> suffix:string -> string
    (** Determine names for output files.  We use -o option if specified
        and if this is the final destination file (not a dump file).
        Otherwise, we generate a file in the current directory. *)

@@ -89,12 +89,12 @@ let command_error n exc =
    and if this is the final destination file (not a dump file).
    Otherwise, we generate a file in the current directory. *)
 
-let output_filename ?(final = false) source_file source_suffix output_suffix =
+let output_filename ?(final = false) source_file ~suffix =
   match !option_o with
   | Some file when final -> file
   | _ ->
-    Filename.basename (Filename.chop_suffix source_file source_suffix)
-    ^ output_suffix
+    Filename.basename (Filename.remove_extension source_file)
+    ^ suffix
 
 (* A variant of [output_filename] where the default output name is fixed *)
 

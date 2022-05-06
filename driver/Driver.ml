@@ -30,18 +30,18 @@ let sdump_suffix = ref ".json"
 let nolink () =
   !option_c || !option_S || !option_E || !option_interp
 
-let object_filename sourcename suff =
+let object_filename sourcename =
   if nolink () then
-    output_filename ~final: !option_c sourcename suff ".o"
+    output_filename ~final: !option_c sourcename ~suffix:".o"
   else
     tmp_file ".o"
 
 (* From CompCert C AST to asm *)
 
-let compile_c_file sourcename ~sourcesuffix ifile ofile =
+let compile_c_file sourcename ifile ofile =
   (* Prepare to dump Clight, RTL, etc, if requested *)
   let set_dest dst opt ext =
-    dst := if !opt then Some (output_filename sourcename sourcesuffix ext)
+    dst := if !opt then Some (output_filename sourcename ~suffix:ext)
       else None in
   set_dest Cprint.destination option_dparse ".parsed.c";
   set_dest PrintCsyntax.destination option_dcmedium ".compcert.c";
@@ -73,23 +73,23 @@ let compile_c_file sourcename ~sourcesuffix ifile ofile =
 
 (* From C source to asm *)
 
-let compile_i_file sourcename ~sourcesuffix preproname =
+let compile_i_file sourcename preproname =
   if !option_interp then begin
     Machine.config := Machine.compcert_interpreter !Machine.config;
     let csyntax = parse_c_file sourcename preproname in
     Interp.execute csyntax;
         ""
   end else if !option_S then begin
-    compile_c_file sourcename ~sourcesuffix:sourcesuffix preproname
-      (output_filename ~final:true sourcename sourcesuffix ".s");
+    compile_c_file sourcename preproname
+      (output_filename ~final:true sourcename ~suffix:".s");
     ""
   end else begin
     let asmname =
       if !option_dasm
-      then output_filename sourcename sourcesuffix ".s"
+      then output_filename sourcename ~suffix:".s"
       else tmp_file ".s" in
-    compile_c_file sourcename ~sourcesuffix:sourcesuffix preproname asmname;
-    let objname = object_filename sourcename sourcesuffix in
+    compile_c_file sourcename preproname asmname;
+    let objname = object_filename sourcename  in
     assemble asmname objname;
     objname
   end
@@ -103,24 +103,24 @@ let process_c_file sourcename =
     ""
   end else begin
     let preproname = if !option_dprepro then
-      output_filename sourcename ".c" ".i"
+      output_filename sourcename ~suffix:".i"
     else
       tmp_file ".i" in
     preprocess sourcename preproname;
-    compile_i_file sourcename ~sourcesuffix:".c" preproname
+    compile_i_file sourcename preproname
   end
 
 (* Processing of a .i / .p file (preprocessed C) *)
 
-let process_i_file sourcename ~sourcesuffix =
+let process_i_file sourcename =
   ensure_inputfile_exists sourcename;
-  compile_i_file sourcename ~sourcesuffix:sourcesuffix sourcename
+  compile_i_file sourcename sourcename
 
 (* Processing of .S and .s files *)
 
 let process_s_file sourcename =
   ensure_inputfile_exists sourcename;
-  let objname = object_filename sourcename ".s" in
+  let objname = object_filename sourcename in
   assemble sourcename objname;
   objname
 
@@ -132,7 +132,7 @@ let process_S_file sourcename =
   end else begin
     let preproname = tmp_file ".s" in
     preprocess sourcename preproname;
-    let objname = object_filename sourcename ".S" in
+    let objname = object_filename sourcename in
     assemble preproname objname;
     objname
   end
@@ -379,11 +379,9 @@ let cmdline_actions =
   Suffix ".c", Self (fun s ->
       push_action process_c_file s; incr num_source_files; incr num_input_files);
   Suffix ".i", Self (fun s ->
-      push_action (process_i_file ~sourcesuffix:".i") s;
-      incr num_source_files; incr num_input_files);
+      push_action process_i_file s; incr num_source_files; incr num_input_files);
   Suffix ".p", Self (fun s ->
-      push_action (process_i_file ~sourcesuffix:".p") s;
-      incr num_source_files; incr num_input_files);
+      push_action process_i_file s; incr num_source_files; incr num_input_files);
   Suffix ".s", Self (fun s ->
       push_action process_s_file s; incr num_source_files; incr num_input_files);
   Suffix ".S", Self (fun s ->

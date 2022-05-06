@@ -67,7 +67,7 @@ let export_clight sourcename csyntax ofile =
 
 let compile_c_file sourcename ifile ofile =
   let set_dest dst opt ext =
-    dst := if !opt then Some (output_filename sourcename ".c" ext)
+    dst := if !opt then Some (output_filename sourcename ~suffix:ext)
       else None in
   set_dest Cprint.destination option_dparse ".parsed.c";
   set_dest PrintCsyntax.destination option_dcmedium ".compcert.c";
@@ -77,20 +77,20 @@ let compile_c_file sourcename ifile ofile =
   | Mode_Csyntax -> export_csyntax sourcename cs ofile
   | Mode_Clight  -> export_clight sourcename cs ofile
 
-let output_filename sourcename suff =
-  let prefixname = Filename.chop_suffix sourcename suff in
+let output_filename sourcename  =
+  let prefixname = Filename.remove_extension sourcename in
   output_filename_default (prefixname ^ ".v")
 
 (* Processing of a .c file *)
 
 let process_c_file sourcename =
   ensure_inputfile_exists sourcename;
-  let ofile = output_filename sourcename ".c" in
+  let ofile = output_filename sourcename in
   if !option_E then begin
     preprocess sourcename "-"
   end else begin
     let preproname = if !option_dprepro then
-        Driveraux.output_filename sourcename ".c" ".i"
+        Driveraux.output_filename sourcename ~suffix:".i"
       else
         Driveraux.tmp_file ".i" in
     preprocess sourcename preproname;
@@ -101,7 +101,7 @@ let process_c_file sourcename =
 
 let process_i_file sourcename =
   ensure_inputfile_exists sourcename;
-  let ofile = output_filename sourcename ".i" in
+  let ofile = output_filename sourcename in
   compile_c_file sourcename sourcename ofile
 
 let usage_string =
