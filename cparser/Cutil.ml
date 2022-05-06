@@ -320,6 +320,8 @@ let packing_parameters al =
 
 (* Type compatibility *)
 
+let enum_ikind = IInt
+
 exception Incompat
 
 type attr_handling =
@@ -400,8 +402,8 @@ let combine_types mode env t1 t2 =
         TUnion(comp_base s1 s2, comp_attr m a1 a2)
     | TEnum(s1, a1), TEnum(s2, a2) ->
         TEnum(comp_base s1 s2, comp_attr m a1 a2)
-    | TEnum(s,a1), TInt(enum_ikind,a2)
-    | TInt(enum_ikind,a2), TEnum (s,a1) ->
+    | TEnum(s,a1), TInt(ik,a2)
+    | TInt(ik,a2), TEnum (s,a1) when ik = enum_ikind ->
         TEnum(s,comp_attr m a1 a2)
     | _, _ ->
         raise Incompat
@@ -464,8 +466,6 @@ let alignof_fkind = function
   | FLongDouble -> !config.alignof_longdouble
 
 (* Return natural alignment of given type, or None if the type is incomplete *)
-
-let enum_ikind = IInt
 
 let rec alignof env t =
   let a = alignas_attribute (attributes_of_type env t) in
