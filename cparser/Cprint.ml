@@ -140,7 +140,7 @@ let rec dcl ?(pp_indication=true) pp ty n =
         match t with
         | TFun _ | TArray _ -> fprintf pp " (*%a%t)" attributes a n
         | _ -> fprintf pp " *%a%t" attributes a n in
-      dcl pp t n'
+      dcl ~pp_indication pp t n'
   | TArray(t, sz, a) ->
       let n' pp =
         n pp;
@@ -152,10 +152,10 @@ let rec dcl ?(pp_indication=true) pp ty n =
         | None -> fprintf pp "]"
         | Some i -> fprintf pp "%Ld]" i
         end in
-      dcl pp t n'
+      dcl ~pp_indication pp t n'
   | TFun(tres, args, vararg, a) ->
       let param (id, ty) =
-        dcl pp ty
+        dcl ~pp_indication pp ty
           (fun pp -> fprintf pp " %a" ident id) in
       let n' pp =
         attributes pp a;
@@ -167,12 +167,16 @@ let rec dcl ?(pp_indication=true) pp ty n =
         | Some [] -> if vararg then fprintf pp "..." else fprintf pp "void"
         | Some (a1 :: al) ->
             param a1;
-            List.iter (fun a -> fprintf pp ",@ "; param a) al;
-            if vararg then fprintf pp ",@ ..."
+            List.iter
+              (fun a -> 
+                if pp_indication then fprintf pp ",@ " else fprintf pp ", ";
+                param a)
+              al;
+            if vararg then fprintf pp ", ..."
         end;
         if pp_indication then fprintf pp "@]";
         fprintf pp ")" in
-      dcl pp tres n'
+      dcl ~pp_indication pp tres n'
   | TNamed(id, a) ->
       fprintf pp "%a%a%t" ident id attributes a n
   | TStruct(id, a) ->
