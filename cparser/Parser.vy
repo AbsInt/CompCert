@@ -720,9 +720,9 @@ direct_abstract_declarator:
 | LPAREN params = parameter_type_list RPAREN
     { Cabs.PROTO Cabs.JUSTBASE params }
 | typ = direct_abstract_declarator LPAREN RPAREN
-    { Cabs.PROTO typ ([], false) }
+    { Cabs.PROTO_OLD typ [] }
 | LPAREN RPAREN
-    { Cabs.PROTO Cabs.JUSTBASE ([], false) }
+    { Cabs.PROTO_OLD Cabs.JUSTBASE [] }
 
 (* 6.7.8 *)
 c_initializer:
