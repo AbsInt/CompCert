@@ -2767,30 +2767,35 @@ let elab_fundef genv spec name defs body loc =
         the structs and unions defined in the parameter list. *)
   let (ty, extra_decls, lenv) =
     match ty, kr_params with
-    | TFun(ty_ret, None, vararg, attr), None ->
-        (TFun(ty_ret, Some [], vararg, attr), [], lenv)
-    | ty, None ->
+    | TFun(ty_ret, Some proto, vararg, attr), None ->
+        (ty, [], lenv)
+    | TFun(ty_ret, None, false, attr), None ->
+        let ty = TFun(ty_ret, Some [], inherit_vararg genv s sto ty, attr) in
+        warning loc CompCert_conformance "function definition without a prototype, converting to prototype form.@ New type is '%a'"
+          Cprint.simple_decl (fun_id, ty);
         (ty, [], lenv)
     | TFun(ty_ret, None, false, attr), Some params ->
-        warning loc CompCert_conformance "non-prototype, pre-standard function definition, converting to prototype form";
         let (params', extra_decls, lenv) =
           elab_KR_function_parameters lenv params defs loc in
-        (TFun(ty_ret, Some params', inherit_vararg genv s sto ty, attr), extra_decls, lenv)
-    | _, Some params ->
-        assert false
+        let ty =
+          TFun(ty_ret, Some params', inherit_vararg genv s sto ty, attr) in
+        warning loc CompCert_conformance "function definition without a prototype, converting to prototype form.@ New type is '%a'"
+          Cprint.simple_decl (fun_id, ty);
+        (ty, extra_decls, lenv)
+    | _, _ ->
+        fatal_error loc "wrong type for function definition"
   in
-  (* Extract infos from the type of the function.
-     Checks on the return type must be done in the global environment. *)
+  (* Extract infos from the type of the function. *)
   let (ty_ret, params, vararg, attr) =
     match ty with
-    | TFun(ty_ret, Some params, vararg, attr) ->
-         if has_std_alignas genv ty then
-           error loc "alignment specified for function '%s'" s;
-         if wrap incomplete_type loc genv ty_ret && not (is_void_type genv ty_ret) then
-           fatal_error loc "incomplete result type %a in function definition"
-             (print_typ genv) ty_ret;
-        (ty_ret, params, vararg, attr)
-    | _ -> fatal_error loc "wrong type for function definition" in
+    | TFun(ty_ret, Some params, vararg, attr) -> (ty_ret, params, vararg, attr)
+    | _ -> assert false in
+  (* Checks on the return type must be done in the global environment. *)
+  if has_std_alignas genv ty then
+    error loc "alignment specified for function '%s'" s;
+  if wrap incomplete_type loc genv ty_ret && not (is_void_type genv ty_ret) then
+    fatal_error loc "incomplete result type %a in function definition"
+                (print_typ genv) ty_ret;
   (* Enter function in the global environment *)
   let (fun_id, sto1, genv, new_ty, _) =
     enter_or_refine_function loc genv fun_id sto ty in
