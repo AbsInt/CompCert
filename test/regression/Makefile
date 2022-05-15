@@ -16,7 +16,7 @@ TESTS=int32 int64 floats floats-basics floats-lit \
   funct3 expr5 struct7 struct8 struct11 struct12 casts1 casts2 char1 \
   sizeof1 sizeof2 binops bool for1 for2 switch switch2 compound \
   decl1 bitfields9 ptrs3 \
-  parsing krfun ifconv generic
+  parsing krfun ifconv generic stringlit charlit
 
 # Can run, but only in compiled mode, and have reference output in Results
 
