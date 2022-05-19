@@ -204,6 +204,18 @@ let rec contains_default s =
   | Sdecl dcl -> false
   | Sasm _ -> false
 
+(* Extract the attributes of a function type, looking for "noreturn". *)
+
+let rec function_attributes env = function
+  | TFun(_, _, _, a) -> a
+  | TPtr(t, _) -> function_attributes env t
+  | TNamed _ as t ->
+      begin match unroll env t with
+      | t' -> function_attributes env t'
+      | exception Env.Error _ -> []
+            (* Any error due to local types should be ignored *)
+      end
+  | _ -> []
 
 (* This is the main analysis function.  Given a C statement [s] it returns
    a flow that overapproximates the behavior of [s]. *)
@@ -213,10 +225,12 @@ let rec outcomes env s : flow =
   | Sskip ->
       normal
   | Sdo {edesc = ECall(fn, args)} ->
-    let returns = find_custom_attributes ["noreturn"; "__noreturn__"]
-        (attributes_of_type env fn.etyp) = [] in
-    let std_noreturn = List.exists (is_call_to_fun fn) std_noreturn_functions in
-    if returns && not std_noreturn then normal else noflow
+      let attr_noreturn =
+        find_custom_attributes ["noreturn"; "__noreturn__"]
+          (function_attributes env fn.etyp)
+      and std_noreturn =
+        List.exists (is_call_to_fun fn) std_noreturn_functions in
+      if attr_noreturn <> [] || std_noreturn then noflow else normal
   | Sdo e ->
       normal
   | Sseq(s1, s2) ->
