@@ -3,6 +3,7 @@
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
 (*          Jacques-Henri Jourdan, INRIA Paris-Rocquencourt            *)
+(*             Xavier Leroy, Collège de France and Inria               *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -438,6 +439,9 @@ and char = parse
       { Esc (Int64.of_string  ("0o" ^ n)) }
   | simple_escape_sequence
       { Esc (convert_escape c) }
+  | "\\u" | "\\U"
+      { error lexbuf "incomplete universal character name";
+        Chr 0 }
   | '\\' (_ as c)
       { error lexbuf "incorrect escape sequence '\\%c'" c;
         Esc (Int64.of_int (Char.code c)) }
