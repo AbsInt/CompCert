@@ -1067,7 +1067,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       let sp := (Vptr stk Ptrofs.zero) in
       match Mem.storev Mint64 m1 (Val.offset_ptr sp pos) rs#SP with
       | None => Stuck
-      | Some m2 => Next (nextinstr (rs #X29 <- (rs#SP) #SP <- sp #X16 <- Vundef)) m2
+      | Some m2 => Next (nextinstr (rs #X15 <- (rs#SP) #SP <- sp #X16 <- Vundef)) m2
       end
   | Pfreeframe sz pos =>
       match Mem.loadv Mint64 m (Val.offset_ptr rs#SP pos) with

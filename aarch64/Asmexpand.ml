@@ -192,8 +192,8 @@ let memcpy_small_arg sz arg tmp =
       assert false
 
 let expand_builtin_memcpy_small sz al src dst =
-  let tsrc = if dst <> BA (IR X17) then X17 else X29 in
-  let tdst = if src <> BA (IR X29) then X29 else X17 in
+  let tsrc = if dst <> BA (IR X17) then X17 else X15 in
+  let tdst = if src <> BA (IR X15) then X15 else X17 in
   let (rsrc, osrc) = memcpy_small_arg sz src tsrc in
   let (rdst, odst) = memcpy_small_arg sz dst tdst in
   let rec copy osrc odst sz =
@@ -233,29 +233,29 @@ let memcpy_big_arg arg tmp =
 let expand_builtin_memcpy_big sz al src dst =
   assert (sz >= 16);
   memcpy_big_arg src X30;
-  memcpy_big_arg dst X29;
+  memcpy_big_arg dst X14;
   let lbl = new_label () in
   expand_loadimm32 X15 (Z.of_uint (sz / 16));
   emit (Plabel lbl);
   emit (Pldp(X16, X17, ADpostincr(RR1 X30, _16)));
-  emit (Pstp(X16, X17, ADpostincr(RR1 X29, _16)));
+  emit (Pstp(X16, X17, ADpostincr(RR1 X14, _16)));
   emit (Psubimm(W, RR1 X15, RR1 X15, _1));
   emit (Pcbnz(W, X15, lbl));
   if sz mod 16 >= 8 then begin
     emit (Pldrx(X16, ADpostincr(RR1 X30, _8)));
-    emit (Pstrx(X16, ADpostincr(RR1 X29, _8)))
+    emit (Pstrx(X16, ADpostincr(RR1 X14, _8)))
   end;
   if sz mod 8 >= 4 then begin
     emit (Pldrw(X16, ADpostincr(RR1 X30, _4)));
-    emit (Pstrw(X16, ADpostincr(RR1 X29, _4)))
+    emit (Pstrw(X16, ADpostincr(RR1 X14, _4)))
   end;
   if sz mod 4 >= 2 then begin
     emit (Pldrh(W, X16, ADpostincr(RR1 X30, _2)));
-    emit (Pstrh(X16, ADpostincr(RR1 X29, _2)))
+    emit (Pstrh(X16, ADpostincr(RR1 X14, _2)))
   end;
   if sz mod 2 >= 1 then begin
     emit (Pldrb(W, X16, ADpostincr(RR1 X30, _1)));
-    emit (Pstrb(X16, ADpostincr(RR1 X29, _1)))
+    emit (Pstrb(X16, ADpostincr(RR1 X14, _1)))
   end
 
 let expand_builtin_memcpy  sz al args =
@@ -412,7 +412,7 @@ let expand_builtin_inline name args res =
 let expand_instruction instr =
   match instr with
   | Pallocframe (sz, ofs) ->
-      emit (Pmov (RR1 X29, XSP));
+      emit (Pmov (RR1 X15, XSP));
       if is_current_function_variadic() && Archi.abi = Archi.AAPCS64 then begin
         let (ir, fr, _) =
           next_arg_locations 0 0 0 (get_current_function_args ()) in
@@ -423,7 +423,7 @@ let expand_instruction instr =
         current_function_stacksize := Z.to_int64 sz
       end;
       expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz));
-      expand_storeptr X29 XSP ofs
+      expand_storeptr X15 XSP ofs
   | Pfreeframe (sz, ofs) ->
       expand_addimm64 XSP XSP (coqint_of_camlint64 !current_function_stacksize)
   | Pcvtx2w rd ->

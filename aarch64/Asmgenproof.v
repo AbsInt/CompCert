@@ -472,7 +472,7 @@ Inductive match_states: Mach.state -> Asm.state -> Prop :=
         (MEXT: Mem.extends m m')
         (AT: transl_code_at_pc ge (rs PC) fb f c ep tf tc)
         (AG: agree ms sp rs)
-        (DXP: ep = true -> rs#X29 = parent_sp s),
+        (DXP: ep = true -> rs#X15 = parent_sp s),
       match_states (Mach.State s fb sp c ms m)
                    (Asm.State rs m')
   | match_states_call:
@@ -503,7 +503,7 @@ Lemma exec_straight_steps:
    exists rs2,
        exec_straight tge tf c rs1 m1' k rs2 m2'
     /\ agree ms2 sp rs2
-    /\ (it1_is_parent ep i = true -> rs2#X29 = parent_sp s)) ->
+    /\ (it1_is_parent ep i = true -> rs2#X15 = parent_sp s)) ->
   exists st',
   plus step tge (State rs1 m1') E0 st' /\
   match_states (Mach.State s fb sp c ms2 m2) st'.
@@ -614,9 +614,9 @@ Definition measure (s: Mach.state) : nat :=
   | Mach.Returnstate _ _ _ => 1%nat
   end.
 
-Remark preg_of_not_X29: forall r, negb (mreg_eq r R29) = true -> IR X29 <> preg_of r.
+Remark preg_of_not_X15: forall r, negb (mreg_eq r R15) = true -> IR X15 <> preg_of r.
 Proof.
-  intros. change (IR X29) with (preg_of R29). red; intros.
+  intros. change (IR X15) with (preg_of R15). red; intros.
   exploit preg_of_injective; eauto. intros; subst r; discriminate.
 Qed.
 
@@ -672,26 +672,26 @@ Proof.
 Opaque loadind.
   left; eapply exec_straight_steps; eauto; intros. monadInv TR. 
   destruct ep.
-(* X30 contains parent *)
+(* X15 contains parent *)
   exploit loadind_correct. eexact EQ.
   instantiate (2 := rs0). simpl; rewrite DXP; eauto. simpl; congruence.
   intros [rs1 [P [Q R]]].
   exists rs1; split. eauto.
   split. eapply agree_set_mreg. eapply agree_set_mreg; eauto. congruence. auto with asmgen.
   simpl; intros. rewrite R; auto with asmgen.
-  apply preg_of_not_X29; auto.
-(* X30 does not contain parent *)
+  apply preg_of_not_X15; auto.
+(* X15 does not contain parent *)
   exploit loadptr_correct. eexact A. simpl; congruence. intros [rs1 [P [Q R]]].
   exploit loadind_correct. eexact EQ. instantiate (2 := rs1). simpl; rewrite Q. eauto. simpl; congruence.
   intros [rs2 [S [T U]]].
   exists rs2; split. eapply exec_straight_trans; eauto.
   split. eapply agree_set_mreg. eapply agree_set_mreg. eauto. eauto.
-  instantiate (1 := rs1#X29 <- (rs2#X29)). intros.
+  instantiate (1 := rs1#X15 <- (rs2#X15)). intros.
   rewrite Pregmap.gso; auto with asmgen.
   congruence.
-  intros. unfold Pregmap.set. destruct (PregEq.eq r' X29). congruence. auto with asmgen.
+  intros. unfold Pregmap.set. destruct (PregEq.eq r' X15). congruence. auto with asmgen.
   simpl; intros. rewrite U; auto with asmgen.
-  apply preg_of_not_X29; auto.
+  apply preg_of_not_X15; auto.
 
 - (* Mop *)
   assert (eval_operation tge sp op (map rs args) m = Some v).
@@ -704,7 +704,7 @@ Opaque loadind.
   apply agree_set_undef_mreg with rs0; auto. 
   apply Val.lessdef_trans with v'; auto.
   simpl; intros. InvBooleans. 
-  rewrite R; auto. apply preg_of_not_X29; auto.
+  rewrite R; auto. apply preg_of_not_X15; auto.
 Local Transparent destroyed_by_op.
   destruct op; try exact I; simpl; congruence.
 
@@ -933,7 +933,7 @@ Local Transparent destroyed_by_op.
   set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f) ::
                  storeptr RA XSP (fn_retaddr_ofs f) x0) in *.
   set (tf := {| fn_sig := Mach.fn_sig f; fn_code := tfbody |}) in *.
-  set (rs2 := nextinstr (rs0#X29 <- (parent_sp s) #SP <- sp #X16 <- Vundef)).
+  set (rs2 := nextinstr (rs0#X15 <- (parent_sp s) #SP <- sp #X16 <- Vundef)).
   exploit (storeptr_correct tge tf XSP (fn_retaddr_ofs f) RA x0 m2' m3' rs2).
     simpl preg_of_iregsp. change (rs2 X30) with (rs0 X30). rewrite ATLR. 
     change (rs2 X2) with sp. eexact P. 

@@ -1057,7 +1057,7 @@ Definition make_epilogue (f: Mach.function) (k: code) :=
 (** Translation of a Mach instruction. *)
 
 Definition transl_instr (f: Mach.function) (i: Mach.instruction)
-                        (r29_is_parent: bool) (k: code) : res code :=
+                        (r15_is_parent: bool) (k: code) : res code :=
   match i with
   | Mgetstack ofs ty dst =>
       loadind XSP ofs ty dst k
@@ -1065,8 +1065,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
       storeind src XSP ofs ty k
   | Mgetparam ofs ty dst =>
       (* load via the frame pointer if it is valid *)
-      do c <- loadind X29 ofs ty dst k;
-      OK (if r29_is_parent then c else loadptr XSP f.(fn_link_ofs) X29 c)
+      do c <- loadind X15 ofs ty dst k;
+      OK (if r15_is_parent then c else loadptr XSP f.(fn_link_ofs) X15 c)
   | Mop op args res =>
       transl_op op args res k
   | Mload chunk addr args dst =>
@@ -1102,8 +1102,8 @@ Definition transl_instr (f: Mach.function) (i: Mach.instruction)
 Definition it1_is_parent (before: bool) (i: Mach.instruction) : bool :=
   match i with
   | Msetstack src ofs ty => before
-  | Mgetparam ofs ty dst => negb (mreg_eq dst R29)
-  | Mop op args res => before && negb (mreg_eq res R29)
+  | Mgetparam ofs ty dst => negb (mreg_eq dst R15)
+  | Mop op args res => before && negb (mreg_eq res R15)
   | _ => false
   end.
 
