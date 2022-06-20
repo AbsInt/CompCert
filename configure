@@ -502,7 +502,7 @@ fi
 missingtools=false
 
 echo "Testing Coq... " | tr -d '\n'
-coq_ver=$(${COQBIN}coqc -v 2>/dev/null | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p')
+coq_ver=$(${COQBIN}coqc -v 2>/dev/null | tr -d '\r' | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p')
 case "$coq_ver" in
   8.12.0|8.12.1|8.12.2|8.13.0|8.13.1|8.13.2|8.14.0|8.14.1|8.15.0|8.15.1)
         echo "version $coq_ver -- good!";;
@@ -521,7 +521,7 @@ case "$coq_ver" in
 esac
 
 echo "Testing OCaml... " | tr -d '\n'
-ocaml_ver=`ocamlc -version 2>/dev/null`
+ocaml_ver=`ocamlc -version 2>/dev/null | tr -d '\r'`
 case "$ocaml_ver" in
   4.00.*|4.01.*| 4.02.*|4.03.*|4.04.*)
         echo "version $ocaml_ver -- UNSUPPORTED"
@@ -539,8 +539,8 @@ case "$ocaml_ver" in
         missingtools=true;;
 esac
 
-echo "Testing OCaml native-code compiler..." | tr -d '\n'
-ocamlopt_ver=`ocamlopt -version 2>/dev/null`
+echo "Testing OCaml native-code compiler... " | tr -d '\n'
+ocamlopt_ver=`ocamlopt -version 2>/dev/null | tr -d '\r'`
 if test "$ocamlopt_ver" = "$ocaml_ver"; then
   echo "yes"
   ocaml_native_comp=true
@@ -550,7 +550,7 @@ else
 fi
 
 echo "Testing OCaml .opt compilers... " | tr -d '\n'
-ocamlopt_opt_ver=`ocamlopt.opt -version 2>/dev/null`
+ocamlopt_opt_ver=`ocamlopt.opt -version 2>/dev/null | tr -d '\r'`
 if test "$ocamlopt_opt_ver" = "$ocaml_ver"; then
   echo "yes"
   ocaml_opt_comp=true
@@ -590,7 +590,7 @@ esac
 echo "Testing GNU make... " | tr -d '\n'
 make=''
 for mk in make gmake gnumake; do
-  make_ver=`$mk -v 2>/dev/null | head -1 | sed -n -e 's/^GNU Make //p'`
+  make_ver=`$mk -v 2>/dev/null | tr -d '\r' | head -1 | sed -n -e 's/^GNU Make //p'`
   case "$make_ver" in
     3.8*|3.9*|[4-9].*)
         echo "version $make_ver (command '$mk') -- good!"
