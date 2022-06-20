@@ -1,3 +1,41 @@
+New features:
+- Support `_Generic` expressions from ISO C11.
+
+ISO C conformance:
+- Enumeration types are compatible only with `int` but not with
+  other integer types.
+- Fixed confusion between unprototyped function pointer types `T (*)()` and
+  prototyped, zero-argument function pointer types `T (*)(void)`
+  in type casts (#431).
+
+Usability:
+- Improved control-flow analysis of calls to "noreturn" functions,
+  resulting in more accurate warnings.
+- More detailed warning for unprototyped function definitions, now shows
+  the prototyped type that is given to the function.
+- Extended the warning above to definitions of the form `T f() { ... }`,
+  i.e. unprototyped but with no parameters.  (Before, the warning would
+  trigger only if parameters were declared.)
+- Check (and warn if requested) for arguments of struct/union types passed
+  to a variable-argument function.
+	
+Bug fixes:
+- RISC-V: fixed an error in the modeling of float32 <-> float64 conversions
+  when the argument is a NaN (#428).
+- x86: changed the compilation of `__builtin_fmin` and `__builtin_fmax`
+  so that their NaN behavior is the one documented in the manual.
+- Improved reproducibility of register allocation.
+  (Compiling CompCert with two different OCaml versions could result
+  in correct but different allocations.)
+- Hardened the configure script against Cygwin installations that produce
+  \r\n for end-of-lines (#434).
+
+Coq development:
+- Updated the Flocq library to version 4.1.
+- Support for Coq 8.14.1, 8.15.0, 8.15.1.
+- Minimal Coq version supported is now 8.12.0.
+
+
 Release 3.10, 2021-11-19
 ========================
 
