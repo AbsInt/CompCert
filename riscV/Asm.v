@@ -751,7 +751,9 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pj_l l =>
       goto_label f l rs m
   | Pj_s s sg =>
-      Next (rs#PC <- (Genv.symbol_address ge s Ptrofs.zero)) m
+      Next (rs#PC <- (Genv.symbol_address ge s Ptrofs.zero)
+              #X6 <- Vundef
+           ) m
   | Pj_r r sg =>
       Next (rs#PC <- (rs#r)) m
   | Pjal_s s sg =>
@@ -1001,7 +1003,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
 
 Definition preg_of (r: mreg) : preg :=
   match r with
-               | R5  => X5  | R6  => X6  | R7  => X7
+               | R5  => X5  | R7  => X7
   | R8  => X8  | R9  => X9  | R10 => X10 | R11 => X11
   | R12 => X12 | R13 => X13 | R14 => X14 | R15 => X15
   | R16 => X16 | R17 => X17 | R18 => X18 | R19 => X19
@@ -1180,6 +1182,7 @@ Qed.
 Definition data_preg (r: preg) : bool :=
   match r with
   | IR RA  => false
+  | IR X6 => false
   | IR X31 => false
   | IR _   => true
   | FR _   => true

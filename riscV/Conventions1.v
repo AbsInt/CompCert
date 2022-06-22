@@ -34,7 +34,7 @@ Require Import AST Machregs Locations.
 
 Definition is_callee_save (r: mreg) : bool :=
   match r with
-  | R5 | R6 | R7 => false
+  | R5 | R7 => false
   | R8 | R9 => true
   | R10 | R11 | R12 | R13 | R14 | R15 | R16 | R17 => false
   | R18 | R19 | R20 | R21 | R22 | R23 | R24 | R25 | R26 | R27 => true
@@ -47,7 +47,7 @@ Definition is_callee_save (r: mreg) : bool :=
   end.
 
 Definition int_caller_save_regs :=
-  R5  :: R6  :: R7 ::
+  R5  :: R7 ::
   R10 :: R11 :: R12 :: R13 :: R14 :: R15 :: R16 :: R17 ::
   R28 :: R29 :: R30 ::
   nil.
@@ -71,14 +71,14 @@ Definition float_callee_save_regs :=
 Definition destroyed_at_call :=
   List.filter (fun r => negb (is_callee_save r)) all_mregs.
 
-Definition dummy_int_reg   := R6.    (**r Used in [Coloring]. *)
+Definition dummy_int_reg   := R5.    (**r Used in [Coloring]. *)
 Definition dummy_float_reg := F0 .   (**r Used in [Coloring]. *)
 
 Definition callee_save_type := mreg_type.
   
 Definition is_float_reg (r: mreg) :=
   match r with
-        | R5  | R6  | R7  | R8  | R9  | R10 | R11
+        | R5        | R7  | R8  | R9  | R10 | R11
   | R12 | R13 | R14 | R15 | R16 | R17 | R18 | R19
   | R20 | R21 | R22 | R23 | R24 | R25 | R26 | R27
   | R28 | R29 | R30 => false
