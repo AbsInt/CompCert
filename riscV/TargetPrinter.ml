@@ -320,7 +320,7 @@ module Target : TARGET =
       | Pj_l(l) ->
          fprintf oc "	j	%a\n" print_label l
       | Pj_s(s, sg) ->
-         fprintf oc "	tail	%a\n" symbol s
+         fprintf oc "	jump	%a, x31\n" symbol s
       | Pj_r(r, sg) ->
          fprintf oc "	jr	%a\n" ireg r
       | Pjal_s(s, sg) ->

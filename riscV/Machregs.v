@@ -40,7 +40,7 @@ Require Import Op.
 
 Inductive mreg: Type :=
  (** Allocatable integer regs. *)
-              | R5:  mreg             | R7:  mreg
+              | R5:  mreg | R6:  mreg | R7:  mreg
   | R8:  mreg | R9:  mreg | R10: mreg | R11: mreg
   | R12: mreg | R13: mreg | R14: mreg | R15: mreg
   | R16: mreg | R17: mreg | R18: mreg | R19: mreg
@@ -62,7 +62,7 @@ Proof. decide equality. Defined.
 Global Opaque mreg_eq.
 
 Definition all_mregs :=
-    R5 :: R7 :: R8 :: R9 :: R10 :: R11 :: R12 :: R13 :: R14 :: R15
+    R5 :: R6 :: R7 :: R8 :: R9 :: R10 :: R11 :: R12 :: R13 :: R14 :: R15
  :: R16 :: R17 :: R18 :: R19 :: R20 :: R21 :: R22 :: R23
  :: R24 :: R25 :: R26 :: R27 :: R28 :: R29 :: R30
  :: F0 :: F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7
@@ -87,7 +87,7 @@ Global Instance Finite_mreg : Finite mreg := {
 
 Definition mreg_type (r: mreg): typ :=
   match r with
-  | R5  | R7  | R8  | R9  | R10 | R11
+        | R5  | R6  | R7  | R8  | R9  | R10 | R11
   | R12 | R13 | R14 | R15 | R16 | R17 | R18 | R19
   | R20 | R21 | R22 | R23 | R24 | R25 | R26 | R27
   | R28 | R29 | R30 => if Archi.ptr64 then Tany64 else Tany32
@@ -105,22 +105,22 @@ Module IndexedMreg <: INDEXED_TYPE.
   Definition eq := mreg_eq.
   Definition index (r: mreg): positive :=
     match r with
-                | R5  =>  5             | R7  =>  7
-    | R8  =>  8 | R9  =>  9 | R10 => 10 | R11 => 11
-    | R12 => 12 | R13 => 13 | R14 => 14 | R15 => 15
-    | R16 => 16 | R17 => 17 | R18 => 18 | R19 => 19
-    | R20 => 20 | R21 => 21 | R22 => 22 | R23 => 23
-    | R24 => 24 | R25 => 25 | R26 => 26 | R27 => 27
-    | R28 => 28 | R29 => 29 | R30 => 30
+                | R5  =>  1 | R6  =>  2 | R7  =>  3
+    | R8  =>  4 | R9  =>  5 | R10 =>  6 | R11 =>  7
+    | R12 =>  8 | R13 =>  9 | R14 => 10 | R15 => 11
+    | R16 => 12 | R17 => 13 | R18 => 14 | R19 => 15
+    | R20 => 16 | R21 => 17 | R22 => 18 | R23 => 19
+    | R24 => 20 | R25 => 21 | R26 => 22 | R27 => 23
+    | R28 => 24 | R29 => 25 | R30 => 26
 
-    | F0  => 32 | F1  => 33 | F2  => 34 | F3  => 35
-    | F4  => 36 | F5  => 37 | F6  => 38 | F7  => 39
-    | F8  => 40 | F9  => 41 | F10 => 42 | F11 => 43
-    | F12 => 44 | F13 => 45 | F14 => 46 | F15 => 47
-    | F16 => 48 | F17 => 49 | F18 => 50 | F19 => 51
-    | F20 => 52 | F21 => 53 | F22 => 54 | F23 => 55
-    | F24 => 56 | F25 => 57 | F26 => 58 | F27 => 59
-    | F28 => 60 | F29 => 61 | F30 => 62 | F31 => 63
+    | F0  => 28 | F1  => 29 | F2  => 30 | F3  => 31
+    | F4  => 32 | F5  => 33 | F6  => 34 | F7  => 35
+    | F8  => 36 | F9  => 37 | F10 => 38 | F11 => 39
+    | F12 => 40 | F13 => 41 | F14 => 42 | F15 => 43
+    | F16 => 44 | F17 => 45 | F18 => 46 | F19 => 47
+    | F20 => 48 | F21 => 49 | F22 => 50 | F23 => 51
+    | F24 => 52 | F25 => 53 | F26 => 54 | F27 => 55
+    | F28 => 56 | F29 => 57 | F30 => 58 | F31 => 59
     end.
   Lemma index_inj:
     forall r1 r2, index r1 = index r2 -> r1 = r2.
@@ -136,7 +136,7 @@ Definition is_stack_reg (r: mreg) : bool := false.
 Local Open Scope string_scope.
 
 Definition register_names :=
-                  ("X5",  R5)                  :: ("X7",  R7)  ::
+                  ("X5",  R5)  :: ("X6",  R6)  :: ("X7",  R7)  ::
   ("X8",  R8)  :: ("X9",  R9)  :: ("X10", R10) :: ("X11", R11) ::
   ("X12", R12) :: ("X13", R13) :: ("X14", R14) :: ("X15", R15) ::
   ("X16", R16) :: ("X17", R17) :: ("X18", R18) :: ("X19", R19) ::
@@ -193,16 +193,16 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
 Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_inline_asm txt sg clob => destroyed_by_clobber clob
-  | EF_memcpy sz al => R5 :: R7 :: F0 :: nil
+  | EF_memcpy sz al => R5 :: R6 :: R7 :: F0 :: nil
   | EF_builtin name sg =>
       if string_dec name "__builtin_clz"
       || string_dec name "__builtin_clzl"
       || string_dec name "__builtin_clzll" then
-        R5 :: R9 :: nil
+        R5 :: R8 :: R9 :: nil
       else if string_dec name "__builtin_ctz"
       || string_dec name "__builtin_ctzl"
       || string_dec name "__builtin_ctzll" then
-        R7 :: R9 :: nil
+        R6 :: R8 :: R9 :: nil
       else
         nil
   | _ => nil
@@ -223,21 +223,21 @@ Definition mregs_for_builtin (ef: external_function): list (option mreg) * list(
   match ef with
   | EF_builtin name sg =>
       if (negb Archi.ptr64) && string_dec name "__builtin_bswap64" then
-        (Some R7 :: Some R5 :: nil, Some R5 :: Some R7 :: nil)
+        (Some R6 :: Some R5 :: nil, Some R5 :: Some R6 :: nil)
       else if string_dec name "__builtin_clz"
            || string_dec name "__builtin_clzl" then
-        (Some R5 :: nil, Some R8 :: nil)
+        (Some R5 :: nil, Some R7 :: nil)
       else if string_dec name "__builtin_clzll" then
         if Archi.ptr64
-        then (Some R5 :: nil, Some R8 :: nil)
-        else (Some R7 :: Some R5 :: nil, Some R8 :: nil)
+        then (Some R5 :: nil, Some R7 :: nil)
+        else (Some R6 :: Some R5 :: nil, Some R7 :: nil)
       else if string_dec name "__builtin_ctz"
            || string_dec name "__builtin_ctzl" then
-        (Some R7 :: nil, Some R8 :: nil)
+        (Some R6 :: nil, Some R7 :: nil)
       else if string_dec name "__builtin_ctzll" then
         if Archi.ptr64
-        then (Some R7 :: nil, Some R8 :: nil)
-        else (Some R7 :: Some R5 :: nil, Some R8 :: nil)
+        then (Some R6 :: nil, Some R7 :: nil)
+        else (Some R6 :: Some R5 :: nil, Some R7 :: nil)
       else
         (nil, nil)
   | _ =>
