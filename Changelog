@@ -18,7 +18,7 @@ Usability:
   trigger only if parameters were declared.)
 - Check (and warn if requested) for arguments of struct/union types passed
   to a variable-argument function.
-	
+
 Bug fixes:
 - RISC-V: fixed an error in the modeling of float32 <-> float64 conversions
   when the argument is a NaN (#428).
@@ -29,6 +29,8 @@ Bug fixes:
   in correct but different allocations.)
 - Hardened the configure script against Cygwin installations that produce
   \r\n for end-of-lines (#434).
+- RISC-V: tail calls to far-away functions were causing link-time errors
+  (#436, #437).
 
 Coq development:
 - Updated the Flocq library to version 4.1.

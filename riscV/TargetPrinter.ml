@@ -315,12 +315,10 @@ module Target : TARGET =
          fprintf oc "	sra	%a, %a, %a\n" ireg rd ireg0 rs1 ireg0 rs2
   
       (* Unconditional jumps.  Links are always to X1/RA. *)
-      (* TODO: fix up arguments for calls to variadics, to move *)
-      (* floating point arguments to integer registers.  How? *)
       | Pj_l(l) ->
          fprintf oc "	j	%a\n" print_label l
       | Pj_s(s, sg) ->
-         fprintf oc "	j	%a\n" symbol s
+         fprintf oc "	jump	%a, x31\n" symbol s
       | Pj_r(r, sg) ->
          fprintf oc "	jr	%a\n" ireg r
       | Pjal_s(s, sg) ->

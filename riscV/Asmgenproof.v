@@ -816,6 +816,7 @@ Local Transparent destroyed_by_op.
   (* match states *)
   econstructor; eauto.
   apply agree_set_other; auto with asmgen.
+  apply agree_set_other; auto with asmgen.
   Simpl. unfold Genv.symbol_address. rewrite symbols_preserved. rewrite H. auto.
 
 - (* Mbuiltin *)
