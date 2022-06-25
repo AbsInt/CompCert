@@ -75,7 +75,7 @@ Fixpoint comptree_match (n: Z) (t: comptree) {struct t}: option nat :=
 
 (** The translation from a table to a comparison tree is performed
   by untrusted Caml code (function [compile_switch] in
-  file [RTLgenaux.ml]).  In Coq, we validate a posteriori the
+  file [Switchaux.ml]).  In Coq, we validate a posteriori the
   result of this function.  In other terms, we now develop
   and prove correct Coq functions that take a table and a comparison
   tree, and check that their semantics are equivalent. *)
