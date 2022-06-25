@@ -34,7 +34,7 @@ Bug fixes:
 
 Coq development:
 - Updated the Flocq library to version 4.1.
-- Support for Coq 8.14.1, 8.15.0, 8.15.1.
+- Support for Coq 8.14.1, 8.15.0, 8.15.1, 8.15.2.
 - Minimal Coq version supported is now 8.12.0.
 
 
