@@ -1,3 +1,6 @@
+Release 3.11, 2022-06-27
+========================
+
 New features:
 - Support `_Generic` expressions from ISO C11.
 
@@ -25,8 +28,8 @@ Bug fixes:
 - x86: changed the compilation of `__builtin_fmin` and `__builtin_fmax`
   so that their NaN behavior is the one documented in the manual.
 - Improved reproducibility of register allocation.
-  (Compiling CompCert with two different OCaml versions could result
-  in correct but different allocations.)
+  (Before, compiling CompCert with two different OCaml versions could
+   have resulted in correct but different allocations.)
 - Hardened the configure script against Cygwin installations that produce
   \r\n for end-of-lines (#434).
 - RISC-V: tail calls to far-away functions were causing link-time errors
