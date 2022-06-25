@@ -65,12 +65,26 @@ Ltac bool_eq_base x y :=
   change (bool_eq x y);
   match goal with
   | [ H: forall (x y: ?A), bool |- @bool_eq ?A x y ] => exact (H x y)
-  | [ H: forall (x y: ?A), {x=y} + {x<>y}  |- @bool_eq ?A x y ] => exact (proj_sumbool (H x y))
+  | [ H: forall (x y: ?A), {x=y} + {x<>y} |- @bool_eq ?A x y ] => exact (proj_sumbool (H x y))
+  | [ H: forall (x y: ?A), {x=y} + {x<>y} |- @bool_eq (list ?A) x y ] => exact (proj_sumbool (list_eq_dec H x y))
   | _ => idtac
   end.
 
 Ltac bool_eq_case :=
   match goal with
+  | |- bool_eq (?C ?x1 ?x2 ?x3 ?x4 ?x5 ?x6 ?x7) (?C ?y1 ?y2 ?y3 ?y4 ?y5 ?y6 ?y7) =>
+         refine (_ && _ && _ && _ && _ && _ && _);
+         [bool_eq_base x1 y1|bool_eq_base x2 y2|bool_eq_base x3 y3|
+          bool_eq_base x4 y4|bool_eq_base x5 y5|bool_eq_base x6 y6|
+          bool_eq_base x7 y7]
+  | |- bool_eq (?C ?x1 ?x2 ?x3 ?x4 ?x5 ?x6) (?C ?y1 ?y2 ?y3 ?y4 ?y5 ?y6) =>
+        refine (_ && _ && _ && _ && _ && _);
+        [bool_eq_base x1 y1|bool_eq_base x2 y2|bool_eq_base x3 y3|
+         bool_eq_base x4 y4|bool_eq_base x5 y5|bool_eq_base x6 y6]
+  | |- bool_eq (?C ?x1 ?x2 ?x3 ?x4 ?x5) (?C ?y1 ?y2 ?y3 ?y4 ?y5) =>
+        refine (_ && _ && _ && _ && _);
+        [bool_eq_base x1 y1|bool_eq_base x2 y2|bool_eq_base x3 y3|
+         bool_eq_base x4 y4|bool_eq_base x5 y5]
   | |- bool_eq (?C ?x1 ?x2 ?x3 ?x4) (?C ?y1 ?y2 ?y3 ?y4) =>
          refine (_ && _ && _ && _); [bool_eq_base x1 y1|bool_eq_base x2 y2|bool_eq_base x3 y3|bool_eq_base x4 y4]
   | |- bool_eq (?C ?x1 ?x2 ?x3) (?C ?y1 ?y2 ?y3) =>
