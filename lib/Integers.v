@@ -20,6 +20,9 @@ Require Import Eqdep_dec Zquot Zwf.
 Require Import Coqlib Zbits.
 Require Archi.
 
+(** Backwards compatibility for Hint Rewrite locality attributes. *)
+Set Warnings "-unsupported-attributes".
+
 (** * Comparisons *)
 
 Inductive comparison : Type :=
@@ -1168,6 +1171,7 @@ Proof.
   intros. unfold mone. rewrite testbit_repr; auto. apply Ztestbit_m1. lia.
 Qed.
 
+#[global]
 Hint Rewrite bits_zero bits_mone : ints.
 
 Ltac bit_solve :=
@@ -1244,6 +1248,7 @@ Proof.
   intros. unfold not. rewrite bits_xor; auto. rewrite bits_mone; auto.
 Qed.
 
+#[global]
 Hint Rewrite bits_and bits_or bits_xor bits_not: ints.
 
 Theorem and_commut: forall x y, and x y = and y x.
@@ -1652,6 +1657,7 @@ Proof.
   lia.
 Qed.
 
+#[global]
 Hint Rewrite bits_shl bits_shru bits_shr: ints.
 
 Theorem shl_zero: forall x, shl x zero = x.
@@ -1980,6 +1986,7 @@ Proof.
     lia. lia. lia. lia.
 Qed.
 
+#[global]
 Hint Rewrite bits_rol bits_ror: ints.
 
 Theorem shl_rolm:
@@ -2530,6 +2537,7 @@ Proof.
   rewrite testbit_repr; auto. apply Zsign_ext_spec. lia. 
 Qed.
 
+#[global]
 Hint Rewrite bits_zero_ext bits_sign_ext: ints.
 
 Theorem zero_ext_above:
