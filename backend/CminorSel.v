@@ -54,6 +54,7 @@ with condexpr : Type :=
   | CEcondition : condexpr -> condexpr -> condexpr -> condexpr
   | CElet: expr -> condexpr -> condexpr.
 
+Declare Scope cminorsel_scope.
 Infix ":::" := Econs (at level 60, right associativity) : cminorsel_scope.
 
 (** Conditional expressions [condexpr] are expressions that are evaluated

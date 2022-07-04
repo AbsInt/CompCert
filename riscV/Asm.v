@@ -93,6 +93,7 @@ Module Pregmap := EMap(PregEq).
 
 (** Conventional names for stack pointer ([SP]) and return address ([RA]). *)
 
+Declare Scope asm.
 Notation "'SP'" := X2 (only parsing) : asm.
 Notation "'RA'" := X1 (only parsing) : asm.
 

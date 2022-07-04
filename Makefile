@@ -44,9 +44,6 @@ endif
 
 # Notes on silenced Coq warnings:
 #
-# undeclared-scope:
-#    warning introduced in 8.12
-#    suggested change (use `Declare Scope`) supported since 8.12
 # unused-pattern-matching-variable:
 #    warning introduced in 8.13
 #    the code rewrite that avoids the warning is not desirable
@@ -62,7 +59,6 @@ endif
 #    triggered by Menhir-generated files, to be solved upstream in Menhir
 
 COQCOPTS ?= \
-  -w -undeclared-scope \
   -w -unused-pattern-matching-variable \
   -w -deprecated-ident-entry
 

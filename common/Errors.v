@@ -67,6 +67,8 @@ Definition bind2 (A B C: Type) (f: res (A * B)) (g: A -> B -> res C) : res C :=
 
 (** The [do] notation, inspired by Haskell's, keeps the code readable. *)
 
+Declare Scope error_monad_scope.
+
 Notation "'do' X <- A ; B" := (bind A (fun X => B))
  (at level 200, X ident, A at level 100, B at level 200)
  : error_monad_scope.

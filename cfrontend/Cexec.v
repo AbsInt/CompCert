@@ -25,6 +25,8 @@ Local Open Scope list_scope.
 
 (** Error monad with options or lists *)
 
+Declare Scope option_monad_scope.
+
 Notation "'do' X <- A ; B" := (match A with Some X => B | None => None end)
   (at level 200, X ident, A at level 100, B at level 200)
   : option_monad_scope.
@@ -44,6 +46,8 @@ Notation "'do' X , Y , Z , W <- A ; B" := (match A with Some (X, Y, Z, W) => B |
 Notation " 'check' A ; B" := (if A then B else None)
   (at level 200, A at level 100, B at level 200)
   : option_monad_scope.
+
+Declare Scope list_monad_scope.
 
 Notation "'do' X <- A ; B" := (match A with Some X => B | None => nil end)
   (at level 200, X ident, A at level 100, B at level 200)
@@ -744,6 +748,8 @@ Definition incontext2 {A1 A2 B: Type}
                      (ctx1: A1 -> B) (ll1: reducts A1)
                      (ctx2: A2 -> B) (ll2: reducts A2) : reducts B :=
   incontext ctx1 ll1 ++ incontext ctx2 ll2.
+
+Declare Scope reducts_monad_scope.
 
 Notation "'do' X <- A ; B" := (match A with Some X => B | None => stuck end)
   (at level 200, X ident, A at level 100, B at level 200)
