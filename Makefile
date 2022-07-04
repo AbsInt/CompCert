@@ -64,8 +64,7 @@ endif
 COQCOPTS ?= \
   -w -undeclared-scope \
   -w -unused-pattern-matching-variable \
-  -w -deprecated-ident-entry \
-  -w -deprecated-hint-rewrite-without-locality
+  -w -deprecated-ident-entry
 
 cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality
 
