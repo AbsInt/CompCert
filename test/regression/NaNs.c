@@ -8,25 +8,25 @@
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
-inline u64 bits_of_double(double d)
+static inline u64 bits_of_double(double d)
 {
   union { double d; u64 i; } u;
   u.d = d; return u.i;
 }
 
-inline double double_of_bits(u64 i)
+static inline double double_of_bits(u64 i)
 {
   union { double d; u64 i; } u;
   u.i = i; return u.d; 
 }
 
-inline u32 bits_of_single(float f)
+static inline u32 bits_of_single(float f)
 {
   union { float f; u32 i; } u;
   u.f = f; return u.i;
 }
 
-inline float single_of_bits(u32 i)
+static inline float single_of_bits(u32 i)
 {
   union { float f; u32 i; } u;
   u.i = i; return u.f;

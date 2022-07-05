@@ -72,7 +72,7 @@ int get4(void)
 /* Byte-swapping a pointer.  For 32/64 bit compatibility, we just swap
    the two low bytes, but that's in the spirit. */
 
-inline uintptr_t bswap(uintptr_t x)
+static inline uintptr_t bswap(uintptr_t x)
 {
   return (x & ~((uintptr_t) 0xFFFF))
     | ((x >> 8) & 0xFF)
