@@ -53,10 +53,6 @@ endif
 # deprecated-ident-entry:
 #    warning introduced in 8.13
 #    suggested change (use `name` instead of `ident`) supported since 8.13
-# deprecated-hint-rewrite-without-locality:
-#    warning introduced in 8.14
-#    suggested change (add Global or Local or [#export] modifier)
-#    is not supported in 8.13 nor in 8.11, but was supported in 8.9 (go figure)
 # deprecated-instance-without-locality:
 #    warning introduced in 8.14
 #    triggered by Menhir-generated files, to be solved upstream in Menhir
