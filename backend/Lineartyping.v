@@ -305,7 +305,7 @@ Local Opaque mreg_type.
 - (* getstack *)
   simpl in *; InvBooleans.
   econstructor; eauto.
-  eapply wt_setreg; eauto. eapply Val.has_subtype; eauto. apply WTRS.
+  eapply wt_setreg; eauto. eapply Val.has_subtype; [eauto|apply WTRS].
   apply wt_undef_regs; auto.
 - (* setstack *)
   simpl in *; InvBooleans.
@@ -316,7 +316,7 @@ Local Opaque mreg_type.
   + (* move *)
     InvBooleans. exploit is_move_operation_correct; eauto. intros [EQ1 EQ2]; subst.
     simpl in H. inv H.
-    econstructor; eauto. apply wt_setreg. eapply Val.has_subtype; eauto. apply WTRS.
+    econstructor; eauto. apply wt_setreg. eapply Val.has_subtype; [eauto|apply WTRS].
     apply wt_undef_regs; auto.
   + (* other ops *)
     destruct (type_of_operation op) as [ty_args ty_res] eqn:TYOP. InvBooleans.
