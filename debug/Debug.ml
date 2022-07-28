@@ -23,9 +23,10 @@ type implem =
     {
       init: string -> unit;
       atom_global: ident -> atom -> unit;
-      set_composite_size: ident -> struct_or_union -> int option -> unit;
-      set_member_offset: ident -> string -> int -> unit;
-      set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
+      set_composite_size: ident -> atom -> struct_or_union -> int option -> unit;
+      set_member_atom: str_id:atom -> string -> fld_id:atom -> unit;
+      set_member_offset: str_id:atom -> fld_id:atom -> int -> unit;
+      set_bitfield_offset: str_id:atom -> fld_id:atom -> bit_ofs:int -> byte_ofs:int -> size:int -> unit;
       insert_global_declaration: Env.t -> globdecl -> unit;
       add_fun_addr: atom -> section_name -> (int * int) -> unit;
       generate_debug_info: (atom -> string) -> string -> debug_entries option;
@@ -55,9 +56,10 @@ let default_implem =
   {
    init = (fun _ -> ());
    atom_global = (fun _ _ -> ());
-   set_composite_size = (fun _ _ _ -> ());
-   set_member_offset = (fun _ _  _ -> ());
-   set_bitfield_offset = (fun _ _ _ _ _ -> ());
+   set_composite_size = (fun _ _ _ _ -> ());
+   set_member_atom = (fun ~str_id _ ~fld_id -> ());
+   set_member_offset = (fun ~str_id ~fld_id  _ -> ());
+   set_bitfield_offset = (fun ~str_id ~fld_id ~bit_ofs ~byte_ofs  ~size-> ());
    insert_global_declaration = (fun _ _ -> ());
    add_fun_addr = (fun _ _ _ -> ());
    generate_debug_info = (fun _  _ -> None);
@@ -87,9 +89,11 @@ let implem = ref default_implem
 
 let init_compile_unit name = !implem.init name
 let atom_global id atom = !implem.atom_global id atom
-let set_composite_size id sou size = !implem.set_composite_size id sou size
-let set_member_offset id field off = !implem.set_member_offset id field off
-let set_bitfield_offset id field off underlying size = !implem.set_bitfield_offset id field off underlying size
+let set_composite_size id atom sou size = !implem.set_composite_size id atom sou size
+let set_member_atom ~str_id field ~fld_id = !implem.set_member_atom ~str_id:str_id field ~fld_id:fld_id
+let set_member_offset ~str_id ~fld_id off = !implem.set_member_offset ~str_id:str_id ~fld_id:fld_id off
+let set_bitfield_offset ~str_id ~fld_id ~bit_ofs ~byte_ofs ~size =
+  !implem.set_bitfield_offset ~str_id:str_id ~fld_id:fld_id ~bit_ofs:bit_ofs ~byte_ofs:byte_ofs ~size:size
 let insert_global_declaration env dec = !implem.insert_global_declaration env dec
 let add_fun_addr atom addr = !implem.add_fun_addr atom addr
 let generate_debug_info fun_s var_s = !implem.generate_debug_info fun_s var_s

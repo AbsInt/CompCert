@@ -624,9 +624,10 @@ let rec convertTypAnnotArgs env = function
       Tcons(convertTyp env (Cutil.unary_conversion env e1.etyp),
             convertTypAnnotArgs env el)
 
-let convertField env f =
+let convertField env sid f =
   let id = intern_string f.fld_name
   and ty = convertTyp env ?bitwidth: f.fld_bitfield f.fld_typ in
+  Debug.set_member_atom ~str_id:sid f.fld_name ~fld_id:id;
   match f.fld_bitfield with
   | None -> Member_plain(id, ty)
   | Some w ->
@@ -639,17 +640,13 @@ let convertField env f =
 let convertCompositedef env su id attr members =
   if Cutil.find_custom_attributes ["packed";"__packed__"] attr <> [] then
     unsupported "packed struct (consider adding option [-fpacked-structs])";
-  let t = match su with
-  | C.Struct ->
-      let layout = Cutil.struct_layout env attr members in
-      List.iter (fun (a,b) -> Debug.set_member_offset id a b) layout;
-      TStruct (id,attr)
-  | C.Union -> TUnion (id,attr) in
-  Debug.set_composite_size id su (Cutil.sizeof env t);
-  Composite(intern_string id.name,
-            begin match su with C.Struct -> Ctypes.Struct | C.Union -> Ctypes.Union end,
-            List.map (convertField env) members,
-            convertAttr attr)
+  let intern_name = intern_string id.name in
+  let (t, su') = match su with
+    | C.Struct -> TStruct (id, attr), Ctypes.Struct
+    | C.Union -> TUnion (id, attr), Ctypes.Union in
+  Debug.set_composite_size id intern_name su (Cutil.sizeof env t);
+  let ms = List.map (convertField env intern_name) members in
+  Composite(intern_name, su', ms, convertAttr attr)
 
 let rec projFunType env ty =
   match Cutil.unroll env ty with
@@ -1527,6 +1524,41 @@ let public_globals gl =
     (fun accu (id, g) -> if atom_is_static id then accu else id :: accu)
     [] gl
 
+(** Complete the debug information of struct/unions *)
+
+(* [debug_set_struct_mem_ofs sid ((id,byte_ofs), bits)] sets the
+   byte and bit offset information of the member [id] of the struct
+   [sid] *)
+let debug_set_struct_mem_ofs sid ((id, byte_ofs), bits) =
+  let byte_ofs = Z.to_int byte_ofs in
+  match bits with
+  | Full ->
+    Debug.set_member_offset ~str_id:sid ~fld_id:id byte_ofs
+  | Bits (sz, sg, bit_pos, width) ->
+    let bit_pos = Z.to_int bit_pos in
+    let sz = Z.to_int (bitalignof_intsize sz) in
+    let bit_pos = if not !Machine.config.Machine.bitfields_msb_first then
+        sz - bit_pos - (Z.to_int width)
+      else
+        bit_pos in
+    let size = sz / 8 in
+    Debug.set_bitfield_offset ~str_id:sid ~fld_id:id ~bit_ofs:bit_pos ~byte_ofs:byte_ofs ~size:size
+
+(* [debug_set_struct_ofs env types] sets the missing offset information
+   of all structs in the list of composites in [types] if we compile
+   with debug information. *)
+let debug_set_struct_ofs env typs =
+  if !Clflags.option_g then
+    List.iter (function
+        | Composite (sid, Ctypes.Struct, ms, a) ->
+          let layout = Ctypes.layout_struct env ms in
+          begin match layout with
+            | Errors.OK layout ->
+              List.iter (debug_set_struct_mem_ofs sid) layout
+            | Errors.Error _ -> ()
+          end
+        | _ -> ()) typs
+
 (** Convert a [C.program] into a [Csyntax.program] *)
 
 let convertProgram p =
@@ -1555,6 +1587,7 @@ let convertProgram p =
             prog_main = intern_string !Clflags.main_function_name;
             prog_types = typs;
             prog_comp_env = ce } in
+        debug_set_struct_ofs ce typs;
         Diagnostics.check_errors ();
         p'
   with Env.Error msg ->

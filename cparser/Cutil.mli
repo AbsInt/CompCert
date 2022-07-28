@@ -142,8 +142,6 @@ val composite_info_decl:
   struct_or_union -> attributes -> Env.composite_info
 val composite_info_def:
   Env.t -> struct_or_union -> attributes -> field list -> Env.composite_info
-val struct_layout:
-  Env.t -> attributes -> field list -> (string * int) list
 val offsetof:
   Env.t -> typ -> field -> int
 (* Compute the offset of a struct member *)

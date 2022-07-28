@@ -19,13 +19,13 @@ open Camlcoq
 type composite_field =
     {
      cfd_name:        string;
+     cfd_atom:        atom option;
      cfd_anon:        bool;
      cfd_typ:         int;
      cfd_bit_size:    int option;
      cfd_bit_offset:  int option;
      cfd_byte_offset: int option;
      cfd_byte_size:   int option;
-     cfd_bitfield:    string option;
    }
 
 type composite_type =

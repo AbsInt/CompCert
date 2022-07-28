@@ -396,13 +396,13 @@ let insert_global_declaration env dec =
       let fields = List.map (fun f ->
         {
          cfd_name = f.fld_name;
+         cfd_atom = None;
          cfd_anon = f.fld_anonymous;
          cfd_typ = insert_type f.fld_typ;
          cfd_bit_size = f.fld_bitfield;
          cfd_bit_offset = None;
          cfd_byte_offset = None;
          cfd_byte_size = None;
-         cfd_bitfield = None;
        }) fi in
       replace_composite id (fun comp ->
         let loc = if comp.ct_file_loc = None then Some dec.gloc else comp.ct_file_loc in
@@ -423,23 +423,36 @@ let insert_global_declaration env dec =
         {en with enum_file_loc = Some dec.gloc; enum_enumerators = enumerator;})
   | Gpragma _ -> ()
 
-let set_member_offset str field offset =
-  let id = find_type (TStruct (str,[])) in
+let atom_is_member id f =
+  match f.cfd_atom with
+  | None -> false
+  | Some f -> f = id
+
+let set_member_atom ~str_id field ~fld_id =
+  let sid = Hashtbl.find atom_to_definition str_id in
+  replace_composite sid (fun comp ->
+      let name f = f.cfd_name = field in
+      let members = list_replace name (fun a -> {a with cfd_atom = Some fld_id;}) comp.ct_members in
+      {comp with ct_members = members;})
+
+let set_member_offset ~str_id ~fld_id offset =
+  let id = Hashtbl.find atom_to_definition str_id in
   replace_composite id (fun comp ->
-    let name f = f.cfd_name = field || match f.cfd_bitfield with Some n -> n = field | _ -> false in
-    let members = list_replace name (fun a -> {a with cfd_byte_offset = Some offset;}) comp.ct_members in
+    let members = list_replace (atom_is_member fld_id) (fun a -> {a with cfd_byte_offset = Some offset;}) comp.ct_members in
     {comp with ct_members = members;})
 
-let set_composite_size comp sou size =
+let set_composite_size comp intern_name sou size =
   let id = find_type (gen_comp_typ sou comp []) in
+  Hashtbl.add atom_to_definition intern_name id;
   replace_composite id (fun comp -> {comp with ct_sizeof = size;})
 
-let set_bitfield_offset str field offset underlying size =
-  let id = find_type (TStruct (str,[])) in
+let set_bitfield_offset ~str_id ~fld_id ~bit_ofs ~byte_ofs ~size =
+  let id = Hashtbl.find atom_to_definition str_id in
   replace_composite id (fun comp ->
-    let name f = f.cfd_name = field in
-    let members = list_replace name (fun a ->
-      {a with cfd_bit_offset = Some offset; cfd_bitfield = Some underlying; cfd_byte_size = Some size})
+    let members = list_replace (atom_is_member fld_id) (fun a ->
+      {a with cfd_bit_offset = Some bit_ofs;
+              cfd_byte_size = Some size;
+              cfd_byte_offset = Some byte_ofs})
         comp.ct_members in
     {comp with ct_members = members;})
 
@@ -670,6 +683,7 @@ let default_debug =
    init = init;
    atom_global = atom_global;
    set_composite_size = set_composite_size;
+   set_member_atom = set_member_atom;
    set_member_offset = set_member_offset;
    set_bitfield_offset = set_bitfield_offset;
    insert_global_declaration = insert_global_declaration;

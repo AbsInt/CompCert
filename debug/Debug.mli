@@ -22,9 +22,10 @@ type implem =
     {
      init: string -> unit;
      atom_global: ident -> atom -> unit;
-     set_composite_size: ident -> struct_or_union -> int option -> unit;
-     set_member_offset: ident -> string -> int -> unit;
-     set_bitfield_offset: ident -> string -> int -> string -> int -> unit;
+     set_composite_size: ident -> atom -> struct_or_union -> int option -> unit;
+     set_member_atom: str_id:atom -> string -> fld_id:atom -> unit;
+     set_member_offset: str_id:atom -> fld_id:atom -> int -> unit;
+     set_bitfield_offset: str_id:atom -> fld_id:atom -> bit_ofs:int -> byte_ofs:int -> size:int -> unit;
      insert_global_declaration: Env.t -> globdecl -> unit;
      add_fun_addr: atom -> section_name -> (int * int) -> unit;
      generate_debug_info: (atom -> string) -> string -> debug_entries option;
@@ -56,9 +57,10 @@ val implem: implem ref
 
 val init_compile_unit: string -> unit
 val atom_global: ident -> atom -> unit
-val set_composite_size: ident -> struct_or_union -> int option -> unit
-val set_member_offset: ident -> string -> int -> unit
-val set_bitfield_offset: ident -> string -> int -> string -> int -> unit
+val set_composite_size: ident -> atom -> struct_or_union -> int option -> unit
+val set_member_atom: str_id:atom -> string -> fld_id:atom -> unit
+val set_member_offset: str_id:atom -> fld_id:atom -> int -> unit
+val set_bitfield_offset: str_id:atom -> fld_id:atom -> bit_ofs:int -> byte_ofs:int -> size:int -> unit
 val insert_global_declaration:  Env.t -> globdecl -> unit
 val add_fun_addr: atom -> section_name -> (int * int) -> unit
 val all_files_iter: (string -> unit) -> unit
