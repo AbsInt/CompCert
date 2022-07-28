@@ -696,6 +696,32 @@ Fixpoint field_offset_rec (env: composite_env) (id: ident) (ms: members) (pos: Z
 Definition field_offset (env: composite_env) (id: ident) (ms: members) : res (Z * bitfield) :=
   field_offset_rec env id ms 0.
 
+(* [field_zero_or_padding m] returns true if the field is a zero length bitfield
+   or does not have a name *)
+Definition field_zero_or_padding (m: member) : bool :=
+  match m with
+  | Member_plain _ _ => false
+  | Member_bitfield _ _ _ _ w p => orb (zle w 0) p
+  end.
+
+(** [layout_struct env ms accu pos] computes the layout of all fields of a struct that
+    are not unnamed or zero width bitfield members *)
+Fixpoint layout_struct_rec (env: composite_env) (ms: members)
+                           (accu: list (ident * Z * bitfield)) (pos: Z)
+                           {struct ms} : res (list (ident * Z * bitfield)) :=
+  match ms with
+  | nil => OK accu
+  | m :: ms =>
+      if field_zero_or_padding m then
+        layout_struct_rec env ms accu (next_field env pos m)
+      else
+        do (p, b) <- layout_field env pos m;
+        layout_struct_rec env ms (((name_member m), p ,b) :: accu) (next_field env pos m)
+  end.
+
+Definition layout_struct (env: composite_env) (ms: members) : res (list (ident * Z * bitfield)) :=
+  layout_struct_rec env ms nil 0.
+
 (** Some sanity checks about field offsets.  First, field offsets are
   within the range of acceptable offsets. *)
 
