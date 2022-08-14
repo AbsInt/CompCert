@@ -20,6 +20,7 @@ prefix='/usr/local'
 bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
 mandir='$(PREFIX)/share/man'
+sharedir='$(PREFIX)/share/compcert'
 coqdevdir='$(PREFIX)/lib/compcert/coq'
 toolprefix=''
 target=''
@@ -88,6 +89,7 @@ Options:
   -bindir <dir>        Install binaries in <dir>
   -libdir <dir>        Install libraries in <dir>
   -mandir <dir>        Install man pages in <dir>
+  -sharedir <dir>      Install compcert.ini in <dir>
   -coqdevdir <dir>     Install Coq development (.vo files) in <dir>
   -toolprefix <pref>   Prefix names of tools ("gcc", etc) with <pref>
   -use-external-Flocq  Use an already-installed Flocq library
@@ -119,6 +121,8 @@ while : ; do
         libdir="$2"; shift;;
     -mandir|--mandir)
         mandir="$2"; shift;;
+    -sharedir|--sharedir)
+        sharedir="$2"; shift;;
     -coqdevdir|--coqdevdir)
         coqdevdir="$2"; install_coqdev=true; shift;;
     -toolprefix|--toolprefix)
@@ -612,8 +616,6 @@ fi
 #
 # Generate Makefile.config
 #
-sharedir="$(dirname "$bindir")"/share
-
 rm -f Makefile.config
 cat > Makefile.config <<EOF
 PREFIX=$prefix
@@ -832,6 +834,7 @@ CompCert configuration:
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $(expandprefix $libdir)
     Man pages installed in........ $(expandprefix $mandir)
+    compcert.ini installed in..... $(expandprefix $sharedir)
     Standard headers provided..... $has_standard_headers
     Standard headers installed in. $(expandprefix $libdir)/include
 EOF
