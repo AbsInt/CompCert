@@ -65,6 +65,7 @@ Supported targets:
 For x86 targets, the "x86_32-" prefix can also be written "ia32-" or "i386-".
 For x86 targets, the "x86_64-" prefix can also be written "amd64-".
 For AArch64 targets, the "aarch64-" prefix can also be written "arm64-".
+For RISC-V targets, the "rv32-" or "rv64-" prefix can also be written "riscv32-" or "riscv64-".
 
 For PowerPC targets, the "ppc-" prefix can be refined into:
   ppc64-               PowerPC 64 bits
@@ -186,9 +187,9 @@ case "$target" in
       arch="powerpc"; model="ppc64"; endianness="big"; bitsize=32;;
   e5500-*)
       arch="powerpc"; model="e5500"; endianness="big"; bitsize=32;;
-  rv32-*)
+  riscv32-*|rv32-*)
       arch="riscV"; model="32"; endianness="little"; bitsize=32;;
-  rv64-*)
+  riscv64-*|rv64-*)
       arch="riscV"; model="64"; endianness="little"; bitsize=64;;
   aarch64-*|arm64-*)
       arch="aarch64"; model="default"; endianness="little"; bitsize=64;;
