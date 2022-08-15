@@ -129,7 +129,7 @@ module Linux_System : SYSTEM =
       | Section_small_const i ->
           variable_section ~sec:".section	.sdata2,\"a\",@progbits" i
       | Section_string -> ".rodata"
-      | Section_literal -> ".section	.rodata.cst8,\"aM\",@progbits,8"
+      | Section_literal -> ".section	.rodata"
       | Section_jumptable -> ".text"
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
