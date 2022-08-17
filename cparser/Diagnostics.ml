@@ -104,6 +104,7 @@ type warning_type =
   | Tentative_incomplete_static
   | Reduced_alignment
   | Non_linear_cond_expr
+  | Invalid_UTF8
 
 (* List of all warnings with default status.
    "true" means the warning is active by default.
@@ -140,6 +141,7 @@ let all_warnings =
     (Tentative_incomplete_static, false);
     (Reduced_alignment, false);
     (Non_linear_cond_expr, false);
+    (Invalid_UTF8, true);
   ]
 
 (* List of active warnings *)
@@ -182,6 +184,7 @@ let string_of_warning = function
   | Tentative_incomplete_static -> "tentative-incomplete-static"
   | Reduced_alignment -> "reduced-alignment"
   | Non_linear_cond_expr -> "non-linear-cond-expr"
+  | Invalid_UTF8 -> "invalid-utf8"
 
 (* Activate the given warning *)
 let activate_warning w () =

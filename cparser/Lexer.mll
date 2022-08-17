@@ -145,9 +145,9 @@ let error lb fmt =
   Diagnostics.error
     (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) fmt
 
-let warning lb fmt =
+let warning lb kind fmt =
   Diagnostics.warning
-      (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) Diagnostics.Unnamed fmt
+      (lb.lex_curr_p.pos_fname,lb.lex_curr_p.pos_lnum) kind fmt
 
 (* Simple character escapes *)
 
@@ -185,12 +185,12 @@ let combine_encodings loc e1 e2 =
 type chr = Chr of int | Esc of int64
 
 let check_utf8 lexbuf min x =
-  if x > 0x10FFFF || (x >= 0xD800 && x <= 0xDFFF) then begin
-    error lexbuf "Wrong Unicode value U+%X" x; Chr 0
-  end else if x < min then begin
-    error lexbuf "Overlong UTF-8 encoding for Unicode value U+%X" x; Chr 0
-  end else
-    Chr x
+  if x > 0x10FFFF || (x >= 0xD800 && x <= 0xDFFF) then
+    warning lexbuf Diagnostics.Invalid_UTF8 "Wrong Unicode value U+%X" x;
+  if x < min then
+    warning lexbuf Diagnostics.Invalid_UTF8
+            "Overlong UTF-8 encoding for Unicode value U+%X" x;
+  Chr x
 
 let check_universal_character lexbuf x =
   if x > 0x10FFFF
@@ -463,7 +463,10 @@ and char = parse
           + (Char.code c3 land 0b00111111) lsl 6
           + (Char.code c4 land 0b00111111) ) }
   | _ as c
-     { error lexbuf "Ill-formed UTF8 text (byte 0x%02x)" (Char.code c); Chr 0 }
+     { warning lexbuf Diagnostics.Invalid_UTF8
+               "Invalid UTF8 encoding: byte 0x%02x" (Char.code c);
+       Esc (Int64.of_int (Char.code c)) (* re-encode as-is *)
+     }
 
 and char_literal startp accu = parse
   | '\''       { lexbuf.lex_start_p <- startp;
@@ -488,7 +491,8 @@ and hash = parse
           try
             int_of_string n
           with Failure _ ->
-            warning lexbuf "invalid line number"; lexbuf.lex_curr_p.pos_lnum
+            warning lexbuf Diagnostics.Unnamed "invalid line number";
+            lexbuf.lex_curr_p.pos_lnum
         in
         lexbuf.lex_curr_p <- {
           lexbuf.lex_curr_p with
@@ -503,7 +507,7 @@ and hash = parse
     ([^ '\n']* as s) '\n'
       { new_line lexbuf; PRAGMA (s, currentLoc lexbuf) }
   | [^ '\n']* '\n'
-      { warning lexbuf "unrecognized '#' line";
+      { warning lexbuf Diagnostics.Unnamed "unrecognized '#' line";
         new_line lexbuf; initial_linebegin lexbuf }
   | [^ '\n']* eof
       { fatal_error lexbuf "unexpected end of file" }

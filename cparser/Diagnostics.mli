@@ -57,6 +57,7 @@ type warning_type =
   | Tentative_incomplete_static    (** static tentative definition with incomplete type *)
   | Reduced_alignment              (** alignment reduction *)
   | Non_linear_cond_expr           (** condition that cannot be linearized *)
+  | Invalid_UTF8                   (** invalid UTF-8 encoding *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 (** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to
