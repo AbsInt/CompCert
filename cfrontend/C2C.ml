@@ -293,6 +293,8 @@ let stringNum = ref 0   (* number of next global for string literals *)
 let stringTable : (string, AST.ident) Hashtbl.t = Hashtbl.create 47
 let wstringTable : (int64 list, AST.ident) Hashtbl.t = Hashtbl.create 47
 
+let is_C_string s = not (String.contains s '\000')
+
 let name_for_string_literal s =
   try
     Hashtbl.find stringTable s
@@ -300,11 +302,12 @@ let name_for_string_literal s =
     incr stringNum;
     let name = Printf.sprintf "__stringlit_%d" !stringNum in
     let id = intern_string name in
+    let mergeable = if is_C_string s then 1 else 0 in
     Hashtbl.add decl_atom id
       { a_storage = C.Storage_static;
         a_alignment = Some 1;
         a_size = Some (Int64.of_int (String.length s + 1));
-        a_sections = [Sections.for_stringlit 0];
+        a_sections = [Sections.for_stringlit mergeable];
         a_access = Sections.Access_default;
         a_inline = No_specifier;
         a_loc = Cutil.no_loc };
@@ -321,8 +324,10 @@ let global_for_string s id =
     init := AST.Init_int8(Z.of_uint(Char.code c)) :: !init in
   add_char '\000';
   for i = String.length s - 1 downto 0 do add_char s.[i] done;
-  (id, AST.Gvar { AST.gvar_info = typeStringLiteral s;  AST.gvar_init = !init;
-              AST.gvar_readonly = true;  AST.gvar_volatile = false})
+  AST.(id, Gvar { gvar_info = typeStringLiteral s;  gvar_init = !init;
+                  gvar_readonly = true;  gvar_volatile = false})
+
+let is_C_wide_string s = not (List.mem 0L s)
 
 let name_for_wide_string_literal s =
   try
@@ -332,12 +337,13 @@ let name_for_wide_string_literal s =
     let name = Printf.sprintf "__stringlit_%d" !stringNum in
     let id = intern_string name in
     let wchar_size = Machine.((!config).sizeof_wchar) in
+    let mergeable = if is_C_wide_string s then wchar_size else 0 in
     Hashtbl.add decl_atom id
       { a_storage = C.Storage_static;
         a_alignment = Some wchar_size;
         a_size = Some (Int64.(mul (of_int (List.length s + 1))
                                   (of_int wchar_size)));
-        a_sections = [Sections.for_stringlit 0];
+        a_sections = [Sections.for_stringlit mergeable];
         a_access = Sections.Access_default;
         a_inline = No_specifier;
         a_loc = Cutil.no_loc };
@@ -365,8 +371,9 @@ let global_for_wide_string s id =
     init := init_of_char(Z.of_uint64 c) :: !init in
   List.iter add_char s;
   add_char 0L;
-   AST.(id,  Gvar { gvar_info = typeWideStringLiteral s;  gvar_init = List.rev !init;
-             gvar_readonly = true; gvar_volatile = false})
+  AST.(id, Gvar { gvar_info = typeWideStringLiteral s;
+                  gvar_init = List.rev !init;
+                  gvar_readonly = true; gvar_volatile = false})
 
 let globals_for_strings globs =
   let globs1 =
