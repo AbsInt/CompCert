@@ -28,7 +28,6 @@ module type TARGET =
       val print_comm_symb:  out_channel -> Z.t -> P.t -> int -> unit
       val print_var_info: out_channel -> P.t -> unit
       val print_fun_info: out_channel -> P.t -> unit
-      val get_section_names: P.t -> section_name * section_name * section_name
       val print_file_line: out_channel -> string -> int -> unit
       val print_optional_fun_info: out_channel -> unit
       val cfi_startproc: out_channel -> unit
@@ -328,3 +327,29 @@ let variable_section ~sec ?bss ?reloc ?(common = !Clflags.option_fcommon) i =
   | Init -> sec
   | Init_reloc ->
       begin match reloc with Some s -> s | None -> sec end
+
+(** ELF and macOS mergeable section names for literals and strings. *)
+
+let elf_mergeable_literal_section sz sec =
+  match sz with
+  | 0 -> sec
+  | 4 | 8 | 16 -> sprintf "%s.cst%d,\"aM\",@progbits,%d" sec sz sz
+  | _ -> assert false
+
+let elf_mergeable_string_section sz sec =
+  match sz with
+  | 0 -> sec
+  | 1 | 2 | 4 -> sprintf "%s.str%d.%d,\"aMS\",@progbits,%d" sec sz sz sz
+  | _ -> assert false
+
+let macos_mergeable_literal_section sz =
+  match sz with
+  | 0 -> ".const"
+  | 4 | 8 | 16 -> sprintf ".literal%d" sz
+  | _ -> assert false
+
+let macos_mergeable_string_section sz =
+  match sz with
+  | 0 | 2 | 4 -> ".const"
+  | 1 -> ".cstring"
+  | _ -> assert false

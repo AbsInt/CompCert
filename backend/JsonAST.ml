@@ -35,6 +35,11 @@ let pp_section pp sec =
     pp_jobject_start pp;
     pp_jmember ~first:true pp "Section Name" pp_jstring name;
     pp_jmember pp "Init" pp_init init;
+    pp_jobject_end pp
+  and pp_complex_int name sz =
+    pp_jobject_start pp;
+    pp_jmember ~first:true pp "Section Name" pp_jstring name;
+    pp_jmember pp "Size" pp_jint sz;
     pp_jobject_end pp in
 
   match sec with
@@ -43,8 +48,8 @@ let pp_section pp sec =
   | Section_small_data init -> pp_complex "Small Data" init
   | Section_const init -> pp_complex "Const" init
   | Section_small_const init -> pp_complex "Small Const" init
-  | Section_string -> pp_simple "String"
-  | Section_literal -> pp_simple "Literal"
+  | Section_string sz -> pp_complex_int "String" sz
+  | Section_literal sz -> pp_complex_int "Literal" sz
   | Section_jumptable -> pp_simple "Jumptable"
   | Section_user (s,w,e) ->
     pp_jobject_start pp;

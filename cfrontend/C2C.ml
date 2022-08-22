@@ -304,7 +304,7 @@ let name_for_string_literal s =
       { a_storage = C.Storage_static;
         a_alignment = Some 1;
         a_size = Some (Int64.of_int (String.length s + 1));
-        a_sections = [Sections.for_stringlit()];
+        a_sections = [Sections.for_stringlit 0];
         a_access = Sections.Access_default;
         a_inline = No_specifier;
         a_loc = Cutil.no_loc };
@@ -337,7 +337,7 @@ let name_for_wide_string_literal s =
         a_alignment = Some wchar_size;
         a_size = Some (Int64.(mul (of_int (List.length s + 1))
                                   (of_int wchar_size)));
-        a_sections = [Sections.for_stringlit()];
+        a_sections = [Sections.for_stringlit 0];
         a_access = Sections.Access_default;
         a_inline = No_specifier;
         a_loc = Cutil.no_loc };

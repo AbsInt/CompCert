@@ -151,8 +151,8 @@ struct
         variable_section ~sec:".data" ~bss:".bss" i
     | Section_const i | Section_small_const i ->
         variable_section ~sec:".section	.rodata" i
-    | Section_string -> ".section	.rodata"
-    | Section_literal -> ".text"
+    | Section_string _ -> ".section	.rodata"
+    | Section_literal _ -> ".text"
     | Section_jumptable -> ".text"
     | Section_user(s, wr, ex) ->
       sprintf ".section	\"%s\",\"a%s%s\",%%progbits"
@@ -529,13 +529,6 @@ struct
         ireg r1 print_label lbl comment symbol_offset (id, ofs)
 
 
-  let get_section_names name =
-    let (text, lit) =
-      match C2C.atom_sections name with
-      | t :: l :: _ -> (t, l)
-      | _    -> (Section_text, Section_literal) in
-    text,lit,Section_jumptable
-
   let print_align oc alignment =
     fprintf oc "	.balign %d\n" alignment
 
@@ -572,7 +565,7 @@ struct
 
   let emit_constants oc lit =
     if not !Constantexpand.literals_in_code && exists_constants () then begin
-      section oc lit;
+      section oc (Sections.with_size 8 lit);
       fprintf oc "	.balign 4\n";
       Hashtbl.iter (print_literal64 oc) literal64_labels;
     end;

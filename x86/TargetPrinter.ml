@@ -138,8 +138,10 @@ module ELF_System : SYSTEM =
           variable_section ~sec:".data" ~bss:".bss" i
       | Section_const i | Section_small_const i ->
           variable_section ~sec:".section	.rodata" i
-      | Section_string -> ".section	.rodata"
-      | Section_literal -> ".section	.rodata"
+      | Section_string sz ->
+          elf_mergeable_string_section sz ".section	.rodata"
+      | Section_literal sz ->
+          elf_mergeable_literal_section sz ".section	.rodata"
       | Section_jumptable -> ".text"
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
@@ -200,8 +202,10 @@ module MacOS_System : SYSTEM =
           variable_section ~sec:".data" i
       | Section_const i  | Section_small_const i ->
           variable_section ~sec:".const" ~reloc:".const_data" i
-      | Section_string -> ".const"
-      | Section_literal -> ".const"
+      | Section_string sz -> 
+          macos_mergeable_string_section sz
+      | Section_literal sz ->
+          macos_mergeable_literal_section sz
       | Section_jumptable -> ".text"
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\", %s, %s"
@@ -265,8 +269,8 @@ module Cygwin_System : SYSTEM =
           variable_section ~sec:".data" ~bss:".bss" i
       | Section_const i | Section_small_const i ->
           variable_section ~sec:".section	.rdata,\"dr\"" i
-      | Section_string -> ".section	.rdata,\"dr\""
-      | Section_literal -> ".section	.rdata,\"dr\""
+      | Section_string _ -> ".section	.rdata,\"dr\""
+      | Section_literal _ -> ".section	.rdata,\"dr\""
       | Section_jumptable -> ".text"
       | Section_user(s, wr, ex) ->
           sprintf ".section	%s, \"%s\"\n"
@@ -887,13 +891,17 @@ module Target(System: SYSTEM):TARGET =
     let name_of_section = name_of_section
 
     let emit_constants oc lit =
-       if exists_constants () then begin
-         section oc lit;
-         print_align oc 8;
-         Hashtbl.iter (print_literal64 oc) literal64_labels;
-         Hashtbl.iter (print_literal32 oc) literal32_labels;
-         reset_literals ()
-       end
+      if Hashtbl.length literal64_labels > 0 then begin
+        section oc (Sections.with_size 8 lit);
+        print_align oc 8;
+        Hashtbl.iter (print_literal64 oc) literal64_labels
+      end;
+      if Hashtbl.length literal32_labels > 0 then begin
+        section oc (Sections.with_size 4 lit);
+        print_align oc 4;
+        Hashtbl.iter (print_literal32 oc) literal32_labels
+      end;
+      reset_literals ()
 
     let cfi_startproc = cfi_startproc
     let cfi_endproc = cfi_endproc
@@ -903,11 +911,6 @@ module Target(System: SYSTEM):TARGET =
       List.iter (print_instruction oc) fn.fn_code
 
     let print_optional_fun_info _ = ()
-
-    let get_section_names name =
-      match C2C.atom_sections name with
-      | [t;l;j] -> (t, l, j)
-      |    _    -> (Section_text, Section_literal, Section_jumptable)
 
     let print_fun_info = print_fun_info
 
@@ -922,7 +925,7 @@ module Target(System: SYSTEM):TARGET =
 
     let print_epilogue oc =
       if !need_masks then begin
-        section oc Section_literal;
+        section oc (Section_literal 16);
         print_align oc 16;
         fprintf oc "%a:	.quad   0x8000000000000000, 0\n"
           raw_symbol "__negd_mask";

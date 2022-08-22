@@ -37,10 +37,15 @@ module Printer(Target:TARGET) =
     let print_location oc loc =
       if loc <> Cutil.no_loc then Target.print_file_line oc (fst loc) (snd loc)
 
+    let get_section_names name =
+      match C2C.atom_sections name with
+      | [t;l;j] -> (t, l, j)
+      |    _    -> (Section_text, Section_literal 0, Section_jumptable)
+
     let print_function oc name fn =
       Hashtbl.clear current_function_labels;
       Debug.symbol_printed (extern_atom name);
-      let (text, lit, jmptbl) = Target.get_section_names name in
+      let (text, lit, jmptbl) = get_section_names name in
       Target.section oc text;
       let alignment =
         match !Clflags.option_falignfunctions with Some n -> n | None -> Target.default_falignment in

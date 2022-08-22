@@ -28,8 +28,8 @@ type section_name =
   | Section_small_data of initialized
   | Section_const of initialized
   | Section_small_const of initialized
-  | Section_string
-  | Section_literal
+  | Section_string of int   (* character size; zero if unknown *)
+  | Section_literal of int  (* literal size; zero if unknown *)
   | Section_jumptable
   | Section_user of string * bool (*writable*) * bool (*executable*)
   | Section_debug_abbrev
@@ -55,4 +55,5 @@ val use_section_for: AST.ident -> string -> bool
 val for_variable: Env.t -> C.location -> AST.ident -> C.typ -> initialized ->
                                           section_name * access_mode
 val for_function: Env.t -> C.location -> AST.ident -> C.attributes -> section_name list
-val for_stringlit: unit -> section_name
+val for_stringlit: int -> section_name
+val with_size: int -> section_name -> section_name

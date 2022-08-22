@@ -27,8 +27,8 @@ type section_name =
   | Section_small_data of initialized
   | Section_const of initialized
   | Section_small_const of initialized
-  | Section_string
-  | Section_literal
+  | Section_string of int   (* character size; zero if unknown *)
+  | Section_literal of int  (* literal size; zero if unknown *)
   | Section_jumptable
   | Section_user of string * bool (*writable*) * bool (*executable*)
   | Section_debug_abbrev
@@ -38,6 +38,11 @@ type section_name =
   | Section_debug_ranges
   | Section_debug_str
   | Section_ais_annotation
+
+let with_size sz = function
+  | Section_string prev -> assert (prev = 0); Section_string sz
+  | Section_literal prev -> assert (prev = 0); Section_literal sz
+  | sec -> sec
 
 type access_mode =
   | Access_default
@@ -96,15 +101,15 @@ let builtin_sections = [
       sec_writable = false; sec_executable = false;
       sec_access = Access_near};
   "STRING",
-     {sec_name_init = Section_string;
-      sec_name_init_reloc = Section_string;
-      sec_name_uninit = Section_string;
+     {sec_name_init = Section_string 0;
+      sec_name_init_reloc = Section_string 0;
+      sec_name_uninit = Section_string 0;
       sec_writable = false; sec_executable = false;
       sec_access = Access_default};
   "LITERAL",
-     {sec_name_init = Section_literal;
-      sec_name_init_reloc = Section_literal;
-      sec_name_uninit = Section_literal;
+     {sec_name_init = Section_literal 0;
+      sec_name_init_reloc = Section_literal 0;
+      sec_name_uninit = Section_literal 0;
       sec_writable = false; sec_executable = false;
       sec_access = Access_default};
   "JUMPTABLE",
@@ -258,10 +263,10 @@ let for_function env loc id attr =
 
 (* Determine section for a string literal *)
 
-let for_stringlit() =
+let for_stringlit sz =
   let si =
     try
       Hashtbl.find current_section_table "STRING"
     with Not_found ->
       assert false in
-  si.sec_name_init
+  with_size sz (si.sec_name_init)
