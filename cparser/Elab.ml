@@ -456,6 +456,15 @@ let elab_string_literal loc enc chars =
   | EncWide | EncU16 | EncU32 -> 
       CWStr(chars, ik)
 
+let warn_C11_literals loc enc kind =
+  let warn enc =
+    warning loc Celeven_extension "'%s' %s are a C11 extension" enc kind in
+  match enc with
+  | EncNone | EncWide -> ()
+  | EncUTF8 -> warn "u8"
+  | EncU16 -> warn "u"
+  | EncU32 -> warn "U"
+
 let elab_constant loc = function
   | CONST_INT s ->
       let (v, ik) = elab_int_constant loc s in
@@ -464,6 +473,7 @@ let elab_constant loc = function
       let (v, fk) = elab_float_constant f in
       CFloat(v, fk)
   | CONST_CHAR(enc, s) ->
+      warn_C11_literals loc enc "character constants";
       let ikind =
         match enc with
         | EncNone -> IInt
@@ -473,6 +483,7 @@ let elab_constant loc = function
         | EncUTF8 -> assert false in
       CInt(elab_char_constant loc enc s, ikind, "")
   | CONST_STRING(wide, s) ->
+      warn_C11_literals loc wide "string literals";
       elab_string_literal loc wide s
 
 let elab_simple_string loc enc chars =
@@ -1610,6 +1621,7 @@ and elab_item zi item il =
      | COMPOUND_INIT [_, SINGLE_INIT(CONSTANT (CONST_STRING(w, s)))]),
     TArray(ty_elt, sz, _)
     when is_integer_type env ty_elt ->
+      warn_C11_literals loc w "string literals";
       begin match elab_string_literal loc w s, unroll env ty_elt with
       | CStr s, TInt((IChar | ISChar | IUChar), _) ->
           if not (I.index_below (Int64.of_int(String.length s - 1)) sz) then
