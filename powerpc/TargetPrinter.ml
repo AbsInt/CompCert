@@ -973,7 +973,7 @@ module Target (System : SYSTEM):TARGET =
 let sel_target () =
   let module S  = (val
     (match Configuration.system with
-    | "linux"  -> (module Linux_System:SYSTEM)
+    | "linux" | "bsd" -> (module Linux_System:SYSTEM)
     | "diab"   -> (module Diab_System:SYSTEM)
     | _        -> invalid_arg ("System " ^ Configuration.system ^ " not supported")):SYSTEM) in
   (module Target(S):TARGET)

@@ -41,6 +41,7 @@ Supported targets:
   ppc-eabi             (PowerPC, EABI with GNU/Unix tools)
   ppc-eabi-diab        (PowerPC, EABI with Diab tools)
   ppc-linux            (PowerPC, Linux)
+  ppc-bsd              (PowerPC, BSD)
   arm-eabi             (ARM, EABI, little endian)
   arm-linux            (ARM, EABI, little endian)
   arm-eabihf           (ARM, EABI using hardware FP registers, little endian)
@@ -59,6 +60,7 @@ Supported targets:
   rv32-linux           (RISC-V 32 bits, Linux)
   rv64-linux           (RISC-V 64 bits, Linux)
   aarch64-linux        (AArch64, i.e. ARMv8 in 64-bit mode, Linux)
+  aarch64-bsd          (AArch64, i.e. ARMv8 in 64-bit mode, BSD)
   aarch64-macos        (AArch64, i.e. Apple silicon, MacOS)
   manual               (edit configuration file by hand)
 
@@ -258,7 +260,7 @@ fi
 if test "$arch" = "powerpc"; then
 
   case "$target" in
-    eabi|eabi-diab|linux)
+    eabi|eabi-diab|linux|bsd)
         ;;
     *)
         echo "Error: invalid eabi/system '$target' for architecture PowerPC." 1>&2
@@ -289,6 +291,11 @@ if test "$arch" = "powerpc"; then
         libmath="-lm"
         system="diab"
         responsefile="diab"
+        ;;
+    bsd)
+        casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
+        cprepro_options="-std=c99 -U__GNUC__ -E"
+        system="bsd"
         ;;
     *)
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
@@ -409,7 +416,13 @@ if test "$arch" = "aarch64"; then
     linux)
         abi="standard"
         cprepro_options="-std=c99 -U__GNUC__ -E"
-        system="linux";;
+        system="linux"
+        ;;
+    bsd)
+        abi="standard"
+        cprepro_options="-std=c99 -U__GNUC__ -E"
+        system="bsd"
+        ;;
     macos|macosx)
         abi="apple"
         casm="${toolprefix}cc"
