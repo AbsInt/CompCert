@@ -201,39 +201,49 @@ let check_universal_character lexbuf x =
   end else
     Chr x
 
+let add_char_utf8 x accu =
+  if x <= 0x007F then
+    Int64.of_int x :: accu
+  else if x <= 0x07FF then
+    Int64.of_int (0x80 lor (x land 0x3F)) ::
+    Int64.of_int (0xC0 lor (x lsr 6)) ::
+    accu
+  else if x <= 0xFFFF then
+    Int64.of_int (0x80 lor (x land 0x3F)) ::
+    Int64.of_int (0x80 lor ((x lsr 6) land 0x3F)) ::
+    Int64.of_int (0xE0 lor (x lsr 12)) ::
+    accu
+  else
+    Int64.of_int (0x80 lor (x land 0x3F)) ::
+    Int64.of_int (0x80 lor ((x lsr 6) land 0x3F)) ::
+    Int64.of_int (0x80 lor ((x lsr 12) land 0x3F)) ::
+    Int64.of_int (0xF0 lor (x lsr 18)) ::
+    accu
+
+let add_char_utf16 x accu =
+  if x <= 0xFFFF then
+    Int64.of_int x :: accu
+  else begin
+    let x = x - 0x10000 in
+    Int64.of_int (0xDC00 lor (x land 0x3FF)) ::
+    Int64.of_int (0xD800 lor (x lsr 10)) ::
+    accu
+  end
+
 let add_char enc c accu =
   match c, enc with
   | Esc x, _ -> (* Escapes are never encoded *)
       x :: accu
-  | Chr x, (Cabs.EncWide | Cabs.EncU32) -> (* Characters are not encoded *)
-      Int64.of_int x :: accu
   | Chr x, (Cabs.EncNone | Cabs.EncUTF8) -> (* Characters are encoded in UTF8 *)
-      if x <= 0x007F then
-        Int64.of_int x :: accu
-      else if x <= 0x07FF then
-        Int64.of_int (0x80 lor (x land 0x3F)) ::
-        Int64.of_int (0xC0 lor (x lsr 6)) ::
-        accu
-      else if x <= 0xFFFF then
-        Int64.of_int (0x80 lor (x land 0x3F)) ::
-        Int64.of_int (0x80 lor ((x lsr 6) land 0x3F)) ::
-        Int64.of_int (0xE0 lor (x lsr 12)) ::
-        accu
-      else
-        Int64.of_int (0x80 lor (x land 0x3F)) ::
-        Int64.of_int (0x80 lor ((x lsr 6) land 0x3F)) ::
-        Int64.of_int (0x80 lor ((x lsr 12) land 0x3F)) ::
-        Int64.of_int (0xF0 lor (x lsr 18)) ::
-        accu
+      add_char_utf8 x accu
   | Chr x, Cabs.EncU16 -> (* Characters are encoded in UTF16 *)
-      if x <= 0xFFFF then
-        Int64.of_int x :: accu
-      else begin
-        let x = x - 0x10000 in
-        Int64.of_int (0xDC00 lor (x land 0x3FF)) ::
-        Int64.of_int (0xD800 lor (x lsr 10)) ::
-        accu
-      end
+      add_char_utf16 x accu
+  | Chr x, Cabs.EncU32 -> (* Characters are not encoded *)
+      Int64.of_int x :: accu
+  | Chr x, Cabs.EncWide -> (* Depends on size of wchar_t *)
+      if Machine.(!config.sizeof_wchar) = 2
+      then add_char_utf16 x accu
+      else Int64.of_int x :: accu
 }
 
 (* Identifiers *)
