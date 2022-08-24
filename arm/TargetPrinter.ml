@@ -562,15 +562,6 @@ struct
     current_function_sig := fn.fn_sig;
     List.iter (print_instruction oc) fn.fn_code
 
-
-  let emit_constants oc lit =
-    if not !Constantexpand.literals_in_code && exists_constants () then begin
-      section oc (Sections.with_size 8 lit);
-      fprintf oc "	.balign 4\n";
-      Hashtbl.iter (print_literal64 oc) literal64_labels;
-    end;
-    reset_constants ()
-
   (* Data *)
 
   let print_prologue oc =

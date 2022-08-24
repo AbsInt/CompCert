@@ -37,6 +37,19 @@ module Printer(Target:TARGET) =
     let print_location oc loc =
       if loc <> Cutil.no_loc then Target.print_file_line oc (fst loc) (snd loc)
 
+    let emit_constants oc lit =
+      if Hashtbl.length literal64_labels > 0 then begin
+        Target.section oc (Sections.with_size 8 lit);
+        Target.print_align oc 8;
+        iter_literal64 (Target.print_literal64 oc)
+      end;
+      if Hashtbl.length literal32_labels > 0 then begin
+        Target.section oc (Sections.with_size 4 lit);
+        Target.print_align oc 4;
+        iter_literal32 (fun n lbl -> fprintf oc "%a:	.long	0x%lx\n" Target.label lbl n);
+      end;
+      reset_literals ()
+
     let get_section_names name =
       match C2C.atom_sections name with
       | [t;l;j] -> (t, l, j)
@@ -65,7 +78,7 @@ module Printer(Target:TARGET) =
       Target.cfi_endproc oc;
       print_debug_label oc e;
       Target.print_fun_info oc name;
-      Target.emit_constants oc lit;
+      emit_constants oc lit;
       Target.print_jumptable oc jmptbl;
       if !Clflags.option_g then
         Hashtbl.iter (fun p i -> Debug.add_label name p i) current_function_labels

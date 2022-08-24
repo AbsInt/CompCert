@@ -915,23 +915,7 @@ module Target (System : SYSTEM):TARGET =
       and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
       fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo
 
-    let print_literal32 oc n lbl =
-      fprintf oc "%a:	.long	0x%lx\n" label lbl n
-
     let print_fun_info = elf_print_fun_info
-
-    let emit_constants oc lit =
-      if Hashtbl.length literal64_labels > 0 then begin
-        section oc (Sections.with_size 8 lit);
-        fprintf oc "	.balign 8\n";
-        Hashtbl.iter (print_literal64 oc) literal64_labels
-      end;
-      if Hashtbl.length literal32_labels > 0 then begin
-        section oc (Sections.with_size 4 lit);
-        fprintf oc "	.balign 4\n";
-        Hashtbl.iter (print_literal32 oc) literal32_labels
-      end;
-      reset_literals ()
 
     let print_optional_fun_info _ = ()
 

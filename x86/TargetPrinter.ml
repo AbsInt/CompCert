@@ -860,8 +860,6 @@ module Target(System: SYSTEM):TARGET =
 
     let print_literal64 oc n lbl =
       fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
-    let print_literal32 oc n lbl =
-      fprintf oc "%a:	.long	0x%lx\n" label lbl n
 
     let print_jumptable oc jmptbl =
       let print_jumptable (lbl, tbl) =
@@ -889,19 +887,6 @@ module Target(System: SYSTEM):TARGET =
       else System.print_comm_decl oc name sz align
 
     let name_of_section = name_of_section
-
-    let emit_constants oc lit =
-      if Hashtbl.length literal64_labels > 0 then begin
-        section oc (Sections.with_size 8 lit);
-        print_align oc 8;
-        Hashtbl.iter (print_literal64 oc) literal64_labels
-      end;
-      if Hashtbl.length literal32_labels > 0 then begin
-        section oc (Sections.with_size 4 lit);
-        print_align oc 4;
-        Hashtbl.iter (print_literal32 oc) literal32_labels
-      end;
-      reset_literals ()
 
     let cfi_startproc = cfi_startproc
     let cfi_endproc = cfi_endproc

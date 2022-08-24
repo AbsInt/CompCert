@@ -274,24 +274,10 @@ module Target(System: SYSTEM): TARGET =
     let section oc sec =
       fprintf oc "	%s\n" (name_of_section sec)
 
-(* Associate labels to floating-point constants and to symbols. *)
+(* Printing floating-point constants. *)
 
-    let emit_constants oc lit =
-      if Hashtbl.length literal64_labels > 0 then begin
-        section oc (Sections.with_size 8 lit);
-        fprintf oc "	.balign 8\n";
-        Hashtbl.iter
-          (fun bf lbl -> fprintf oc "%a:	.quad	0x%Lx\n" label lbl bf)
-          literal64_labels
-      end;
-      if Hashtbl.length literal32_labels > 0 then begin
-        section oc (Sections.with_size 4 lit);
-        fprintf oc "	.balign 4\n";
-        Hashtbl.iter
-          (fun bf lbl -> fprintf oc "%a:	.long	0x%lx\n" label lbl bf)
-          literal32_labels
-      end;
-      reset_literals ()
+    let print_literal64 oc n lbl =
+      fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
 
 (* Emit .file / .loc debugging directives *)
 

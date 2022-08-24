@@ -132,22 +132,8 @@ module Target : TARGET =
 
 (* Associate labels to floating-point constants and to symbols. *)
 
-    let emit_constants oc lit =
-      if Hashtbl.length literal64_labels > 0 then begin
-        section oc (Sections.with_size 8 lit);
-        fprintf oc "      .align 3\n";
-        Hashtbl.iter
-          (fun bf lbl -> fprintf oc "%a:	.quad	0x%Lx\n" label lbl bf)
-          literal64_labels
-      end;
-      if Hashtbl.length literal32_labels > 0 then begin
-        section oc (Sections.with_size 4 lit);
-        fprintf oc "      .align 2\n";
-        Hashtbl.iter
-          (fun bf lbl -> fprintf oc "%a:	.long	0x%lx\n" label lbl bf)
-          literal32_labels
-      end;
-      reset_literals ()
+    let print_literal64 oc n lbl =
+      fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
 
 (* Generate code to load the address of id + ofs in register r *)
 
