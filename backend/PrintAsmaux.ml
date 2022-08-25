@@ -33,7 +33,6 @@ module type TARGET =
       val cfi_startproc: out_channel -> unit
       val print_instructions: out_channel -> coq_function -> unit
       val cfi_endproc: out_channel -> unit
-      val print_literal64 : out_channel -> int64 -> int -> unit
       val print_jumptable: out_channel -> section_name -> unit
       val section: out_channel -> section_name -> unit
       val name_of_section: section_name -> string

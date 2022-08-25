@@ -910,11 +910,6 @@ module Target (System : SYSTEM):TARGET =
 
     (* Print the code for a function *)
 
-    let print_literal64 oc n lbl =
-      let nlo = Int64.to_int32 n
-      and nhi = Int64.to_int32(Int64.shift_right_logical n 32) in
-      fprintf oc "%a:	.long	0x%lx, 0x%lx\n" label lbl nhi nlo
-
     let print_fun_info = elf_print_fun_info
 
     let print_optional_fun_info _ = ()

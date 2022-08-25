@@ -274,11 +274,6 @@ module Target(System: SYSTEM): TARGET =
     let section oc sec =
       fprintf oc "	%s\n" (name_of_section sec)
 
-(* Printing floating-point constants. *)
-
-    let print_literal64 oc n lbl =
-      fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
-
 (* Emit .file / .loc debugging directives *)
 
     let print_file_line oc file line =

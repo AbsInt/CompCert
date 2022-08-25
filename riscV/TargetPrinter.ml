@@ -130,11 +130,6 @@ module Target : TARGET =
     let section oc sec =
       fprintf oc "	%s\n" (name_of_section sec)
 
-(* Associate labels to floating-point constants and to symbols. *)
-
-    let print_literal64 oc n lbl =
-      fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
-
 (* Generate code to load the address of id + ofs in register r *)
 
     let loadsymbol oc r id ofs =

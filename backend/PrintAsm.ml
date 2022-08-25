@@ -37,16 +37,27 @@ module Printer(Target:TARGET) =
     let print_location oc loc =
       if loc <> Cutil.no_loc then Target.print_file_line oc (fst loc) (snd loc)
 
+    let splitlong b =
+      if Archi.big_endian then
+        (Int64.shift_right_logical b 32),
+        (Int64.logand b 0xFFFFFFFFL)
+      else
+        (Int64.logand b 0xFFFFFFFFL),
+        (Int64.shift_right_logical b 32)
+
     let emit_constants oc lit =
       if Hashtbl.length literal64_labels > 0 then begin
         Target.section oc (Sections.with_size 8 lit);
         Target.print_align oc 8;
-        iter_literal64 (Target.print_literal64 oc)
+        iter_literal64 (fun n lbl ->
+            let (hi, lo) = splitlong n in
+            fprintf oc "%a:	.long	0x%Lx, 0x%Lx\n" Target.label lbl hi lo)
       end;
       if Hashtbl.length literal32_labels > 0 then begin
         Target.section oc (Sections.with_size 4 lit);
         Target.print_align oc 4;
-        iter_literal32 (fun n lbl -> fprintf oc "%a:	.long	0x%lx\n" Target.label lbl n);
+        iter_literal32 (fun n lbl ->
+            fprintf oc "%a:	.long	0x%lx\n" Target.label lbl n);
       end;
       reset_literals ()
 
@@ -88,14 +99,6 @@ module Printer(Target:TARGET) =
         Target.symbol oc symb;
         let ofs = camlint64_of_ptrofs ofs in
         if ofs <> 0L then fprintf oc " + %Ld" ofs in
-      let splitlong b =
-        let b = camlint64_of_coqint b in
-        if Archi.big_endian then
-          (Int64.shift_right_logical b 32),
-          (Int64.logand b 0xFFFFFFFFL)
-        else
-          (Int64.logand b 0xFFFFFFFFL),
-          (Int64.shift_right_logical b 32) in
       match init with
       | Init_int8 n ->
           fprintf oc "	.byte	%ld\n" (camlint_of_coqint n)
@@ -104,14 +107,15 @@ module Printer(Target:TARGET) =
       | Init_int32 n ->
           fprintf oc "	.long	%ld\n" (camlint_of_coqint n)
       | Init_int64 n ->
-          let hi,lo = splitlong n in
+          let (hi, lo) = splitlong (camlint64_of_coqint n) in
           fprintf oc "	.long	0x%Lx, 0x%Lx\n" hi lo
       | Init_float32 n ->
           fprintf oc "	.long	0x%lx %s %.18g\n"
             (camlint_of_coqint (Floats.Float32.to_bits n))
             Target.comment (camlfloat_of_coqfloat32 n)
       | Init_float64 n ->
-          let hi,lo = splitlong (Floats.Float.to_bits n) in
+          let (hi, lo) =
+            splitlong (camlint64_of_coqint (Floats.Float.to_bits n)) in
           fprintf oc "	.long	0x%Lx, 0x%Lx %s %.18g\n" hi lo
             Target.comment (camlfloat_of_coqfloat n)
       | Init_space n ->

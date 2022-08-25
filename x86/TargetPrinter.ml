@@ -858,9 +858,6 @@ module Target(System: SYSTEM):TARGET =
               assert false
           end
 
-    let print_literal64 oc n lbl =
-      fprintf oc "%a:	.quad	0x%Lx\n" label lbl n
-
     let print_jumptable oc jmptbl =
       let print_jumptable (lbl, tbl) =
         let print_entry l =
