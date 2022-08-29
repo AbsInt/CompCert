@@ -154,7 +154,8 @@ let gnu_prepro_actions = [
   Exact "-iquote", String (gnu_prepro_opt_key "-iquote");
   Exact "-P", Self gnu_prepro_opt;
   Exact "-C", Self gnu_prepro_opt;
-  Exact "-CC", Self gnu_prepro_opt;]
+  Exact "-CC", Self gnu_prepro_opt;
+  Prefix "-finput-charset=", Self gnu_prepro_opt]
 
 let prepro_actions = [
   (* Preprocessing options *)
@@ -198,6 +199,8 @@ let gnu_prepro_help =
   -C              Do not discard comments
   -CC             Do not discard comments, including during macro
                   expansion
+  -finput-charset=<charset>
+                  Set the input character set, used for reading source files.
 |}
 
 let prepro_help = {|Preprocessing options:
