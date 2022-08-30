@@ -98,13 +98,6 @@ let reset_literals () =
   Hashtbl.clear literal32_labels;
   Hashtbl.clear literal64_labels
 
-let reset_constants () =
-  jumptables := [];
-  reset_literals ()
-
-let exists_constants () =
-  Hashtbl.length literal32_labels > 0 || Hashtbl.length literal64_labels > 0
-
 (* Variables used for the handling of varargs *)
 
 let current_function_stacksize = ref 0l
