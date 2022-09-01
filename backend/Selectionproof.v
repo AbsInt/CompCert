@@ -892,34 +892,55 @@ Qed.
 
 (** If-conversion *)
 
-Lemma classify_stmt_sound_1:
-  forall f sp e m s k,
-  classify_stmt s = SCskip ->
-  star Cminor.step ge (Cminor.State f s k sp e m) E0 (Cminor.State f Cminor.Sskip k sp e m).
+Definition eventually := Smallstep.eventually Cminor.step Cminor.final_state ge.
+
+Lemma eventually_step: forall f s k sp e m n P,
+  (forall t S', Cminor.step ge (Cminor.State f s k sp e m) t S' -> t = E0 /\ eventually n S' P) ->
+  eventually (S n) (Cminor.State f s k sp e m) P.
 Proof.
-  intros until s; functional induction (classify_stmt s); intros; try discriminate.
-  - apply star_refl.
-  - eapply star_trans; eauto. eapply star_two. constructor. constructor.
-    traceEq. traceEq.
-  - eapply star_left. constructor.
-    eapply star_right. eauto. constructor.
-    traceEq. traceEq.
+  intros. apply Smallstep.eventually_later; auto. intros r FS. inv FS.
 Qed.
 
-Lemma classify_stmt_sound_2:
-  forall f sp e m a id v,
-  Cminor.eval_expr ge sp e m a v ->
-  forall s k,
-  classify_stmt s = SCassign id a ->
-  star Cminor.step ge (Cminor.State f s k sp e m) E0 (Cminor.State f Cminor.Sskip k sp (PTree.set id v e) m).
+Lemma classify_stmt_sound:
+  forall s,
+  match classify_stmt s with
+  | SCskip =>
+      exists n, forall f k sp e m,
+      eventually n (Cminor.State f s k sp e m) (eq (Cminor.State f Cminor.Sskip k sp e m))
+  | SCassign id a =>
+      exists n, forall f k sp e m v,
+      Cminor.eval_expr ge sp e m a v ->
+      eventually n (Cminor.State f s k sp e m) (eq (Cminor.State f Cminor.Sskip k sp (PTree.set id v e) m))
+  | SCother => True
+  end.
 Proof.
-  intros until s; functional induction (classify_stmt s); intros; try discriminate.
-  - inv H0. apply star_one. constructor; auto.
-  - eapply star_trans; eauto. eapply star_two. constructor. constructor.
-    traceEq. traceEq.
-  - eapply star_left. constructor.
-    eapply star_right. eauto. constructor.
-    traceEq. traceEq.
+  induction s; simpl; auto.
+- (* skip *)
+  exists O; intros. constructor; auto.
+- (* assign *)
+  exists 1%nat; intros. apply eventually_step; intros. inv H0.
+  assert (v0 = v) by eauto using eval_expr_determ. subst v0.
+  split; auto. apply eventually_now. auto.
+- (* builtin *)
+  destruct o; auto. destruct e; auto. 
+  exists 1%nat; intros. apply eventually_step; intros. inv H. inv H11.
+  split; auto. apply eventually_now; auto.
+- (* sequence *)
+  assert (ESEQ: forall n1 n2 f sp m e e' e'',
+    (forall k, eventually n1 (Cminor.State f s1 k sp e m) (eq (Cminor.State f Cminor.Sskip k sp e' m))) ->
+    (forall k, eventually n2 (Cminor.State f s2 k sp e' m) (eq (Cminor.State f Cminor.Sskip k sp e'' m))) ->
+    (forall k, eventually (S (n1 + S n2))%nat 
+                          (Cminor.State f (Cminor.Sseq s1 s2) k sp e m)
+                          (eq (Cminor.State f Cminor.Sskip k sp e'' m)))).
+  { intros.
+    apply eventually_step. intros t S' ST; inv ST. split; auto.
+    eapply eventually_trans. eapply H. intros S' EQ; subst S'.
+    apply eventually_step. intros t S' ST; inv ST; [auto | inv H8].
+  }
+  destruct (classify_stmt s1), (classify_stmt s2); auto;
+  destruct IHs1 as (n1 & E1), IHs2 as (n2 & E2);
+  exists (S (n1 + (S n2)))%nat; intros;
+  eapply ESEQ; eauto.
 Qed.
 
 Lemma classify_stmt_wt:
@@ -928,43 +949,44 @@ Lemma classify_stmt_wt:
   wt_stmt env tyret s ->
   wt_expr env a (env id).
 Proof.
-  intros until s; functional induction (classify_stmt s); intros CL WT;
-  try discriminate.
+  induction s; simpl; intros CL WT; try discriminate.
 - inv CL; inv WT; auto.
-- inv WT; eauto.
-- inv WT; eauto.
+- destruct o; try discriminate. destruct e; discriminate.
+- inv WT. destruct (classify_stmt s1), (classify_stmt s2); try discriminate; eauto.
 Qed.
 
-Lemma eval_select_safe_exprs:
-  forall a1 a2 f env ty e e' m m' sp cond vb b id s,
-  safe_expr (known_id f) a1 = true ->
-  safe_expr (known_id f) a2 = true ->
-  option_map (fun sel => Sassign id sel) (sel_select_opt ty cond a1 a2) = Some s ->
-  Cminor.eval_expr ge sp e m cond vb -> Val.bool_of_val vb b ->
-  wt_expr env a1 ty ->
-  wt_expr env a2 ty ->
+Lemma if_conversion_base_correct:
+  forall f env cond id ifso ifnot s e ty vb b sp m tf tk e' m',
+  if_conversion_base (known_id f) env cond id ifso ifnot = Some s ->
   def_env f e -> wt_env env e ->
+  env id = ty ->
+  wt_expr env ifso ty ->
+  wt_expr env ifnot ty ->
   Cminor.eval_expr ge sp e m cond vb -> Val.bool_of_val vb b ->
   env_lessdef e e' -> Mem.extends m m' ->
-  exists a' v1 v2 v',
-     s = Sassign id a'
-  /\ Cminor.eval_expr ge sp e m a1 v1
-  /\ Cminor.eval_expr ge sp e m a2 v2
-  /\ eval_expr tge sp e' m' nil a' v'
-  /\ Val.lessdef (if b then v1 else v2) v'.
+  exists v1 v2 v',
+     Cminor.eval_expr ge sp e m ifso v1
+  /\ Cminor.eval_expr ge sp e m ifnot v2
+  /\ Val.lessdef (if b then v1 else v2) v'
+  /\ step tge (State tf s tk sp e' m')
+           E0 (State tf Sskip tk sp (PTree.set id v' e') m').
 Proof.
-  intros.
-  destruct (sel_select_opt ty cond a1 a2) as [a'|] eqn:SSO; simpl in H1; inv H1.
-  destruct (eval_safe_expr ge f sp e m a1) as (v1 & EV1); auto.
-  destruct (eval_safe_expr ge f sp e m a2) as (v2 & EV2); auto.
+  unfold if_conversion_base; intros. rewrite H2 in H. clear H2.
+  destruct (is_known (known_id f) id &&
+            safe_expr (known_id f) ifso &&
+            safe_expr (known_id f) ifnot &&
+            if_conversion_heuristic cond ifso ifnot ty) eqn:C; try discriminate.
+  destruct (sel_select_opt ty cond ifso ifnot) as [a'|] eqn:SSO; simpl in H; inv H.
+  InvBooleans.
+  destruct (eval_safe_expr ge f sp e m ifso) as (v1 & EV1); auto.
+  destruct (eval_safe_expr ge f sp e m ifnot) as (v2 & EV2); auto.
   assert (TY1: Val.has_type v1 ty) by (eapply wt_eval_expr; eauto).
   assert (TY2: Val.has_type v2 ty) by (eapply wt_eval_expr; eauto).
   exploit sel_select_opt_correct; eauto. intros (v' & EV' & LD).
-  exists a', v1, v2, v'; intuition eauto.
-  apply Val.lessdef_trans with (Val.select (Some b) v1 v2 ty).
-  simpl. rewrite Val.normalize_idem; auto. destruct b; auto.
-  assumption.
-Qed. 
+  simpl in LD. rewrite Val.normalize_idem in LD by (destruct b; auto).
+  exists v1, v2, v'; intuition auto.
+  constructor. eexact EV'.
+Qed.
 
 Lemma if_conversion_correct:
   forall f env tyret cond ifso ifnot s vb b k f' k' sp e m e' m',
@@ -975,50 +997,39 @@ Lemma if_conversion_correct:
   Cminor.eval_expr ge sp e m cond vb -> Val.bool_of_val vb b ->
   env_lessdef e e' -> Mem.extends m m' ->
   let s0 := if b then ifso else ifnot in
-  exists e1 e1',
+  exists n e1 e1',
      step tge (State f' s k' sp e' m') E0 (State f' Sskip k' sp e1' m')
-  /\ star Cminor.step ge (Cminor.State f s0 k sp e m) E0 (Cminor.State f Cminor.Sskip k sp e1 m)
+  /\ eventually n (Cminor.State f s0 k sp e m) (eq (Cminor.State f Cminor.Sskip k sp e1 m))
   /\ env_lessdef e1 e1'.
 Proof.
   unfold if_conversion; intros until m'; intros IFC DE WTE WT1 WT2 EVC BOV ELD MEXT.
   set (s0 := if b then ifso else ifnot). set (ki := known_id f) in *.
+  generalize (classify_stmt_sound ifso) (classify_stmt_sound ifnot).
   destruct (classify_stmt ifso) eqn:IFSO; try discriminate;
   destruct (classify_stmt ifnot) eqn:IFNOT; try discriminate;
-  unfold if_conversion_base in IFC.
-- destruct (is_known ki id && safe_expr ki (Cminor.Evar id) && safe_expr ki a
-            && if_conversion_heuristic cond (Cminor.Evar id) a (env id)) eqn:B; inv IFC.
-  InvBooleans.
-  exploit (eval_select_safe_exprs (Cminor.Evar id) a); eauto.
-  constructor. eapply classify_stmt_wt; eauto.
-  intros (a' & v1 & v2 & v' & A & B & C & D & E).
-  exists (PTree.set id (if b then v1 else v2) e), (PTree.set id v' e').
-  split. subst s. constructor; auto.
-  split. unfold s0; destruct b. 
-  rewrite PTree.gsident by (inv B; auto). apply classify_stmt_sound_1; auto.
-  eapply classify_stmt_sound_2; eauto.
+  intros (n1 & EV1) (n2 & EV2).
+- exploit if_conversion_base_correct; eauto using wt_expr, classify_stmt_wt.
+  intros (v1 & v2 & v' & E1 & E2 & VLD & STEP).
+  exists (if b then n1 else n2), (PTree.set id (if b then v1 else v2) e), (PTree.set id v' e').
+  split. eexact STEP. 
+  split. unfold s0; destruct b.
+    rewrite PTree.gsident by (inv E1; auto). eapply EV1.
+    eapply EV2; eauto.
   apply set_var_lessdef; auto.
-- destruct (is_known ki id && safe_expr ki a && safe_expr ki (Cminor.Evar id)
-            && if_conversion_heuristic cond a (Cminor.Evar id) (env id)) eqn:B; inv IFC.
-  InvBooleans.
-  exploit (eval_select_safe_exprs a (Cminor.Evar id)); eauto.
-  eapply classify_stmt_wt; eauto. constructor. 
-  intros (a' & v1 & v2 & v' & A & B & C & D & E).
-  exists (PTree.set id (if b then v1 else v2) e), (PTree.set id v' e').
-  split. subst s. constructor; auto.
-  split. unfold s0; destruct b. 
-  eapply classify_stmt_sound_2; eauto.
-  rewrite PTree.gsident by (inv C; auto). apply classify_stmt_sound_1; auto.
+- exploit if_conversion_base_correct; eauto using wt_expr, classify_stmt_wt.
+  intros (v1 & v2 & v' & E1 & E2 & VLD & STEP).
+  exists (if b then n1 else n2), (PTree.set id (if b then v1 else v2) e), (PTree.set id v' e').
+  split. eexact STEP. 
+  split. unfold s0; destruct b.
+    eapply EV1; eauto.
+    rewrite PTree.gsident by (inv E2; auto). eapply EV2.
   apply set_var_lessdef; auto.
 - destruct (ident_eq id id0); try discriminate. subst id0.
-  destruct (is_known ki id && safe_expr ki a && safe_expr ki a0
-            && if_conversion_heuristic cond a a0 (env id)) eqn:B; inv IFC.
-  InvBooleans.
-  exploit (eval_select_safe_exprs a a0); eauto.
-  eapply classify_stmt_wt; eauto. eapply classify_stmt_wt; eauto.
-  intros (a' & v1 & v2 & v' & A & B & C & D & E).
-  exists (PTree.set id (if b then v1 else v2) e), (PTree.set id v' e').
-  split. subst s. constructor; auto.
-  split. unfold s0; destruct b; eapply classify_stmt_sound_2; eauto.
+  exploit if_conversion_base_correct; eauto using wt_expr, classify_stmt_wt.
+  intros (v1 & v2 & v' & E1 & E2 & VLD & STEP).
+  exists (if b then n1 else n2), (PTree.set id (if b then v1 else v2) e), (PTree.set id v' e').
+  split. eexact STEP. 
+  split. unfold s0; destruct b. eapply EV1; eauto. eapply EV2; eauto.
   apply set_var_lessdef; auto.
 Qed.
 
@@ -1119,32 +1130,23 @@ Proof.
   destruct 1; intros; try contradiction. split; auto. inv H; auto.
 Qed.
 
-(*
-Remark match_call_cont_cont:
-  forall k k', match_call_cont k k' -> exists cunit hf ki env, match_cont cunit hf ki env k k'.
-Proof.
-  intros. simple refine (let cunit : Cminor.program := _ in _).
-  econstructor. apply nil. apply nil. apply xH.
-  simple refine (let hf : helper_functions := _ in _).
-  econstructor; apply xH.
-  exists cunit, hf; auto.
-Qed.
-*)
-
 Definition nolabel (s: Cminor.stmt) : Prop :=
   forall lbl k, Cminor.find_label lbl s k = None.
 Definition nolabel' (s: stmt) : Prop :=
   forall lbl k, find_label lbl s k = None.
 
-Lemma classify_stmt_nolabel:
+Remark classify_stmt_nolabel:
   forall s, classify_stmt s <> SCother -> nolabel s.
 Proof.
-  intros s. functional induction (classify_stmt s); intros.
-- red; auto.
-- red; auto.
-- apply IHs0 in H. red; intros; simpl. apply H.
-- apply IHs0 in H. red; intros; simpl. rewrite H; auto.
-- congruence.
+  induction s; simpl; intros DIFF; try congruence.
+- (* skip *) red; auto.
+- (* assign *) red; auto.
+- (* builtin *) red; auto.
+- (* seq *)
+  assert (CL: classify_stmt s1 <> SCother /\ classify_stmt s2 <> SCother).
+  { destruct (classify_stmt s1), (classify_stmt s2); intuition congruence. }
+  destruct CL as [CL1 CL2]. apply IHs1 in CL1; apply IHs2 in CL2.
+  red; intros; simpl. rewrite CL1; apply CL2.
 Qed.
 
 Lemma if_conversion_base_nolabel: forall (hf: helper_functions) ki env a id a1 a2 s,
@@ -1159,8 +1161,8 @@ Proof.
 Qed.
 
 Lemma if_conversion_nolabel: forall (hf: helper_functions) ki env a s1 s2 s,
-    if_conversion ki env a s1 s2 = Some s ->
-    nolabel s1 /\ nolabel s2 /\ nolabel' s.
+  if_conversion ki env a s1 s2 = Some s ->
+  nolabel s1 /\ nolabel s2 /\ nolabel' s.
 Proof.
   unfold if_conversion; intros.
   Ltac conclude :=
@@ -1232,6 +1234,8 @@ Proof.
   destruct (ident_eq lbl l). auto. apply IHs; auto.
 Qed.
 
+(** The simulation diagram *)
+
 Definition measure (s: Cminor.state) : nat :=
   match s with
   | Cminor.Callstate _ _ _ _ => 0%nat
@@ -1244,7 +1248,7 @@ Lemma sel_step_correct:
   forall T1, match_states S1 T1 -> wt_state S1 ->
   (exists T2, plus step tge T1 t T2 /\ match_states S2 T2)
   \/ (measure S2 < measure S1 /\ t = E0 /\ match_states S2 T1)%nat
-  \/ (exists S3 T2, star Cminor.step ge S2 E0 S3 /\ step tge T1 t T2 /\ match_states S3 T2).
+  \/ (exists T2 n, step tge T1 t T2 /\ eventually n S2 (fun S3 => match_states S3 T2)).
 Proof.
   induction 1; intros T1 ME WTS; inv ME; try (monadInv TS).
 - (* skip seq *)
@@ -1323,9 +1327,10 @@ Proof.
   simpl in TS. destruct (if_conversion (known_id f) env a s1 s2) as [s|] eqn:IFC; monadInv TS.
 + inv WTS. inv WT_FN. assert (env0 = env) by congruence. subst env0. inv WT_STMT.
   exploit if_conversion_correct; eauto.
-  set (s0 := if b then s1 else s2). intros (e1 & e1' & A & B & C).
-  right; right. econstructor; econstructor.
-  split. eexact B. split. eexact A. econstructor; eauto. 
+  set (s0 := if b then s1 else s2). intros (n & e1 & e1' & A & B & C).
+  right; right. econstructor; exists n.
+  split. eexact A. eapply eventually_implies. eexact B.
+  intros S3 EQ; subst S3. econstructor; eauto.
 + exploit sel_expr_correct; eauto. intros [v' [A B]].
   assert (Val.bool_of_val v' b). inv B. auto. inv H0.
   left; exists (State f' (if b then x else x0) k' sp e' m'); split.
@@ -1442,21 +1447,23 @@ Theorem transf_program_correct:
   forward_simulation (Cminor.semantics prog) (CminorSel.semantics tprog).
 Proof.
   set (MS := fun S T => match_states S T /\ wt_state S).
-  apply forward_simulation_determ_star with (match_states := MS) (measure := measure).
-- apply Cminor.semantics_determinate.
-- apply senv_preserved.
-- intros. exploit sel_initial_states; eauto. intros (T & P & Q). 
-  exists T; split; auto; split; auto. eapply wt_initial_state. eexact wt_prog. auto. 
-- intros. destruct H. eapply sel_final_states; eauto.
-- intros S1 t S2 A T1 [B C].
-  assert (wt_state S2) by (eapply subject_reduction; eauto using wt_prog).
+  apply forward_simulation_eventually_star with (measure := measure) (match_states := MS);
   unfold MS.
+- apply senv_preserved.
+- intros S INIT. exploit sel_initial_states; eauto. intros (T & P & Q).
+  assert (W: wt_state S). { eapply wt_initial_state. eexact wt_prog. auto. }
+  eauto.
+- intros S T r (M & W) FIN.
+  eapply sel_final_states; eauto.
+- intros S1 t S2 A T1 (M & W1).
+  assert (W2: wt_state S2) by (eapply subject_reduction; eauto using wt_prog).
   exploit sel_step_correct; eauto.
-  intros [(T2 & D & E) | [(D & E & F) | (S3 & T2 & D & E & F)]].
-+ exists S2, T2. intuition auto using star_refl.
-+ subst t. exists S2, T1. intuition auto using star_refl.
-+ assert (wt_state S3) by (eapply subject_reduction_star; eauto using wt_prog).
-  exists S3, T2. intuition auto using plus_one.
+  intros [(T2 & D & E) | [(D & E & F) | (T2 & n & D & E)]].
++ left; exists T2; auto.
++ subst t. left; exists T1; auto using star_refl.
++ right; exists n, T2; split.
+  apply plus_one; auto.
+  apply eventually_and_invariant; eauto using subject_reduction, wt_prog.
 Qed.
 
 End PRESERVATION.
