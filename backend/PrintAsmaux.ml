@@ -83,6 +83,18 @@ let literal64_labels   = (Hashtbl.create 39 : (int64, int) Hashtbl.t)
 let label_literal32 bf = label_constant literal32_labels bf
 let label_literal64 n = label_constant literal64_labels n
 
+(* Sort by label before iteration, to make compilations more reproducible *)
+
+let iter_literal32 f =
+  List.iter (fun (n, lbl) -> f n lbl)
+    (List.fast_sort (fun (n1, lbl1) (n2, lbl2) -> compare lbl1 lbl2)
+       (Hashtbl.fold (fun n lbl accu -> (n, lbl) :: accu) literal32_labels []))
+
+let iter_literal64 f =
+  List.iter (fun (n, lbl) -> f n lbl)
+    (List.fast_sort (fun (n1, lbl1) (n2, lbl2) -> compare lbl1 lbl2)
+       (Hashtbl.fold (fun n lbl accu -> (n, lbl) :: accu) literal64_labels []))
+
 let reset_literals () =
   Hashtbl.clear literal32_labels;
   Hashtbl.clear literal64_labels
