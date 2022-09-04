@@ -101,3 +101,16 @@ val error_summary : unit -> unit
 
 val active_warning : warning_type -> bool
 (** Test whether a warning is active to avoid costly checks *)
+
+val activate_warning : warning_type -> unit -> unit
+(** Turn the given warning on *)
+
+val deactivate_warning : warning_type -> unit -> unit
+(** Turn the given warning off *)
+
+val warning_as_error : warning_type -> unit -> unit
+(** Turn the given warning on and report it as an error *)
+
+val warning_not_as_error : warning_type -> unit -> unit
+(** Do not report the given warning as an error *)
+
