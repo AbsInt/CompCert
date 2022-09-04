@@ -1768,6 +1768,7 @@ let elab_expr ctx loc env a =
 (* 6.5.1.1 Generic selection *)
 
   | GENERIC(a1, assoc) ->
+      warning Celeven_extension "'_Generic' is a C11 extension";
       let b1,env = elab env a1 in
       let bssoc,env = elab_generic_association env assoc in
       let ty = erase_attributes_type env (pointer_decay env b1.etyp) in
