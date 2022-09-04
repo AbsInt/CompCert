@@ -91,14 +91,11 @@ let parse_array spec argv first last =
           end
       | Some(Integer fn) ->
           if i + 1 <= last then begin
-            let n =
-              try
-                int_of_string argv.(i+1)
-              with Failure _ ->
+            match int_of_string_opt argv.(i+1) with
+            | Some n -> fn n; parse (i+2)
+            | None ->
                 let msg = sprintf "argument to option `%s' must be an integer" s in
                 raise (CmdError msg)
-            in
-            fn n; parse (i+2)
           end else begin
             let msg = sprintf  "option `%s' expects an argument" s in
             raise (CmdError msg)
@@ -124,19 +121,15 @@ let argv =
 let parse_cmdline spec =
   parse_array spec argv 1 (Array.length argv - 1)
 
-let long_int_action key s =
-  let ls = String.length s
-  and lkey = String.length key in
-  assert (ls > lkey);
-  let s = String.sub s (lkey + 1) (ls - lkey - 1) in
-  try
-    int_of_string s
-  with Failure _ ->
-    let msg =  sprintf "argument to option `%s' must be an integer" key in
-    raise (CmdError msg)
+let longopt key f =
+  let lkey = String.length key + 1 in
+  let act s = f (String.sub s lkey (String.length s - lkey)) in
+  (Prefix (key ^ "="), Self act)
 
 let longopt_int key f =
-  let act s =
-    let n = long_int_action key s in
-    f n in
-  Prefix (key ^ "="),Self act
+  longopt key (fun s ->
+    match int_of_string_opt s with
+    | Some n -> f n
+    | None ->
+        let msg =  sprintf "argument to option `%s' must be an integer" key in
+        raise (CmdError msg))
