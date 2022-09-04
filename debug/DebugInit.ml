@@ -36,14 +36,16 @@ let init () =
     init_none ()
 
 let gnu_debugging_help =
-"  -gdwarf-       Generate debug information in DWARF v2 or DWARF v3\n"
+{|  -gdwarf-2     Generate debug information in DWARF v2 format
+  -gdwarf-3     Generate debug information in DWARF v3 format
+|}
 
 let debugging_help =
 {|Debugging options:
   -g             Generate debugging information
   -g<n>          Control generation of debugging information
-                 (<n>=0: none, <n>=1: only-globals, <n>=2: globals + locals
-                 without locations, <n>=3: full;)
+                 (<n>=0: none, <n>=1: only globals,
+                  <n>=2: globals + locals without locations, <n>=3: full)
 |}
 ^ (if Configuration.gnu_toolchain then gnu_debugging_help else "")
 
