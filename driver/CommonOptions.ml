@@ -10,20 +10,21 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+open Printf
 open Clflags
 open Commandline
 
 (* The version string for [tool_name] *)
 let version_string tool_name =
   if Version.buildnr <> "" && Version.tag <> "" && Version.branch <> "" then
-    Printf.sprintf "The CompCert %s, Release: %s, Build: %s, Tag: %s, Branch: %s\n"
+    sprintf "The CompCert %s, Release: %s, Build: %s, Tag: %s, Branch: %s\n"
       tool_name Version.version Version.buildnr Version.tag Version.branch
   else
-    Printf.sprintf "The CompCert %s, version %s\n" tool_name Version.version
+    sprintf "The CompCert %s, version %s\n" tool_name Version.version
 
 (* Print the version string and exit the program *)
 let print_version_and_exit tool_name () =
-  Printf.printf "%s" (version_string tool_name); exit 0
+  printf "%s" (version_string tool_name); exit 0
 
 let version_options tool_name =
   [ Exact "-version", Unit (print_version_and_exit tool_name);
@@ -42,8 +43,21 @@ let f_opt name ref =
 let set_all opts () = List.iter (fun r -> r := true) opts
 let unset_all opts () = List.iter (fun r -> r := false) opts
 
+let set_std s =
+  let s = String.lowercase_ascii s in
+  option_std := s;
+  match s with
+  | "c99" ->
+      Diagnostics.(activate_warning Celeven_extension ())
+  | "c11" | "c18" ->
+      Diagnostics.(deactivate_warning Celeven_extension ())
+  | _ ->
+      raise (CmdError (sprintf
+                         "wrong -std option: unknown standard '%s'" s))
+
 let language_support_options =
-  [ Exact "-fall", Unit (set_all all_language_support_options);
+  [ longopt "-std" set_std;
+    Exact "-fall", Unit (set_all all_language_support_options);
     Exact "-fnone", Unit (unset_all all_language_support_options);
     Exact "-fbitfields", Unit (fun () -> ()); ]
   @ f_opt "longdouble" option_flongdouble
@@ -56,6 +70,8 @@ let language_support_options =
 
 let language_support_help =
   {|Language support options (use -fno-<opt> to turn off -f<opt>) :
+  -std=c99  or  -std=c11  or  -std=c18
+                 Choose the ISO C language standard used: C99, C11 or C18.
   -flongdouble   Treat 'long double' as 'double' [off]
   -fstruct-passing  Support passing structs and unions by value as function
                     results or function arguments [off]
