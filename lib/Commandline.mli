@@ -47,6 +47,11 @@ val parse_cmdline: (pattern * action) list -> unit
     and performs all [actions].  Raises [CmdError] if an error occurred.
 *)
 
+val longopt: string -> (string -> unit) -> pattern * action
+(** [longopt_int key fn] generates a pattern and an action for
+    options of the form [key=<text>] and calls [fn] with the string argument
+*)
+
 val longopt_int: string -> (int -> unit) -> pattern * action
 (** [longopt_int key fn] generates a pattern and an action for
     options of the form [key=<n>] and calls [fn] with the integer argument
