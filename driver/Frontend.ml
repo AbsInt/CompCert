@@ -57,6 +57,9 @@ let preprocess ifile ofile =
     if ofile = "-" then None else Some ofile in
   let cmd = List.concat [
     Configuration.prepro;
+    (if Configuration.gnu_toolchain
+     then ["-std=" ^ !option_std]
+     else []);
     predefined_macros;
     (if !Clflags.use_standard_headers
      then ["-I" ^ Filename.concat !Clflags.stdlib_path "include" ]
