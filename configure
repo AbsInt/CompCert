@@ -248,7 +248,7 @@ if test "$arch" = "arm"; then
         exit 2;;
   esac
 
-  cprepro_options="-std=c99 -U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
+  cprepro_options="-U__GNUC__ '-D__REDIRECT(name,proto,alias)=name proto' '-D__REDIRECT_NTH(name,proto,alias)=name proto' -E"
   system="linux"
 fi
 
@@ -293,7 +293,7 @@ if test "$arch" = "powerpc"; then
         ;;
     *)
         casmruntime="${toolprefix}gcc -c -Wa,-mregnames"
-        cprepro_options="-std=c99 -U__GNUC__ -E"
+        cprepro_options="-U__GNUC__ -E"
         system="linux"
         ;;
   esac
@@ -311,7 +311,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cc_options="-m32"
         casm_options="-m32 -c"
         clinker_options="-m32"
-        cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+        cprepro_options="-m32 -U__GNUC__ -E"
         system="bsd"
         ;;
     cygwin)
@@ -319,7 +319,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cc_options="-m32"
         casm_options="-m32 -c"
         clinker_options="-m32"
-        cprepro_options="-std=c99 -m32 -U__GNUC__ '-D__attribute__(x)=' -E"
+        cprepro_options="-m32 -U__GNUC__ '-D__attribute__(x)=' -E"
         system="cygwin"
         ;;
     linux)
@@ -327,7 +327,7 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         cc_options="-m32"
         casm_options="-m32 -c"
         clinker_options="-m32"
-        cprepro_options="-std=c99 -m32 -U__GNUC__ -E"
+        cprepro_options="-m32 -U__GNUC__ -E"
         system="linux"
         ;;
     *)
@@ -348,7 +348,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cc_options="-m64"
         casm_options="-m64 -c"
         clinker_options="-m64"
-        cprepro_options="-std=c99 -m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
+        cprepro_options="-m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
         system="bsd"
         ;;
     linux)
@@ -356,7 +356,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cc_options="-m64"
         casm_options="-m64 -c"
         clinker_options="-m64"
-        cprepro_options="-std=c99 -m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
+        cprepro_options="-m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
         system="linux"
         ;;
     macos|macosx)
@@ -365,7 +365,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         casm_options="-arch x86_64 -c"
         clinker_options="-arch x86_64"
         clinker_needs_no_pie=false
-        cprepro_options="-std=c99 -arch x86_64 -U__GNUC__ -U__SIZEOF_INT128__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' '-D__DARWIN_OS_INLINE=static inline' -Wno-\\#warnings -E"
+        cprepro_options="-arch x86_64 -U__GNUC__ -U__SIZEOF_INT128__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' '-D__DARWIN_OS_INLINE=static inline' -Wno-\\#warnings -E"
         libmath=""
         system="macos"
         ;;
@@ -374,7 +374,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cc_options="-m64"
         casm_options="-m64 -c"
         clinker_options="-m64"
-        cprepro_options="-std=c99 -m64 -U__GNUC__ -U__SIZEOF_INT128__ '-D__attribute__(x)=' -E"
+        cprepro_options="-m64 -U__GNUC__ -U__SIZEOF_INT128__ '-D__attribute__(x)=' -E"
         system="cygwin"
         ;;
     *)
@@ -398,7 +398,7 @@ if test "$arch" = "riscV"; then
   cc_options="$model_options"
   casm_options="$model_options -c"
   clinker_options="$model_options"
-  cprepro_options="$model_options -std=c99 -U__GNUC__ -E"
+  cprepro_options="$model_options -U__GNUC__ -E"
   system="linux"
 fi
 
@@ -409,7 +409,7 @@ if test "$arch" = "aarch64"; then
   case "$target" in
     linux)
         abi="standard"
-        cprepro_options="-std=c99 -U__GNUC__ -E"
+        cprepro_options="-U__GNUC__ -E"
         system="linux";;
     macos|macosx)
         abi="apple"
@@ -419,7 +419,7 @@ if test "$arch" = "aarch64"; then
         clinker="${toolprefix}cc"
         clinker_needs_no_pie=false
         cprepro="${toolprefix}cc"
-        cprepro_options="-std=c99 -arch arm64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' '-D__DARWIN_OS_INLINE=static inline' -Wno-\\#warnings -E"
+        cprepro_options="-arch arm64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' '-D__DARWIN_OS_INLINE=static inline' -Wno-\\#warnings -E"
         libmath=""
         system="macos"
         ;;
