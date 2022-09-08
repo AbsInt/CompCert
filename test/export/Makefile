@@ -13,7 +13,7 @@ endif
 COQINCLUDES += -R ./clight compcert.test.clight
 COQINCLUDES += -R ./csyntax compcert.test.csyntax
 
-CLIGHTGEN=../../clightgen
+CLIGHTGEN=../../clightgen -stdlib ../../runtime
 COQC=coqc
 
 # Regression tests in the current directory
