@@ -325,7 +325,7 @@ let preprocessing_number =
   '.'? ['0'-'9']
   (['0'-'9' 'A'-'Z' 'a'-'z' '_' '.'] | ['e' 'E' 'p' 'P']['+' '-'])*
 
-(* Character and string constants.  Escape sequences omit the initial '\\' *)
+(* Character and string constants *)
 let simple_escape_sequence =
   '\\' ( ['\''  '\"'  '?'  '\\'  'a'  'b'  'e'  'f'  'n'  'r'  't'  'v'] as c)
 let octal_escape_sequence =
