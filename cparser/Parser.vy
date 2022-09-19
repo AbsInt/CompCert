@@ -23,7 +23,7 @@ Require Cabs.
 
 %token<Cabs.string * Cabs.loc> VAR_NAME TYPEDEF_NAME OTHER_NAME
 %token<Cabs.string * Cabs.loc> PRAGMA
-%token<bool * list Cabs.char_code * Cabs.loc> STRING_LITERAL
+%token<Cabs.encoding * list Cabs.char_code * Cabs.loc> STRING_LITERAL
 %token<Cabs.constant * Cabs.loc> CONSTANT
 %token<Cabs.loc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
   ANDAND BARBAR PLUS MINUS STAR TILDE BANG SLASH PERCENT HAT BAR QUESTION
@@ -124,8 +124,8 @@ primary_expression:
 | cst = CONSTANT
     { (Cabs.CONSTANT (fst cst), snd cst) }
 | str = STRING_LITERAL
-    { let '((wide, chars), loc) := str in
-      (Cabs.CONSTANT (Cabs.CONST_STRING wide chars), loc) }
+    { let '((enc, chars), loc) := str in
+      (Cabs.CONSTANT (Cabs.CONST_STRING enc chars), loc) }
 | loc = LPAREN expr = expression RPAREN
     { (fst expr, loc)}
 | sel = generic_selection
@@ -786,8 +786,8 @@ designator:
 static_assert_declaration:
 | loc = STATIC_ASSERT LPAREN expr = constant_expression
                         COMMA str = STRING_LITERAL RPAREN SEMICOLON
-    { let '((wide, chars), locs) := str in
-      (expr, (Cabs.CONST_STRING wide chars, locs), loc) }
+    { let '((enc, chars), locs) := str in
+      (expr, (Cabs.CONST_STRING enc chars, locs), loc) }
 
 (* 6.8 *)
 statement_dangerous:
@@ -922,9 +922,9 @@ jump_statement:
 asm_statement:
 | loc = ASM attr = asm_attributes LPAREN template = STRING_LITERAL args = asm_arguments
   RPAREN SEMICOLON
-    { let '(wide, chars, _) := template in
+    { let '(enc, chars, _) := template in
       let '(outputs, inputs, flags) := args in
-      Cabs.ASM attr wide chars outputs inputs flags loc }
+      Cabs.ASM attr enc chars outputs inputs flags loc }
 
 asm_attributes:
 | /* empty */
@@ -954,7 +954,7 @@ asm_operands_ne:
 
 asm_operand:
 | n = asm_op_name cstr = STRING_LITERAL LPAREN e = expression RPAREN
-    { let '(wide, s, loc) := cstr in Cabs.ASMOPERAND n wide s (fst e) }
+    { let '(enc, s, loc) := cstr in Cabs.ASMOPERAND n enc s (fst e) }
 
 asm_op_name:
 | /* empty */                         { None }
@@ -962,9 +962,9 @@ asm_op_name:
 
 asm_flags:
 | f = STRING_LITERAL
-    { let '(wide, s, loc) := f in (wide, s) :: nil }
+    { let '(enc, s, loc) := f in (enc, s) :: nil }
 | f = STRING_LITERAL COMMA fl = asm_flags
-    { let '(wide, s, loc) := f in (wide, s) :: fl }
+    { let '(enc, s, loc) := f in (enc, s) :: fl }
 
 (* 6.9 *)
 translation_unit_file:

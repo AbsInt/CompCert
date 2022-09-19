@@ -47,7 +47,7 @@
 %token<string * Pre_parser_aux.identifier_type ref * Cabs.loc>
   VAR_NAME TYPEDEF_NAME
 %token<Cabs.constant * Cabs.loc> CONSTANT
-%token<bool * int64 list * Cabs.loc> STRING_LITERAL
+%token<Cabs.encoding * int64 list * Cabs.loc> STRING_LITERAL
 %token<string * Cabs.loc> PRAGMA
 
 %token<Cabs.loc> SIZEOF PTR INC DEC LEFT RIGHT LEQ GEQ EQEQ EQ NEQ LT GT
