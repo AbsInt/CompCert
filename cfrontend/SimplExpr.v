@@ -55,6 +55,7 @@ Definition bind {A B: Type} (x: mon A) (f: A -> mon B) : mon B :=
 Definition bind2 {A B C: Type} (x: mon (A * B)) (f: A -> B -> mon C) : mon C :=
   bind x (fun p => f (fst p) (snd p)).
 
+Declare Scope gensym_monad_scope.
 Notation "'do' X <- A ; B" := (bind A (fun X => B))
    (at level 200, X ident, A at level 100, B at level 200)
    : gensym_monad_scope.

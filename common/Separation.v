@@ -54,6 +54,7 @@ Record massert : Type := {
   m_valid: forall m b ofs, m_pred m -> m_footprint b ofs -> Mem.valid_block m b
 }.
 
+Declare Scope sep_scope.
 Notation "m |= p" := (m_pred p m) (at level 74, no associativity) : sep_scope.
 
 (** Implication and logical equivalence between memory predicates *)

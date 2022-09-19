@@ -49,6 +49,8 @@ Definition mkprogram (types: list composite_definition)
 
 (** ** Notations *)
 
+Declare Scope clight_scope.
+
 Module ClightNotations.
 
 (** A convenient notation [$ "ident"] to force evaluation of

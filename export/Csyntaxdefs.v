@@ -49,6 +49,8 @@ Definition mkprogram (types: list composite_definition)
 
 (** ** Notations *)
 
+Declare Scope csyntax_scope.
+
 Module CsyntaxNotations.
 
 (** A convenient notation [$ "ident"] to force evaluation of

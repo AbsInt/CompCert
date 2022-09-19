@@ -312,6 +312,7 @@ Module Pregmap := EMap(PregEq).
 Definition regset := Pregmap.t val.
 Definition genv := Genv.t fundef unit.
 
+Declare Scope asm.
 Notation "a # b" := (a b) (at level 1, only parsing) : asm.
 Notation "a # b <- c" := (Pregmap.set b c a) (at level 1, b at next level) : asm.
 

@@ -862,6 +862,8 @@ Inductive Passes: Language -> Language -> Type :=
   | pass_nil: forall l, Passes l l
   | pass_cons: forall l1 l2 l3, Pass l1 l2 -> Passes l2 l3 -> Passes l1 l3.
 
+Declare Scope linking_scope.
+
 Infix ":::" := pass_cons (at level 60, right associativity) : linking_scope.
 
 (** The pass corresponding to the composition of a list of passes. *)

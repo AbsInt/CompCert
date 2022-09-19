@@ -96,6 +96,7 @@ Coercion preg_of_iregsp: iregsp >-> preg.
 
 (** Conventional name for return address ([RA]) *)
 
+Declare Scope asm.
 Notation "'RA'" := X30 (only parsing) : asm.
 
 (** The instruction set.  Most instructions correspond exactly to

@@ -552,6 +552,8 @@ Definition Semantics {state funtype vartype: Type}
 
 (** Handy notations. *)
 
+Declare Scope smallstep_scope.
+
 Notation " 'Step' L " := (step L (globalenv L)) (at level 1) : smallstep_scope.
 Notation " 'Star' L " := (star (step L) (globalenv L)) (at level 1) : smallstep_scope.
 Notation " 'Plus' L " := (plus (step L) (globalenv L)) (at level 1) : smallstep_scope.
