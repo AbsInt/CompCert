@@ -1611,7 +1611,7 @@ Ltac NOTIN :=
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_set with (a1 := a2) (t := sd_temp sd); auto.
+  apply S. apply tr_paren_set with (a1 := a2) (t := t); auto.
   apply tr_expr_monotone with tmp2; eauto. auto. auto.
 - (* seqand false *)
   exploit tr_top_leftcontext; eauto. clear TR.
@@ -1720,7 +1720,7 @@ Ltac NOTIN :=
   apply push_seq. reflexivity. reflexivity.
   rewrite <- Kseqlist_app.
   eapply match_exprstates; eauto.
-  apply S. apply tr_paren_set with (a1 := a2) (t := sd_temp sd); auto.
+  apply S. apply tr_paren_set with (a1 := a2) (t := t); auto.
   apply tr_expr_monotone with tmp2; eauto. auto. auto.
 - (* condition *)
   exploit tr_top_leftcontext; eauto. clear TR.
