@@ -80,11 +80,13 @@ let parse_c_file sourcename ifile =
   Sections.initialize();
   CPragmas.reset();
   (* Parsing and production of a simplified C AST *)
-  let ast = Parse.preprocessed_file
-              ~unblock: true
-              ~struct_passing: !option_fstruct_passing
-              ~packed_structs: !option_fpacked_structs
-              sourcename ifile in
+  let ast =
+    Parse.preprocessed_file
+      ~unblock: true
+      ~switch_norm: (if !option_funstructured_switch then `Full else `Partial)
+      ~struct_passing: !option_fstruct_passing
+      ~packed_structs: !option_fpacked_structs
+      sourcename ifile in
   (* Save C AST if requested *)
   Cprint.print_if ast;
   (* Conversion to Csyntax *)

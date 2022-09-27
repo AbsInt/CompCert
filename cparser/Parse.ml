@@ -16,13 +16,20 @@
 
 (* Entry point for the library: parse, elaborate, and transform *)
 
-let transform_program ~unblock ~struct_passing ~packed_structs p =
+let transform_program ~unblock ~switch_norm ~struct_passing ~packed_structs p =
   let run_pass pass p =
     let p' = pass p in Diagnostics.check_errors (); p' in
   let run_opt_pass pass flag p =
-    if flag then run_pass pass p else p in
+    if flag then run_pass pass p else p
+  and run_opt_pass3 pass flag p =
+    match flag with
+    | `Off -> p
+    | `Partial -> run_pass (pass false) p
+    | `Full -> run_pass (pass true) p in
+  let unblock = unblock || switch_norm <> `Off || packed_structs in
   p
-  |> run_opt_pass Unblock.program (unblock || packed_structs)
+  |> run_opt_pass Unblock.program unblock
+  |> run_opt_pass3 SwitchNorm.program switch_norm
   |> run_opt_pass PackedStructs.program packed_structs
   |> run_opt_pass StructPassing.program struct_passing
   |> Rename.program
@@ -49,6 +56,7 @@ let parse_string name text =
       Diagnostics.fatal_error Diagnostics.no_loc "internal error while parsing"
 
 let preprocessed_file ?(unblock = false)
+                      ?(switch_norm = `Off)
                       ?(struct_passing = false)
                       ?(packed_structs = false)
                       name sourcefile =
@@ -66,5 +74,5 @@ let preprocessed_file ?(unblock = false)
   |> Timing.time "Elaboration" Elab.elab_file
   |> check_errors
   |> Timing.time "Emulations"
-                (transform_program ~unblock ~struct_passing ~packed_structs)
+      (transform_program ~unblock ~switch_norm ~struct_passing ~packed_structs)
   |> check_errors

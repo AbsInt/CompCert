@@ -300,7 +300,7 @@ let rec unblock_stmt env ctx ploc s =
         if s.sloc <> s1.sloc then
           add_lineno ctx ploc s.sloc (unblock_stmt env ctx s.sloc s1)
         else
-          unblock_stmt env cts ploc s1 in
+          unblock_stmt env ctx ploc s1 in
       {s with sdesc = Slabeled(lbl, s1')}
   | Sgoto lbl ->
       add_lineno ctx ploc s.sloc s
