@@ -70,8 +70,12 @@ Definition instr_within_bounds (i: instruction) :=
   | Lload chunk addr args dst => mreg_within_bounds dst
   | Lcall sig ros => size_arguments sig <= bound_outgoing b
   | Lbuiltin ef args res =>
-       (forall r, In r (params_of_builtin_res res) \/ In r (destroyed_by_builtin ef) -> mreg_within_bounds r)
-    /\ (forall sl ofs ty, In (S sl ofs ty) (params_of_builtin_args args) -> slot_within_bounds sl ofs ty)
+       (forall r,
+           In r (params_of_builtin_res res) \/
+           In r (destroyed_before_builtin ef) \/
+           In r (destroyed_during_builtin ef) -> mreg_within_bounds r)
+    /\ (forall sl ofs ty,
+           In (S sl ofs ty) (params_of_builtin_args args) -> slot_within_bounds sl ofs ty)
   | _ => True
   end.
 
@@ -109,7 +113,10 @@ Definition record_regs_of_instr (u: RegSet.t) (i: instruction) : RegSet.t :=
   | Lcall sig ros => u
   | Ltailcall sig ros => u
   | Lbuiltin ef args res =>
-      record_regs (record_regs u (params_of_builtin_res res)) (destroyed_by_builtin ef)
+      let (destr_before, destr_during) := destroyed_by_builtin ef in
+      record_regs
+       (record_regs
+         (record_regs u (params_of_builtin_res res)) destr_before) destr_during
   | Llabel lbl => u
   | Lgoto lbl => u
   | Lcond cond args lbl => u
@@ -212,12 +219,13 @@ Qed.
 Lemma record_regs_of_instr_only: forall u i, only_callee_saves u -> only_callee_saves (record_regs_of_instr u i).
 Proof.
   intros. destruct i; simpl; auto using record_reg_only, record_regs_only.
+  destruct (destroyed_by_builtin e) as [before during]; auto using record_regs_only.
 Qed.
 
 Lemma record_regs_of_function_only:
   only_callee_saves record_regs_of_function.
 Proof.
-  intros. unfold record_regs_of_function.
+  intros. unfold record_regs_of_function. 
   apply fold_left_preserves. apply record_regs_of_instr_only.
   red; intros. eelim RegSet.empty_1; eauto.
 Qed.
@@ -274,6 +282,7 @@ Qed.
 Lemma record_regs_of_instr_incr: forall r' u i, RegSet.In r' u -> RegSet.In r' (record_regs_of_instr u i).
 Proof.
   intros. destruct i; simpl; auto using record_reg_incr, record_regs_incr.
+  destruct (destroyed_by_builtin e) as [before during]; auto using record_regs_incr.
 Qed.
 
 Definition defined_by_instr (r': mreg) (i: instruction) :=
@@ -281,14 +290,17 @@ Definition defined_by_instr (r': mreg) (i: instruction) :=
   | Lgetstack sl ofs ty r => r' = r
   | Lop op args res => r' = res
   | Lload chunk addr args dst => r' = dst
-  | Lbuiltin ef args res => In r' (params_of_builtin_res res) \/ In r' (destroyed_by_builtin ef)
+  | Lbuiltin ef args res =>
+      In r' (params_of_builtin_res res) \/ In r' (destroyed_before_builtin ef) \/ In r' (destroyed_during_builtin ef)
   | _ => False
   end.
 
 Lemma record_regs_of_instr_ok: forall r' u i, defined_by_instr r' i -> is_callee_save r' = true -> RegSet.In r' (record_regs_of_instr u i).
 Proof.
   intros. destruct i; simpl in *; try contradiction; subst; auto using record_reg_ok.
-  destruct H; auto using record_regs_incr, record_regs_ok.
+  unfold destroyed_before_builtin, destroyed_during_builtin in H.
+  destruct (destroyed_by_builtin e) as [before after]; simpl in H.
+  intuition auto using record_regs_incr, record_regs_ok.
 Qed.
 
 Lemma record_regs_of_function_ok:

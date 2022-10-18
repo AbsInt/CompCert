@@ -135,6 +135,7 @@ let addressing_of_builtin_arg = function
    memory accesses regardless of alignment. *)
 
 let expand_builtin_memcpy_small sz al src dst =
+  assert (src <> BA (IR RCX) && dst <> BA (IR RCX));
   let rec copy src dst sz =
     if sz >= 8 && Archi.ptr64 then begin
 	emit (Pmovq_rm (RCX, src));
@@ -213,14 +214,14 @@ let expand_builtin_vload chunk args res =
   | _ ->
      assert false
 
-let expand_builtin_vstore_common chunk addr src tmp =
+let expand_builtin_vstore_common chunk addr src =
   match chunk, src with
   | (Mint8signed | Mint8unsigned), BA(IR src) ->
      if Archi.ptr64 || Asmgen.low_ireg src then
        emit (Pmovb_mr (addr,src))
      else begin
-       emit (Pmov_rr (tmp,src));
-       emit (Pmovb_mr (addr,tmp))
+       emit (Pmov_rr (RAX,src));
+       emit (Pmovb_mr (addr,RAX))
      end
   | (Mint16signed | Mint16unsigned), BA(IR src) ->
      emit (Pmovw_mr (addr,src))
@@ -242,9 +243,7 @@ let expand_builtin_vstore_common chunk addr src tmp =
 let expand_builtin_vstore chunk args =
   match args with
   | [addr; src] ->
-     let addr = addressing_of_builtin_arg addr in
-     expand_builtin_vstore_common chunk addr src
-       (if Asmgen.addressing_mentions addr RAX then RCX else RAX)
+     expand_builtin_vstore_common chunk (addressing_of_builtin_arg addr) src
   | _ -> assert false
 
 (* Handling of varargs *)
@@ -459,20 +458,19 @@ let expand_builtin_inline name args res =
      emit (Pmovl_rm (res, linear_addr a1 _0));
      emit (Pbswap32 res)
   | "__builtin_write16_reversed", [BA(IR a1); BA(IR a2)], _ ->
-     let tmp = if a1 = RCX then RDX else RCX in
+     let tmp = RDX in
      if a2 <> tmp then
        emit (Pmov_rr (tmp,a2));
      emit (Pbswap16 tmp);
      emit (Pmovw_mr (linear_addr a1 _0z, tmp))
   | "__builtin_write32_reversed", [BA(IR a1); BA(IR a2)], _ ->
-     let tmp = if a1 = RCX then RDX else RCX in
+     let tmp = RDX in
      if a2 <> tmp then
        emit (Pmov_rr (tmp,a2));
      emit (Pbswap32 tmp);
      emit (Pmovl_mr (linear_addr a1 _0z, tmp))
   (* Vararg stuff *)
   | "__builtin_va_start", [BA(IR a)], _ ->
-     assert (a = RDX);
      if Archi.win64 then expand_builtin_va_start_win64 a
      else if Archi.ptr64 then expand_builtin_va_start_elf64 a
      else expand_builtin_va_start_32 a

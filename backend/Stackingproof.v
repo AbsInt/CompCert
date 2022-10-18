@@ -1972,8 +1972,11 @@ Proof.
 
 - (* Lbuiltin *)
   destruct BOUND as [BND1 BND2].
+  apply frame_undef_regs with (rl := destroyed_before_builtin ef) in SEP.
   exploit transl_builtin_args_correct.
-    eauto. eauto. rewrite sep_swap in SEP; apply sep_proj2 in SEP; eexact SEP.
+    eauto.
+    apply agree_regs_undef_regs with (rl := destroyed_before_builtin ef). eauto. 
+    rewrite sep_swap in SEP; apply sep_proj2 in SEP; eexact SEP.
     eauto. rewrite <- forallb_forall. eapply wt_state_builtin; eauto.
     exact BND2.
   intros [vargs' [P Q]].
@@ -1987,8 +1990,8 @@ Proof.
   eapply external_call_symbols_preserved; eauto. apply senv_preserved.
   eapply match_states_intro with (j := j'); eauto with coqlib.
   eapply match_stacks_change_meminj; eauto.
-  apply agree_regs_set_res; auto. apply agree_regs_undef_regs; auto. eapply agree_regs_inject_incr; eauto.
-  apply agree_locs_set_res; auto. apply agree_locs_undef_regs; auto.
+  apply agree_regs_set_res; eauto using agree_regs_undef_regs, agree_regs_inject_incr.
+  apply agree_locs_set_res; auto. do 2 (apply agree_locs_undef_regs; auto).
   apply frame_set_res. apply frame_undef_regs. apply frame_contents_incr with j; auto.
   rewrite sep_swap2. apply stack_contents_change_meminj with j; auto. rewrite sep_swap2.
   exact SEP.

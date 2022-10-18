@@ -693,26 +693,31 @@ let add_interfs_instr g instr live =
   | Xtailcall(sg, Coq_inr id, args) ->
       ()
   | Xbuiltin(ef, args, res) ->
-      (* Interferences with live across *)
+      let vres = params_of_builtin_res res
+      and vargs = params_of_builtin_args args in
       let across = vset_removeres res live in
-      let vres = params_of_builtin_res res in
+      (* Results must not be live across *)
       List.iter (add_interfs_live g across) vres;
       (* All results must be pairwise different *)
       add_interfs_pairwise g vres;
-      add_interfs_destroyed g across (destroyed_by_builtin ef);
+      (* Interferences with destroyed registers *)
+      let (destr_before, destr_across) = destroyed_by_builtin ef in
+      add_interfs_destroyed g across destr_across;
+      if destr_before <> [] then
+        add_interfs_destroyed g (vset_addlist vargs across) destr_before;      
       begin match ef, args, res with
       | EF_annot_val _, [BA arg], BR res ->
           (* like a move *)
           IRC.add_pref g arg res
       | EF_inline_asm(txt, sg, clob), _, _ ->
-          let vargs = params_of_builtin_args args in
-          (* clobbered regs interfere with res and args for GCC compatibility *)
+          (* clobbered regs interfere with res and args for GCC compatibility.
+             Interference with args was taken care of above
+             (destroyed_by_builtin returns the clobbered regs as
+              destroyed before).  Add interferences with res. *)
           List.iter (fun c ->
             match Machregs.register_by_name c with
             | None -> ()
-            | Some mr ->
-                add_interfs_list_mreg g vargs mr;
-                add_interfs_list_mreg g vres mr)
+            | Some mr -> add_interfs_list_mreg g vres mr)
             clob
       | _ -> ()
       end

@@ -367,12 +367,14 @@ Proof.
   exploit can_eval_safe_arg; eauto. intros [v1 E1].
   eapply star_step; eauto.
   econstructor.
+  simpl; auto.
   constructor. eexact E1. constructor.
   simpl; constructor.
   simpl; auto.
   traceEq.
 - eapply star_step; eauto.
   econstructor.
+  simpl; auto.
   constructor.
   simpl; constructor.
   simpl; auto.

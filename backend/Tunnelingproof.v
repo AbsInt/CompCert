@@ -611,7 +611,9 @@ Proof.
   apply sig_preserved.
   econstructor; eauto using return_regs_lessdef, match_parent_locset.
 - (* Lbuiltin *)
-  exploit eval_builtin_args_lessdef. eexact LS. eauto. eauto. intros (tvargs & EVA & LDA).
+  set (rs1 := undef_regs (destroyed_before_builtin ef) rs).
+  exploit eval_builtin_args_lessdef. apply locmap_undef_regs_lessdef; eexact LS. eauto. eauto.
+  intros (tvargs & EVA & LDA).
   exploit external_call_mem_extends; eauto. intros (tvres & tm' & A & B & C & D).
   left; simpl; econstructor; split.
   eapply exec_Lbuiltin; eauto.

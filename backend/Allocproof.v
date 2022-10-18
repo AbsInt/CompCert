@@ -2350,23 +2350,31 @@ Proof.
   rewrite SIG. inv WTI. rewrite <- H6. apply wt_regset_list; auto.
 
 (* builtin *)
-- exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
-  exploit add_equations_builtin_eval; eauto.
+- replace l with (destroyed_before_builtin ef) in *
+  by (unfold destroyed_before_builtin; rewrite Heqp; auto).
+  replace l0 with (destroyed_during_builtin ef) in *
+  by (unfold destroyed_during_builtin; rewrite Heqp; auto).
+  clear Heqp.
+  exploit (exec_moves mv1); eauto. intros [ls1 [A1 B1]].
+  set (ls2 := undef_regs (destroyed_before_builtin ef) ls1).
+  assert (B2: satisf rs ls2 e2) by (eapply can_undef_satisf; eauto).
+  exploit add_equations_builtin_eval. 4: eexact B2. 1-5: eauto.
   intros (C & vargs' & vres' & m'' & D & E & F & G).
   assert (WTRS': wt_regset env (regmap_setres res vres rs)) by (eapply wt_exec_Ibuiltin; eauto).
-  set (ls2 := Locmap.setres res' vres' (undef_regs (destroyed_by_builtin ef) ls1)).
-  assert (satisf (regmap_setres res vres rs) ls2 e0).
+  set (ls3 := Locmap.setres res' vres' (undef_regs (destroyed_during_builtin ef) ls2)).
+  assert (B3: satisf (regmap_setres res vres rs) ls3 e0).
   { eapply parallel_set_builtin_res_satisf; eauto.
     eapply can_undef_satisf; eauto. }
-  exploit (exec_moves mv2); eauto. intros [ls3 [A3 B3]].
+  exploit (exec_moves mv2); eauto. intros [ls4 [A4 B4]].
   econstructor; split.
   eapply plus_left. econstructor; eauto.
   eapply star_trans. eexact A1.
   eapply star_left. econstructor.
+  instantiate (1 := ls2); auto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
   eapply external_call_symbols_preserved. apply senv_preserved. eauto.
-  instantiate (1 := ls2); auto.
-  eapply star_right. eexact A3.
+  instantiate (1 := ls3); auto.
+  eapply star_right. eexact A4.
   econstructor.
   reflexivity. reflexivity. reflexivity. traceEq.
   exploit satisf_successors; eauto. simpl; eauto.

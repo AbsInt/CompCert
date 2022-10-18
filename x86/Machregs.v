@@ -169,21 +169,40 @@ Fixpoint destroyed_by_clobber (cl: list string): list mreg :=
       end
   end.
 
-Definition destroyed_by_builtin (ef: external_function): list mreg :=
+(* First list is the temporaries destroyed "before" the builtin, i.e.
+   before reading the arguments of the builtin.  Any register in this first list
+   cannot be allocated to any of the parameters.
+
+   Second list is the temporaries destroyed "during" the builtin, i.e.
+   after reading the arguments, but before writing the results.
+   The registers in this second list can be allocated to any of the parameters.
+
+   Temporaries appearing in either list cannot be allocated to variables
+   live across the builtin, but can be allocated to any of the results.
+
+   Parameters that have fixed registers (as determined by [mregs_for_builtin]
+   below) must not be in the first list, otherwise there would be no
+   correct register allocation.
+*)
+
+Definition destroyed_by_builtin (ef: external_function): list mreg * list mreg :=
   match ef with
   | EF_memcpy sz al =>
-      if zle sz 32 then CX :: X7 :: nil else CX :: SI :: DI :: nil
+      if zle sz 32 then (CX :: X7 :: nil, nil) else (nil, CX :: SI :: DI :: nil)
   | EF_vstore (Mint8unsigned|Mint8signed) =>
-      if Archi.ptr64 then nil else AX :: CX :: nil
+      if Archi.ptr64 then (nil, nil) else (AX :: nil, nil)
   | EF_builtin name sg =>
-      if string_dec name "__builtin_va_start" then AX :: nil
+      if string_dec name "__builtin_va_start" then (AX :: nil, nil)
       else if string_dec name "__builtin_write16_reversed"
            || string_dec name "__builtin_write32_reversed"
-      then CX :: DX :: nil
-      else nil
-  | EF_inline_asm txt sg clob => destroyed_by_clobber clob
-  | _ => nil
+      then (DX :: nil, nil)
+      else (nil, nil)
+  | EF_inline_asm txt sg clob => (destroyed_by_clobber clob, nil)
+  | _ => (nil, nil)
   end.
+
+Definition destroyed_before_builtin ef := fst (destroyed_by_builtin ef).
+Definition destroyed_during_builtin ef := snd (destroyed_by_builtin ef).
 
 Definition destroyed_at_function_entry: list mreg :=
   (* must include [destroyed_by_setstack ty] *)
@@ -229,7 +248,7 @@ Definition mregs_for_operation (op: operation): list (option mreg) * option mreg
 Definition mregs_for_builtin (ef: external_function): list (option mreg) * list (option mreg) :=
   match ef with
   | EF_memcpy sz al =>
-     if zle sz 32 then (Some AX :: Some DX :: nil, nil) else (Some DI :: Some SI :: nil, nil)
+     if zle sz 32 then (nil, nil) else (Some DI :: Some SI :: nil, nil)
   | EF_builtin name sg =>
      if string_dec name "__builtin_negl" then
        (Some DX :: Some AX :: nil, Some DX :: Some AX :: nil)
@@ -238,8 +257,6 @@ Definition mregs_for_builtin (ef: external_function): list (option mreg) * list 
        (Some DX :: Some AX :: Some CX :: Some BX :: nil, Some DX :: Some AX :: nil)
      else if string_dec name "__builtin_mull" then
        (Some AX :: Some DX :: nil, Some DX :: Some AX :: nil)
-     else if string_dec name "__builtin_va_start" then
-       (Some DX :: nil, nil)
      else if (negb Archi.ptr64) && string_dec name "__builtin_bswap64" then
        (Some AX :: Some DX :: nil, Some DX :: Some AX :: nil)
      else

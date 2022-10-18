@@ -1107,15 +1107,16 @@ Inductive step: state -> trace -> state -> Prop :=
       exec_instr f i rs m = Next rs' m' ->
       step (State rs m) E0 (State rs' m')
   | exec_step_builtin:
-      forall b ofs f ef args res rs m vargs t vres rs' m',
+      forall b ofs f ef args res rs m vargs t vres rs1 rs' m',
       rs PC = Vptr b ofs ->
       Genv.find_funct_ptr ge b = Some (Internal f) ->
       find_instr (Ptrofs.unsigned ofs) f.(fn_code) = Some (Pbuiltin ef args res) ->
+      rs1 = undef_regs (map preg_of (destroyed_before_builtin ef)) rs ->
       eval_builtin_args ge rs (rs RSP) m args vargs ->
       external_call ef ge vargs m t vres m' ->
       rs' = nextinstr_nf
              (set_res res vres
-               (undef_regs (map preg_of (destroyed_by_builtin ef)) rs)) ->
+               (undef_regs (map preg_of (destroyed_during_builtin ef)) rs)) ->
       step (State rs m) t (State rs' m')
   | exec_step_external:
       forall b ef args res rs m t rs' m',
@@ -1189,7 +1190,7 @@ Ltac Equalities :=
 + discriminate.
 + discriminate.
 + assert (vargs0 = vargs) by (eapply eval_builtin_args_determ; eauto). subst vargs0.
-  exploit external_call_determ. eexact H5. eexact H11. intros [A B].
+  exploit external_call_determ. eexact H6. eexact H12. intros [A B].
   split. auto. intros. destruct B; auto. subst. auto.
 + assert (args0 = args) by (eapply extcall_arguments_determ; eauto). subst args0.
   exploit external_call_determ. eexact H4. eexact H9. intros [A B].

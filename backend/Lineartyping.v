@@ -353,7 +353,7 @@ Local Opaque mreg_type.
   simpl in *; InvBooleans.
   econstructor; eauto.
   eapply wt_setres; eauto. eapply external_call_well_typed; eauto.
-  apply wt_undef_regs; auto.
+  auto using wt_undef_regs.
 - (* label *)
   simpl in *. econstructor; eauto.
 - (* goto *)

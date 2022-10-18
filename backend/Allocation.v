@@ -1092,18 +1092,20 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
       do e2 <- add_equations_args args (sig_args sg) args' e1;
       track_moves env mv1 e2
   | BSbuiltin ef args res mv1 args' res' mv2 s =>
+      let (destr_before, destr_during) := destroyed_by_builtin ef in
       do e1 <- track_moves env mv2 e;
       do e2 <- remove_equations_builtin_res env res res' e1;
       assertion (forallb (fun r => reg_unconstrained r e2)
                          (params_of_builtin_res res));
       assertion (forallb (fun mr => loc_unconstrained (R mr) e2)
                          (params_of_builtin_res res'));
-      assertion (can_undef (destroyed_by_builtin ef) e2);
+      assertion (can_undef destr_during e2);
       do e3 <-
         match ef with
         | EF_debug _ _ _ => add_equations_debug_args env args args' e2
         | _              => add_equations_builtin_args env args args' e2
         end;
+      assertion (can_undef destr_before e3);
       track_moves env mv1 e3
   | BScond cond args mv args' s1 s2 =>
       assertion (can_undef (destroyed_by_cond cond) e);
