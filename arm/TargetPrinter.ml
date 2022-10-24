@@ -150,7 +150,10 @@ struct
     | Section_data i | Section_small_data i ->
         variable_section ~sec:".data" ~bss:".bss" i
     | Section_const i | Section_small_const i ->
-        variable_section ~sec:".section	.rodata" i
+        variable_section
+          ~sec:".section      .rodata"
+          ~reloc:".section    .data.rel.ro,\"aw\",%progbits"
+          i
     | Section_string _ -> ".section	.rodata"
     | Section_literal _ -> ".text"
     | Section_jumptable -> ".text"

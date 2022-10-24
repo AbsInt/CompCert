@@ -110,7 +110,10 @@ module Target : TARGET =
       | Section_data i | Section_small_data i ->
           variable_section ~sec:".data" ~bss:".bss" i
       | Section_const i | Section_small_const i ->
-          variable_section ~sec:".section	.rodata" i
+          variable_section
+            ~sec:".section      .rodata"
+            ~reloc:".section    .data.rel.ro,\"aw\",@progbits"
+            i
       | Section_string sz ->
           elf_mergeable_string_section sz ".section	.rodata"
       | Section_literal sz ->
