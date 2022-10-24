@@ -137,7 +137,7 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
                    (Ecast a1 ty) tmp
   | tr_seqand_val: forall le e1 e2 ty sl1 a1 tmp1 t sl2 a2 tmp2 tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
-      tr_expr le (For_set (sd_seqbool_val t ty)) e2 sl2 a2 tmp2 ->
+      tr_expr le (For_set (SDbase type_bool ty t)) e2 sl2 a2 tmp2 ->
       list_disjoint tmp1 tmp2 ->
       incl tmp1 tmp -> incl tmp2 tmp -> In t tmp ->
       tr_expr le For_val (Csyntax.Eseqand e1 e2 ty)
@@ -152,18 +152,18 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       tr_expr le For_effects (Csyntax.Eseqand e1 e2 ty)
                     (sl1 ++ makeif a1 (makeseq sl2) Sskip :: nil)
                     any tmp
-  | tr_seqand_set: forall le sd e1 e2 ty sl1 a1 tmp1 sl2 a2 tmp2 any tmp,
+  | tr_seqand_set: forall le sd e1 e2 ty sl1 a1 tmp1 t sl2 a2 tmp2 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
-      tr_expr le (For_set (sd_seqbool_set ty sd)) e2 sl2 a2 tmp2 ->
+      tr_expr le (For_set (SDcons type_bool ty t sd)) e2 sl2 a2 tmp2 ->
       list_disjoint tmp1 tmp2 ->
-      incl tmp1 tmp -> incl tmp2 tmp -> In (sd_temp sd) tmp ->
+      incl tmp1 tmp -> incl tmp2 tmp -> In t tmp ->
       tr_expr le (For_set sd) (Csyntax.Eseqand e1 e2 ty)
                     (sl1 ++ makeif a1 (makeseq sl2)
                                       (makeseq (do_set sd (Econst_int Int.zero ty))) :: nil)
                     any tmp
   | tr_seqor_val: forall le e1 e2 ty sl1 a1 tmp1 t sl2 a2 tmp2 tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
-      tr_expr le (For_set (sd_seqbool_val t ty)) e2 sl2 a2 tmp2 ->
+      tr_expr le (For_set (SDbase type_bool ty t)) e2 sl2 a2 tmp2 ->
       list_disjoint tmp1 tmp2 ->
       incl tmp1 tmp -> incl tmp2 tmp -> In t tmp ->
       tr_expr le For_val (Csyntax.Eseqor e1 e2 ty)
@@ -178,11 +178,11 @@ Inductive tr_expr: temp_env -> destination -> Csyntax.expr -> list statement -> 
       tr_expr le For_effects (Csyntax.Eseqor e1 e2 ty)
                     (sl1 ++ makeif a1 Sskip (makeseq sl2) :: nil)
                     any tmp
-  | tr_seqor_set: forall le sd e1 e2 ty sl1 a1 tmp1 sl2 a2 tmp2 any tmp,
+  | tr_seqor_set: forall le sd e1 e2 ty sl1 a1 tmp1 t sl2 a2 tmp2 any tmp,
       tr_expr le For_val e1 sl1 a1 tmp1 ->
-      tr_expr le (For_set (sd_seqbool_set ty sd)) e2 sl2 a2 tmp2 ->
+      tr_expr le (For_set (SDcons type_bool ty t sd)) e2 sl2 a2 tmp2 ->
       list_disjoint tmp1 tmp2 ->
-      incl tmp1 tmp -> incl tmp2 tmp -> In (sd_temp sd) tmp ->
+      incl tmp1 tmp -> incl tmp2 tmp -> In t tmp ->
       tr_expr le (For_set sd) (Csyntax.Eseqor e1 e2 ty)
                     (sl1 ++ makeif a1 (makeseq (do_set sd (Econst_int Int.one ty)))
                                       (makeseq sl2) :: nil)
@@ -642,7 +642,7 @@ Lemma contained_disjoint:
   contained l1 g1 g2 -> contained l2 g2 g3 -> list_disjoint l1 l2.
 Proof.
   intros; red; intros. red; intro; subst y.
-  exploit H; eauto. intros [A B]. exploit H0; eauto. intros [Csyntax D].
+  exploit H; eauto. intros [A B]. exploit H0; eauto. intros [C D].
   elim (Plt_strict x). apply Plt_Ple_trans with (gen_next g2); auto.
 Qed.
 
@@ -650,9 +650,18 @@ Lemma contained_notin:
   forall g1 l g2 id g3,
   contained l g1 g2 -> within id g2 g3 -> ~In id l.
 Proof.
-  intros; red; intros. exploit H; eauto. intros [Csyntax D]. destruct H0 as [A B].
+  intros; red; intros. exploit H; eauto. intros [C D]. destruct H0 as [A B].
   elim (Plt_strict id). apply Plt_Ple_trans with (gen_next g2); auto.
 Qed.
+
+Hint Resolve gensym_within within_widen contained_widen
+             contained_cons contained_app contained_disjoint
+             contained_notin contained_nil
+             incl_refl incl_tl incl_app incl_appl incl_appr incl_same_head incl_cons
+             in_eq in_cons in_or_app
+             Ple_trans Ple_refl: gensym.
+
+(** ** Properties of destinations *)
 
 Definition dest_below (dst: destination) (g: generator) : Prop :=
   match dst with
@@ -660,35 +669,54 @@ Definition dest_below (dst: destination) (g: generator) : Prop :=
   | _ => True
   end.
 
+Lemma dest_below_le:
+  forall dst g1 g2,
+  dest_below dst g1 -> Ple g1.(gen_next) g2.(gen_next) -> dest_below dst g2.
+Proof.
+  intros. destruct dst; simpl in *; eauto using Plt_Ple_trans.
+Qed.
+
 Remark dest_for_val_below: forall g, dest_below For_val g.
 Proof. intros; simpl; auto. Qed.
 
 Remark dest_for_effect_below: forall g, dest_below For_effects g.
 Proof. intros; simpl; auto. Qed.
 
-Lemma dest_for_set_seqbool_val:
-  forall tmp ty g1 g2,
-  within tmp g1 g2 -> dest_below (For_set (sd_seqbool_val tmp ty)) g2.
+Lemma dest_for_set_base_below: forall tmp tycast ty g1 g2,
+  within tmp g1 g2 -> dest_below (For_set (SDbase tycast ty tmp)) g2.
 Proof.
-  intros. destruct H. simpl. auto.
+  intros. destruct H. auto.
 Qed.
 
-Lemma dest_for_set_seqbool_set:
-  forall sd ty g, dest_below (For_set sd) g -> dest_below (For_set (sd_seqbool_set ty sd)) g.
+Hint Resolve dest_below_le dest_for_set_base_below : gensym.
+Local Hint Resolve dest_for_val_below dest_for_effect_below : core.
+
+(** ** Properties of [temp_for_sd] *)
+
+Definition good_temp_for_sd (ty: type) (tmp: ident) (sd: set_destination) (g1 g2 g3: generator) : Prop :=
+     Plt (sd_temp sd) g1.(gen_next)
+  /\ Ple g1.(gen_next) g2.(gen_next)
+  /\ Ple g2.(gen_next) g3.(gen_next)
+  /\ if type_eq ty (sd_head_type sd) then tmp = sd_temp sd else within tmp g2 g3.
+
+Lemma temp_for_sd_charact: forall ty tmp sd g1 g2 g3 I,
+  dest_below (For_set sd) g1 ->
+  temp_for_sd ty sd g2 = Res tmp g3 I ->
+  Ple g1.(gen_next) g2.(gen_next) ->
+  good_temp_for_sd ty tmp sd g1 g2 g3.
 Proof.
-  intros. assumption.
+  unfold temp_for_sd, good_temp_for_sd; intros. destruct type_eq.
+- inv H0. tauto.
+- eauto with gensym.
 Qed.
 
-Lemma dest_for_set_condition_val:
-  forall tmp tycast ty g1 g2, within tmp g1 g2 -> dest_below (For_set (SDbase tycast ty tmp)) g2.
+Lemma dest_for_set_cons_below: forall tycast ty tmp sd g1 g2 g3,
+  good_temp_for_sd ty tmp sd g1 g2 g3 ->
+  dest_below (For_set (SDcons tycast ty tmp sd)) g3.
 Proof.
-  intros. destruct H. simpl. auto.
-Qed.
-
-Lemma dest_for_set_condition_set:
-  forall sd tmp tycast ty g1 g2, dest_below (For_set sd) g2 -> within tmp g1 g2 -> dest_below (For_set (SDcons tycast ty tmp sd)) g2.
-Proof.
-  intros. destruct H0. simpl. auto.
+  intros until g3; intros (P & Q & R & S). simpl. destruct type_eq.
+- subst tmp. unfold Ple, Plt in *; lia.
+- destruct S; auto.
 Qed.
 
 Lemma sd_temp_notin:
@@ -698,24 +726,41 @@ Proof.
   elim (Plt_strict (sd_temp sd)). apply Plt_Ple_trans with (gen_next g1); auto.
 Qed.
 
-Lemma dest_below_le:
-  forall dst g1 g2,
-  dest_below dst g1 -> Ple g1.(gen_next) g2.(gen_next) -> dest_below dst g2.
+Definition used_temp_for_sd (ty: type) (tmp: ident) (sd: set_destination) : list ident :=
+  if type_eq ty (sd_head_type sd) then nil else tmp :: nil.
+
+Lemma temp_for_sd_disj: forall tmp1 tmp2 ty t sd g1 g2 g3 g4,
+  good_temp_for_sd ty t sd g1 g2 g3 ->
+  contained tmp1 g1 g2 ->
+  contained tmp2 g3 g4 ->
+  list_disjoint tmp1 (t :: tmp2).
 Proof.
-  intros. destruct dst; simpl in *; auto. eapply Plt_Ple_trans; eauto.
+  intros. destruct H as (P & Q & R & S).
+  apply list_disjoint_cons_r; eauto with gensym.
+  destruct type_eq.
+- subst t. eapply sd_temp_notin; eauto.
+- eauto with gensym.
 Qed.
 
-Hint Resolve gensym_within within_widen contained_widen
-             contained_cons contained_app contained_disjoint
-             contained_notin contained_nil
-             dest_for_set_seqbool_val dest_for_set_seqbool_set
-             dest_for_set_condition_val dest_for_set_condition_set
-             sd_temp_notin dest_below_le
-             incl_refl incl_tl incl_app incl_appl incl_appr incl_same_head
-             in_eq in_cons
-             Ple_trans Ple_refl: gensym.
+Lemma temp_for_sd_in: forall tmp ty t sd g1 g2 g3,
+  good_temp_for_sd ty t sd g1 g2 g3 ->
+  In t (sd_temp sd :: used_temp_for_sd ty t sd ++ tmp).
+Proof.
+  intros. destruct H as (P & Q & R & S). unfold used_temp_for_sd. destruct type_eq.
+- subst t. auto with coqlib.
+- simpl; auto.
+Qed.
 
-Local Hint Resolve dest_for_val_below dest_for_effect_below : core.
+Lemma temp_for_sd_contained: forall ty t sd g1 g2 g3,
+  good_temp_for_sd ty t sd g1 g2 g3 ->
+  contained (used_temp_for_sd ty t sd) g2 g3.
+Proof.
+  intros. destruct H as (P & Q & R & S). unfold used_temp_for_sd.
+  destruct type_eq; eauto with gensym.
+Qed.
+
+Hint Resolve temp_for_sd_charact dest_for_set_cons_below
+             sd_temp_notin temp_for_sd_disj temp_for_sd_in temp_for_sd_contained: gensym.
 
 (** ** Correctness of the translation functions *)
 
@@ -741,14 +786,6 @@ Ltac UseFinish :=
       repeat rewrite app_ass
   end.
 
-(*
-Fixpoint add_set_dest (sd: set_destination) (tmps: list ident) :=
-  match sd with
-  | SDbase ty tmp => tmp :: tmps
-  | SDcons ty tmp sd' => tmp :: add_set_dest sd' tmps
-  end.
-*)
-
 Definition add_dest (dst: destination) (tmps: list ident) :=
   match dst with
   | For_set sd => sd_temp sd :: tmps
@@ -768,6 +805,7 @@ Lemma tr_expr_add_dest:
 Proof.
   intros. apply tr_expr_monotone with tmps; auto. apply add_dest_incl.
 Qed.
+
 
 Lemma is_bitfield_access_meets_spec: forall l g bf g' I,
   is_bitfield_access ce l g = Res bf g' I ->
@@ -838,7 +876,7 @@ Opaque makeif.
   econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
 - (* valof *)
   monadInv H0. exploit H; eauto. intros [tmp1 [A B]].
-  exploit transl_valof_meets_spec; eauto. intros [tmp2 [Csyntax D]]. UseFinish.
+  exploit transl_valof_meets_spec; eauto. intros [tmp2 [C D]]. UseFinish.
   exists (tmp1 ++ tmp2); split.
   intros; apply tr_expr_add_dest. econstructor; eauto with gensym.
   eauto with gensym.
@@ -853,7 +891,7 @@ Opaque makeif.
   econstructor; split; eauto. intros; apply tr_expr_add_dest. constructor; auto.
 - (* binop *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
-  exploit H0; eauto. intros [tmp2 [Csyntax D]]. UseFinish.
+  exploit H0; eauto. intros [tmp2 [C D]]. UseFinish.
   exists (tmp1 ++ tmp2); split.
   intros; apply tr_expr_add_dest. econstructor; eauto with gensym.
   eauto with gensym.
@@ -883,7 +921,7 @@ Opaque makeif.
   apply contained_cons. eauto with gensym.
   apply contained_app; eauto with gensym.
 + (* for effects *)
-  exploit H0; eauto with gensym. intros [tmp2 [Csyntax D]].
+  exploit H0; eauto with gensym. intros [tmp2 [C D]].
   simpl add_dest in *.
   exists (tmp1 ++ tmp2); split.
   intros; eapply tr_seqand_effects; eauto with gensym.
@@ -891,15 +929,15 @@ Opaque makeif.
 + (* for set *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
   simpl add_dest in *.
-  exists (tmp1 ++ tmp2); split.
-  intros; eapply tr_seqand_set; eauto with gensym.
-  apply list_disjoint_cons_r; eauto with gensym.
+  exists (used_temp_for_sd ty x0 sd ++ tmp1 ++ tmp2); split.
+  intros; eapply tr_seqand_set; eauto 4 with gensym; eauto 7 with gensym.
+  apply contained_app. eauto with gensym.
   apply contained_app; eauto with gensym.
 - (* seqor *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
   destruct dst; monadInv EQ0.
 + (* for value *)
-  exploit H0; eauto with gensym. intros [tmp2 [Csyntax D]].
+  exploit H0; eauto with gensym. intros [tmp2 [C D]].
   simpl add_dest in *.
   exists (x0 :: tmp1 ++ tmp2); split.
   intros; eapply tr_seqor_val; eauto with gensym.
@@ -915,9 +953,9 @@ Opaque makeif.
 + (* for set *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
   simpl add_dest in *.
-  exists (tmp1 ++ tmp2); split.
-  intros; eapply tr_seqor_set; eauto with gensym.
-  apply list_disjoint_cons_r; eauto with gensym.
+  exists (used_temp_for_sd ty x0 sd ++ tmp1 ++ tmp2); split.
+  intros; eapply tr_seqor_set; eauto 4 with gensym; eauto 7 with gensym.
+  apply contained_app. eauto with gensym.
   apply contained_app; eauto with gensym.
 - (* condition *)
   monadInv H2. exploit H; eauto. intros [tmp1 [A B]].
@@ -934,7 +972,7 @@ Opaque makeif.
   apply contained_app. eauto with gensym.
   apply contained_app; eauto with gensym.
 + (* for effects *)
-  exploit H0; eauto. intros [tmp2 [Csyntax D]].
+  exploit H0; eauto. intros [tmp2 [C D]].
   exploit H1; eauto. intros [tmp3 [E F]].
   simpl add_dest in *.
   exists (tmp1 ++ tmp2 ++ tmp3); split.
@@ -942,13 +980,13 @@ Opaque makeif.
   apply contained_app; eauto with gensym.
 + (* for test *)
   exploit H0; eauto with gensym. intros [tmp2 [C D]].
-  exploit H1; eauto 10 with gensym. intros [tmp3 [E F]].
+  exploit H1; eauto 6 with gensym. intros [tmp3 [E F]].
   simpl add_dest in *.
-  exists (x0 :: tmp1 ++ tmp2 ++ tmp3); split.
-  intros; eapply tr_condition_set; eauto with gensym.
-  apply list_disjoint_cons_r; eauto with gensym.
-  apply list_disjoint_cons_r; eauto with gensym.
-  apply contained_cons; eauto with gensym.
+  exists (used_temp_for_sd ty x0 sd ++ tmp1 ++ tmp2 ++ tmp3); split.
+  intros; eapply tr_condition_set; eauto 4 with gensym.
+  apply incl_cons; eauto with gensym.
+  apply incl_cons; eauto with gensym.
+  apply contained_app; eauto with gensym.
   apply contained_app; eauto with gensym.
   apply contained_app; eauto with gensym.
 - (* sizeof *)
@@ -959,7 +997,7 @@ Opaque makeif.
   exists (@nil ident); split; auto with gensym. constructor.
 - (* assign *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
-  exploit H0; eauto. intros [tmp2 [Csyntax D]].
+  exploit H0; eauto. intros [tmp2 [C D]].
   apply is_bitfield_access_meets_spec in EQ0.
   destruct dst; monadInv EQ3; simpl add_dest in *.
 + (* for value *)
@@ -979,7 +1017,7 @@ Opaque makeif.
   apply contained_app; eauto with gensym.
 - (* assignop *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
-  exploit H0; eauto. intros [tmp2 [Csyntax D]].
+  exploit H0; eauto. intros [tmp2 [C D]].
   exploit transl_valof_meets_spec; eauto. intros [tmp3 [E F]].
   apply is_bitfield_access_meets_spec in EQ2.
   destruct dst; monadInv EQ4; simpl add_dest in *.
@@ -1018,7 +1056,7 @@ Opaque makeif.
   apply contained_cons; eauto with gensym.
 - (* comma *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
-  exploit H0; eauto with gensym. intros [tmp2 [Csyntax D]].
+  exploit H0; eauto with gensym. intros [tmp2 [C D]].
   exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
   destruct dst; simpl; eauto with gensym.
@@ -1028,7 +1066,7 @@ Opaque makeif.
   apply contained_app; eauto with gensym.
 - (* call *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
-  exploit H0; eauto. intros [tmp2 [Csyntax D]].
+  exploit H0; eauto. intros [tmp2 [C D]].
   destruct dst; monadInv EQ2; simpl add_dest in *.
 + (* for value *)
   exists (x1 :: tmp1 ++ tmp2); split.
@@ -1067,7 +1105,7 @@ Opaque makeif.
   monadInv H; exists (@nil ident); split; auto with gensym. constructor.
 - (* cons *)
   monadInv H1. exploit H; eauto. intros [tmp1 [A B]].
-  exploit H0; eauto. intros [tmp2 [Csyntax D]].
+  exploit H0; eauto. intros [tmp2 [C D]].
   exists (tmp1 ++ tmp2); split.
   econstructor; eauto with gensym.
   eauto with gensym.

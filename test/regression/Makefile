@@ -15,7 +15,7 @@ TESTS=int32 int64 floats floats-basics floats-lit \
   volatile1 volatile2 volatile3 volatile4 \
   funct3 expr5 struct7 struct8 struct11 struct12 casts1 casts2 char1 \
   sizeof1 sizeof2 binops bool for1 for2 switch switch2 compound \
-  decl1 bitfields9 ptrs3 \
+  decl1 bitfields9 ptrs3 telescopes \
   parsing krfun ifconv generic
 
 # stringlit charlit # temporarily removed
