@@ -101,11 +101,13 @@ let copy oc pref b first last =
     try
       while b.lineno <= last do
         let c = input_char b.chan in
-        output_char oc c;
-        if c = '\n' then begin
+        match c with
+        | '\n' ->
+          output_char oc c;
           b.lineno <- b.lineno + 1;
           if b.lineno <= last then output_string oc pref
-        end
+        | '\r' | '\011' | '\012' -> output_char oc ' '
+        | _ -> output_char oc c
       done
     with End_of_file ->
       output_char oc '\n'
