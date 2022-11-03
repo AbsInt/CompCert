@@ -118,6 +118,12 @@ let substitute_cases case_table body end_label =
       | sd -> sd }
   in transf false body
 
+let rec is_skip_or_debug s =
+  match s.sdesc with
+  | Sseq (a, b) -> is_skip_or_debug a && is_skip_or_debug b
+  | Sskip -> true
+  | _ -> Cutil.is_debug_stmt s
+
 let new_label = ref 0
 
 let gen_label () = incr new_label; sprintf "@%d" !new_label
@@ -125,7 +131,7 @@ let gen_label () = incr new_label; sprintf "@%d" !new_label
 let normalize_switch loc e body =
   let (init, cases) = [body] |> flatten_switch |> group_switch
   and allcases = List.rev (all_cases [] body) in
-  if init.sdesc = Sskip && List.length cases = List.length allcases then
+  if is_skip_or_debug init && List.length cases = List.length allcases then
     (* This is a structured switch *)
     make_normalized_switch e cases
   else begin
