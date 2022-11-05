@@ -25,7 +25,7 @@ type filebuf = {
    the first character of line number [b.lineno]. *)
 
 let openfile f =
-  { chan = open_in f;
+  { chan = open_in_bin f;
     lineno = 1 }
 
 let close b =
