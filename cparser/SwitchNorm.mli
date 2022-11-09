@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
+(*          Xavier Leroy, Collège de France and Inria                  *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -14,18 +14,15 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Entry point for the library: parse, elaborate, and transform *)
+(* Normalization of structured "switch" statements
+   and emulation of unstructured "switch" statements (e.g. Duff's device) *)
 
-val preprocessed_file:
-  ?unblock: bool -> 
-  ?switch_norm: [`Off | `Partial | `Full] ->
-  ?struct_passing: bool ->
-  ?packed_structs: bool ->
-  string -> string -> C.program
-      (** [preprocessed_file filename sourcetext] performs parsing,
-          elaboration, and optional source-to-source transformations.
-          [filename] is the name of the source file, for error messages.
-          [sourcetext] is the text of the source file after preprocessing.
-          The optional arguments indicate which source-to-source
-          transformations to perform.  They default to [false] or [`Off]
-          (do not perform). *)
+(* Assumes: nothing
+   Produces: code with normalized "switch" statements *)
+
+(* A normalized switch has the following form:
+     Sswitch(e, Sblock [ Slabeled(lbl1, case1); ...
+                         Slabeled(lblN,caseN) ])
+*)
+
+val program: bool -> C.program -> C.program

@@ -1028,61 +1028,6 @@ let convertAsm loc env txt outputs inputs clobber =
   | None -> e
   | Some lhs -> Eassign (convertLvalue env lhs, e, typeof e)
 
-(* Separate the cases of a switch statement body *)
-
-type switchlabel =
-  | Case of C.exp
-  | Default
-
-type switchbody =
-  | Label of switchlabel
-  | Stmt of C.stmt
-
-let rec flattenSwitch = function
-  | {sdesc = C.Sseq(s1, s2)} ->
-      flattenSwitch s1 @ flattenSwitch s2
-  | {sdesc = C.Slabeled(C.Scase(e, _), s1)} ->
-      Label(Case e) :: flattenSwitch s1
-  | {sdesc = C.Slabeled(C.Sdefault, s1)} ->
-      Label Default :: flattenSwitch s1
-  | {sdesc = C.Slabeled(C.Slabel lbl, s1); sloc = loc} ->
-      Stmt {sdesc = C.Slabeled(C.Slabel lbl, Cutil.sskip); sloc = loc}
-      :: flattenSwitch s1
-  | s ->
-      [Stmt s]
-
-let rec groupSwitch = function
-  | [] ->
-      (Cutil.sskip, [])
-  | Label case :: rem ->
-      let (fst, cases) = groupSwitch rem in
-      (Cutil.sskip, (case, fst) :: cases)
-  | Stmt s :: rem ->
-      let (fst, cases) = groupSwitch rem in
-      (Cutil.sseq s.sloc s fst, cases)
-
-(* Test whether the statement contains case and give an *)
-let rec contains_case s =
-  match s.sdesc with
-  | C.Sskip
-  | C.Sdo _
-  | C.Sbreak
-  | C.Scontinue
-  | C.Sswitch _ (* Stop at a switch *)
-  | C.Sgoto _
-  | C.Sreturn _
-  | C.Sdecl _
-  | C.Sasm _ ->  ()
-  | C.Sseq (s1,s2)
-  | C.Sif(_,s1,s2) -> contains_case s1; contains_case s2
-  | C.Swhile (_,s1)
-  | C.Sdowhile (s1,_) -> contains_case s1
-  | C.Sfor (s1,e,s2,s3) ->  contains_case s1; contains_case s2; contains_case s3
-  | C.Slabeled(C.Scase _, _) ->
-      unsupported "'case' statement not in 'switch' statement"
-  | C.Slabeled(_,s) -> contains_case s
-  | C.Sblock b -> List.iter contains_case b
-
 (** Annotations for line numbers *)
 
 (** Statements *)
@@ -1122,20 +1067,8 @@ let rec convertStmt env s =
   | C.Scontinue ->
       Csyntax.Scontinue
   | C.Sswitch(e, s1) ->
-      let (init, cases) = groupSwitch (flattenSwitch s1) in
-      let rec init_debug s =
-        match s.sdesc with
-        | Sseq (a,b) -> init_debug a && init_debug b
-        | C.Sskip -> true
-        | _ -> Cutil.is_debug_stmt s in
-      if init.sdesc <> C.Sskip && not (init_debug init) then
-        begin
-          warning Diagnostics.Unnamed "ignored code at beginning of 'switch'";
-          contains_case init
-        end;
       let te = convertExpr env e in
-      swrap (Ctyping.sswitch te
-               (convertSwitch env (is_int64 env e.etyp) cases))
+      swrap (Ctyping.sswitch te (convertSwitch env (is_int64 env e.etyp) s1))
   | C.Slabeled(C.Slabel lbl, s1) ->
       Csyntax.Slabel(intern_string lbl, convertStmt env s1)
   | C.Slabeled(C.Scase _, _) ->
@@ -1158,23 +1091,24 @@ let rec convertStmt env s =
       Csyntax.Sdo (convertAsm s.sloc env txt outputs inputs clobber)
 
 and convertSwitch env is_64 = function
-  | [] ->
+  | {sdesc = C.Sskip} ->
       LSnil
-  | (lbl, s) :: rem ->
-      updateLoc s.sloc;
-      let lbl' =
-        match lbl with
-        | Default ->
-            None
-        | Case e ->
-            match Ceval.integer_expr env e with
-            | None -> unsupported "expression is not an integer constant expression";
-                      None
-            | Some v -> Some (if is_64
-                              then Z.of_uint64 v
-                              else Z.of_uint32 (Int64.to_int32 v))
-      in
-      LScons(lbl', convertStmt env s, convertSwitch env is_64 rem)
+  | {sdesc = C.Slabeled(lbl, s)} ->
+      convertSwitchCase env is_64 lbl s LSnil
+  | {sdesc = C.Sseq ({sdesc = C.Slabeled(lbl, s)}, rem)} ->
+      convertSwitchCase env is_64 lbl s (convertSwitch env is_64 rem)
+  | _ ->
+      assert false
+
+and convertSwitchCase env is_64 lbl s k =
+  let lbl' =
+    match lbl with
+    | C.Sdefault ->
+        None
+    | C.Scase(e, v) ->
+        Some (if is_64 then Z.of_uint64 v else Z.of_uint32 (Int64.to_int32 v))
+    | _ -> assert false in
+  LScons(lbl', convertStmt env s, k)
 
 (** Function definitions *)
 

@@ -35,7 +35,7 @@ let version_options tool_name =
 let all_language_support_options = [
   option_flongdouble;
   option_fstruct_passing; option_fvararg_calls; option_funprototyped;
-  option_fpacked_structs; option_finline_asm
+  option_fpacked_structs; option_finline_asm; option_funstructured_switch
 ]
 
 let f_opt name ref =
@@ -65,6 +65,7 @@ let language_support_options =
   @ f_opt "struct-passing" option_fstruct_passing
   @ f_opt "vararg-calls" option_fvararg_calls
   @ f_opt "unprototyped" option_funprototyped
+  @ f_opt "unstructured-switch" option_funstructured_switch
   @ f_opt "packed-structs" option_fpacked_structs
   @ f_opt "inline-asm" option_finline_asm
 
@@ -78,6 +79,7 @@ let language_support_help =
   -fstruct-return   Like -fstruct-passing (deprecated)
   -fvararg-calls Support calls to variable-argument functions [on]
   -funprototyped Support calls to old-style functions without prototypes [on]
+  -funstructured-switch Support non-structured 'switch' statements [off]
   -fpacked-structs  Emulate packed structs [off]
   -finline-asm   Support inline 'asm' statements [off]
   -fall          Activate all language support options above

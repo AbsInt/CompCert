@@ -16,33 +16,23 @@
 
 (* Entry point for the library: parse, elaborate, and transform *)
 
-module CharSet = Set.Make(struct type t = char let compare = compare end)
-
-let transform_program t p =
-  let run_pass pass flag p =
-    if CharSet.mem flag t then begin
-      let p = pass p in
-      Diagnostics.check_errors ();
-      p
-    end else
-      p
-  in
-    p
-    |> run_pass Unblock.program 'b'
-    |> run_pass PackedStructs.program 'p'
-    |> run_pass StructPassing.program 's'
-    |> Rename.program
-
-let parse_transformations s =
-  let t = ref CharSet.empty in
-  let set s = String.iter (fun c -> t := CharSet.add c !t) s in
-  String.iter
-    (function 'b' -> set "b"
-            | 's' -> set "s"
-            | 'p' -> set "bp"
-            |  _  -> ())
-    s;
-  !t
+let transform_program ~unblock ~switch_norm ~struct_passing ~packed_structs p =
+  let run_pass pass p =
+    let p' = pass p in Diagnostics.check_errors (); p' in
+  let run_opt_pass pass flag p =
+    if flag then run_pass pass p else p
+  and run_opt_pass3 pass flag p =
+    match flag with
+    | `Off -> p
+    | `Partial -> run_pass (pass false) p
+    | `Full -> run_pass (pass true) p in
+  let unblock = unblock || switch_norm <> `Off || packed_structs in
+  p
+  |> run_opt_pass Unblock.program unblock
+  |> run_opt_pass3 SwitchNorm.program switch_norm
+  |> run_opt_pass PackedStructs.program packed_structs
+  |> run_opt_pass StructPassing.program struct_passing
+  |> Rename.program
 
 let read_file sourcefile =
   let ic = open_in_bin sourcefile in
@@ -65,7 +55,11 @@ let parse_string name text =
             Timeout_pr means that we ran for 2^50 steps. *)
       Diagnostics.fatal_error Diagnostics.no_loc "internal error while parsing"
 
-let preprocessed_file transfs name sourcefile =
+let preprocessed_file ?(unblock = false)
+                      ?(switch_norm = `Off)
+                      ?(struct_passing = false)
+                      ?(packed_structs = false)
+                      name sourcefile =
   Diagnostics.reset();
   let check_errors x =
     Diagnostics.check_errors(); x in
@@ -79,5 +73,6 @@ let preprocessed_file transfs name sourcefile =
   |> Timing.time2 "Parsing" parse_string name
   |> Timing.time "Elaboration" Elab.elab_file
   |> check_errors
-  |> Timing.time2 "Emulations" transform_program (parse_transformations transfs)
+  |> Timing.time "Emulations"
+      (transform_program ~unblock ~switch_norm ~struct_passing ~packed_structs)
   |> check_errors

@@ -110,7 +110,7 @@ Pass comma separated arguments in <args> to the preprocessor.
 Pass argument <arg> to the preprocessor.
 .
 .TP
-.BR \-C ", " \-CC ", " \-idirafter ", " \-imacros ", " \-iquote ", " \-isystem ", " \-M ", " \-MF ", " \-MG ", " \-MM ", " \-MP ", " \-MQ ", " \-MT  ", " \-nostdinc ", " \-P
+.BR \-C ", " \-CC ", " \-finput-charset ", " \-idirafter ", " \-imacros ", " \-iquote ", " \-isystem ", " \-M ", " \-MF ", " \-MG ", " \-MM ", " \-MP ", " \-MQ ", " \-MT  ", " \-nostdinc ", " \-P
 For GNU backends these options are recognized by CompCert and passed through to the preprocessor.
 .
 .SS
@@ -238,12 +238,12 @@ Code Generation Options (ARM Targets)
 .TP
 .B \-mthumb
 Generate code using the Thumb 2 instruction encoding.
-This is the default if CompCert is configured for the ARMv7R profile.
+This is the default if CompCert is configured for the ARMv7M profile.
 .
 .TP
 .B \-marm
 Generate code using the ARM instruction encoding.
-This is the default if CompCert is configured for a profile other than ARMv7R.
+This is the default if CompCert is configured for a profile other than ARMv7M.
 .
 .SS
 Assembling Options
@@ -327,6 +327,11 @@ Language Support Options
 .INDENT 0.0
 .
 .TP
+.BR \-std=<standard>
+Choose the ISO C language standard to be used: \fBc99\fP, \fBc11\fP, or \fBc18\fP.
+Defaults to \fBc99\fP.
+.
+.TP
 .BR \-flongdouble ", " \-fno\-longdouble
 Turn on/off support for emulation of \fBlong double\fP as \fBdouble\fP.
 Disabled by default.
@@ -345,6 +350,11 @@ Disabled by default.
 .BR \-funprototyped ", " \-fno\-unprototyped
 Turn on/off support calls to old-style functions without prototypes.
 Enabled by default.
+.
+.TP
+.BR \-funstructured-switch ", " \-fno\-unstructured-switch
+Turn on/off support for non-structured \fBswitch\fP statements.
+Disabled by default.
 .
 .TP
 .BR \-fvararg\-calls ", " \-fno\-vararg\-calls
@@ -418,7 +428,7 @@ Type of parameter or return type is implicitly assumed to be int.
 Enabled by default.
 .sp
 \fIinline\-asm\-sdump\fP:
-Use of unsupported features in combination with dump of abstract syntax tree.
+Use of inline assembly in combination with dump of abstract syntax tree.
 Enabled by default.
 .sp
 \fIint\-conversion\fP:
@@ -427,6 +437,10 @@ Enabled by default.
 .sp
 \fIinvalid\-noreturn\fP:
 Functions declared as noreturn that actually contain a return statement.
+Enabled by default.
+.sp
+\fIinvalid\-utf8\fP:
+Illegal unicode characters in string or character constants.
 Enabled by default.
 .sp
 \fIliteral\-range\fP:
@@ -484,6 +498,10 @@ Disabled by default.
 .sp
 \fIvarargs\fP:
 Promotable vararg arguments.
+Enabled by default.
+.sp
+\fIweak\-sdump\fP:
+Use of attribute \fBweak\fP in combination with dump of abstract syntax tree.
 Enabled by default.
 .sp
 \fIwrong\-ais\-parameter\fP:

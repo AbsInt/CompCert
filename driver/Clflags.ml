@@ -20,6 +20,7 @@ let option_fstruct_passing = ref false
 let option_fvararg_calls = ref true
 let option_funprototyped = ref true
 let option_fpacked_structs = ref false
+let option_funstructured_switch = ref false
 let option_ffpu = ref true
 let option_ffloatconstprop = ref 2
 let option_ftailcalls = ref true
