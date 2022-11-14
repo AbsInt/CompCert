@@ -164,7 +164,7 @@ int main()
   quotestring("(ab$cd)", 0); putchar('\n');
   quotestring("(ab$cd)", 1); putchar('\n');
 
-  char c;
+  int c;
   while ((c = decompressor()) != EOF) putchar(c);
 
   testpigeon(FORWARD);
