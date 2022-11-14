@@ -20,6 +20,7 @@ prefix='/usr/local'
 bindir='$(PREFIX)/bin'
 libdir='$(PREFIX)/lib/compcert'
 mandir='$(PREFIX)/share/man'
+sharedir=''  # determined later based on $bindir and -sharedir option
 coqdevdir='$(PREFIX)/lib/compcert/coq'
 toolprefix=''
 target=''
@@ -88,6 +89,7 @@ Options:
   -prefix <dir>        Install in <dir>/bin and <dir>/lib/compcert
   -bindir <dir>        Install binaries in <dir>
   -libdir <dir>        Install libraries in <dir>
+  -sharedir <dir>      Install configuration file in <dir>
   -mandir <dir>        Install man pages in <dir>
   -coqdevdir <dir>     Install Coq development (.vo files) in <dir>
   -toolprefix <pref>   Prefix names of tools ("gcc", etc) with <pref>
@@ -120,6 +122,8 @@ while : ; do
         libdir="$2"; shift;;
     -mandir|--mandir)
         mandir="$2"; shift;;
+    -sharedir|--sharedir)
+        sharedir="$2"; shift;;
     -coqdevdir|--coqdevdir)
         coqdevdir="$2"; install_coqdev=true; shift;;
     -toolprefix|--toolprefix)
@@ -611,9 +615,35 @@ if $missingtools; then
 fi
 
 #
+# Determine $sharedir or check that user-provided $sharedir is valid
+#
+
+expandprefix() {
+  echo "$1" | sed -e "s|\\\$(PREFIX)|$prefix|"
+}
+
+if test -z "$sharedir"; then
+  sharedir=$(dirname "$bindir")/share
+else
+  expsharedir=$(expandprefix "$sharedir")
+  expbindir=$(expandprefix "$bindir")
+  expbindirshare=$(dirname "$expbindir")/share
+  if test "$expsharedir" = "$expbindirshare/compcert" \
+  || test "$expsharedir" = "$expbindirshare" \
+  || test "$expsharedir" = "$expbindir"
+  then : ; # ok!
+  else
+    echo "Wrong -sharedir option. The share directory must be one of"
+    echo "  $expbindirshare/compcert"
+    echo "  $expbindirshare"
+    echo "  $expbindir"
+    exit 2
+  fi
+fi
+
+#
 # Generate Makefile.config
 #
-sharedir="$(dirname "$bindir")"/share
 
 rm -f Makefile.config
 cat > Makefile.config <<EOF
@@ -805,10 +835,6 @@ Please finish the configuration by editing file ./Makefile.config.
 EOF
 else
 
-expandprefix() {
-  echo "$1" | sed -e "s|\\\$(PREFIX)|$prefix|"
-}
-
 cat <<EOF
 
 CompCert configuration:
@@ -830,6 +856,7 @@ CompCert configuration:
     The Flocq library............. $library_Flocq
     The MenhirLib library......... $library_MenhirLib
     Binaries installed in......... $(expandprefix $bindir)
+    Shared config installed in.... $(expandprefix $sharedir)
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $(expandprefix $libdir)
     Man pages installed in........ $(expandprefix $mandir)
