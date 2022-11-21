@@ -1,6 +1,57 @@
+Release 3.12, 2022-11-25
+========================
+
+New features:
+- Support unstructured `switch` statements such as Duff's device.
+  This is achieved via an optional, unverified code rewrite,
+  activated by option `-funstructured-switch`. (#459)
+- Support C11 Unicode string literals and character constants,
+  such as `u8"été"` or `u32'❎'`.
+
+Usability:
+- Support the `-std=c99`, `-std=c11` and `-std=c18` option.
+  These options are passed to the preprocessor, helping it select the
+  correct version of the standard header files.  It also controls
+  CompCert's warning for uses of C11 features. (#456)
+- The source character set of CompCert is now officially Unicode
+  with UTF-8 encoding,  A new warning `invalid-utf8` is triggered if byte
+  sequences that are not valid UTF-8 are found outside of comments.
+  Other source character sets and stricter validation can be supported
+  via the `-finput-charset` option, see next.
+- If the GNU preprocessor is used, the source character set can be
+  selected with the `-finput-charset=` option.  In particular,
+  `-finput-charset=utf8` checks that the source file is correctly
+  UTF-8 encoded, and `-finput-charset=ascii` that it contains no
+  Unicode characters at all.
+- Support mergeable sections for string literals and for numerical constants.
+- AArch64, ARM, RISC-V and x86 ELF targets: use `.data.rel.ro` section
+  for `const` data whose initializers contain relocatable addresses.
+  This is required by the LLVM linker and simplifies the work of the GNU linker.
+- `configure` script: add option `-sharedir` to specify where to put
+  the `compcert.ini` configuration file (#450, #460)
+- ARM 32 bits: emit appropriate `Tag_ABI_VFP` attribute (#461)
+
+Optimizations:
+- Recognize more `if`-`else` statements that can be if-converted into
+  a conditional move.  In particular, debug statements generated in
+  `-g` mode no longer prevent this conversion.
+
+Bug fixes:
+- Revised simplification of nested conditional, `||`, `&&` expressions
+  to make sure the generated Clight code is well typed and is not rejected
+  later by `ccomp` (#458).
+- In `-g` mode, when running under Windows, the `ccomp` executable could
+  fail on an uncaught exception while inserting lines of the source C file
+  as comments in the generated assembly file.
+- Reintroduced DWARF debug information for bit fields in structs
+  (it was missing since 3.10).
+
 Coq development:
-- RTLgen: use the state and error monad for reserving goto labels (#371)
+- RTLgen: use the state and error monad for reserving `goto` labels (#371)
   (by Pierre Nigron)
+- Add `Declare Scope` statements where appropriate, and re-enable the
+  `undeclared-scope` warning.
+
 
 Release 3.11, 2022-06-27
 ========================
