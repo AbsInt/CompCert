@@ -579,7 +579,12 @@ struct
        | _ -> "armv7");
     fprintf oc "	.fpu	%s\n"
       (if Opt.vfpv3 then "vfpv3-d16" else "vfpv2");
-    fprintf oc "	.%s\n" (if !Clflags.option_mthumb then "thumb" else "arm");
+    fprintf oc "	.eabi_attribute Tag_ABI_VFP_args, %d\n"
+      (match Configuration.abi with
+       | "hardfloat" -> 1
+       | _ -> 0);
+    fprintf oc "	.%s\n"
+      (if !Clflags.option_mthumb then "thumb" else "arm");
     if !Clflags.option_g then begin
       section oc Section_text;
       cfi_section oc
