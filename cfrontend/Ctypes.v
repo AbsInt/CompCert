@@ -1902,7 +1902,7 @@ Theorem link_match_program_gen:
   exists tp, link tp1 tp2 = Some tp /\ match_program p tp.
 Proof.
   intros until p; intros L [M1 T1] [M2 T2].
-  exploit link_linkorder; eauto. intros [LO1 LO2]. 
+  destruct (link_linkorder _ _ _ L) as [LO1 LO2].
 Local Transparent Linker_program.
   simpl in L; unfold link_program in L.
   destruct (link (program_of_program p1) (program_of_program p2)) as [pp|] eqn:LP; try discriminate.
