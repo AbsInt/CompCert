@@ -337,8 +337,8 @@ Definition sel_switch_long :=
 
 (** Recognition of "then" and "else" statements that support if-conversion.
   Basically we are interested in assignments to local variables [id = e].
-  However the front-end may have put [skip] statements around these
-  assignments. *)
+  However the front-end may have put [skip] statements and debug annotations
+  around these assignments. *)
 
 Inductive stmt_class : Type :=
   | SCskip
