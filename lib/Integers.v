@@ -468,7 +468,7 @@ Qed.
 Lemma eqm_unsigned_repr:
   forall z, eqm z (unsigned (repr z)).
 Proof.
-  unfold eqm; intros. rewrite unsigned_repr_eq. apply eqmod_mod. auto with ints.
+  unfold eqm; intros. rewrite unsigned_repr_eq. apply eqmod_mod.
 Qed.
 Global Hint Resolve eqm_unsigned_repr: ints.
 
@@ -948,29 +948,25 @@ Qed.
 (** ** Properties of division and modulus *)
 
 Lemma modu_divu_Euclid:
-  forall x y, y <> zero -> x = add (mul (divu x y) y) (modu x y).
+  forall x y, x = add (mul (divu x y) y) (modu x y).
 Proof.
   intros. unfold add, mul, divu, modu.
   transitivity (repr (unsigned x)). auto with ints.
   apply eqm_samerepr.
   set (x' := unsigned x). set (y' := unsigned y).
   apply eqm_trans with ((x' / y') * y' + x' mod y').
-  apply eqm_refl2. rewrite Z.mul_comm. apply Z_div_mod_eq.
-  generalize (unsigned_range y); intro.
-  assert (unsigned y <> 0). red; intro.
-  elim H. rewrite <- (repr_unsigned y). unfold zero. congruence.
-  unfold y'. lia.
+  apply eqm_refl2. rewrite Z.mul_comm. apply Z_div_mod_eq_full.
   auto with ints.
 Qed.
 
 Theorem modu_divu:
-  forall x y, y <> zero -> modu x y = sub x (mul (divu x y) y).
+  forall x y, modu x y = sub x (mul (divu x y) y).
 Proof.
   intros.
   assert (forall a b c, a = add b c -> c = sub a b).
   intros. subst a. rewrite sub_add_l. rewrite sub_idem.
   rewrite add_commut. rewrite add_zero. auto.
-  apply H0. apply modu_divu_Euclid. auto.
+  apply H. apply modu_divu_Euclid.
 Qed.
 
 Lemma mods_divs_Euclid:
@@ -1013,7 +1009,6 @@ Theorem modu_one:
   forall x, modu x one = zero.
 Proof.
   intros. rewrite modu_divu. rewrite divu_one. rewrite mul_one. apply sub_idem.
-  apply one_not_zero.
 Qed.
 
 Theorem divs_mone:
@@ -1936,7 +1931,7 @@ Lemma bits_rol:
   testbit (rol x y) i = testbit x ((i - unsigned y) mod zwordsize).
 Proof.
   intros. unfold rol.
-  exploit (Z_div_mod_eq (unsigned y) zwordsize). apply wordsize_pos.
+  generalize (Z_div_mod_eq_full (unsigned y) zwordsize).
   set (j := unsigned y mod zwordsize). set (k := unsigned y / zwordsize).
   intros EQ.
   exploit (Z_mod_lt (unsigned y) zwordsize). apply wordsize_pos.
@@ -1964,7 +1959,7 @@ Lemma bits_ror:
   testbit (ror x y) i = testbit x ((i + unsigned y) mod zwordsize).
 Proof.
   intros. unfold ror.
-  exploit (Z_div_mod_eq (unsigned y) zwordsize). apply wordsize_pos.
+  generalize (Z_div_mod_eq_full (unsigned y) zwordsize).
   set (j := unsigned y mod zwordsize). set (k := unsigned y / zwordsize).
   intros EQ.
   exploit (Z_mod_lt (unsigned y) zwordsize). apply wordsize_pos.
@@ -2071,13 +2066,13 @@ Proof.
   set (M := unsigned m); set (N := unsigned n).
   apply eqmod_trans with (i - M - N).
   apply eqmod_sub.
-  apply eqmod_sym. apply eqmod_mod. apply wordsize_pos.
+  apply eqmod_sym. apply eqmod_mod.
   apply eqmod_refl.
   replace (i - M - N) with (i - (M + N)) by lia.
   apply eqmod_sub.
   apply eqmod_refl.
   apply eqmod_trans with (Z.modulo (unsigned n + unsigned m) zwordsize).
-  replace (M + N) with (N + M) by lia. apply eqmod_mod. apply wordsize_pos.
+  replace (M + N) with (N + M) by lia. apply eqmod_mod.
   unfold modu, add. fold M; fold N. rewrite unsigned_repr_wordsize.
   assert (forall a, eqmod zwordsize a (unsigned (repr a))).
     intros. eapply eqmod_divides. apply eqm_unsigned_repr. assumption.
@@ -2800,7 +2795,6 @@ Lemma eqmod_zero_ext:
   forall n x, 0 <= n < zwordsize -> eqmod (two_p n) (unsigned (zero_ext n x)) (unsigned x).
 Proof.
   intros. rewrite zero_ext_mod; auto. apply eqmod_sym. apply eqmod_mod.
-  apply two_p_gt_ZERO. lia.
 Qed.
 
 (** [sign_ext n x] is the unique integer congruent to [x] modulo [2^n]
@@ -4506,7 +4500,7 @@ Proof.
   set (p := Int.unsigned x * Int.unsigned y).
   set (ph := p / Int.modulus). set (pl := p mod Int.modulus).
   transitivity (repr (ph * Int.modulus + pl)).
-- f_equal. rewrite Z.mul_comm. apply Z_div_mod_eq. apply Int.modulus_pos.
+- f_equal. rewrite Z.mul_comm. apply Z_div_mod_eq_full.
 - apply eqm_samerepr. apply eqm_add. apply eqm_mul_2p32. auto with ints.
   rewrite Int.unsigned_repr_eq. apply eqm_refl.
 Qed.

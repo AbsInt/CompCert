@@ -39,7 +39,7 @@ Lemma Zdiv_mul_pos:
   Z.div n d = Z.div (m * n) (two_p (N + l)).
 Proof.
   intros m l l_pos [LO HI] n RANGE.
-  exploit (Z_div_mod_eq n d). auto.
+  generalize (Z_div_mod_eq_full n d).
   set (q := n / d).
   set (r := n mod d).
   intro EUCL.
@@ -105,7 +105,7 @@ Lemma Zdiv_mul_opp:
 Proof.
   intros m l l_pos [LO HI] n RANGE.
   replace (m * (-n)) with (- (m * n)) by ring.
-  exploit (Z_div_mod_eq n d). auto.
+  generalize (Z_div_mod_eq_full n d).
   set (q := n / d).
   set (r := n mod d).
   intro EUCL.
@@ -591,7 +591,6 @@ Proof.
       econstructor; eauto. eapply eval_mod_from_div.
       eapply eval_divu_mul; eauto. simpl; eauto. simpl; eauto.
       rewrite Int.modu_divu. auto.
-      red; intros; subst n2; discriminate.
     * eapply eval_modu_base; eauto. EvalOp.
 Qed.
 
@@ -817,10 +816,9 @@ Proof.
 ** destruct x; simpl in H1; try discriminate.
    destruct (Int64.eq n2 Int64.zero) eqn:Z; inv H1.
    rewrite Int64.modu_divu.
-    econstructor; split; eauto. econstructor. eauto.
-    eapply eval_modl_from_divl; eauto.
-    eapply eval_divlu_mull; eauto.
-    red; intros; subst n2; discriminate Z.
+   econstructor; split; eauto. econstructor. eauto.
+   eapply eval_modl_from_divl; eauto.
+   eapply eval_divlu_mull; eauto.
 ** eapply eval_modlu_base; eauto.
 - eapply eval_modlu_base; eauto.
 Qed.

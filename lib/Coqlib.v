@@ -436,7 +436,7 @@ Lemma Zdiv_interval_1:
   lo <= a/b < hi.
 Proof.
   intros.
-  generalize (Z_div_mod_eq a b H1). generalize (Z_mod_lt a b H1). intros.
+  generalize (Z_div_mod_eq_full a b). generalize (Z_mod_lt a b H1). intros.
   set (q := a/b) in *. set (r := a mod b) in *.
   split.
   assert (lo < (q + 1)).
@@ -511,7 +511,7 @@ Definition align (n: Z) (amount: Z) :=
 Lemma align_le: forall x y, y > 0 -> x <= align x y.
 Proof.
   intros. unfold align.
-  generalize (Z_div_mod_eq (x + y - 1) y H). intro.
+  generalize (Z_div_mod_eq_full (x + y - 1) y). intro.
   replace ((x + y - 1) / y * y)
      with ((x + y - 1) - (x + y - 1) mod y).
   generalize (Z_mod_lt (x + y - 1) y H). lia.
@@ -526,7 +526,7 @@ Qed.
 Lemma align_lt: forall x y, y > 0 -> align x y < x + y.
 Proof.
   intros. unfold align.
-  generalize (Z_div_mod_eq (x + y - 1) y H); intro.
+  generalize (Z_div_mod_eq_full (x + y - 1) y); intro.
   generalize (Z_mod_lt (x + y - 1) y H); intro.
   lia.
 Qed.
@@ -549,7 +549,7 @@ Lemma floor_interval:
   forall x y, y > 0 -> floor x y <= x < floor x y + y.
 Proof.
   unfold floor; intros.
-  generalize (Z_div_mod_eq x y H) (Z_mod_lt x y H).
+  generalize (Z_div_mod_eq_full x y) (Z_mod_lt x y H).
   set (q := x / y). set (r := x mod y). intros. lia.
 Qed.
 

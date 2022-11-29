@@ -1254,7 +1254,6 @@ Proof.
   destruct (Int.eq i0 Int.zero) eqn:?; inv H.
   exists (Vint (Int.divu i i0)); split; auto.
   simpl. rewrite Int.modu_divu. auto.
-  generalize (Int.eq_spec i0 Int.zero). rewrite Heqb; auto.
 Qed.
 
 Theorem modls_divls:
@@ -1276,7 +1275,6 @@ Proof.
   destruct (Int64.eq i0 Int64.zero) eqn:?; inv H.
   exists (Vlong (Int64.divu i i0)); split; auto.
   simpl. rewrite Int64.modu_divu. auto.
-  generalize (Int64.eq_spec i0 Int64.zero). rewrite Heqb; auto.
 Qed.
 
 Theorem divs_pow2:

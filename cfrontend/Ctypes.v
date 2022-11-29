@@ -762,7 +762,7 @@ Proof.
   assert (C: forall x y, x * 8 <= y -> x <= bytes_of_bits y).
   { unfold bytes_of_bits; intros. 
     assert (P: 8 > 0) by lia.
-    generalize (Z_div_mod_eq (y + 7) 8 P) (Z_mod_lt (y + 7) 8 P).
+    generalize (Z_div_mod_eq_full (y + 7) 8) (Z_mod_lt (y + 7) 8 P).
     lia. }
   split. lia. apply C. lia.
 Qed.
