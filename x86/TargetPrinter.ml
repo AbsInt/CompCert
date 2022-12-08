@@ -254,8 +254,7 @@ module Cygwin_System : SYSTEM =
     (* The comment delimiter *)
     let comment = "#"
 
-    let symbol_prefix =
-      if Archi.ptr64 then "" else "_"
+    let symbol_prefix = ""
 
     let raw_symbol oc s =
        fprintf oc "%s%s" symbol_prefix s
@@ -287,7 +286,6 @@ module Cygwin_System : SYSTEM =
       | Section_ais_annotation -> assert false (* Not supported for coff binaries *)
 
     let stack_alignment = 8
-      (* minimum is 4 for 32 bits, 8 for 64 bits; 8 is better for perfs *)
 
     let print_align oc n =
       fprintf oc "	.balign	%d\n" n
@@ -295,13 +293,10 @@ module Cygwin_System : SYSTEM =
     let indirect_symbols : StringSet.t ref = ref StringSet.empty
 
     let print_mov_rs oc rd id =
-      if Archi.ptr64 then begin
-        let s = extern_atom id in
-        indirect_symbols := StringSet.add s !indirect_symbols;
-        fprintf oc "	movq	.refptr.%s(%%rip), %a\n" s ireg rd
-      end else begin
-        fprintf oc "	movl	$%a, %a\n" symbol id ireg rd
-      end
+      assert Archi.ptr64;
+      let s = extern_atom id in
+      indirect_symbols := StringSet.add s !indirect_symbols;
+      fprintf oc "	movq	.refptr.%s(%%rip), %a\n" s ireg rd
 
     let print_fun_info _ _  = ()
 
@@ -315,10 +310,8 @@ module Cygwin_System : SYSTEM =
       fprintf oc "	.quad	%s\n" s
 
     let print_epilogue oc =
-      if Archi.ptr64 then begin
-        StringSet.iter (declare_indirect_symbol oc) !indirect_symbols;
-        indirect_symbols := StringSet.empty
-      end
+      StringSet.iter (declare_indirect_symbol oc) !indirect_symbols;
+      indirect_symbols := StringSet.empty
 
     let print_comm_decl oc name sz al =
       fprintf oc "	.comm   %a, %s, %d\n" 

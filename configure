@@ -52,7 +52,6 @@ Supported targets:
   armeb-hardfloat      (ARM, EABI using hardware FP registers, big endian)
   x86_32-linux         (x86 32 bits, Linux)
   x86_32-bsd           (x86 32 bits, BSD)
-  x86_32-cygwin        (x86 32 bits, Cygwin environment under Windows)
   x86_64-linux         (x86 64 bits, Linux)
   x86_64-bsd           (x86 64 bits, BSD)
   x86_64-macos         (x86 64 bits, MacOS X)
@@ -317,14 +316,6 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
         clinker_options="-m32"
         cprepro_options="-m32 -U__GNUC__ -E"
         system="bsd"
-        ;;
-    cygwin)
-        abi="standard"
-        cc_options="-m32"
-        casm_options="-m32 -c"
-        clinker_options="-m32"
-        cprepro_options="-m32 -U__GNUC__ '-D__attribute__(x)=' -E"
-        system="cygwin"
         ;;
     linux)
         abi="standard"
