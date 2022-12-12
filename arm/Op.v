@@ -671,10 +671,6 @@ Proof.
   destruct sp; simpl; auto. rewrite Ptrofs.add_assoc. do 4 f_equal. symmetry; auto with ptrofs.
 Qed.
 
-(** Two-address operations.  There are none in the ARM architecture. *)
-
-Definition two_address_op (op: operation) : bool := false.
-
 (** Operations that are so cheap to recompute that CSE should not factor them out. *)
 
 Definition is_trivial_op (op: operation) : bool :=
