@@ -175,6 +175,22 @@ let expand_builtin_memcpy  sz al args =
 
 (* Handling of volatile reads and writes *)
 
+(* Offset checks *)
+
+let offset_in_range chunk ofs =
+  match chunk with
+  | Mint8signed | Mint16signed | Mint16unsigned  ->
+    Int.eq (Asmgen.mk_immed_mem_small ofs) ofs
+  | Mint8unsigned | Mint32 ->
+    Int.eq (Asmgen.mk_immed_mem_word ofs) ofs
+  | Mfloat32 | Mfloat64 ->
+    Int.eq (Asmgen.mk_immed_mem_float ofs) ofs
+  | Mint64 ->
+    Int.eq (Asmgen.mk_immed_mem_word ofs) ofs &&
+    Int.eq (Asmgen.mk_immed_mem_word (Int.add ofs _4)) (Int.add ofs _4)
+  | _ ->
+    assert false
+
 let expand_builtin_vload_common chunk base ofs res =
   match chunk, res with
   | Mint8unsigned, BR(IR res) ->
@@ -209,7 +225,7 @@ let expand_builtin_vload chunk args res =
   | [BA(IR addr)] ->
       expand_builtin_vload_common chunk addr _0 res
   | [BA_addrstack ofs] ->
-      if offset_in_range (Int.add ofs (Memdata.size_chunk chunk)) then
+      if offset_in_range chunk ofs then
         expand_builtin_vload_common chunk IR13 ofs res
       else begin
         expand_addimm IR14 IR13 ofs;
@@ -219,7 +235,7 @@ let expand_builtin_vload chunk args res =
       emit (Ploadsymbol (IR14,id,ofs));
       expand_builtin_vload_common chunk IR14 _0 res
   | [BA_addptr(BA(IR addr), BA_int ofs)] ->
-      if offset_in_range (Int.add ofs (Memdata.size_chunk chunk)) then
+      if offset_in_range chunk ofs then
         expand_builtin_vload_common chunk addr ofs res
       else begin
         expand_addimm IR14 addr ofs;
@@ -253,7 +269,7 @@ let expand_builtin_vstore chunk args =
   | [BA(IR addr); src] ->
       expand_builtin_vstore_common chunk addr _0 src
   | [BA_addrstack ofs; src] ->
-      if offset_in_range (Int.add ofs (Memdata.size_chunk chunk)) then
+      if offset_in_range chunk ofs then
         expand_builtin_vstore_common chunk IR13 ofs src
       else begin
         expand_addimm IR14 IR13 ofs;
@@ -263,7 +279,7 @@ let expand_builtin_vstore chunk args =
       emit (Ploadsymbol (IR14,id,ofs));
       expand_builtin_vstore_common chunk IR14 _0 src
   | [BA_addptr(BA(IR addr), BA_int ofs); src] ->
-      if offset_in_range (Int.add ofs (Memdata.size_chunk chunk)) then
+      if offset_in_range chunk ofs then
         expand_builtin_vstore_common chunk addr ofs src
       else begin
         expand_addimm IR14 addr ofs;
