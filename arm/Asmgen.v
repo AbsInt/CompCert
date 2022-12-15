@@ -93,20 +93,20 @@ In particular, if [n] is a representable immediate argument, we should have
 *)
 
 Definition mk_immed_mem_word (x: int): int :=
-  if Int.ltu x Int.zero then
+  if Int.lt x Int.zero then
     Int.neg (Int.zero_ext (if thumb tt then 8 else 12) (Int.neg x))
   else
     Int.zero_ext 12 x.
 
 Definition mk_immed_mem_small (x: int): int :=
-  if Int.ltu x Int.zero then
+  if Int.lt x Int.zero then
     Int.neg (Int.zero_ext 8 (Int.neg x))
   else
     Int.zero_ext 8 x.
 
 Definition mk_immed_mem_float (x: int): int :=
   let x := Int.and x (Int.repr (-4)) in   (**r mask low 2 bits off *)
-  if Int.ltu x Int.zero then
+  if Int.lt x Int.zero then
     Int.neg (Int.zero_ext 10 (Int.neg x))
   else
     Int.zero_ext 10 x.
