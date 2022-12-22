@@ -240,7 +240,7 @@ Lemma iter_monot:
 Proof.
   induction p; intros.
   simpl. red; intros; red; auto.
-  destruct q. elimtype False; lia.
+  destruct q. exfalso; lia.
   simpl. apply F_iter_monot. apply IHp. lia.
 Qed.
 
