@@ -277,9 +277,9 @@ struct
         thumbS ireg r1 ireg r2 ireg r3
     | Pmla(r1, r2, r3, r4) ->
       fprintf oc "	mla	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4
-    | Pmov(r1, (SOimm _ | SOreg _ as so)) ->
+    | Pmov(r1, SOreg reg) ->
       (* No S flag even in Thumb2 mode *)
-      fprintf oc "	mov	%a, %a\n" ireg r1 shift_op so
+      fprintf oc "	mov	%a, %a\n" ireg r1 ireg reg
     | Pmov(r1, so) ->
       fprintf oc "	mov%t	%a, %a\n" thumbS ireg r1 shift_op so
     | Pmovw(r1, n) ->
