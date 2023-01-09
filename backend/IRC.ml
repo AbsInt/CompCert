@@ -195,8 +195,8 @@ module IntPairs = Hashtbl.Make(struct
 
 type graph = {
   (* Machine registers available for allocation *)
-  caller_save_registers: mreg array array;
-  callee_save_registers: mreg array array;
+  preferred_registers: mreg array array;
+  remaining_registers: mreg array array;
   num_available_registers: int array;
   start_points: int array;
   allocatable_registers: mreg list;
@@ -262,27 +262,28 @@ let rec remove_reserved = function
 (* Initialize and return an empty graph *)
 
 let init costs =
-  let int_caller_save = remove_reserved int_caller_save_regs
-  and float_caller_save = remove_reserved float_caller_save_regs
-  and int_callee_save = remove_reserved int_callee_save_regs
-  and float_callee_save = remove_reserved float_callee_save_regs in
+  let aregs = allocatable_registers () in
+  let int_preferred_regs = remove_reserved aregs.preferred_int_regs
+  and float_preferred_regs = remove_reserved aregs.preferred_float_regs
+  and int_remaining_regs = remove_reserved aregs.remaining_int_regs
+  and float_remaining_regs = remove_reserved aregs.remaining_float_regs in
   {
-    caller_save_registers =
-      [| Array.of_list int_caller_save;
-         Array.of_list float_caller_save;
+    preferred_registers =
+      [| Array.of_list int_preferred_regs;
+         Array.of_list float_preferred_regs;
          [||] |];
-    callee_save_registers =
-      [| Array.of_list int_callee_save;
-         Array.of_list float_callee_save;
+    remaining_registers =
+      [| Array.of_list int_remaining_regs;
+         Array.of_list float_remaining_regs;
          [||] |];
     num_available_registers =
-      [| List.length int_caller_save + List.length int_callee_save;
-         List.length float_caller_save + List.length float_callee_save;
+      [| List.length int_preferred_regs + List.length int_remaining_regs;
+         List.length float_preferred_regs + List.length float_remaining_regs;
          0 |];
     start_points =
       [| 0; 0; 0 |];
     allocatable_registers =
-      int_caller_save @ int_callee_save @ float_caller_save @ float_callee_save;
+      int_preferred_regs @ int_remaining_regs @ float_preferred_regs @ float_remaining_regs;
     stats_of_reg = costs;
     varTable = Hashtbl.create 253;
     nextIdent = 0;
@@ -773,13 +774,17 @@ let rec nodeOrder g stack =
 (* Assign a color (i.e. a hardware register or a stack location)
    to a node.  The color is chosen among the colors that are not
    assigned to nodes with which this node interferes.  The choice
-   is guided by the following heuristics: consider first caller-save
-   hardware register of the correct type; second, callee-save registers;
-   third, a stack location.  Callee-save registers and stack locations
-   are ``expensive'' resources, so we try to minimize their number
-   by picking the smallest available callee-save register or stack location.
-   In contrast, caller-save registers are ``free'', so we pick an
-   available one pseudo-randomly. *)
+   is guided by the following heuristics: consider first the preferred
+   hardware registers of the correct type; second the remaining
+   registers; third, a stack location.
+   For most architectures the preferred registers are the caller-save hardware
+   register and the rest are the callee-save hardware registers.
+   For some architectures these differ due other constraints.
+   Non-preferred registers (which always include callee-save registers)
+   and stack locations  are ``expensive'' resources,
+   so we try to minimize their number by picking the smallest available
+   callee-save register or stack location.  In contrast, preferred
+   registers are ``free'', so we pick an available one pseudo-randomly. *)
 
 module Regset =
   Set.Make(struct type t = mreg let compare = compare end)
@@ -792,22 +797,22 @@ let find_reg g conflicts regclass =
       then find avail (curr + 1) last
       else Some (R r)
     end in
-  let caller_save = g.caller_save_registers.(regclass)
-  and callee_save = g.callee_save_registers.(regclass)
+  let preferred_reg = g.preferred_registers.(regclass)
+  and remaining_reg = g.remaining_registers.(regclass)
   and start = g.start_points.(regclass) in
-  match find caller_save start (Array.length caller_save) with
+  match find preferred_reg start (Array.length preferred_reg) with
   | Some _ as res ->
       g.start_points.(regclass) <-
-        (if start + 1 < Array.length caller_save then start + 1 else 0);
+        (if start + 1 < Array.length preferred_reg then start + 1 else 0);
       res
   | None ->
-      match find caller_save 0 start with
+      match find preferred_reg 0 start with
       | Some _ as res ->
           g.start_points.(regclass) <-
-            (if start + 1 < Array.length caller_save then start + 1 else 0);
+            (if start + 1 < Array.length preferred_reg then start + 1 else 0);
           res
       | None ->
-          find callee_save 0 (Array.length callee_save)
+          find remaining_reg 0 (Array.length remaining_reg)
 
 (* Aggressive coalescing of stack slots.  When assigning a slot,
    try first the slots assigned to the pseudoregs for which we

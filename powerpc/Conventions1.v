@@ -91,6 +91,23 @@ Definition float_callee_save_regs :=
 Definition dummy_int_reg := R3.     (**r Used in [Coloring]. *)
 Definition dummy_float_reg := F0.   (**r Used in [Coloring]. *)
 
+(** How to use registers for register allocation.
+    We favor the use of caller-save registers, using callee-save registers
+    only when no caller-save is available. *)
+
+Record alloc_regs := mk_alloc_regs {
+  preferred_int_regs: list mreg;
+  remaining_int_regs: list mreg;
+  preferred_float_regs: list mreg;
+  remaining_float_regs: list mreg
+}.
+
+Definition allocatable_registers (_: unit) :=
+  {| preferred_int_regs := int_caller_save_regs;
+     remaining_int_regs := int_callee_save_regs;
+     preferred_float_regs := float_caller_save_regs;
+     remaining_float_regs := float_callee_save_regs |}.
+
 (** * Function calling conventions *)
 
 (** The functions in this section determine the locations (machine registers
