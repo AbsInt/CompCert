@@ -360,7 +360,7 @@ let unblock_decl env ((sto, id, ty, optinit) as d) =
   | Some init ->
       global_variables := [];
       let init' = expand_init false env init in
-      let decls = !global_variables in
+      let decls = List.rev !global_variables in
       global_variables := [];
       decls @ [(sto, id, ty, Some init')]
 
