@@ -93,6 +93,7 @@ Definition transf_instr (f: function) (pc: node) (instr: instruction) :=
 
 Definition transf_function (f: function) : function :=
   if zeq f.(fn_stacksize) 0
+  && option_eq zeq f.(fn_sig).(sig_cc).(cc_vararg) None
   then RTL.transf_function (transf_instr f) f
   else f.
 
