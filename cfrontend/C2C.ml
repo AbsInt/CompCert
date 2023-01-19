@@ -470,7 +470,7 @@ let rec convertTyp env ?bitwidth t =
                 convertTyp env tres,
                 convertCallconv tres targs va a)
   | C.TNamed _ ->
-      convertTyp env (Cutil.unroll env t)
+      convertTyp env ?bitwidth (Cutil.unroll env t)
   | C.TStruct(id, a) ->
       Ctypes.Tstruct(intern_string id.name, convertAttr a)
   | C.TUnion(id, a) ->
