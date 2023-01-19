@@ -82,10 +82,9 @@ let expand_annot_val kind txt targ args res =
 (* The ARM has strict alignment constraints for 2 and 4 byte accesses.
    8-byte accesses must be 4-aligned. *)
 
-let offset_in_range ofs =
-  let n = camlint_of_coqint ofs in n <= 128l && n >= -128l
-
 let memcpy_small_arg sz arg tmp =
+  let offset_in_range ofs =
+    let n = camlint_of_coqint ofs in n <= 128l && n >= -128l in
   match arg with
   | BA (IR r) ->
       (r, _0)
