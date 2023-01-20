@@ -51,6 +51,14 @@ let predefined_macros =
 
 (* From C to preprocessed C *)
 
+(* We define the type wchar_t since it is dependent on the system and
+   we want to avoid more ifdefs in the stddef header file. *)
+let abi_macros () =
+  let wchar_typ = Cprint.name_of_ikind (Cutil.wchar_ikind()) in
+  [
+    sprintf "-D__COMPCERT_WCHAR_TYPE__=%s" wchar_typ
+  ]
+
 let preprocess ifile ofile =
   Diagnostics.raise_on_errors ();
   let output =
@@ -61,6 +69,7 @@ let preprocess ifile ofile =
      then ["-std=" ^ !option_std]
      else []);
     predefined_macros;
+    abi_macros ();
     (if !Clflags.use_standard_headers
      then ["-I" ^ Filename.concat !Clflags.stdlib_path "include" ]
      else []);

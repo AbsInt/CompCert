@@ -86,7 +86,7 @@ typedef signed long ptrdiff_t;
 #ifdef _TYPE_wchar_t
 _TYPE_wchar_t;
 #else
-typedef unsigned short wchar_t;
+typedef __COMPCERT_WCHAR_TYPE__ wchar_t;
 #endif
 #endif
 #undef __need_wchar_t
@@ -95,11 +95,7 @@ typedef unsigned short wchar_t;
 #if defined(_STDDEF_H) || defined(__need_wchar_t)
 #ifndef _WCHAR_T
 #define _WCHAR_T
-#ifdef _WIN32
-typedef unsigned short wchar_t;
-#else
-typedef signed int wchar_t;
-#endif
+typedef __COMPCERT_WCHAR_TYPE__ wchar_t;
 #endif
 #undef __need_wchar_t
 #endif
