@@ -37,3 +37,6 @@ val program : Format.formatter -> C.program -> unit
 
 val destination : string option ref
 val print_if : C.program -> unit
+
+val name_of_ikind: C.ikind -> string
+val name_of_fkind: C.fkind -> string
