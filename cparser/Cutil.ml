@@ -1008,10 +1008,7 @@ let find_matching_signed_ikind sz =
   else if sz = !config.sizeof_longlong then ILongLong
   else assert false
 
-let wchar_ikind () =
-  if !config.wchar_signed
-  then find_matching_signed_ikind !config.sizeof_wchar
-  else find_matching_unsigned_ikind !config.sizeof_wchar
+let wchar_ikind () = !config.wchar_ikind
 let size_t_ikind () = find_matching_unsigned_ikind !config.sizeof_size_t
 let ptr_t_ikind () = find_matching_unsigned_ikind !config.sizeof_ptr
 let ptrdiff_t_ikind () = find_matching_signed_ikind !config.sizeof_ptrdiff_t

@@ -41,8 +41,7 @@ type t = {
   sizeof_longdouble: int;
   sizeof_void: int option;
   sizeof_fun: int option;
-  sizeof_wchar: int;
-  wchar_signed: bool;
+  wchar_ikind: C.ikind;
   sizeof_size_t: int;
   sizeof_ptrdiff_t: int;
   sizeof_intreg: int;
@@ -76,8 +75,7 @@ let ilp32ll64 = {
   sizeof_longdouble = 8;
   sizeof_void = None;
   sizeof_fun = None;
-  sizeof_wchar = 4;
-  wchar_signed = true;
+  wchar_ikind = C.IInt;
   sizeof_size_t = 4;
   sizeof_ptrdiff_t = 4;
   sizeof_intreg = 4;
@@ -111,8 +109,7 @@ let i32lpll64 = {
   sizeof_longdouble = 8;
   sizeof_void = None;
   sizeof_fun = None;
-  sizeof_wchar = 4;
-  wchar_signed = true;
+  wchar_ikind = C.IInt;
   sizeof_size_t = 8;
   sizeof_ptrdiff_t = 8;
   sizeof_intreg = 8;
@@ -146,8 +143,7 @@ let il32pll64 = {
   sizeof_longdouble = 8;
   sizeof_void = None;
   sizeof_fun = None;
-  sizeof_wchar = 4;
-  wchar_signed = true;
+  wchar_ikind = C.IInt;
   sizeof_size_t = 8;
   sizeof_ptrdiff_t = 8;
   sizeof_intreg = 8;
@@ -193,15 +189,16 @@ let x86_64 =
 
 let win32 =
   { ilp32ll64 with name = "win32"; char_signed = true;
-                   sizeof_wchar = 2; wchar_signed = false;
+                   wchar_ikind = C.IUShort;
                    struct_passing_style = SP_split_args;
                    struct_return_style = SR_ref }
 let win64 =
   { il32pll64 with name = "win64"; char_signed = true;
-                   sizeof_wchar = 2; wchar_signed = false }
+                   wchar_ikind = C.IUShort }
 let ppc_32_bigendian =
   { ilp32ll64 with name = "powerpc";
                    bigendian = true;
+                   wchar_ikind = C.ILong;
                    bitfields_msb_first = true;
                    supports_unaligned_accesses = true;
                    struct_passing_style = SP_ref_caller;
@@ -211,7 +208,7 @@ let ppc_32_r64_bigendian =
   { ppc_32_bigendian with sizeof_intreg = 8;}
 
 let ppc_32_diab_bigendian =
-  { ppc_32_bigendian with sizeof_wchar = 2; wchar_signed = false }
+  { ppc_32_bigendian with wchar_ikind = C.IUShort }
 
 let ppc_32_r64_diab_bigendian =
   { ppc_32_diab_bigendian with sizeof_intreg = 8;}
@@ -272,8 +269,7 @@ let undef = {
   sizeof_longdouble = 0;
   sizeof_void = None;
   sizeof_fun = None;
-  sizeof_wchar = 0;
-  wchar_signed = true;
+  wchar_ikind = C.IInt;
   sizeof_size_t = 0;
   sizeof_ptrdiff_t = 0;
   sizeof_intreg = 0;

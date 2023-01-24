@@ -241,7 +241,7 @@ let add_char enc c accu =
   | Chr x, Cabs.EncU32 -> (* Characters are not encoded *)
       Int64.of_int x :: accu
   | Chr x, Cabs.EncWide -> (* Depends on size of wchar_t *)
-      if Machine.(!config.sizeof_wchar) = 2
+      if Cutil.sizeof_ikind (Cutil.wchar_ikind ()) = 2
       then add_char_utf16 x accu
       else Int64.of_int x :: accu
 }

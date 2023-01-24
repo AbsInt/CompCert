@@ -40,8 +40,7 @@ type t = {
   sizeof_longdouble: int;
   sizeof_void: int option;
   sizeof_fun: int option;
-  sizeof_wchar: int;
-  wchar_signed: bool;
+  wchar_ikind: C.ikind;
   sizeof_size_t: int;
   sizeof_ptrdiff_t: int;
   sizeof_intreg: int;
