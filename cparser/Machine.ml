@@ -219,7 +219,9 @@ let ppc_32_r64_linux_bigendian =
   { ppc_32_linux_bigendian with sizeof_intreg = 8;}
 
 let arm_littleendian =
-  { ilp32ll64 with name = "arm"; struct_passing_style = SP_split_args;
+  { ilp32ll64 with name = "arm";
+                   wchar_ikind = C.IUInt;
+                   struct_passing_style = SP_split_args;
                    struct_return_style = SR_int1to4;}
 
 let arm_bigendian =
@@ -237,11 +239,14 @@ let rv64 =
 
 let aarch64 =
   { i32lpll64 with name = "aarch64";
+                   wchar_ikind = C.IUInt;
                    struct_passing_style = SP_ref_callee; (* Wrong *)
                    struct_return_style = SR_ref } (* Wrong *)
 
 let aarch64_apple =
-  { aarch64 with char_signed = true }
+  { aarch64 with char_signed = true;
+                 wchar_ikind = C.IInt;}
+(*- #End *)
 
 (* Add GCC extensions re: sizeof and alignof *)
 
