@@ -404,11 +404,11 @@ module Target : TARGET =
          fprintf oc "	fmax.s	%a, %a, %a\n" freg fd freg fs1 freg fs2
 
       | Pfeqs (rd, fs1, fs2) ->
-         fprintf oc "	feq.s   %a, %a, %a\n" ireg rd freg fs1 freg fs2
+         fprintf oc "	feq.s	%a, %a, %a\n" ireg rd freg fs1 freg fs2
       | Pflts (rd, fs1, fs2) ->
-         fprintf oc "	flt.s   %a, %a, %a\n" ireg rd freg fs1 freg fs2
+         fprintf oc "	flt.s	%a, %a, %a\n" ireg rd freg fs1 freg fs2
       | Pfles (rd, fs1, fs2) ->
-         fprintf oc "	fle.s   %a, %a, %a\n" ireg rd freg fs1 freg fs2
+         fprintf oc "	fle.s	%a, %a, %a\n" ireg rd freg fs1 freg fs2
 
       | Pfsqrts (fd, fs) ->
          fprintf oc "	fsqrt.s %a, %a\n"     freg fd freg fs
