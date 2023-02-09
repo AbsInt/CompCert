@@ -123,7 +123,6 @@ Definition register_by_name (s: string) : option mreg :=
 
 Definition destroyed_by_op (op: operation): list mreg :=
   match op with
-  | Odiv | Odivu => R0 :: R1 :: R2 :: R3 :: R12 :: nil
   | Ointoffloat | Ointuoffloat | Ointofsingle | Ointuofsingle => F6 :: nil
   | _ => nil
   end.
@@ -153,6 +152,8 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_memcpy sz al => R2 :: R3 :: R12 :: F7 :: nil
   | EF_inline_asm txt sg clob => destroyed_by_clobber clob
+  | EF_builtin "__aeabi_idiv" _ | EF_builtin "__aeabi_uidiv" _ =>
+                                    R0 :: R1 :: R2 :: R3 :: R12 :: F0 :: F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: nil
   | _ => nil
   end.
 
@@ -167,14 +168,15 @@ Definition destroyed_at_indirect_call: list mreg :=
 Definition temp_for_parent_frame: mreg :=
   R12.
 
-Definition mregs_for_operation (op: operation): list (option mreg) * option mreg :=
-  match op with
-  | Odiv | Odivu => (Some R0 :: Some R1 :: nil, Some R0)
-  | _ => (nil, None)
-  end.
+Definition mregs_for_operation (op: operation): list (option mreg) * option mreg := (nil, None).
+
 
 Definition mregs_for_builtin (ef: external_function): list (option mreg) * list(option mreg) :=
-  (nil, nil).
+  match ef with
+  | EF_builtin "__aeabi_idiv" _ | EF_builtin "__aeabi_uidiv" _ => (Some R0 :: Some R1 :: nil, Some R0 :: nil)
+  | _ => (nil, nil)
+  end.
+
 
 Global Opaque
     destroyed_by_op destroyed_by_load destroyed_by_store

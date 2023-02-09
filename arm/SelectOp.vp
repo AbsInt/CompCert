@@ -276,19 +276,26 @@ Nondetfunction xor (e1: expr) (e2: expr) :=
 
 (** ** Integer division and modulus *)
 
-Definition mod_aux (divop: operation) (e1 e2: expr) :=
+Definition mod_aux (divop: expr -> expr -> expr) (e1 e2: expr) :=
   Elet e1
     (Elet (lift e2)
       (Eop Osub (Eletvar 1 :::
-                 Eop Omul (Eop divop (Eletvar 1 ::: Eletvar 0 ::: Enil) :::
+                 Eop Omul (divop (Eletvar 1) (Eletvar 0) :::
                            Eletvar 0 :::
                            Enil) :::
                  Enil))).
 
-Definition divs_base (e1: expr) (e2: expr) := Eop Odiv (e1:::e2:::Enil).
-Definition mods_base := mod_aux Odiv.
-Definition divu_base (e1: expr) (e2: expr) := Eop Odivu (e1:::e2:::Enil).
-Definition modu_base := mod_aux Odivu.
+Definition divs_base :=
+  if Archi.hardware_idiv tt then fun (e1: expr) (e2: expr) => Eop Odiv (e1:::e2:::Enil)
+  else fun (e1: expr) (e2: expr) => Ebuiltin (EF_builtin "__aeabi_idiv" (platform_builtin_sig BI_idiv)) (e1::: e2:::Enil).
+
+Definition mods_base := mod_aux divs_base.
+
+Definition divu_base :=
+  if Archi.hardware_idiv tt then fun (e1: expr) (e2: expr) =>  Eop Odivu (e1:::e2:::Enil)
+  else fun (e1: expr) (e2: expr) => Ebuiltin (EF_builtin "__aeabi_uidiv" (platform_builtin_sig BI_uidiv)) (e1::: e2:::Enil).
+
+Definition modu_base := mod_aux divu_base.
 
 Definition shrximm (e1: expr) (n2: int) :=
   if Int.eq n2 Int.zero then e1 else Eop (Oshrximm n2) (e1:::Enil).

@@ -323,11 +323,9 @@ struct
       fprintf oc "	strb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
     | Pstrh_p(r1, r2, sa) ->
       fprintf oc "	strh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
-    | Psdiv ->
-      if Opt.hardware_idiv then
-        fprintf oc "	sdiv	r0, r0, r1\n"
-      else
-        fprintf oc "	bl	__aeabi_idiv\n"
+    | Psdiv(r1,r2,r3) ->
+       assert Opt.hardware_idiv;
+        fprintf oc "	sdiv	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
     | Psbfx(r1, r2, lsb, sz) ->
       fprintf oc "	sbfx	%a, %a, #%a, #%a\n" ireg r1 ireg r2 coqint lsb coqint sz
     | Psmull(r1, r2, r3, r4) ->
@@ -338,11 +336,9 @@ struct
     | Psubs(r1, r2, so) ->
       fprintf oc "	subs	%a, %a, %a\n"
         ireg r1 ireg r2 shift_op so
-    | Pudiv ->
-      if Opt.hardware_idiv then
-        fprintf oc "	udiv	r0, r0, r1\n"
-      else
-         fprintf oc "	bl	__aeabi_uidiv\n"
+    | Pudiv(r1,r2,r3)->
+       assert Opt.hardware_idiv;
+        fprintf oc "	udiv	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
     | Pumull(r1, r2, r3, r4) ->
       fprintf oc "	umull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4
     (* Floating-point VFD instructions *)

@@ -413,6 +413,16 @@ let expand_builtin_inline name args res =
   (* Optimization hint *)
   | "__builtin_unreachable", [], _ ->
      ()
+  (* Soft integer division *)
+  | "__aeabi_idiv", args , res ->
+     assert ((args,res) = ([BA(IR IR0); BA(IR IR1)] , BR (IR IR0)));
+     let id = intern_string "__aeabi_idiv" in
+     emit (Pblsymb(id,Builtins1.platform_builtin_sig Builtins1.BI_idiv))
+  | "__aeabi_uidiv", args , res ->
+     assert ((args,res) = ([BA(IR IR0); BA(IR IR1)] , BR (IR IR0)));
+     let id = intern_string "__aeabi_uidiv" in
+     emit (Pblsymb(id,Builtins1.platform_builtin_sig Builtins1.BI_uidiv))
+
   (* Catch-all *)
   | _ ->
       raise (Error ("unrecognized builtin " ^ name))

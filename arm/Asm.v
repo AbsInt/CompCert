@@ -173,10 +173,10 @@ Inductive instruction : Type :=
   | Pstr_a: ireg -> ireg -> shift_op -> instruction (**r any32 store from int register *)
   | Pstrb: ireg -> ireg -> shift_op -> instruction (**r int8 store *)
   | Pstrh: ireg -> ireg -> shift_op -> instruction (**r int16 store *)
-  | Psdiv: instruction                              (**r signed division *)
+  | Psdiv: ireg -> ireg -> ireg     -> instruction (**r signed division *)
   | Psmull: ireg -> ireg -> ireg -> ireg -> instruction (**r signed multiply long *)
   | Psub: ireg -> ireg -> shift_op -> instruction  (**r integer subtraction *)
-  | Pudiv: instruction                             (**r unsigned division *)
+  | Pudiv: ireg -> ireg -> ireg -> instruction     (**r unsigned division *)
   | Pumull: ireg -> ireg -> ireg -> ireg -> instruction (**r unsigned multiply long *)
   (* Floating-point coprocessor instructions (VFP double scalar operations) *)
   | Pfcpyd: freg -> freg -> instruction             (**r float move *)
@@ -657,11 +657,9 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       exec_store Mint8unsigned (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
   | Pstrh r1 r2 sa =>
       exec_store Mint16unsigned (Val.add rs#r2 (eval_shift_op sa rs)) r1 rs m
-  | Psdiv =>
-      match Val.divs rs#IR0 rs#IR1 with
-      | Some v => Next (nextinstr (rs#IR0 <- v
-                                     #IR1 <- Vundef #IR2 <- Vundef
-                                     #IR3 <- Vundef #IR12 <- Vundef)) m
+  | Psdiv r1 r2 r3 =>
+      match Val.divs rs#r2 rs#r3 with
+      | Some v => Next (nextinstr (rs#r1 <- v )) m
       | None => Stuck
       end
   | Psbfx r1 r2 lsb sz =>
@@ -671,11 +669,9 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
                          #rdh <- (Val.mulhs rs#r1 rs#r2))) m
   | Psub r1 r2 so =>
       Next (nextinstr_nf (rs#r1 <- (Val.sub rs#r2 (eval_shift_op so rs)))) m
-  | Pudiv =>
-      match Val.divu rs#IR0 rs#IR1 with
-      | Some v => Next (nextinstr (rs#IR0 <- v
-                                     #IR1 <- Vundef #IR2 <- Vundef
-                                     #IR3 <- Vundef #IR12 <- Vundef)) m
+  | Pudiv r1 r2 r3 =>
+      match Val.divu rs#r2 rs#r3 with
+      | Some v => Next (nextinstr (rs#r1 <- v)) m
       | None => Stuck
       end
   | Pumull rdl rdh r1 r2 =>

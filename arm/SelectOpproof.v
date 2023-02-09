@@ -466,31 +466,26 @@ Proof.
   TrivialExists.
 Qed.
 
-Lemma eval_mod_aux:
-  forall divop semdivop,
-  (forall sp x y m, eval_operation ge sp divop (x :: y :: nil) m = semdivop x y) ->
+
+Theorem eval_divs_base_exact:
   forall le a b x y z,
   eval_expr ge sp e m le a x ->
   eval_expr ge sp e m le b y ->
-  semdivop x y = Some z ->
-  eval_expr ge sp e m le (mod_aux divop a b) (Val.sub x (Val.mul z y)).
+  Val.divs x y = Some z ->
+  eval_expr ge sp e m le (divs_base a b) z.
 Proof.
-  intros; unfold mod_aux.
-  eapply eval_Elet. eexact H0. eapply eval_Elet.
-  apply eval_lift. eexact H1.
-  eapply eval_Eop. eapply eval_Econs.
-  eapply eval_Eletvar. simpl; reflexivity.
-  eapply eval_Econs. eapply eval_Eop.
-  eapply eval_Econs. eapply eval_Eop.
-  eapply eval_Econs. apply eval_Eletvar. simpl; reflexivity.
-  eapply eval_Econs. apply eval_Eletvar. simpl; reflexivity.
-  apply eval_Enil.
-  rewrite H. eauto.
-  eapply eval_Econs. apply eval_Eletvar. simpl; reflexivity.
-  apply eval_Enil.
-  simpl; reflexivity. apply eval_Enil.
-  reflexivity.
+  intros. unfold divs_base.
+  destruct (Archi.hardware_idiv tt).
+  - EvalOp.
+  - econstructor.
+    eauto with evalexpr.
+    econstructor.
+    simpl.
+    destruct x; destruct y; try (unfold Val.divs in H1; congruence).
+    rewrite <- divs_is_divs.
+    auto.
 Qed.
+
 
 Theorem eval_divs_base:
   forall le a b x y z,
@@ -499,8 +494,74 @@ Theorem eval_divs_base:
   Val.divs x y = Some z ->
   exists v, eval_expr ge sp e m le (divs_base a b) v /\ Val.lessdef z v.
 Proof.
-  intros. unfold divs_base. exists z; split. EvalOp. auto.
+  intros.
+  exists z; split; [|auto].
+  eapply eval_divs_base_exact;eauto.
 Qed.
+
+Theorem eval_divu_base_exact:
+  forall le a x b y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.divu x y = Some z ->
+  eval_expr ge sp e m le (divu_base a b) z.
+Proof.
+  intros. unfold divu_base.
+  destruct (Archi.hardware_idiv tt).
+  - EvalOp.
+  - econstructor.
+    eauto with evalexpr.
+    econstructor.
+    simpl.
+    destruct x; destruct y; try (unfold Val.divu in H1; congruence).
+    rewrite <- divu_is_divu.
+    auto.
+Qed.
+
+Theorem eval_divu_base:
+  forall le a x b y z,
+  eval_expr ge sp e m le a x ->
+  eval_expr ge sp e m le b y ->
+  Val.divu x y = Some z ->
+  exists v, eval_expr ge sp e m le (divu_base a b) v /\ Val.lessdef z v.
+Proof.
+  intros.
+  exists z; split; [|auto].
+  eapply eval_divu_base_exact;eauto.
+Qed.
+
+
+Lemma eval_mod_aux:
+  forall divop semdivop,
+  (forall le a b x y z,
+    eval_expr ge sp e m le a x ->
+    eval_expr ge sp e m le b y ->
+    semdivop x y = Some z ->
+    eval_expr ge sp e m le (divop a b) z) ->
+  forall le a b x y z
+    (EA : eval_expr ge sp e m le a x)
+    (EB : eval_expr ge sp e m le b y)
+    (SDIV : semdivop x y = Some z),
+  eval_expr ge sp e m le (mod_aux divop a b) (Val.sub x (Val.mul z y)).
+Proof.
+  intros; unfold mod_aux.
+  eapply eval_Elet. eexact EA. eapply eval_Elet.
+  apply eval_lift. eexact EB.
+  eapply eval_Eop. eapply eval_Econs.
+  eapply eval_Eletvar. simpl; reflexivity.
+  eapply eval_Econs. eapply eval_Eop.
+  eapply eval_Econs.
+  eapply H.
+  apply eval_Eletvar. reflexivity.
+  apply eval_Eletvar. reflexivity.
+  eapply SDIV.
+  eapply eval_Econs. apply eval_Eletvar. simpl; reflexivity.
+  apply eval_Enil.
+  reflexivity.
+  apply eval_Enil.
+  simpl; reflexivity.
+Qed.
+
 
 Theorem eval_mods_base:
   forall le a b x y z,
@@ -513,17 +574,9 @@ Proof.
   exploit Val.mods_divs; eauto. intros [v [A B]].
   subst. econstructor; split; eauto.
   apply eval_mod_aux with (semdivop := Val.divs); auto.
+  intros. eapply eval_divs_base_exact;eauto.
 Qed.
 
-Theorem eval_divu_base:
-  forall le a x b y z,
-  eval_expr ge sp e m le a x ->
-  eval_expr ge sp e m le b y ->
-  Val.divu x y = Some z ->
-  exists v, eval_expr ge sp e m le (divu_base a b) v /\ Val.lessdef z v.
-Proof.
-  intros. unfold divu_base. exists z; split. EvalOp. auto.
-Qed.
 
 Theorem eval_modu_base:
   forall le a x b y z,
@@ -536,6 +589,7 @@ Proof.
   exploit Val.modu_divu; eauto. intros [v [A B]].
   subst. econstructor; split; eauto.
   apply eval_mod_aux with (semdivop := Val.divu); auto.
+  intros. eapply eval_divu_base_exact;eauto.
 Qed.
 
 Theorem eval_shrximm:
