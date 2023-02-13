@@ -918,8 +918,19 @@ Proof.
 - (* skip *)
   exists O; intros. constructor; auto.
 - (* assign *)
-  exists 1%nat; intros. apply eventually_step; intros. inv H0.
-  assert (v0 = v) by eauto using eval_expr_determ. subst v0.
+  assert (BASE:
+           exists n : nat,
+           forall (f : Cminor.function) (k : Cminor.cont) (sp : val) (e0 : env) (m : mem) (v : val),
+           Cminor.eval_expr ge sp e0 m e v ->
+           eventually n (Cminor.State f (Cminor.Sassign i e) k sp e0 m) (eq (Cminor.State f Cminor.Sskip k sp (PTree.set i v e0) m))).
+  {
+    exists 1%nat; intros. apply eventually_step; intros. inv H0.
+    assert (v0 = v) by eauto using eval_expr_determ. subst v0.
+    split; auto. apply eventually_now. auto.
+  }
+  destruct e; try destruct (ident_eq i i0); auto.
+  exists 1%nat. intros. apply eventually_step; intros. inv H.
+  rewrite PTree.gsident by (inv H9; auto).
   split; auto. apply eventually_now. auto.
 - (* builtin *)
   destruct o; auto. destruct e; auto. 
@@ -950,7 +961,7 @@ Lemma classify_stmt_wt:
   wt_expr env a (env id).
 Proof.
   induction s; simpl; intros CL WT; try discriminate.
-- inv CL; inv WT; auto.
+- destruct e; try destruct (ident_eq i i0); inv CL; inv WT; auto.
 - destruct o; try discriminate. destruct e; discriminate.
 - inv WT. destruct (classify_stmt s1), (classify_stmt s2); try discriminate; eauto.
 Qed.
