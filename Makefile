@@ -326,8 +326,13 @@ endif
 ifeq ($(INSTALL_COQDEV),true)
 	install -d $(DESTDIR)$(COQDEVDIR)
 	for d in $(DIRS); do \
-          install -d $(DESTDIR)$(COQDEVDIR)/$$d && \
+          set -e; \
+          install -d $(DESTDIR)$(COQDEVDIR)/$$d; \
           install -m 0644 $$d/*.vo $(DESTDIR)$(COQDEVDIR)/$$d/; \
+          if test -d $$d/.coq-native; then \
+            install -d $(DESTDIR)$(COQDEVDIR)/$$d/.coq-native; \
+            install -m 0644 $$d/.coq-native/* $(DESTDIR)$(COQDEVDIR)/$$d/.coq-native/; \
+          fi \
 	done
 	install -m 0644 ./VERSION $(DESTDIR)$(COQDEVDIR)
 	install -m 0644 ./compcert.config $(DESTDIR)$(COQDEVDIR)
