@@ -211,7 +211,7 @@ struct
       fprintf oc "	adc	%a, %a, %a\n" ireg r1 ireg r2 shift_op so
     | Padd(r1, r2, so) ->
       fprintf oc "	add%s	%a, %a, %a\n"
-        (if !Clflags.option_mthumb && r2 <> IR14 then "s" else "")
+        (if !Clflags.option_mthumb && r2 <> IR13 then "s" else "")
         ireg r1 ireg r2 shift_op so
     | Padds (r1,r2,so) ->
       fprintf oc "	adds	%a, %a, %a\n" ireg r1 ireg r2 shift_op so
@@ -333,8 +333,9 @@ struct
     | Psmull(r1, r2, r3, r4) ->
       fprintf oc "	smull	%a, %a, %a, %a\n" ireg r1 ireg r2 ireg r3 ireg r4
     | Psub(r1, r2, so) ->
-      fprintf oc "	sub%t	%a, %a, %a\n"
-        thumbS ireg r1 ireg r2 shift_op so
+      fprintf oc "	sub%s	%a, %a, %a\n"
+        (if !Clflags.option_mthumb && r2 <> IR13 then "s" else "")
+        ireg r1 ireg r2 shift_op so
     | Psubs(r1, r2, so) ->
       fprintf oc "	subs	%a, %a, %a\n"
         ireg r1 ireg r2 shift_op so
