@@ -29,6 +29,7 @@ has_standard_headers=true
 clightgen=false
 install_coqdev=false
 ignore_coq_version=false
+ignore_ocaml_version=false
 library_Flocq=local
 library_MenhirLib=local
 
@@ -99,6 +100,7 @@ Options:
   -clightgen           Also compile and install the clightgen tool
   -install-coqdev      Also install the Coq development (implied by -clightgen)
   -ignore-coq-version  Accept to use experimental or unsupported versions of Coq
+  -ignore-ocaml-version Accept to use experimental or unsupported versions of OCaml
 '
 
 #
@@ -136,6 +138,8 @@ while : ; do
         install_coqdev=true;;
     -ignore-coq-version|--ignore-coq-version)
         ignore_coq_version=true;;
+    -ignore-ocaml-version|--ignore-ocaml-version)
+        ignore_ocaml_version=true;;
     -install-coqdev|--install-coqdev|-install-coq-dev|--install-coq-dev)
         install_coqdev=true;;
     -use-external-Flocq|--use-external-Flocq)
@@ -519,19 +523,18 @@ esac
 echo "Testing OCaml... " | tr -d '\n'
 ocaml_ver=`ocamlc -version 2>/dev/null | tr -d '\r'`
 case "$ocaml_ver" in
-  4.00.*|4.01.*| 4.02.*|4.03.*|4.04.*)
-        echo "version $ocaml_ver -- UNSUPPORTED"
-        echo "Error: CompCert requires OCaml version 4.05 or later."
-        missingtools=true;;
-  4.*)
+  4.0[5-9].*|4.1?.*)
         echo "version $ocaml_ver -- good!";;
   ?.*)
         echo "version $ocaml_ver -- UNSUPPORTED"
-        echo "Error: CompCert requires OCaml version 4.05 or later."
-        missingtools=true;;
+        if $ignore_ocaml_version; then
+            echo "Warning: this version of OCaml is unsupported, proceed at your own risks."
+        else
+            echo "Error: make sure OCaml version 4.05 to 4.14 is installed."
+            missingtools=true
+        fi;;
   *)
         echo "NOT FOUND"
-        echo "Error: make sure OCaml version 4.05 or later is installed."
         missingtools=true;;
 esac
 
