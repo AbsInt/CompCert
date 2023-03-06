@@ -426,7 +426,7 @@ Lemma check_inj_value:
 Proof.
   induction n; simpl. auto.
   unfold proj_sumbool. rewrite dec_eq_true. rewrite dec_eq_true.
-  rewrite <- beq_nat_refl. simpl; auto.
+  rewrite Nat.eqb_refl. simpl; auto.
 Qed.
 
 Lemma proj_inj_value:
@@ -719,7 +719,7 @@ Proof.
   {
     induction n; destruct mvs; simpl; intros; try discriminate.
     contradiction.
-    destruct m; try discriminate. InvBooleans. apply beq_nat_true in H4. subst.
+    destruct m; try discriminate. InvBooleans. apply Nat.eqb_eq in H4. subst.
     destruct H0. subst mv. exists n0; split; auto. lia.
     eapply IHn; eauto. lia.
   }
@@ -738,7 +738,7 @@ Proof.
     destruct (quantity_eq q q0); auto.
     destruct (Nat.eqb sz n) eqn:EQN; auto.
     destruct (check_value sz v q mvl) eqn:CHECK; auto.
-    simpl. apply beq_nat_true in EQN. subst n q0. constructor. auto.
+    simpl. apply Nat.eqb_eq in EQN. subst n q0. constructor. auto.
     destruct H0 as [E|[E|[E|E]]]; subst chunk; destruct q; auto || discriminate.
     congruence.
     intros. eapply B; eauto. lia.
@@ -797,9 +797,9 @@ Lemma check_value_inject:
 Proof.
   induction 1; intros; destruct n; simpl in *; auto.
   inv H; auto.
-  InvBooleans. assert (n = n0) by (apply beq_nat_true; auto). subst v1 q0 n0.
+  InvBooleans. assert (n = n0) by (apply Nat.eqb_eq; auto). subst v1 q0 n0.
   replace v2 with v'.
-  unfold proj_sumbool; rewrite ! dec_eq_true. rewrite <- beq_nat_refl. simpl; eauto.
+  unfold proj_sumbool; rewrite ! dec_eq_true. rewrite Nat.eqb_refl. simpl; eauto.
   inv H2; try discriminate; inv H4; congruence.
   discriminate.
 Qed.

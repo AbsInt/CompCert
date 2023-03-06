@@ -271,7 +271,7 @@ Lemma validate_jumptable_correct_rec:
 Proof.
   induction tbl; simpl; intros.
 - unfold list_length_z in H0. simpl in H0. extlia.
-- InvBooleans. rewrite list_length_z_cons in H0. apply beq_nat_true in H1.
+- InvBooleans. rewrite list_length_z_cons in H0. apply Nat.eqb_eq in H1.
   destruct (zeq v 0).
   + replace (base + v) with base by lia. congruence.
   + replace (base + v) with (Z.succ base + Z.pred v) by lia.
@@ -308,13 +308,13 @@ Proof.
   intros default v VRANGE. induction t; simpl; intros until hi.
 - (* base case *)
   destruct cases as [ | [key1 act1] cases1]; intros.
-+ apply beq_nat_true in H. subst act. reflexivity.
-+ InvBooleans. apply beq_nat_true in H2. subst. simpl.
++ apply Nat.eqb_eq in H. subst act. reflexivity.
++ InvBooleans. apply Nat.eqb_eq in H2. subst. simpl.
   destruct (zeq v hi). auto. extlia.
 - (* eq node *)
   destruct (split_eq key cases) as [optact others] eqn:EQ. intros.
   destruct optact as [act1|]; InvBooleans; try discriminate.
-  apply beq_nat_true in H.
+  apply Nat.eqb_eq in H.
   rewrite (split_eq_prop v default _ _ _ _ EQ).
   destruct (zeq v key).
   + congruence.

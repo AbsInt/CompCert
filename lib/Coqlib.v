@@ -406,6 +406,12 @@ Qed.
 
 (** Properties of Euclidean division and modulus. *)
 
+Lemma Z_div_mod_eq: forall a b,
+  b > 0 -> a = (b * (a / b) + a mod b).
+Proof.
+  intros. apply Z.div_mod. lia.
+Qed.
+
 Lemma Zmod_unique:
   forall x y a b,
   x = a * y + b -> 0 <= b < y -> x mod y = b.

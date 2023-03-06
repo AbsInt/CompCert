@@ -204,7 +204,6 @@ End PrimIter.
 
 Require Import Classical.
 Require Import ClassicalDescription.
-Require Import Max.
 
 Module GenIter.
 
@@ -280,7 +279,7 @@ Lemma converges_to_unique:
 Proof.
   intros a b [n C] b' [n' C'].
   rewrite <- (C (max n n')). rewrite <- (C' (max n n')). auto.
-  apply le_max_r. apply le_max_l.
+  apply Nat.le_max_r. apply Nat.le_max_l.
 Qed.
 
 Lemma converges_to_exists_uniquely:

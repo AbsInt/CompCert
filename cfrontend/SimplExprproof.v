@@ -1974,7 +1974,7 @@ Ltac NOTIN :=
   exploit tr_simple_rvalue; eauto. simpl; intro SL1.
   subst sl0; simpl Kseqlist.
   econstructor; split.
-  right; split. apply star_refl. simpl. apply plus_lt_compat_r.
+  right; split. apply star_refl. simpl. apply Nat.add_lt_mono_r.
   apply (leftcontext_size _ _ _ H). simpl. lia.
   econstructor; eauto. apply S.
   eapply tr_expr_monotone; eauto.
@@ -1996,7 +1996,7 @@ Ltac NOTIN :=
   auto.
 + (* for effects *)
   econstructor; split.
-  right; split. apply star_refl. simpl. apply plus_lt_compat_r.
+  right; split. apply star_refl. simpl. apply Nat.add_lt_mono_r.
   apply (leftcontext_size _ _ _ H). simpl. lia.
   econstructor; eauto.
   exploit tr_simple_rvalue; eauto. simpl. intros A. subst sl1.
