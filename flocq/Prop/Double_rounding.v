@@ -987,7 +987,7 @@ assert (UB : y * bpow (- fexp (mag x)) < / IZR (beta ^ k)).
       * lia.
       * simpl; unfold Raux.bpow, Z.pow_pos.
         now apply Rle_refl.
-      * casetype False; apply (Z.lt_irrefl 0).
+      * exfalso; apply (Z.lt_irrefl 0).
         apply (Z.lt_trans _ _ _ Hk).
         apply Zlt_neg_0. }
 rewrite (Zfloor_imp mx).
@@ -2859,7 +2859,7 @@ destruct (Rle_or_lt x 0) as [Npx|Px].
   + now apply sqrt_lt_R0.
   + lia.
   + lia.
-  + intros Hmid; casetype False; apply (Rle_not_lt _ _ Hmid).
+  + intros Hmid; exfalso; apply (Rle_not_lt _ _ Hmid).
     apply (round_round_sqrt_aux fexp1 fexp2 Vfexp1 Vfexp2 Hexp x Px Hf2 Fx).
 Qed.
 
@@ -2978,7 +2978,7 @@ unfold round_round_sqrt_hyp; split; [|split]; intros ex.
   + destruct (Z.ltb_spec (ex - prec') emin');
     destruct (Z.ltb_spec (ex - prec) emin);
     lia.
-  + casetype False.
+  + exfalso.
     rewrite (Zlt_bool_true _ _ H') in H.
     lia.
 Qed.
@@ -3240,7 +3240,7 @@ destruct (Rle_or_lt x 0) as [Npx|Px].
       unfold sqrt.
       destruct Rcase_abs.
       + reflexivity.
-      + casetype False; lra. }
+      + exfalso; lra. }
   rewrite Hs.
   rewrite round_0.
   + reflexivity.
@@ -3288,7 +3288,7 @@ destruct (Rle_or_lt x 0) as [Npx|Px].
   + now apply sqrt_lt_R0.
   + lia.
   + lia.
-  + intros Hmid; casetype False; apply (Rle_not_lt _ _ Hmid).
+  + intros Hmid; exfalso; apply (Rle_not_lt _ _ Hmid).
     apply (round_round_sqrt_radix_ge_4_aux Hbeta fexp1 fexp2 Vfexp1 Vfexp2
                                            Hexp x Px Hf2 Fx).
 Qed.
@@ -3412,7 +3412,7 @@ unfold round_round_sqrt_radix_ge_4_hyp; split; [|split]; intros ex.
   + destruct (Z.ltb_spec (ex - prec') emin');
     destruct (Z.ltb_spec (ex - prec) emin);
     lia.
-  + casetype False.
+  + exfalso.
     rewrite (Zlt_bool_true _ _ H') in H.
     lia.
 Qed.
@@ -3605,7 +3605,7 @@ destruct (Zle_or_lt (fexp2 (mag x)) (mag x)).
       rewrite <- (Zmult_1_r beta) at 1.
       apply Zmult_lt_compat_l; lia.
 - (* mag x < fexp2 (mag x) *)
-  casetype False; apply Nzx''.
+  exfalso; apply Nzx''.
   now apply (round_N_small_pos beta _ _ _ (mag x)).
 Qed.
 
@@ -4286,16 +4286,16 @@ apply round_round_all_mid_cases.
 - exact Pxy.
 - apply Hexp.
 - intros Hf1 Hlxy.
-  casetype False.
+  exfalso.
   now apply (round_round_div_aux0 fexp1 fexp2 _ _ choice1 choice2 Hexp x y).
 - intros Hf1 Hlxy.
-  casetype False.
+  exfalso.
   now apply (round_round_div_aux1 fexp1 fexp2 _ _ choice1 choice2 Hexp x y).
 - intro H.
   apply round_round_eq_mid_beta_even; try assumption.
   apply Hexp.
 - intros Hf1 Hlxy.
-  casetype False.
+  exfalso.
   now apply (round_round_div_aux2 fexp1 fexp2 _ _ choice1 choice2 Hexp x y).
 Qed.
 
@@ -4331,7 +4331,7 @@ destruct (Rtotal_order x 0) as [Nx|[Zx|Px]].
     apply generic_format_opp in Fy.
     now apply round_round_div_aux.
   + (* y = 0 *)
-    now casetype False; apply Nzy.
+    now exfalso; apply Nzy.
   + (* y > 0 *)
     rewrite <- (Ropp_involutive x).
     rewrite Ropp_div.
@@ -4358,7 +4358,7 @@ destruct (Rtotal_order x 0) as [Nx|[Zx|Px]].
     apply generic_format_opp in Fy.
     now apply round_round_div_aux.
   + (* y = 0 *)
-    now casetype False; apply Nzy.
+    now exfalso; apply Nzy.
   + (* y > 0 *)
     now apply round_round_div_aux.
 Qed.

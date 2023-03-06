@@ -214,7 +214,7 @@ destruct (Req_dec x 0) as [Zx|Nzx].
   unfold sqrt.
   destruct Rcase_abs.
   + reflexivity.
-  + casetype False.
+  + exfalso.
     now apply Nzx, Rle_antisym; [|apply Rge_le].
 Qed.
 
@@ -2355,7 +2355,7 @@ assert (H: forall i, (i < N)%nat -> ~ P i).
   apply archimed.
 destruct (HP N) as [PN|PN].
   now split.
-elimtype False.
+exfalso.
 refine (Rle_not_lt _ _ (lub (/ (INR (S N) + 1))%R _) _).
   intros x [y [[Py ->]|[_ ->]]].
   destruct (eq_nat_dec y N) as [HyN|HyN].
