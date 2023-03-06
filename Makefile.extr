@@ -64,7 +64,9 @@ else
 WARN_ERRORS=
 endif
 
-COMPFLAGS+=-g -strict-sequence -safe-string $(INCLUDES) -I "$(MENHIR_DIR)" $(WARNINGS) $(WARN_ERRORS)
+COMPFLAGS+=-g -strict-sequence -safe-string \
+  $(INCLUDES) -I "$(MENHIR_DIR)" -I +str -I +unix \
+  $(WARNINGS) $(WARN_ERRORS)
 
 # Using .opt compilers if available
 
