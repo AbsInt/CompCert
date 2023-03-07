@@ -193,8 +193,11 @@ endif
 
 proof: $(FILES:.v=.vo)
 
-# Turn off some warnings for compiling Flocq
-flocq/%.vo: COQCOPTS+=-w -compatibility-notation
+# Turn off some warnings for Flocq and Menhirlib
+# These warnings can only be addressed upstream
+
+flocq/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition
+MenhirLib/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition
 
 extraction: extraction/STAMP
 
