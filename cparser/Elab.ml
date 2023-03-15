@@ -2822,6 +2822,9 @@ let elab_fundef genv spec name defs body loc =
     | _, _ ->
         fatal_error loc "wrong type for function definition"
   in
+  (* Add the noreturn to the function type since for calls we only check for noreturn
+      attributes in the type of the function call. *)
+  let ty = if noret then add_attributes_type [Attr("noreturn",[])] ty else ty in
   (* Extract infos from the type of the function. *)
   let (ty_ret, params, vararg, attr) =
     match ty with
