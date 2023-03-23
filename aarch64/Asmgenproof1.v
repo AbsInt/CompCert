@@ -1521,24 +1521,38 @@ Local Transparent Val.add.
   destruct (preg_of res) eqn:RES; monadInv TR.
   + (* integer *)
     generalize (ireg_of_eq _ _ EQ) (ireg_of_eq _ _ EQ1); intros E1 E2; rewrite E1, E2.
-    exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C).
-    econstructor; split.
-    eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
-    split. Simpl. destruct (eval_condition cond (map rs (map preg_of args)) m) as [b|]; simpl in *.
-    rewrite (B b) by auto. rewrite !C. apply Val.lessdef_normalize.
-    rewrite <- E2; auto with asmgen. rewrite <- E1; auto with asmgen.
-    auto.
-    intros; Simpl.
+    destruct (ireg_eq x x0); inv EQ2.
+    * econstructor; split.
+      econstructor; simpl; eauto.
+      split. Simpl. unfold Val.select.
+      destruct (eval_condition cond (map rs (map preg_of args)) m); auto.
+      destruct b; auto using Val.lessdef_normalize.
+      intros; Simpl.
+    * exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C).
+      econstructor; split.
+      eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
+      split. Simpl. destruct (eval_condition cond (map rs (map preg_of args)) m) as [b|]; simpl in *.
+      rewrite (B b) by auto. rewrite !C. apply Val.lessdef_normalize.
+      rewrite <- E2; auto with asmgen. rewrite <- E1; auto with asmgen.
+      auto.
+      intros; Simpl.
   + (* FP *)
     generalize (freg_of_eq _ _ EQ) (freg_of_eq _ _ EQ1); intros E1 E2; rewrite E1, E2.
-    exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C).
-    econstructor; split.
-    eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
-    split. Simpl. destruct (eval_condition cond (map rs (map preg_of args)) m) as [b|]; simpl in *.
-    rewrite (B b) by auto. rewrite !C. apply Val.lessdef_normalize.
-    rewrite <- E2; auto with asmgen. rewrite <- E1; auto with asmgen.
-    auto.
-    intros; Simpl.
+    destruct (freg_eq x x0); inv EQ2.
+    * econstructor; split.
+      econstructor; simpl; eauto.
+      split. Simpl. unfold Val.select.
+      destruct (eval_condition cond (map rs (map preg_of args)) m); auto.
+      destruct b; auto using Val.lessdef_normalize.
+      intros; Simpl.
+    * exploit (transl_cond_correct cond args); eauto. intros (rs' & A & B & C).
+      econstructor; split.
+      eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
+      split. Simpl. destruct (eval_condition cond (map rs (map preg_of args)) m) as [b|]; simpl in *.
+      rewrite (B b) by auto. rewrite !C. apply Val.lessdef_normalize.
+      rewrite <- E2; auto with asmgen. rewrite <- E1; auto with asmgen.
+      auto.
+      intros; Simpl.
 Qed.
 
 (** Translation of addressing modes, loads, stores *)

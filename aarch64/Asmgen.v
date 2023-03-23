@@ -897,10 +897,16 @@ Definition transl_op
       match preg_of res with
       | IR r => 
           do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-          transl_cond cmp args (Pcsel r r1 r2 (cond_for_cond cmp) :: k)
+          if ireg_eq r1 r2 then
+            OK (Pmov r r1 :: k)
+          else
+            transl_cond cmp args (Pcsel r r1 r2 (cond_for_cond cmp) :: k)
       | FR r =>
           do r1 <- freg_of a1; do r2 <- freg_of a2;
-          transl_cond cmp args (Pfsel r r1 r2 (cond_for_cond cmp) :: k)
+          if freg_eq r1 r2 then
+            OK (Pfmov r r1 :: k)
+          else
+            transl_cond cmp args (Pfsel r r1 r2 (cond_for_cond cmp) :: k)
       | _ =>
           Error(msg "Asmgen.Osel")
       end
