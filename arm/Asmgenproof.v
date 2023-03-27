@@ -270,7 +270,11 @@ Opaque Int.eq.
   destruct Archi.thumb2_support; TailNoLabel.
   eapply tail_nolabel_trans; TailNoLabel.
   eapply tail_nolabel_trans. eapply transl_cond_label; eauto. TailNoLabel.
-  destruct (preg_of r); monadInv H; (eapply tail_nolabel_trans; [eapply transl_cond_label; eauto|TailNoLabel]).
+  destruct (preg_of r); monadInv H.
+  destruct (ireg_eq x x0); [TailNoLabel|].
+  eapply tail_nolabel_trans; [eapply transl_cond_label; eauto|TailNoLabel].
+  destruct (freg_eq x x0); [TailNoLabel|].
+  eapply tail_nolabel_trans; [eapply transl_cond_label; eauto|TailNoLabel].
 Qed.
 
 Remark transl_memory_access_label:

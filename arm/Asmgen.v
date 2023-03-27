@@ -567,12 +567,18 @@ Definition transl_op
       match preg_of res with
       | IR r => 
           do r1 <- ireg_of a1; do r2 <- ireg_of a2;
-          transl_cond cmp args
-            (Pmovite (cond_for_cond cmp) r (SOreg r1) (SOreg r2) :: k)
+         if ireg_eq r1 r2 then
+           OK (Pmov r (SOreg r1) :: k)
+         else
+           transl_cond cmp args
+             (Pmovite (cond_for_cond cmp) r (SOreg r1) (SOreg r2) :: k)
       | FR r =>
           do r1 <- freg_of a1; do r2 <- freg_of a2;
-          transl_cond cmp args
-            (Pfmovite (cond_for_cond cmp) r r1 r2 :: k)
+         if freg_eq r1 r2 then
+           OK (Pfcpyd r r1 :: k)
+         else
+           transl_cond cmp args
+             (Pfmovite (cond_for_cond cmp) r r1 r2 :: k)
       | _ =>
           Error(msg "Asmgen.Osel")
       end

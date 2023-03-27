@@ -1381,21 +1381,33 @@ Proof.
   assert (D2: data_preg (preg_of m1) = true) by auto with asmgen.
   destruct (preg_of res) eqn:RES; monadInv H.
 + inv EQ2. rewrite (ireg_of_eq _ _ EQ), (ireg_of_eq _ _ EQ1) in *.
-  exploit transl_cond_correct; eauto. instantiate (1 := rs). instantiate (1 := m). intros [rs1 [A [B C]]].
-  econstructor; split.
-  eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
-  split; intros; Simpl.
-  rewrite ! C by auto.
-  destruct (eval_condition c0 rs ## (preg_of ## args) m) as [b|]; simpl; auto.
-  destruct B as [B1 B2]; rewrite B1. destruct b; apply Val.lessdef_normalize.
+  destruct (ireg_eq x x0); inv H0.
+  * econstructor; split.
+    apply exec_straight_one; simpl; eauto.
+    split; intros; Simpl.
+    destruct (eval_condition c0 rs ## (preg_of ## args) m); simpl; eauto.
+    destruct b; eauto using Val.lessdef_normalize.
+  * exploit transl_cond_correct; eauto. instantiate (1 := rs). instantiate (1 := m). intros [rs1 [A [B C]]].
+    econstructor; split.
+    eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
+    split; intros; Simpl.
+    rewrite ! C by auto.
+    destruct (eval_condition c0 rs ## (preg_of ## args) m) as [b|]; simpl; auto.
+    destruct B as [B1 B2]; rewrite B1. destruct b; apply Val.lessdef_normalize.
 + inv EQ2. rewrite (freg_of_eq _ _ EQ), (freg_of_eq _ _ EQ1) in *.
-  exploit transl_cond_correct; eauto. instantiate (1 := rs). instantiate (1 := m). intros [rs1 [A [B C]]].
-  econstructor; split.
-  eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
-  split; intros; Simpl.
-  rewrite ! C by auto.
-  destruct (eval_condition c0 rs ## (preg_of ## args) m) as [b|]; simpl; auto.
-  destruct B as [B1 B2]; rewrite B1. destruct b; apply Val.lessdef_normalize.
+  destruct (freg_eq x x0); inv H0.
+  * econstructor; split.
+    apply exec_straight_one; simpl; eauto.
+    split; intros; Simpl.
+    destruct (eval_condition c0 rs ## (preg_of ## args) m); simpl; eauto.
+    destruct b; eauto using Val.lessdef_normalize.
+  * exploit transl_cond_correct; eauto. instantiate (1 := rs). instantiate (1 := m). intros [rs1 [A [B C]]].
+    econstructor; split.
+    eapply exec_straight_trans. eexact A. apply exec_straight_one. simpl; eauto. auto.
+    split; intros; Simpl.
+    rewrite ! C by auto.
+    destruct (eval_condition c0 rs ## (preg_of ## args) m) as [b|]; simpl; auto.
+    destruct B as [B1 B2]; rewrite B1. destruct b; apply Val.lessdef_normalize.
 Qed.
 
 (** Translation of loads and stores. *)
