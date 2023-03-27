@@ -128,6 +128,11 @@ Function combine_op (op: operation) (args: list valnum) : option(operation * lis
       | Some(cond', args') => Some(Ocmp cond', args')
       | None => None
       end
+  | Osel cond ty, x :: y :: args =>
+      match combine_cond cond args with
+      | Some (cond', args') => Some (Osel cond' ty, x :: y :: args')
+      | None => None
+      end
   | _, _ => None
   end.
 

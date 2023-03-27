@@ -161,6 +161,8 @@ Transparent Val.sub.
   UseGetSound. simpl. rewrite <- H0. rewrite Val.xor_assoc. auto.
 (* cmp *)
   simpl. decEq; decEq. eapply combine_cond_sound; eauto.
+(* sel *)
+  simpl. erewrite combine_cond_sound; eauto.
 Qed.
 
 End COMBINE.
