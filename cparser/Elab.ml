@@ -441,7 +441,7 @@ let elab_char_constant loc enc chars =
   if v' <> v then
     warning loc Constant_conversion
       "overflow in character constant, changes value from %Ld to %Ld" v v';
-  v'
+  (v', ik)
 
 let elab_string_literal loc enc chars =
   let ik = ikind_of_encoding enc in
@@ -481,7 +481,7 @@ let elab_constant loc = function
         | EncU16 -> IUShort
         | EncU32 -> IUInt
         | EncUTF8 -> assert false in
-      CInt(elab_char_constant loc enc s, ikind, "")
+      CInt(fst (elab_char_constant loc enc s), ikind, "")
   | CONST_STRING(wide, s) ->
       warn_C11_literals loc wide "string literals";
       elab_string_literal loc wide s
