@@ -119,6 +119,43 @@ Proof.
   simpl; eapply combine_compimm_eq_1_sound; eauto.
 Qed.
 
+
+Lemma combine_comparison_ccomp_sound:
+  forall c x y res res',
+  combine_comparison c x y = Some res' ->
+  eval_condition (Ccomp c) (valu x :: valu y :: nil) m = Some res ->
+  res = res'.
+Proof.
+  unfold combine_comparison. intros.
+  destruct c, (eq_valnum x y); inv H; destruct (valu y); inv H0;
+  try rewrite Int.eq_true; auto;
+  unfold Int.lt; rewrite zlt_false; auto; lia.
+Qed.
+
+Lemma combine_comparison_ccompl_sound:
+  forall c x y res res',
+  combine_comparison c x y = Some res' ->
+  eval_condition (Ccompl c) (valu x :: valu y :: nil) m = Some res ->
+  res = res'.
+Proof.
+  unfold combine_comparison. intros.
+  destruct c, (eq_valnum x y); inv H; destruct (valu y); inv H0;
+  try rewrite Int64.eq_true; auto;
+  unfold Int64.lt; rewrite zlt_false; auto; lia.
+Qed.
+
+Theorem combine_cond'_sound:
+  forall cond args res res',
+  combine_cond' cond args = Some res' ->
+  eval_condition cond (map valu args) m = Some res ->
+  res = res'.
+Proof.
+  intros.  unfold combine_cond' in *.
+  destruct cond; inv H; destruct args; inv H2; destruct args; inv H1; destruct args; inv H2.
+  apply (combine_comparison_ccomp_sound c v v0 res res'); auto.
+  apply (combine_comparison_ccompl_sound c v v0 res res'); auto.
+Qed.
+
 Theorem combine_addr_32_sound:
   forall addr args addr' args',
   combine_addr_32 get addr args = Some(addr', args') ->

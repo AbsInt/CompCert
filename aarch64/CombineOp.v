@@ -67,6 +67,25 @@ Function combine_cond (cond: condition) (args: list valnum) : option(condition *
   | _, _ => None
   end.
 
+Definition combine_comparison (c: comparison) (x y: valnum) : option bool :=
+  match c with
+  | Ceq => if eq_valnum x y then Some true else None
+  | Cle => if eq_valnum x y then Some true else None
+  | Cge => if eq_valnum x y then Some true else None
+  | Cne => if eq_valnum x y then Some false else None
+  | Clt => if eq_valnum x y then Some false else None
+  | Cgt => if eq_valnum x y then Some false else None
+  end.
+
+Definition combine_cond' (cond: condition) (args: list valnum) : option bool :=
+  match cond, args with
+  | Ccomp c, x :: y :: nil => combine_comparison c x y
+  | Ccompu c, x :: y :: nil => combine_comparison c x y
+  | Ccompl c, x :: y :: nil => combine_comparison c x y
+  | Ccomplu c, x :: y :: nil => combine_comparison c x y
+  | _, _ => None
+  end.
+
 Function combine_addr (addr: addressing) (args: list valnum) : option(addressing * list valnum) :=
   match addr, args with
   | Aindexed n, x::nil =>

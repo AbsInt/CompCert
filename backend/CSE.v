@@ -549,8 +549,12 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
       Istore chunk addr' args' src s
   | Icond cond args s1 s2 =>
       let (n1, vl) := valnum_regs n args in
-      let (cond', args') := reduce _ combine_cond n1 cond args vl in
-      Icond cond' args' s1 s2
+      match combine_cond' cond vl with
+      | Some b => Inop (if b then s1 else s2)
+      | None =>
+          let (cond', args') := reduce _ combine_cond n1 cond args vl in
+          Icond cond' args' s1 s2
+      end
   | _ =>
       instr
   end.

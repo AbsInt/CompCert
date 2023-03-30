@@ -1160,16 +1160,24 @@ Proof.
   destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.
   elim SAT; intros valu1 NH1.
   exploit valnum_regs_holds; eauto. intros (valu2 & NH2 & EQ & AG & P & Q).
-  destruct (reduce condition combine_cond n1 cond args vl) as [cond' args'] eqn:?.
-  assert (RES: eval_condition cond' rs##args' m = Some b).
-  { eapply reduce_sound with (sem := fun cond vl => eval_condition cond vl m); eauto.
-    intros; eapply combine_cond_sound; eauto. }
-  econstructor; split.
-  eapply exec_Icond; eauto.
-  eapply eval_condition_lessdef; eauto. apply regs_lessdef_regs; auto.
-  econstructor; eauto.
-  destruct b; eapply analysis_correct_1; eauto; simpl; auto;
-  unfold transfer; rewrite H; auto.
+  destruct (combine_cond' cond vl) eqn:?; auto.
+  + econstructor; split.
+    eapply exec_Inop; eauto.
+    assert (eval_condition cond (map valu2 vl) m = Some b) by (rewrite <- EQ; auto).
+    rewrite (combine_cond'_sound m valu2 cond vl b b0); eauto.
+    econstructor; eauto.
+    destruct b0; eapply analysis_correct_1; eauto; simpl; auto;
+    unfold transfer; rewrite H; auto.
+  + destruct (reduce condition combine_cond n1 cond args vl) as [cond' args'] eqn:?.
+    assert (RES: eval_condition cond' rs##args' m = Some b).
+    { eapply reduce_sound with (sem := fun cond vl => eval_condition cond vl m); eauto.
+      intros; eapply combine_cond_sound; eauto. }
+    econstructor; split.
+    eapply exec_Icond; eauto.
+    eapply eval_condition_lessdef; eauto. apply regs_lessdef_regs; auto.
+    econstructor; eauto.
+    destruct b; eapply analysis_correct_1; eauto; simpl; auto;
+    unfold transfer; rewrite H; auto.
 
 - (* Ijumptable *)
   generalize (RLD arg); rewrite H0; intro LD; inv LD.
