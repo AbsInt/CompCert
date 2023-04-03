@@ -141,18 +141,25 @@ Function combine_op (op: operation) (args: list valnum) : option(operation * lis
       | _ => None
       end
   | Ocmp cond, _ =>
-      match combine_cond cond args with
-      | Some(cond', args') => Some(Ocmp cond', args')
-      | None => None
+      match combine_cond' cond args with
+      | Some b => Some ((if b then Ointconst Int.one else Ointconst Int.zero), nil)
+      | None =>
+          match combine_cond cond args with
+          | Some(cond', args') => Some(Ocmp cond', args')
+          | None => None
+          end
       end
   | Osel cond ty, x :: y :: args =>
-      match combine_cond cond args with
-      | Some (cond', args') => Some (Osel cond' ty, x :: y :: args')
-      | None => None
+      match combine_cond' cond args with
+      | Some b => Some (Omove, (if b then x else y) :: nil)
+      | None =>
+          if eq_valnum x y then Some (Omove, x :: nil) else
+          match combine_cond cond args with
+          | Some (cond', args') => Some (Osel cond' ty, x :: y :: args')
+          | None => None
+          end
       end
   | _, _ => None
   end.
 
 End COMBINE.
-
-

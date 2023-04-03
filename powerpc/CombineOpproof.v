@@ -192,51 +192,77 @@ Proof.
 Qed.
 
 Theorem combine_op_sound:
-  forall op args op' args',
+  forall op args op' args' r,
   combine_op get op args = Some(op', args') ->
-  eval_operation ge sp op' (map valu args') m = eval_operation ge sp op (map valu args) m.
+  eval_operation ge sp op (map valu args) m = Some r ->
+  exists r', eval_operation ge sp op' (map valu args') m = Some r' /\ Val.lessdef r r'.
 Proof.
   intros. functional inversion H; subst.
-(* addimm - addimm *)
-  UseGetSound; simpl. rewrite <- H0. rewrite Val.add_assoc. auto.
-(* addimm - subimm *)
-Opaque Val.sub.
-  UseGetSound; simpl. rewrite <- H0.
+  - (* addimm - addimm *)
+    UseGetSound; simpl. econstructor. rewrite <- H0. split.
+  simpl. rewrite <- H1.  rewrite Val.add_assoc. auto. auto.
+  -(* addimm - subimm *)
+    Opaque Val.sub.
+    UseGetSound; simpl. econstructor; split. rewrite <- H0. simpl.
   change (Vint (Int.add m0 n)) with (Val.add (Vint m0) (Vint n)).
-  rewrite Val.sub_add_l. auto.
-(* subimm - addimm *)
-  UseGetSound; simpl. rewrite <- H0.
-Transparent Val.sub.
-  destruct v; simpl; auto. repeat rewrite Int.sub_add_opp. rewrite Int.add_assoc.
-  rewrite Int.neg_add_distr. decEq. decEq. decEq. apply Int.add_commut.
-(* andimm - andimm *)
-  UseGetSound; simpl.
-  generalize (Int.eq_spec p m0); rewrite H7; intros.
-  rewrite <- H0. rewrite Val.and_assoc. simpl. fold p. rewrite H1. auto.
-  UseGetSound; simpl.
-  rewrite <- H0. rewrite Val.and_assoc. auto.
-(* andimm - rolm *)
-  UseGetSound; simpl.
-  generalize (Int.eq_spec p m0); rewrite H7; intros.
-  rewrite <- H0. destruct v; simpl; auto. unfold Int.rolm.
-  rewrite Int.and_assoc. fold p. rewrite H1. auto.
-  UseGetSound; simpl.
-  rewrite <- H0. destruct v; simpl; auto. unfold Int.rolm.
-  rewrite Int.and_assoc. auto.
-(* orimm *)
-  UseGetSound; simpl. rewrite <- H0. rewrite Val.or_assoc. auto.
-(* xorimm *)
-  UseGetSound; simpl. rewrite <- H0. rewrite Val.xor_assoc. auto.
-(* rolm - andimm *)
-  UseGetSound; simpl. rewrite <- H0.
+  rewrite Val.sub_add_l. rewrite H1. auto. auto.
+  - (* subimm - addimm *)
+    UseGetSound; simpl. econstructor; split. rewrite <- H0.
+  Transparent Val.sub.
+  simpl. rewrite <- H1.
+  destruct v; simpl; auto. repeat rewrite Int.sub_add_opp.  rewrite Int.add_assoc.
+  rewrite Int.neg_add_distr. decEq. decEq. decEq. apply Int.add_commut. auto.
+  - (* andimm - andimm *)
+    UseGetSound; simpl. exists r; split. rewrite <- H1.
+  generalize (Int.eq_spec p m0). intros.
+  rewrite <- H0. simpl. rewrite <- H1. rewrite Val.and_assoc. simpl. fold p. rewrite H1. auto.
+  UseGetSound; simpl. rewrite <- H1. rewrite H8 in H2. rewrite H2. reflexivity.
+  auto.
+  - (* andimm - rolm *)
+    UseGetSound; simpl. exists r; split; auto. rewrite <- H0. simpl. rewrite <- H1.
+  generalize (Int.eq_spec p m0); intros.
+  destruct v; simpl; auto. rewrite Int.and_assoc. fold p. reflexivity.
+  - (* andimm - rolm *)
+    UseGetSound; simpl. exists r; split; auto. rewrite <- H0. simpl. rewrite <- H1.
+  destruct v; simpl; auto. unfold Int.rolm.
+  rewrite Int.and_assoc. generalize (Int.eq_spec p m0). intros.
+  rewrite H8 in H2. rewrite <- H2. unfold p. rewrite Int.and_assoc.
+  rewrite Int.and_idem. reflexivity.
+  - (* andimm - rolm *)
+    UseGetSound; simpl. exists r; split; auto. rewrite <- H0. simpl. rewrite <- H1.
+  destruct v; simpl; auto. unfold Int.rolm.
+  rewrite Int.and_assoc. reflexivity.
+  - (* orimm *)
+    UseGetSound; simpl. exists r; split; auto. rewrite <- H0. simpl. rewrite <- H1. rewrite Val.or_assoc. auto.
+  - (* xorimm *)
+    UseGetSound; simpl. exists r; split; auto. rewrite <- H0. simpl. rewrite <- H1. rewrite Val.xor_assoc. auto.
+  - (* rolm - andimm *)
+    UseGetSound; simpl. exists r; split; auto. rewrite <- H0. simpl. rewrite <- H1.
   rewrite <- Val.rolm_zero. rewrite Val.rolm_rolm.
   rewrite (Int.add_commut Int.zero). rewrite Int.add_zero. auto.
-(* rolm - rolm *)
-  UseGetSound; simpl. rewrite <- H0. rewrite Val.rolm_rolm. auto.
-(* cmp *)
-  simpl. decEq; decEq. eapply combine_cond_sound; eauto.
-(* sel *)
-  simpl. erewrite combine_cond_sound; eauto.
+  - (* rolm - rolm *)
+    UseGetSound; simpl. exists r; split; auto. rewrite <- H0. simpl. rewrite <- H1. rewrite Val.rolm_rolm. auto.
+  (* cmp true *)
+  - exists Vtrue; split; auto. inv H0. destruct (eval_condition cond (map valu args) m) eqn:?; auto.
+    rewrite (combine_cond'_sound cond args b true); eauto.
+  (* cmp false *)
+  - exists Vfalse; split; auto. inv H0. destruct (eval_condition cond (map valu args) m) eqn:?; auto.
+    rewrite (combine_cond'_sound cond args b false); eauto.
+  (* cmp reduce *)
+  - exists r; split; auto. decEq; decEq. simpl. erewrite combine_cond_sound; eauto.
+  (* sel cond true *)
+  - exists (valu x). simpl in H0.
+    destruct (eval_condition cond (map valu args1) m) eqn:?; simpl; split; auto; inv H0; auto.
+    rewrite (combine_cond'_sound cond args1 b true); eauto.  destruct (valu x), ty; auto.
+  (* sel cond false *)
+  - exists (valu y). simpl in H0.
+    destruct (eval_condition cond (map valu args1) m) eqn:?; simpl; split; auto; inv H0; auto.
+    rewrite (combine_cond'_sound cond args1 b false); eauto.  destruct (valu y), ty; auto.
+  (* sel cond same *)
+  - exists (valu y); split; auto. inv H0. destruct (eval_condition cond (map valu args1) m); auto.
+    simpl. destruct b, (valu y), ty; auto.
+  - exists r; split; auto. rewrite <- H0.
+    simpl. erewrite combine_cond_sound; eauto.
 Qed.
 
 End COMBINE.

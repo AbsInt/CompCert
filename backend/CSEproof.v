@@ -776,6 +776,73 @@ Qed.
 
 End REDUCE.
 
+
+Section REDUCELD.
+
+Variable A: Type.
+Variable f: (valnum -> option rhs) -> A -> list valnum -> option (A * list valnum).
+Variable ge: genv.
+Variable sp: val.
+Variable rs: regset.
+Variable m: mem.
+Variable sem: A -> list val -> option val.
+Hypothesis f_sound:
+  forall eqs valu op args op' args' r,
+  (forall v rhs, eqs v = Some rhs -> rhs_eval_to valu ge sp m rhs (valu v)) ->
+  f eqs op args = Some(op', args') ->
+  sem op (map valu args) = Some r ->
+  exists r',
+  sem op' (map valu args') = Some r' /\ Val.lessdef r r'.
+Variable n: numbering.
+Variable valu: valnum -> val.
+Hypothesis n_holds: numbering_holds valu ge sp rs m n.
+
+Lemma reduce_rec_sound':
+  forall niter op args op' rl' r,
+  reduce_rec A f n niter op args = Some(op', rl') ->
+  sem op (map valu args) = Some r ->
+  exists r',
+  sem op' (rs##rl') = Some r' /\ Val.lessdef r r'.
+Proof.
+  induction niter; simpl; intros.
+  discriminate.
+  destruct (f (fun v : valnum => find_valnum_num v (num_eqs n)) op args)
+           as [[op1 args1] | ] eqn:?; try discriminate.
+  assert (exists r': val, sem op1 (map valu args1) = Some r' /\ Val.lessdef r r').
+  { exploit f_sound.
+    simpl; intros.
+    exploit num_holds_eq; eauto.
+    eapply find_valnum_num_charact; eauto with cse.
+    eapply H1.
+    intros EH; inv EH; auto. eexact H3. eexact Heqo. eexact H0.
+    intros. eauto.
+  }
+  destruct (reduce_rec A f n niter op1 args1) as [[op2 rl2] | ] eqn:?.
+  destruct H1. destruct H1.
+  exploit IHniter. eexact Heqo0. eexact H1. inv H.
+  intros. destruct H. destruct H. exists x0. split; eauto.
+  eapply Val.lessdef_trans. eexact H2. eexact H3.
+  destruct (regs_valnums n args1) as [rl|] eqn:?; try discriminate.
+  inv H. erewrite regs_valnums_sound; eauto.
+Qed.
+
+
+Lemma reduce_sound':
+  forall op rl vl op' rl' r,
+  reduce A f n op rl vl = (op', rl') ->
+  map valu vl = rs##rl ->
+  sem op rs##rl = Some r ->
+  exists r', sem op' rs##rl' = Some r' /\ Val.lessdef r r'.
+Proof.
+  unfold reduce; intros.
+  destruct (reduce_rec A f n 4%nat op vl) as [[op1 rl1] | ] eqn:?.
+  eapply reduce_rec_sound'; eauto. inv H. eexact Heqo. congruence.
+  exists r. inv H. auto.
+Qed.
+
+End REDUCELD.
+
+
 (** The numberings associated to each instruction by the static analysis
   are inductively satisfiable, in the following sense: the numbering
   at the function entry point is satisfiable, and for any RTL execution
@@ -1016,20 +1083,24 @@ Proof.
   eapply Val.lessdef_trans; eauto.
 * (* possibly simplified *)
   destruct (reduce operation combine_op n1 op args vl) as [op' args'] eqn:?.
-  assert (RES: eval_operation ge sp op' rs##args' m = Some v).
-    eapply reduce_sound with (sem := fun op vl => eval_operation ge sp op vl m); eauto.
-    intros; eapply combine_op_sound; eauto.
-  exploit eval_operation_lessdef. eapply regs_lessdef_regs; eauto. eauto. eauto.
-  intros [v' [A B]].
+  assert (RES: exists v', eval_operation ge sp op' rs##args' m = Some v' /\ Val.lessdef v v').
+  { exploit (reduce_sound' operation combine_op ge sp rs m (fun op vl => eval_operation ge sp op vl m)); eauto.
+    intros. exploit combine_op_sound. intros; eauto. eexact H2. eexact H3. intros (v' & EV & LD).
+    exists v'; auto.
+  }
+  destruct RES as (v' & EV' & LD').
+  assert  (exists v'', eval_operation ge sp op' rs'##args' m' = Some v'' /\ Val.lessdef v' v'').
+  { eapply eval_operation_lessdef; eauto. eapply regs_lessdef_regs; eauto. }
+  destruct H1 as [v'' [EV'' LD'']].
   econstructor; split.
-  eapply exec_Iop with (v := v'); eauto.
-  rewrite <- A. apply eval_operation_preserved. exact symbols_preserved.
+  eapply exec_Iop. eexact C. erewrite eval_operation_preserved. eexact EV''.
+  exact symbols_preserved.
   econstructor; eauto.
   eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H.
   eapply add_op_holds; eauto.
   apply set_reg_lessdef; auto.
-
+  eapply (Val.lessdef_trans v v' v''); auto.
 - (* Iload *)
   destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.
   destruct SAT as [valu1 NH1].
