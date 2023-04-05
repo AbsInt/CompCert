@@ -432,7 +432,9 @@ module Target(System: SYSTEM):TARGET =
       | Pmovq_ri(rd, n) ->
           let n1 = camlint64_of_coqint n in
           let n2 = Int64.to_int32 n1 in
-          if n1 = Int64.of_int32 n2 then
+          if Int64.shift_right_logical n1 32 = Int64.zero then
+            fprintf oc "	movl	$%Ld, %a\n" n1 ireg32 rd
+          else if n1 = Int64.of_int32 n2 then
             fprintf oc "	movq	$%ld, %a\n" n2 ireg64 rd
           else
             fprintf oc "	movabsq	$%Ld, %a\n" n1 ireg64 rd
