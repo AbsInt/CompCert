@@ -1653,8 +1653,8 @@ Definition outcome_result_value (out: outcome) (t: type) (v: val) (m: mem) : Pro
   | _, _ => False
   end.
 
-(** [eval_expression ge e m1 a t m2 a'] describes the evaluation of the
-  complex expression e.  [v] is the resulting value, [m2] the final
+(** [eval_expression ge e m1 a t m2 v] describes the evaluation of the
+  complex expression [a].  [v] is the resulting value, [m2] the final
   memory state, and [t] the trace of input/output events performed
   during this evaluation.  *)
 
