@@ -178,6 +178,11 @@ static __inline__ BOOL symbol_Equal(SYMBOL A, SYMBOL B)
   return A==B;
 }
 
+static __inline__ BOOL symbol_PtrEqual(POINTER A, POINTER B)
+{
+  return symbol_Equal((SYMBOL) A, (SYMBOL) B);
+}
+
 static __inline__ BOOL symbol_IsSignature(SYMBOL S)
 {
   return S < 0;

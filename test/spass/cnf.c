@@ -2758,7 +2758,7 @@ static LIST cnf_FreeVariablesBut(TERM Term, LIST Symbols)
   follist = fol_FreeVariables(Term);
   for (Scan = follist; !list_Empty(Scan); Scan = list_Cdr(Scan))
     if (list_Member(Symbols, (POINTER)term_TopSymbol(list_Car(Scan)),
-		    (BOOL (*)(POINTER,POINTER))symbol_Equal))
+		    symbol_PtrEqual))
       list_Rplaca(Scan,NULL);
   follist = list_PointerDeleteElement(follist,NULL);
     
