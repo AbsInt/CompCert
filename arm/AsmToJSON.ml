@@ -278,7 +278,7 @@ let pp_instructions pp ic =
     | Prsc(r1, r2, so) -> instruction pp "Prsc" [Ireg r1; Ireg r2; Shift so]
     | Psbc(r1, r2, so) -> instruction pp "Psbc" [Ireg r1; Ireg r2; Shift so]
     | Psbfx(r1, r2, lsb, sz) -> instruction pp "Psbfx" [Ireg r1; Ireg r2; Long lsb; Long sz]
-    | Psdiv -> instruction pp "Psdiv" [Ireg IR0; Ireg IR0; Ireg IR1]
+    | Psdiv (r1, r2, r3) -> instruction pp "Psdiv" [Ireg r1; Ireg r2; Ireg r3]
     | Psmull(r1, r2, r3, r4) -> instruction pp "Psmull" [Ireg r1; Ireg r2; Ireg r3; Ireg r4]
     | Pstr(r1, r2, so) | Pstr_a(r1, r2, so) -> instruction pp "Pstr" [Ireg r1; Ireg r2; Shift so]
     | Pstr_p(r1, r2, so) -> instruction pp "Pstr_p" [Ireg r1; Ireg r2; Shift so]
@@ -288,7 +288,7 @@ let pp_instructions pp ic =
     | Pstrh_p(r1, r2, so) -> instruction pp "Pstrh_p" [Ireg r1; Ireg r2; Shift so]
     | Psub(r1, r2, so) -> instruction pp "Psub" [Ireg r1; Ireg r2; Shift so]
     | Psubs(r1, r2, so) -> instruction pp "Psubs" [Ireg r1; Ireg r2; Shift so]
-    | Pudiv -> instruction pp "Pudiv" [Ireg IR0; Ireg IR0; Ireg IR1]
+    | Pudiv (r1, r2, r3) -> instruction pp "Pudiv" [Ireg r1; Ireg r2; Ireg r3]
     | Pumull(r1, r2, r3, r4) -> instruction pp "Pumull" [Ireg r1; Ireg r2; Ireg r3; Ireg r4]
     (* Fixup instructions for calling conventions *)
     | Pfcpy_fs(r1, r2) -> instruction pp "Pfcpy_fs" [SFreg r1; SPreg r2]

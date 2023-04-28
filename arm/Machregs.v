@@ -123,7 +123,11 @@ Definition register_by_name (s: string) : option mreg :=
 
 Definition destroyed_by_op (op: operation): list mreg :=
   match op with
-  | Odiv | Odivu => R0 :: R1 :: R2 :: R3 :: R12 :: nil
+  | Odiv | Odivu =>
+             if Archi.hardware_idiv tt then
+              nil
+             else
+              R0 :: R1 :: R2 :: R3 :: R12 :: F0 :: F1 :: F2 :: F3 :: F4 :: F5 :: F6 :: F7 :: nil
   | Ointoffloat | Ointuoffloat | Ointofsingle | Ointuofsingle => F6 :: nil
   | _ => nil
   end.
@@ -169,7 +173,7 @@ Definition temp_for_parent_frame: mreg :=
 
 Definition mregs_for_operation (op: operation): list (option mreg) * option mreg :=
   match op with
-  | Odiv | Odivu => (Some R0 :: Some R1 :: nil, Some R0)
+  | Odiv | Odivu => if Archi.hardware_idiv tt then (nil, None) else (Some R0 :: Some R1 :: nil, Some R0)
   | _ => (nil, None)
   end.
 

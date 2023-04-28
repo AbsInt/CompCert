@@ -24,7 +24,6 @@ open Fileinfo
 module type PRINTER_OPTIONS =
 sig
   val vfpv3: bool
-  val hardware_idiv: bool
 end
 
 (* Basic printing functions *)
@@ -323,9 +322,9 @@ struct
       fprintf oc "	strb	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
     | Pstrh_p(r1, r2, sa) ->
       fprintf oc "	strh	%a, [%a], %a\n" ireg r1 ireg r2 shift_op sa
-    | Psdiv ->
-      if Opt.hardware_idiv then
-        fprintf oc "	sdiv	r0, r0, r1\n"
+    | Psdiv (r, r1, r2) ->
+      if Archi.hardware_idiv () then
+        fprintf oc "	sdiv	%a, %a, %a\n" ireg r ireg r1 ireg r2
       else
         fprintf oc "	bl	__aeabi_idiv\n"
     | Psbfx(r1, r2, lsb, sz) ->
@@ -339,9 +338,9 @@ struct
     | Psubs(r1, r2, so) ->
       fprintf oc "	subs	%a, %a, %a\n"
         ireg r1 ireg r2 shift_op so
-    | Pudiv ->
-      if Opt.hardware_idiv then
-        fprintf oc "	udiv	r0, r0, r1\n"
+    | Pudiv (r, r1, r2) ->
+      if Archi.hardware_idiv () then
+        fprintf oc "	udiv	%a, %a, %a\n" ireg r ireg r1 ireg r2
       else
          fprintf oc "	bl	__aeabi_uidiv\n"
     | Pumull(r1, r2, r3, r4) ->
@@ -606,11 +605,6 @@ let sel_target () =
   let module S : PRINTER_OPTIONS = struct
 
     let vfpv3 = Configuration.model >= "armv7"
-
-    let hardware_idiv  =
-      match  Configuration.model with
-      | "armv7r" | "armv7m" -> !Clflags.option_mthumb
-      | _ -> false
 
   end in
   (module Target(S):TARGET)

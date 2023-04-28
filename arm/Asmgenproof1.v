@@ -1197,17 +1197,17 @@ Lemma transl_op_correct_same:
 Proof.
   intros until v; intros TR EV NOCMP.
   unfold transl_op in TR; destruct op; ArgsInv; simpl in EV; inv EV; try (TranslOpSimpl; fail).
-  (* Omove *)
+- (* Omove *)
   destruct (preg_of res) eqn:RES; try discriminate;
   destruct (preg_of m0) eqn:ARG; inv TR.
   econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
   econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
-  (* Ointconst *)
+- (* Ointconst *)
   generalize (loadimm_correct x i k rs m). intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
-  (* Oaddrstack *)
+- (* Oaddrstack *)
   contradiction.
-  (* Ocast8signed *)
+- (* Ocast8signed *)
   destruct Archi.thumb2_support.
   econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
   destruct (rs x0); auto; simpl. rewrite Int.shru_zero. reflexivity.
@@ -1220,7 +1220,7 @@ Proof.
   change (Int.ltu (Int.repr 24) Int.iwordsize) with true; simpl.
   f_equal. symmetry. apply (Int.sign_ext_shr_shl 8). compute; intuition congruence.
   intros. unfold rs2, rs1; Simpl.
-  (* Ocast16signed *)
+- (* Ocast16signed *)
   destruct Archi.thumb2_support.
   econstructor; split. apply exec_straight_one; simpl; eauto. intuition Simpl.
   destruct (rs x0); auto; simpl. rewrite Int.shru_zero. reflexivity.
@@ -1233,44 +1233,48 @@ Proof.
   change (Int.ltu (Int.repr 16) Int.iwordsize) with true; simpl.
   f_equal. symmetry. apply (Int.sign_ext_shr_shl 16). compute; intuition congruence.
   intros. unfold rs2, rs1; Simpl.
-  (* Oaddimm *)
+- (* Oaddimm *)
   generalize (addimm_correct x x0 i k rs m).
   intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
-  (* Orsbimm *)
+- (* Orsbimm *)
   generalize (rsubimm_correct x x0 i k rs m).
   intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
-  (* divs *)
-Local Transparent destroyed_by_op.
-  econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity. auto.
-  split. Simpl. simpl; intros. intuition Simpl.
-  (* divu *)
-  econstructor. split. apply exec_straight_one. simpl. rewrite H0. reflexivity. auto.
-  split. Simpl. simpl; intros. intuition Simpl.
-  (* Oandimm *)
+- (* divs *)
+  Local Transparent destroyed_by_op.
+  unfold destroyed_by_op.
+  destruct (Archi.hardware_idiv tt) eqn:?; monadInv EQ3;
+  econstructor; split; try apply exec_straight_one; simpl; try rewrite H0; try rewrite Heqb; auto;split; Simpl;
+  intros; intuition Simpl.
+- (* divu *)
+  unfold destroyed_by_op.
+  destruct (Archi.hardware_idiv tt) eqn:?; monadInv EQ3;
+  econstructor; split; try apply exec_straight_one; simpl; try rewrite H0; try rewrite Heqb; auto;split; Simpl;
+  intros; intuition Simpl.
+- (* Oandimm *)
   generalize (andimm_correct x x0 i k rs m).
   intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
-  (* Oorimm *)
+- (* Oorimm *)
   generalize (orimm_correct x x0 i k rs m).
   intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
-  (* Oxorimm *)
+- (* Oxorimm *)
   generalize (xorimm_correct x x0 i k rs m).
   intros [rs' [A [B C]]].
   exists rs'; auto with asmgen.
-  (* Oshrximm *)
+- (* Oshrximm *)
   destruct (rs x0) eqn: X0; simpl in H0; try discriminate.
   destruct (Int.ltu i (Int.repr 31)) eqn: LTU; inv H0.
   revert EQ2. predSpec Int.eq Int.eq_spec i Int.zero; intros EQ2.
-  (* i = 0 *)
++ (* i = 0 *)
   inv EQ2. econstructor.
   split. apply exec_straight_one. simpl. reflexivity. auto.
   split. Simpl. unfold Int.shrx. rewrite Int.shl_zero. unfold Int.divs.
   change (Int.signed Int.one) with 1. rewrite Z.quot_1_r. rewrite Int.repr_signed. auto.
   intros. Simpl.
-  (* i <> 0 *)
++ (* i <> 0 *)
   inv EQ2.
   assert (LTU': Int.ltu (Int.sub Int.iwordsize i) Int.iwordsize = true).
   {
@@ -1306,34 +1310,34 @@ Local Transparent destroyed_by_op.
   rewrite LTU'; simpl. rewrite LTU''; simpl.
   f_equal. symmetry. apply Int.shrx_shr_2. assumption.
   intros. unfold rs3; Simpl. unfold rs2; Simpl. unfold rs1; Simpl.
-  (* intoffloat *)
+- (* intoffloat *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
 Transparent destroyed_by_op.
   simpl. intuition Simpl.
-  (* intuoffloat *)
+- (* intuoffloat *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   simpl. intuition Simpl.
-  (* floatofint *)
+- (* floatofint *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   intuition Simpl.
-  (* floatofintu *)
+- (* floatofintu *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   intuition Simpl.
-  (* intofsingle *)
+- (* intofsingle *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   simpl. intuition Simpl.
-  (* intuofsingle *)
+- (* intuofsingle *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   simpl. intuition Simpl.
-  (* singleofint *)
+- (* singleofint *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   intuition Simpl.
-  (* singleofintu *)
+- (* singleofintu *)
   econstructor; split. apply exec_straight_one; simpl. rewrite H0; simpl. eauto. auto.
   intuition Simpl.
-  (* Ocmp *)
+- (* Ocmp *)
   contradiction.
-  (* Osel *)
+- (* Osel *)
   contradiction.
 Qed.
 
