@@ -861,6 +861,8 @@ Qed.
 
 (** Least upper bound *)
 
+
+(* Not monotone
 Definition vlub (v w: aval) : aval :=
   match v, w with
   | Vbot, _ => w
@@ -882,6 +884,45 @@ Definition vlub (v w: aval) : aval :=
   | Uns p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max (n1 + 1) n2)
   | Sgn p1 n1, Uns p2 n2 => sgn (plub p1 p2) (Z.max n1 (n2 + 1))
   | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max n1 n2)
+  | F f1, F f2 =>
+      if Float.eq_dec f1 f2 then v else ntop
+  | FS f1, FS f2 =>
+      if Float32.eq_dec f1 f2 then v else ntop
+  | L i1, L i2 =>
+      if Int64.eq i1 i2 then v else ntop
+  | Ptr p1, Ptr p2 => Ptr(plub p1 p2)
+  | Ptr p1, Ifptr p2 => Ifptr(plub p1 p2)
+  | Ifptr p1, Ptr p2 => Ifptr(plub p1 p2)
+  | Ifptr p1, Ifptr p2 => Ifptr(plub p1 p2)
+  | (Ptr p1 | Ifptr p1), (Uns p2 _ | Sgn p2 _) => Ifptr(plub p1 p2)
+  | (Uns p1 _ | Sgn p1 _), (Ptr p2 | Ifptr p2) => Ifptr(plub p1 p2)
+  | _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), _ => if va_strict tt then Ifptr p else Vtop
+  | _, _ => Vtop
+  end.
+
+Compute (vlub (Ifptr Pbot) (Ifptr Pbot)).
+Compute (vlub (Ifptr Pbot) (I Int.zero)).
+ *)
+Definition vlub (v w: aval) : aval :=
+  match v, w with
+  | Vbot, _ => w
+  | _, Vbot => v
+  | I i1, I i2 =>
+      if Int.eq i1 i2 then v else
+      if Int.lt i1 Int.zero || Int.lt i2 Int.zero
+      then sgn Pbot (Z.max (ssize i1) (ssize i2))
+      else uns Pbot (Z.max (usize i1) (usize i2))
+  | I i, Uns p n | Uns p n, I i =>
+      if Int.lt i Int.zero
+      then sgn p (Z.max (ssize i) (n + 1))
+      else uns p (Z.max (usize i) n)
+  | I i, Sgn p n | Sgn p n, I i =>
+      sgn p (Z.max (ssize i) n)
+  | I i, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), I i => Ifptr p
+  | Uns p1 n1, Uns p2 n2 => Uns (plub p1 p2) (Z.max n1 n2)
+  | Uns p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max (n1 + 1) n2)
+  | Sgn p1 n1, Uns p2 n2 => sgn (plub p1 p2) (Z.max n1 (n2 + 1))
+  | Sgn p1 n1, Sgn p2 n2 => Sgn (plub p1 p2) (Z.max n1 n2)
   | F f1, F f2 =>
       if Float.eq_dec f1 f2 then v else ntop
   | FS f1, FS f2 =>
@@ -988,7 +1029,6 @@ Proof.
 - eapply vge_trans. apply vge_sgn_sgn'.
   apply vge_trans with (Sgn p (n + 1)); eauto using pge_lub_l with va.
 - eapply vge_trans. apply vge_sgn_sgn'. eauto with va.
-- eapply vge_trans. apply vge_sgn_sgn'. eauto using pge_lub_l with va.
 - eapply vge_trans. apply vge_sgn_sgn'. eauto using pge_lub_l with va.
 - destruct (Int64.eq n n0); constructor.
 - destruct (Float.eq_dec f f0); constructor.
@@ -3057,6 +3097,49 @@ Proof with (auto using provenance_monotone with va).
 - destruct (zlt n 8)...
 - destruct (zlt n 16)...
 Qed.
+
+Remark vlub_bot_l: forall a, vlub Vbot a = a.
+Proof.
+  reflexivity.
+Qed.
+
+Remark vlub_bot_r: forall a, vlub a Vbot = a.
+Proof.
+  intros. rewrite vlub_comm. apply vlub_bot_l.
+Qed.
+
+Remark plub_idem: forall p, plub p p = p.
+Proof.
+  destruct p; cbn; try reflexivity.
+  all: try destruct Ptrofs.eq_dec.
+  all: try destruct ident_eq.
+  all: try contradiction.
+  all: reflexivity.
+Qed.
+
+Remark vlub_idem: forall a, vlub a a = a.
+Proof.
+  destruct a; cbn; try reflexivity.
+  all: try rewrite Int.eq_true.
+  all: try rewrite Int64.eq_true.
+  all: try rewrite plub_idem.
+  all: try rewrite Z.max_id.
+  all: try reflexivity.
+  - destruct Float.eq_dec; congruence.
+  - destruct Float32.eq_dec; congruence.
+Qed.
+
+Remark plub_monotone_l: forall p1 p2 q (GE : pge p1 p2),
+    pge (plub p1 q) (plub p2 q).
+Proof.
+  intros. apply plub_least.
+  - apply pge_trans with (q := p1).
+    + apply pge_lub_l.
+    + assumption.
+  - apply pge_lub_r.
+Qed.
+
+Hint Resolve plub_monotone_l : va.
 
 (** Analysis of known builtin functions.  All we have is a dynamic semantics
   as a function [list val -> option val], but we can still perform 
