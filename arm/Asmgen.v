@@ -417,15 +417,23 @@ Definition transl_op
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (Pumull IR14 r r1 r2 :: k)
   | Odiv, a1 :: a2 :: nil =>
-      assertion (mreg_eq res R0);
-      assertion (mreg_eq a1 R0);
-      assertion (mreg_eq a2 R1);
-      OK (Psdiv :: k)
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      if Archi.hardware_idiv tt then
+        OK (Psdiv r r1 r2 :: k)
+      else
+        assertion (mreg_eq res R0);
+        assertion (mreg_eq a1 R0);
+        assertion (mreg_eq a2 R1);
+        OK (Psdiv r r1 r2 :: k)
   | Odivu, a1 :: a2 :: nil =>
-      assertion (mreg_eq res R0);
-      assertion (mreg_eq a1 R0);
-      assertion (mreg_eq a2 R1);
-      OK (Pudiv :: k)
+      do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
+      if Archi.hardware_idiv tt then
+        OK (Pudiv r r1 r2 :: k)
+      else
+        assertion (mreg_eq res R0);
+        assertion (mreg_eq a1 R0);
+        assertion (mreg_eq a2 R1);
+        OK (Pudiv r r1 r2 :: k)
   | Oand, a1 :: a2 :: nil =>
       do r <- ireg_of res; do r1 <- ireg_of a1; do r2 <- ireg_of a2;
       OK (Pand r r1 (SOreg r2) :: k)
