@@ -918,7 +918,7 @@ Definition vlub (v w: aval) : aval :=
       else uns p (Z.max (usize i) n)
   | I i, Sgn p n | Sgn p n, I i =>
       sgn p (Z.max (ssize i) n)
-  | (I _ | L _), (Ptr p | Ifptr p) | (Ptr p | Ifptr p), (I _ | L _) => Ifptr p
+  | (I _ | L _ | F _ | FS _), (Ptr p | Ifptr p) | (Ptr p | Ifptr p), (I _ | L _ | F _ | FS _) => Ifptr p
   | Uns p1 n1, Uns p2 n2 => Uns (plub p1 p2) (Z.max n1 n2)
   | Uns p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max (n1 + 1) n2)
   | Sgn p1 n1, Uns p2 n2 => sgn (plub p1 p2) (Z.max n1 (n2 + 1))
@@ -935,7 +935,6 @@ Definition vlub (v w: aval) : aval :=
   | Ifptr p1, Ifptr p2 => Ifptr(plub p1 p2)
   | (Ptr p1 | Ifptr p1), (Uns p2 _ | Sgn p2 _) => Ifptr(plub p1 p2)
   | (Uns p1 _ | Sgn p1 _), (Ptr p2 | Ifptr p2) => Ifptr(plub p1 p2)
-  | _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), _ => if va_strict tt then Ifptr p else Vtop
   | _, _ => Vtop
   end.
 
