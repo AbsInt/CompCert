@@ -308,7 +308,7 @@ Proof.
   InvBooleans; subst; auto with va.
 Qed.
 
-Lemma pincl_ge_2: forall p q, pge p q -> pincl q p = true.
+Lemma ge_pincl: forall p q, pge p q -> pincl q p = true.
 Proof.
   destruct 1; simpl; auto.
 - destruct p; auto.
@@ -534,6 +534,7 @@ Inductive aval : Type :=
   | L (n: int64)             (**r exactly [Vlong n] *)
   | F (f: float)             (**r exactly [Vfloat f] *)
   | FS (f: float32)          (**r exactly [Vsingle f] *)
+  | Num (p: aptr)            (**r any number, or [Vundef] *)
   | Ptr (p: aptr)            (**r a pointer from the set [p], or [Vundef] *)
   | Ifptr (p: aptr).         (**r a pointer from the set [p], or a number, or [Vundef] *)
 
@@ -542,10 +543,9 @@ Inductive aval : Type :=
 
 Definition Vtop := Ifptr Ptop.
 
-(** The [p] parameter (an abstract pointer) to [Uns] and [Sgn] helps keeping
+(** The [p] parameter (an abstract pointer) to [Uns], [Sgn] and [Num] helps keeping
   track of pointers that leak through arithmetic operations such as shifts.
-  See the section "Tracking leakage of pointers" below.
-  In strict analysis mode, [p] is always [Pbot]. *)
+  See the section "Tracking leakage of pointers" below. *)
 
 Definition eq_aval: forall (v1 v2: aval), {v1=v2} + {v1<>v2}.
 Proof.
@@ -567,6 +567,11 @@ Inductive vmatch : val -> aval -> Prop :=
   | vmatch_l: forall i, vmatch (Vlong i) (L i)
   | vmatch_f: forall f, vmatch (Vfloat f) (F f)
   | vmatch_s: forall f, vmatch (Vsingle f) (FS f)
+  | vmatch_num_undef: forall p, vmatch Vundef (Num p)
+  | vmatch_num_i: forall i p, vmatch (Vint i) (Num p)
+  | vmatch_num_l: forall i p, vmatch (Vlong i) (Num p)
+  | vmatch_num_f: forall f p, vmatch (Vfloat f) (Num p)
+  | vmatch_num_s: forall f p, vmatch (Vsingle f) (Num p)
   | vmatch_ptr: forall b ofs p, pmatch b ofs p -> vmatch (Vptr b ofs) (Ptr p)
   | vmatch_ptr_undef: forall p, vmatch Vundef (Ptr p)
   | vmatch_ifptr_undef: forall p, vmatch Vundef (Ifptr p)
@@ -575,6 +580,16 @@ Inductive vmatch : val -> aval -> Prop :=
   | vmatch_ifptr_f: forall f p, vmatch (Vfloat f) (Ifptr p)
   | vmatch_ifptr_s: forall f p, vmatch (Vsingle f) (Ifptr p)
   | vmatch_ifptr_p: forall b ofs p, pmatch b ofs p -> vmatch (Vptr b ofs) (Ifptr p).
+
+Hint Extern 1 (vmatch _ _) => constructor : va.
+
+Lemma vmatch_num:
+  forall v p,
+  match v with Vptr _ _ => False | _ => True end ->
+  vmatch v (Num p).
+Proof.
+  intros. destruct v; auto with va; contradiction.
+Qed.
 
 Lemma vmatch_ifptr:
   forall v p,
@@ -589,9 +604,7 @@ Proof.
   intros. apply vmatch_ifptr. intros. subst v. inv H; eapply pmatch_top'; eauto.
 Qed.
 
-Hint Extern 1 (vmatch _ _) => constructor : va.
-
-(* Some properties about [is_uns] and [is_sgn]. *)
+(** Some properties about [is_uns] and [is_sgn]. *)
 
 Lemma is_uns_mon: forall n1 n2 i, is_uns n1 i -> n1 <= n2 -> is_uns n2 i.
 Proof.
@@ -709,33 +722,66 @@ Qed.
 
 In the CompCert semantics, arithmetic operations (e.g. "xor") applied
 to pointer values are undefined or produce the [Vundef] result.
-So, in strict mode, we can abstract the result values of such operations
-as [Ifptr Pbot], namely: [Vundef], or any number, but not a pointer.
+If we later use the result as the address of a memory access,
+the memory access will fail.  Hence, in strict mode, the alias
+analysis can ignore these pointers that were transformed by arithmetic
+operations.
 
-In real code, such arithmetic over pointers occurs, so we need to be
-more prudent.  The policy we take, inspired by that of GCC, is that
-"undefined" arithmetic operations involving pointer arguments can
-produce a pointer, but not any pointer: rather, a pointer to the same
-block, but possibly with a different offset.  Hence, if the operation
-has a pointer to abstract region [p] as argument, the result value
-can be a pointer to abstract region [poffset p].  In other words,
-the result value is abstracted as [Ifptr (poffset p)].
+In real code, arithmetic over pointers occurs, and can produce valid
+pointers.  For example, a bitwise "and" can be used to realign a pointer.
+Hence, in conservative mode, the alias analysis must track these
+pointers that were transformed by arithmetic operations.
+
+This is the purpose of the "provenance" argument [p] to the abstract values
+[Num p], [Uns p n], and [Sgn p n].  [p] is an abstract pointer that
+over-approximates all the pointer values that may have been used
+as integers to produce this numerical value.  If a memory access
+is performed at an address that matches [Num p], [Uns p n], or [Sgn p n],
+the value analysis considers that the abstract pointer [p] is accessed.
+Likewise, if one of these abstract values is joined with a pointer
+abstract value [Ptr q] or [Ifptr q], the pointer abstract value
+[Ifptr (plub p q)] is produced.
+
+To define the provenance [p] of the result of an arithmetic operation,
+we follow the same policy as GCC: "undefined" arithmetic operations
+involving pointer arguments can produce a pointer, but not any
+pointer, just a pointer to the same block but possibly with a
+different offset.  Hence, if the operation has a pointer to abstract
+region [p] as argument, the result value can be a pointer to abstract
+region [poffset p].
 
 We encapsulate this reasoning in the following [ntop1] and [ntop2] functions
 ("numerical top"). *)
 
 Definition provenance (x: aval) : aptr :=
-  if va_strict tt then Pbot else
-    match x with
-    | Ptr p | Ifptr p | Uns p _ | Sgn p _ => poffset p
-    | _ => Pbot
-    end.
+  match x with
+  | Ptr p | Ifptr p => poffset p
+  | Uns p _ | Sgn p _ | Num p => p
+  | _ => Pbot
+  end.
 
-Definition ntop : aval := Ifptr Pbot.
+Definition ntop : aval := Num Pbot.
 
-Definition ntop1 (x: aval) : aval := Ifptr (provenance x).
+Definition ntop1 (x: aval) : aval := Num (provenance x).
 
-Definition ntop2 (x y: aval) : aval := Ifptr (plub (provenance x) (provenance y)).
+Definition ntop2 (x y: aval) : aval := Num (plub (provenance x) (provenance y)).
+
+(** Embedded C code often uses integer literals as absolute addresses
+for loads and stores, e.g. [ int * device = (int * ) 0x1000; *device = 12; ].
+In conservative mode, we analyze these loads and stores as potentially
+accessing any memory location except stack blocks, i.e. as a [Nonstack]
+access.  
+
+The following functions determine the provenance to use for integer
+literals when they are used in a pointer context.  The null pointer
+(literal 0) is treated specially: even in conservative mode, accesses
+to address 0 are considered illegal. *)
+
+Definition int_provenance (i: int) : aptr :=
+  if va_strict tt || Int.eq i Int.zero then Pbot else Nonstack.
+
+Definition long_provenance (i: int64) : aptr :=
+  if va_strict tt || Int64.eq i Int64.zero then Pbot else Nonstack.
 
 (** Smart constructors for [Uns] and [Sgn]. *)
 
@@ -745,23 +791,17 @@ Definition uns (p: aptr) (n: Z) : aval :=
   else if zle n 8 then Uns p 8
   else if zle n 15 then Uns p 15
   else if zle n 16 then Uns p 16
-  else Ifptr p.
+  else Num p.
 
 Definition sgn (p: aptr) (n: Z) : aval :=
-  if zle n 8 then Sgn p 8 else if zle n 16 then Sgn p 16 else Ifptr p.
+  if zle n 8 then Sgn p 8 else if zle n 16 then Sgn p 16 else Num p.
 
 Lemma vmatch_uns':
   forall p i n, is_uns (Z.max 0 n) i -> vmatch (Vint i) (uns p n).
 Proof.
   intros.
   assert (A: forall n', n' >= 0 -> n' >= n -> is_uns n' i) by (eauto with va).
-  unfold uns.
-  destruct (zle n 1). auto with va.
-  destruct (zle n 7). auto with va.
-  destruct (zle n 8). auto with va.
-  destruct (zle n 15). auto with va.
-  destruct (zle n 16). auto with va.
-  auto with va.
+  unfold uns. repeat destruct zle; auto with va.
 Qed.
 
 Lemma vmatch_uns:
@@ -772,12 +812,7 @@ Qed.
 
 Lemma vmatch_uns_undef: forall p n, vmatch Vundef (uns p n).
 Proof.
-  intros. unfold uns.
-  destruct (zle n 1). auto with va.
-  destruct (zle n 7). auto with va.
-  destruct (zle n 8). auto with va.
-  destruct (zle n 15). auto with va.
-  destruct (zle n 16); auto with va.
+  intros. unfold uns. repeat destruct zle; auto with va.
 Qed.
 
 Lemma vmatch_sgn':
@@ -785,9 +820,7 @@ Lemma vmatch_sgn':
 Proof.
   intros.
   assert (A: forall n', n' >= 1 -> n' >= n -> is_sgn n' i) by (eauto with va).
-  unfold sgn.
-  destruct (zle n 8). auto with va.
-  destruct (zle n 16); auto with va.
+  unfold sgn. repeat destruct zle; auto with va.
 Qed.
 
 Lemma vmatch_sgn:
@@ -798,9 +831,7 @@ Qed.
 
 Lemma vmatch_sgn_undef: forall p n, vmatch Vundef (sgn p n).
 Proof.
-  intros. unfold sgn.
-  destruct (zle n 8). auto with va.
-  destruct (zle n 16); auto with va.
+  intros. unfold sgn. repeat destruct zle; auto with va.
 Qed.
 
 Hint Resolve vmatch_uns vmatch_uns_undef vmatch_sgn vmatch_sgn_undef : va.
@@ -824,33 +855,42 @@ Inductive vge: aval -> aval -> Prop :=
   | vge_sgn_i: forall p n i, 0 < n -> is_sgn n i -> vge (Sgn p n) (I i)
   | vge_sgn_sgn: forall p1 n1 p2 n2, n1 >= n2 -> pge p1 p2 -> vge (Sgn p1 n1) (Sgn p2 n2)
   | vge_sgn_uns: forall p1 n1 p2 n2, n1 > n2 -> pge p1 p2 -> vge (Sgn p1 n1) (Uns p2 n2)
+  | vge_num_i: forall p i, vge (Num p) (I i)
+  | vge_num_l: forall p i, vge (Num p) (L i)
+  | vge_num_f: forall p f, vge (Num p) (F f)
+  | vge_num_s: forall p f, vge (Num p) (FS f)
+  | vge_num_uns: forall p q n, pge p q -> vge (Num p) (Uns q n)
+  | vge_num_sgn: forall p q n, pge p q -> vge (Num p) (Sgn q n)
+  | vge_num_num: forall p q, pge p q -> vge (Num p) (Num q)
   | vge_p_p: forall p q, pge p q -> vge (Ptr p) (Ptr q)
   | vge_ip_p: forall p q, pge p q -> vge (Ifptr p) (Ptr q)
   | vge_ip_ip: forall p q, pge p q -> vge (Ifptr p) (Ifptr q)
-  | vge_ip_i: forall p i, vge (Ifptr p) (I i)
+  | vge_ip_i: forall  p i, vge (Ifptr p) (I i)
   | vge_ip_l: forall p i, vge (Ifptr p) (L i)
   | vge_ip_f: forall p f, vge (Ifptr p) (F f)
   | vge_ip_s: forall p f, vge (Ifptr p) (FS f)
   | vge_ip_uns: forall p q n, pge p q -> vge (Ifptr p) (Uns q n)
-  | vge_ip_sgn: forall p q n, pge p q -> vge (Ifptr p) (Sgn q n).
+  | vge_ip_sgn: forall p q n, pge p q -> vge (Ifptr p) (Sgn q n)
+  | vge_ip_num: forall p q, pge p q -> vge (Ifptr p) (Num q).
 
 Hint Constructors vge : va.
 
-Lemma vge_top: forall v, vge Vtop v.
+Lemma vge_top: forall x, vge Vtop x.
 Proof.
-  destruct v; constructor; constructor.
+  unfold Vtop; destruct x; auto with va.
 Qed.
 
-Hint Resolve vge_top : va.
-
-Lemma vge_refl: forall v, vge v v.
+Lemma vge_refl: forall x, vge x x.
 Proof.
-  destruct v; auto with va.
+  destruct x; auto with va.
 Qed.
 
-Lemma vge_trans: forall u v, vge u v -> forall w, vge v w -> vge u w.
+Hint Resolve vge_top vge_refl : va.
+
+Lemma vge_trans: forall x y z, vge x y -> vge y z -> vge x z.
 Proof.
-  induction 1; intros w V; inv V; eauto using pge_trans with va.
+  intros x y z XY YZ; revert y z YZ x XY.
+  destruct 1; intros x V; auto with va; inv V; eauto using pge_trans with va.
 Qed.
 
 Lemma vmatch_ge:
@@ -876,65 +916,47 @@ Definition vlub (v w: aval) : aval :=
       else uns p (Z.max (usize i) n)
   | I i, Sgn p n | Sgn p n, I i =>
       sgn p (Z.max (ssize i) n)
-  | I i, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), I i =>
-      if va_strict tt || Int.eq i Int.zero then Ifptr p else Vtop
+  | I i, Num p | Num p, I i => Num p
+  | I i, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), I i => Ifptr (plub p (int_provenance i))
+  | I _, (L _ | F _ | FS _) | (L _ | F _ | FS _), I _ => ntop
   | Uns p1 n1, Uns p2 n2 => Uns (plub p1 p2) (Z.max n1 n2)
   | Uns p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max (n1 + 1) n2)
   | Sgn p1 n1, Uns p2 n2 => sgn (plub p1 p2) (Z.max n1 (n2 + 1))
   | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max n1 n2)
-  | F f1, F f2 =>
-      if Float.eq_dec f1 f2 then v else ntop
-  | FS f1, FS f2 =>
-      if Float32.eq_dec f1 f2 then v else ntop
-  | L i1, L i2 =>
-      if Int64.eq i1 i2 then v else ntop
+  | (Uns p1 _ | Sgn p1 _), Num p2 | Num p1, (Uns p2 _ | Sgn p2 _) => Num (plub p1 p2)
+  | (Uns p1 _ | Sgn p1 _), (Ptr p2 | Ifptr p2) | (Ptr p1 | Ifptr p1), (Uns p2 _ | Sgn p2 _) => Ifptr (plub p1 p2)
+  | (Uns p _ | Sgn p _), (L _ | F _ | FS _) | (L _ | F _ | FS _), (Uns p _ | Sgn p _) => Num p
+  | L i1, L i2 => if Int64.eq i1 i2 then v else ntop
+  | L i, Num p | Num p, L i => Num p
+  | L i, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), L i => Ifptr (plub p (long_provenance i))
+  | L _, (F _ | FS _) | (F _ | FS _), L _ => ntop
+  | F f1, F f2 => if Float.eq_dec f1 f2 then v else ntop
+  | F _, Num p | Num p, F _ => Num p
+  | F _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), F _ => Ifptr p
+  | F _, FS _ | FS _, F _ => ntop
+  | FS f1, FS f2 => if Float32.eq_dec f1 f2 then v else ntop
+  | FS _, Num p | Num p, FS _ => Num p
+  | FS _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), FS _ => Ifptr p
+  | Num p1, Num p2 => Num (plub p1 p2)
+  | Num p1, (Ptr p2 | Ifptr p2) | (Ifptr p1 | Ptr p1), Num p2 => Ifptr (plub p1 p2)
   | Ptr p1, Ptr p2 => Ptr(plub p1 p2)
-  | Ptr p1, Ifptr p2 => Ifptr(plub p1 p2)
-  | Ifptr p1, Ptr p2 => Ifptr(plub p1 p2)
-  | Ifptr p1, Ifptr p2 => Ifptr(plub p1 p2)
-  | (Ptr p1 | Ifptr p1), (Uns p2 _ | Sgn p2 _) => Ifptr(plub p1 p2)
-  | (Uns p1 _ | Sgn p1 _), (Ptr p2 | Ifptr p2) => Ifptr(plub p1 p2)
-  | _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), _ => if va_strict tt then Ifptr p else Vtop
-  | _, _ => Vtop
+  | Ptr p1, Ifptr p2 | Ifptr p1, Ptr p2 | Ifptr p1, Ifptr p2 => Ifptr(plub p1 p2)
   end.
 
 Lemma vlub_comm:
   forall v w, vlub v w = vlub w v.
 Proof.
-  intros. unfold vlub; destruct v; destruct w; auto.
-- rewrite Int.eq_sym. predSpec Int.eq Int.eq_spec n0 n.
-  congruence.
-  rewrite orb_comm.
-  destruct (Int.lt n0 Int.zero || Int.lt n Int.zero); f_equal; apply Z.max_comm.
-- f_equal. apply plub_comm. apply Z.max_comm.
-- f_equal. apply plub_comm. apply Z.max_comm.
-- f_equal; apply plub_comm.
-- f_equal; apply plub_comm.
-- f_equal. apply plub_comm. apply Z.max_comm.
-- f_equal. apply plub_comm. apply Z.max_comm.
-- f_equal; apply plub_comm.
-- f_equal; apply plub_comm.
+  intros. unfold vlub; destruct v; destruct w; auto; f_equal; auto using Z.max_comm, plub_comm.
+- rewrite Int.eq_sym. predSpec Int.eq Int.eq_spec n0 n. congruence.
+  rewrite orb_comm. destruct orb; f_equal; apply Z.max_comm.
 - rewrite Int64.eq_sym. predSpec Int64.eq Int64.eq_spec n0 n; congruence.
-- rewrite dec_eq_sym. destruct (Float.eq_dec f0 f). congruence. auto.
-- rewrite dec_eq_sym. destruct (Float32.eq_dec f0 f). congruence. auto.
-- f_equal; apply plub_comm.
-- f_equal; apply plub_comm.
-- f_equal; apply plub_comm.
-- f_equal; apply plub_comm.
-- f_equal; apply plub_comm.
-- f_equal; apply plub_comm.
-- f_equal; apply plub_comm.
-- f_equal; apply plub_comm.
+- rewrite dec_eq_sym. destruct (Float.eq_dec f0 f); congruence.
+- rewrite dec_eq_sym. destruct (Float32.eq_dec f0 f); congruence.
 Qed.
 
 Lemma vge_uns_uns': forall p n, vge (uns p n) (Uns p n).
 Proof.
-  unfold uns; intros.
-  destruct (zle n 1). auto with va.
-  destruct (zle n 7). auto with va.
-  destruct (zle n 8). auto with va.
-  destruct (zle n 15). auto with va.
-  destruct (zle n 16); auto with va.
+  unfold uns; intros. repeat (destruct zle); eauto with va.
 Qed.
 
 Lemma vge_uns_i': forall p n i, 0 <= n -> is_uns n i -> vge (uns p n) (I i).
@@ -944,9 +966,7 @@ Qed.
 
 Lemma vge_sgn_sgn': forall p n, vge (sgn p n) (Sgn p n).
 Proof.
-  unfold sgn; intros.
-  destruct (zle n 8). auto with va.
-  destruct (zle n 16); auto with va.
+  unfold sgn; intros. repeat (destruct zle); eauto with va.
 Qed.
 
 Lemma vge_sgn_i': forall p n i, 0 < n -> is_sgn n i -> vge (sgn p n) (I i).
@@ -970,26 +990,18 @@ Qed.
 Lemma vge_lub_l:
   forall x y, vge (vlub x y) x.
 Proof.
-  assert (IFSTRICT: forall (cond: bool) x1 x2 y, vge x1 y -> vge x2 y -> vge (if cond then x1 else x2) y).
-  { destruct cond; auto with va. }
-  unfold vlub; destruct x, y; eauto using pge_lub_l with va.
-- predSpec Int.eq Int.eq_spec n n0. auto with va.
-  destruct (Int.lt n Int.zero || Int.lt n0 Int.zero).
-  apply vge_sgn_i'. generalize (ssize_pos n); extlia. eauto with va.
-  apply vge_uns_i'. generalize (usize_pos n); extlia. eauto with va.
+  unfold vlub, ntop; destruct x, y; eauto using vge_trans, pge_lub_l with va.
+- predSpec Int.eq Int.eq_spec n n0. auto with va. destruct orb.
+  apply vge_sgn_i'. generalize (ssize_pos n); lia. eauto with va.
+  apply vge_uns_i'. generalize (usize_pos n); lia. eauto with va.
 - destruct (Int.lt n Int.zero).
-  apply vge_sgn_i'. generalize (ssize_pos n); extlia. eauto with va.
-  apply vge_uns_i'. generalize (usize_pos n); extlia. eauto with va.
-- apply vge_sgn_i'. generalize (ssize_pos n); extlia. eauto with va.
+  apply vge_sgn_i'. generalize (ssize_pos n); lia. eauto with va.
+  apply vge_uns_i'. generalize (usize_pos n); lia. eauto with va.
+- apply vge_sgn_i'. generalize (ssize_pos n); lia. eauto with va.
 - destruct (Int.lt n0 Int.zero).
   eapply vge_trans. apply vge_sgn_sgn'.
   apply vge_trans with (Sgn p (n + 1)); eauto with va.
   eapply vge_trans. apply vge_uns_uns'. eauto with va.
-- eapply vge_trans. apply vge_sgn_sgn'.
-  apply vge_trans with (Sgn p (n + 1)); eauto using pge_lub_l with va.
-- eapply vge_trans. apply vge_sgn_sgn'. eauto with va.
-- eapply vge_trans. apply vge_sgn_sgn'. eauto using pge_lub_l with va.
-- eapply vge_trans. apply vge_sgn_sgn'. eauto using pge_lub_l with va.
 - destruct (Int64.eq n n0); constructor.
 - destruct (Float.eq_dec f f0); constructor.
 - destruct (Float32.eq_dec f f0); constructor.
@@ -1025,9 +1037,11 @@ Qed.
 
 Definition aptr_of_aval (v: aval) : aptr :=
   match v with
-  | Ptr p => p
-  | Ifptr p => p
-  | _ => if va_strict tt then Pbot else Nonstack
+  | Ptr p | Ifptr p => p
+  | Num p | Uns p _ | Sgn p _ => if va_strict tt then Pbot else p
+  | I i => int_provenance i
+  | L i => long_provenance i
+  | _ => Pbot
   end.
 
 Lemma match_aptr_of_aval:
@@ -1069,14 +1083,14 @@ Qed.
 
 Definition vpincl (v: aval) (p: aptr) : bool :=
   match v with
-  | Ptr q | Ifptr q | Uns q _ | Sgn q _ => pincl q p
+  | Ptr q | Ifptr q | Num q | Uns q _ | Sgn q _ => pincl q p
   | _ => true
   end.
 
 Lemma vpincl_ge:
   forall x p, vpincl x p = true -> vge (Ifptr p) x.
 Proof.
-  unfold vpincl; intros. destruct x; constructor; apply pincl_ge; auto.
+  unfold vpincl; intros. destruct x; eauto using pincl_ge with va. 
 Qed.
 
 Lemma vpincl_sound:
@@ -1097,18 +1111,31 @@ Definition vincl (v w: aval) : bool :=
   | L i, L j => Int64.eq_dec i j
   | F i, F j => Float.eq_dec i j
   | FS i, FS j => Float32.eq_dec i j
+  | (I _ | L _ | F _ | FS _), (Num _ | Ifptr _) => true
+  | (Uns p _ | Sgn p _ | Num p), Num q => pincl p q
   | Ptr p, Ptr q => pincl p q
-  | (Ptr p | Ifptr p | Uns p _ | Sgn p _), Ifptr q => pincl p q
-  | _, Ifptr _ => true
+  | (Ptr p | Ifptr p | Num p | Uns p _ | Sgn p _), Ifptr q => pincl p q
   | _, _ => false
   end.
 
 Lemma vincl_ge: forall v w, vincl v w = true -> vge w v.
 Proof.
   unfold vincl; destruct v; destruct w;
-  intros; try discriminate; try InvBooleans; try subst; auto using pincl_ge with va.
+  intros; try discriminate; try InvBooleans; try subst; eauto using pincl_ge with va.
 - constructor; auto. rewrite is_uns_zero_ext; auto.
 - constructor; auto. rewrite is_sgn_sign_ext; auto.
+Qed.
+
+Lemma ge_vincl: forall v w, vge v w -> vincl w v = true.
+Proof.
+  induction 1; simpl; try (apply andb_true_intro; split); auto using ge_pincl, proj_sumbool_is_true.
+- apply is_uns_zero_ext in H0; rewrite H0. auto using proj_sumbool_is_true.
+- unfold proj_sumbool; rewrite zle_true by auto. auto.
+- unfold proj_sumbool; rewrite zle_true by lia. auto.
+- apply is_sgn_sign_ext in H0; auto. rewrite H0. auto using proj_sumbool_is_true.
+- unfold proj_sumbool; rewrite zlt_true by auto. auto.
+- unfold proj_sumbool; rewrite zle_true by lia. auto.
+- unfold proj_sumbool; rewrite zlt_true by lia. auto.
 Qed.
 
 (** Loading constants *)
@@ -1484,7 +1511,7 @@ Lemma rol_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.rol v w) (rol x y).
 Proof.
   intros.
-  assert (DEFAULT: forall p, vmatch (Val.rol v w) (Ifptr p)).
+  assert (DEFAULT: forall p, vmatch (Val.rol v w) (Num p)).
   {
     destruct v; destruct w; simpl; constructor.
   }
@@ -1512,7 +1539,7 @@ Lemma ror_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.ror v w) (ror x y).
 Proof.
   intros.
-  assert (DEFAULT: forall p, vmatch (Val.ror v w) (Ifptr p)).
+  assert (DEFAULT: forall p, vmatch (Val.ror v w) (Num p)).
   {
     destruct v; destruct w; simpl; constructor.
   }
@@ -2921,51 +2948,40 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   | Mint16unsigned, I i => I (Int.zero_ext 16 i)
   | Mint16unsigned, Uns p n => Uns (provenance v) (Z.min n 16)
   | Mint16unsigned, _ => Uns (provenance v) 16
-  | Mint32, (I _ | Uns _ _ | Sgn _ _ | Ifptr _) => v
-  | Mint32, Ptr p => if Archi.ptr64 then Ifptr p else v
-  | Mint64, (L _ | Ifptr _) => v
-  | Mint64, (Uns p _ | Sgn p _) => Ifptr p
-  | Mint64, Ptr p => if Archi.ptr64 then v else Ifptr p
+  | Mint32, (I _ | Uns _ _ | Sgn _ _ | Num _) => v
+  | Mint32, (Ptr p | Ifptr p) => if Archi.ptr64 then Num (provenance v) else v
+  | Mint32, _ => Num (provenance v)
+  | Mint64, L _ => v
+  | Mint64, (Ptr p | Ifptr p) => if Archi.ptr64 then v else Num (provenance v)
+  | Mint64, _ => Num (provenance v)
   | Mfloat32, FS f => v
+  | Mfloat32, _ => Num (provenance v)
   | Mfloat64, F f => v
-  | Many32, (I _ | Uns _ _ | Sgn _ _ | FS _ | Ifptr _) => v
-  | Many32, Ptr p => if Archi.ptr64 then Ifptr p else v
+  | Mfloat64, _ => Num (provenance v)
+  | Many32, (I _ | Uns _ _ | Sgn _ _ | FS _) => v
+  | Many32, (Ptr p | Ifptr p) => if Archi.ptr64 then Num (provenance v) else v
+  | Many32, _ => Num (provenance v)
   | Many64, _ => v
-  | _, _ => Ifptr (provenance v)
   end.
 
 Lemma vnormalize_sound:
   forall chunk v x, vmatch v x -> vmatch (Val.load_result chunk v) (vnormalize chunk x).
 Proof.
   unfold Val.load_result, vnormalize; generalize Archi.ptr64; intros ptr64;
-  induction 1; destruct chunk; auto with va.
+  induction 1; destruct chunk; eauto using is_zero_ext_uns, is_sign_ext_sgn with va;
+  try (destruct ptr64; auto with va; fail).
 - destruct (zlt n 8); constructor; auto with va.
   apply is_sign_ext_uns; auto.
   apply is_sign_ext_sgn; auto with va.
-- constructor. extlia. apply is_zero_ext_uns. apply Z.min_case; auto with va.
+- constructor. lia. apply is_zero_ext_uns. apply Z.min_case; auto with va.
 - destruct (zlt n 16); constructor; auto with va.
   apply is_sign_ext_uns; auto.
   apply is_sign_ext_sgn; auto with va.
 - constructor. extlia. apply is_zero_ext_uns. apply Z.min_case; auto with va.
 - destruct (zlt n 8); auto with va.
 - destruct (zlt n 16); auto with va.
-- constructor. extlia. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
-- constructor. lia. apply is_zero_ext_uns; auto with va.
-- constructor. extlia. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
-- constructor. lia. apply is_zero_ext_uns; auto with va.
-- destruct ptr64; auto with va.
-- destruct ptr64; auto with va.
-- destruct ptr64; auto with va.
-- destruct ptr64; auto with va.
-- destruct ptr64; auto with va.
-- destruct ptr64; auto with va.
-- constructor. lia. apply is_sign_ext_sgn; auto with va.
-- constructor. lia. apply is_zero_ext_uns; auto with va.
-- constructor. lia. apply is_sign_ext_sgn; auto with va.
-- constructor. lia. apply is_zero_ext_uns; auto with va.
-- destruct ptr64; auto with va.
-- destruct ptr64; auto with va.
-- destruct ptr64; auto with va.
+- constructor. lia. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
+- constructor. lia. apply is_sign_ext_sgn; auto with va. apply Z.min_case; auto with va.
 Qed.
 
 Lemma vnormalize_cast:
@@ -2985,17 +3001,22 @@ Proof.
 - (* int16unsigned *)
   rewrite H2. destruct v; simpl; constructor. lia. apply is_zero_ext_uns; auto with va.
 - (* int32 *)
-  auto.
+  red in H1. destruct Archi.ptr64; auto. destruct v; constructor || discriminate.
 - (* int64 *)
-  auto.
+  red in H1. destruct Archi.ptr64; auto. destruct v; constructor || discriminate.
 - (* float32 *)
   destruct v; try contradiction; constructor.
 - (* float64 *)
   destruct v; try contradiction; constructor.
 - (* any32 *)
-  destruct Archi.ptr64; auto.
+  red in H1. destruct Archi.ptr64; auto. destruct v; constructor || discriminate.
 - (* any64 *)
   auto.
+Qed.
+
+Remark poffset_ge: forall p, pge (poffset p) p.
+Proof.
+  destruct p; constructor.
 Qed.
 
 Remark poffset_monotone:
@@ -3007,55 +3028,52 @@ Qed.
 Remark provenance_monotone:
   forall x y, vge x y -> pge (provenance x) (provenance y).
 Proof.
-  unfold provenance; intros. destruct (va_strict tt). constructor.
-  inv H; auto using poffset_monotone with va.
+  induction 1; simpl; eauto using poffset_ge, poffset_monotone, pge_trans with va.
+Qed.
+
+Remark provenance_ifptr_ge:
+  forall p q, pge p q -> pge (provenance (Ifptr p)) q.
+Proof.
+  intros. simpl. apply pge_trans with p; auto. apply poffset_ge.
 Qed.
 
 Lemma vnormalize_monotone:
   forall chunk x y,
   vge x y -> vge (vnormalize chunk x) (vnormalize chunk y).
-Proof with (auto using provenance_monotone with va).
-  intros chunk x y V; unfold vnormalize; generalize Archi.ptr64; intro ptr64; inversion V; subst; destruct chunk eqn:C; simpl...
-- destruct (zlt n 8); constructor...
-  apply is_sign_ext_uns...
-  apply is_sign_ext_sgn...
+Proof with (auto using provenance_monotone, provenance_ifptr_ge with va).
+Local Opaque provenance.
+  induction 1;
+  unfold vnormalize; generalize Archi.ptr64; intro ptr64; subst; 
+  destruct chunk eqn:C; simpl;
+  repeat match goal with |- vge (if ?x then _ else _) _ => destruct x end...
+- constructor... apply is_sign_ext_uns...
+- constructor... apply is_sign_ext_sgn...
 - constructor... apply is_zero_ext_uns... apply Z.min_case...
-- destruct (zlt n 16); constructor...
-  apply is_sign_ext_uns...
-  apply is_sign_ext_sgn...
+- constructor... apply is_sign_ext_uns...
+- constructor... apply is_sign_ext_sgn...
 - constructor... apply is_zero_ext_uns... apply Z.min_case...
-- unfold provenance; destruct (va_strict tt)...
-- destruct (zlt n1 8). rewrite zlt_true by lia...
-  destruct (zlt n2 8)...
-- destruct (zlt n1 16). rewrite zlt_true by lia...
-  destruct (zlt n2 16)...
+- rewrite zlt_true by lia...
+- destruct (zlt n2 8)...
+- rewrite zlt_true by lia...
+- destruct (zlt n2 16)...
 - constructor... apply is_sign_ext_sgn... apply Z.min_case...
 - constructor... apply is_zero_ext_uns...
 - constructor... apply is_sign_ext_sgn... apply Z.min_case...
 - constructor... apply is_zero_ext_uns...
-- unfold provenance; destruct (va_strict tt)...
 - destruct (zlt n2 8); constructor...
 - destruct (zlt n2 16); constructor...
-- destruct ptr64...
-- destruct ptr64...
-- destruct ptr64...
-- destruct ptr64...
-- destruct ptr64...
-- destruct ptr64...
 - constructor... apply is_sign_ext_sgn...
 - constructor... apply is_zero_ext_uns...
 - constructor... apply is_sign_ext_sgn...
 - constructor... apply is_zero_ext_uns...
-- unfold provenance; destruct (va_strict tt)...
-- unfold provenance; destruct (va_strict tt)...
-- unfold provenance; destruct (va_strict tt)...
-- unfold provenance; destruct (va_strict tt)...
-- unfold provenance; destruct (va_strict tt)...
-- unfold provenance; destruct (va_strict tt)...
-- unfold provenance; destruct (va_strict tt)...
-- unfold provenance; destruct (va_strict tt)...
-- destruct (zlt n 8)...
-- destruct (zlt n 16)...
+- destruct (zlt n 8); constructor...
+- destruct (zlt n 16); constructor...
+- constructor... apply is_sign_ext_sgn...
+- constructor... apply is_zero_ext_uns...
+- constructor... apply is_sign_ext_sgn...
+- constructor... apply is_zero_ext_uns...
+- destruct (zlt n 8); constructor...
+- destruct (zlt n 16); constructor...
 Qed.
 
 (** Analysis of known builtin functions.  All we have is a dynamic semantics
