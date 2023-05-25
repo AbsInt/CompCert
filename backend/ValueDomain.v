@@ -918,24 +918,29 @@ Definition vlub (v w: aval) : aval :=
       sgn p (Z.max (ssize i) n)
   | I i, Num p | Num p, I i => Num p
   | I i, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), I i => Ifptr (plub p (int_provenance i))
+  | I _, (L _ | F _ | FS _) | (L _ | F _ | FS _), I _ => ntop
   | Uns p1 n1, Uns p2 n2 => Uns (plub p1 p2) (Z.max n1 n2)
   | Uns p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max (n1 + 1) n2)
   | Sgn p1 n1, Uns p2 n2 => sgn (plub p1 p2) (Z.max n1 (n2 + 1))
   | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max n1 n2)
   | (Uns p1 _ | Sgn p1 _), Num p2 | Num p1, (Uns p2 _ | Sgn p2 _) => Num (plub p1 p2)
   | (Uns p1 _ | Sgn p1 _), (Ptr p2 | Ifptr p2) | (Ptr p1 | Ifptr p1), (Uns p2 _ | Sgn p2 _) => Ifptr (plub p1 p2)
+  | (Uns p _ | Sgn p _), (L _ | F _ | FS _) | (L _ | F _ | FS _), (Uns p _ | Sgn p _) => Num p
   | L i1, L i2 => if Int64.eq i1 i2 then v else ntop
   | L i, Num p | Num p, L i => Num p
   | L i, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), L i => Ifptr (plub p (long_provenance i))
+  | L _, (F _ | FS _) | (F _ | FS _), L _ => ntop
   | F f1, F f2 => if Float.eq_dec f1 f2 then v else ntop
   | F _, Num p | Num p, F _ => Num p
+  | F _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), F _ => Ifptr p
+  | F _, FS _ | FS _, F _ => ntop
   | FS f1, FS f2 => if Float32.eq_dec f1 f2 then v else ntop
   | FS _, Num p | Num p, FS _ => Num p
+  | FS _, (Ptr p | Ifptr p) | (Ptr p | Ifptr p), FS _ => Ifptr p
   | Num p1, Num p2 => Num (plub p1 p2)
-  | Num p1, Ifptr p2 | Ifptr p1, Num p2 => Ifptr (plub p1 p2)
+  | Num p1, (Ptr p2 | Ifptr p2) | (Ifptr p1 | Ptr p1), Num p2 => Ifptr (plub p1 p2)
   | Ptr p1, Ptr p2 => Ptr(plub p1 p2)
   | Ptr p1, Ifptr p2 | Ifptr p1, Ptr p2 | Ifptr p1, Ifptr p2 => Ifptr(plub p1 p2)
-  | _, _ => Vtop
   end.
 
 Lemma vlub_comm:
@@ -951,12 +956,7 @@ Qed.
 
 Lemma vge_uns_uns': forall p n, vge (uns p n) (Uns p n).
 Proof.
-  unfold uns; intros.
-  destruct (zle n 1). auto with va.
-  destruct (zle n 7). auto with va.
-  destruct (zle n 8). auto with va.
-  destruct (zle n 15). auto with va.
-  destruct (zle n 16); eauto with va.
+  unfold uns; intros. repeat (destruct zle); eauto with va.
 Qed.
 
 Lemma vge_uns_i': forall p n i, 0 <= n -> is_uns n i -> vge (uns p n) (I i).
@@ -966,9 +966,7 @@ Qed.
 
 Lemma vge_sgn_sgn': forall p n, vge (sgn p n) (Sgn p n).
 Proof.
-  unfold sgn; intros.
-  destruct (zle n 8). auto with va.
-  destruct (zle n 16); eauto with va.
+  unfold sgn; intros. repeat (destruct zle); eauto with va.
 Qed.
 
 Lemma vge_sgn_i': forall p n i, 0 < n -> is_sgn n i -> vge (sgn p n) (I i).
@@ -992,7 +990,7 @@ Qed.
 Lemma vge_lub_l:
   forall x y, vge (vlub x y) x.
 Proof.
-  unfold vlub; destruct x, y; eauto using vge_trans, pge_lub_l with va.
+  unfold vlub, ntop; destruct x, y; eauto using vge_trans, pge_lub_l with va.
 - predSpec Int.eq Int.eq_spec n n0. auto with va. destruct orb.
   apply vge_sgn_i'. generalize (ssize_pos n); lia. eauto with va.
   apply vge_uns_i'. generalize (usize_pos n); lia. eauto with va.
