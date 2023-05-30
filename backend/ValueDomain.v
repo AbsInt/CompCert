@@ -1129,11 +1129,13 @@ Qed.
 Lemma ge_vincl: forall v w, vge v w -> vincl w v = true.
 Proof.
   induction 1; simpl; try (apply andb_true_intro; split); auto using ge_pincl, proj_sumbool_is_true.
+  (* Coq 8.18 solves this goal automatically in the previous tactics,
+     with previous versions we need to solve it explicitly. *)
+  5: try solve [unfold proj_sumbool; rewrite zle_true by auto; auto].
 - apply is_uns_zero_ext in H0; rewrite H0. auto using proj_sumbool_is_true.
 - unfold proj_sumbool; rewrite zle_true by auto. auto.
 - unfold proj_sumbool; rewrite zle_true by lia. auto.
 - apply is_sgn_sign_ext in H0; auto. rewrite H0. auto using proj_sumbool_is_true.
-- unfold proj_sumbool; rewrite zlt_true by auto. auto.
 - unfold proj_sumbool; rewrite zle_true by lia. auto.
 - unfold proj_sumbool; rewrite zlt_true by lia. auto.
 Qed.
