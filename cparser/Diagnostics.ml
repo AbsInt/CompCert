@@ -105,6 +105,7 @@ type warning_type =
   | Reduced_alignment
   | Non_linear_cond_expr
   | Invalid_UTF8
+  | Implicitly_unsigned_literal
 
 (* List of all warnings with default status.
    "true" means the warning is active by default.
@@ -142,6 +143,7 @@ let all_warnings =
     (Reduced_alignment, false);
     (Non_linear_cond_expr, false);
     (Invalid_UTF8, true);
+    (Implicitly_unsigned_literal, true);
   ]
 
 (* List of active warnings *)
@@ -185,6 +187,7 @@ let string_of_warning = function
   | Reduced_alignment -> "reduced-alignment"
   | Non_linear_cond_expr -> "non-linear-cond-expr"
   | Invalid_UTF8 -> "invalid-utf8"
+  | Implicitly_unsigned_literal -> "implicitly-unsigned-literal"
 
 (* Activate the given warning *)
 let activate_warning w () =
