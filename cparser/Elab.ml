@@ -375,7 +375,7 @@ let elab_int_constant loc s0 =
     try List.find (fun ty -> integer_representable v ty)
                   (if base = 10 then dec_kinds else hex_kinds)
     with Not_found ->
-      error loc "integer literal '%s' cannot be represented" s0;
+      error loc "integer literal '%s' is too large to be represented in a signed integer type.  Consider marking it as unsigned, or writing it in hexadecimal." s0;
       IInt
   in
   (v, ty)
