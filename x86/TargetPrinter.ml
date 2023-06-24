@@ -900,7 +900,7 @@ module Target(System: SYSTEM):TARGET =
       need_masks := false;
       if !Clflags.option_g then begin
         section oc Section_text;
-        if Configuration.system <> "bsd" then cfi_section oc
+        cfi_section oc
       end
 
     let print_epilogue oc =
