@@ -797,7 +797,7 @@ Variable n: numbering.
 Variable valu: valnum -> val.
 Hypothesis n_holds: numbering_holds valu ge sp rs m n.
 
-Lemma reduce_rec_sound':
+Lemma reduce_rec_lessdef_sound:
   forall niter op args op' rl' r,
   reduce_rec A f n niter op args = Some(op', rl') ->
   sem op (map valu args) = Some r ->
@@ -827,7 +827,7 @@ Proof.
 Qed.
 
 
-Lemma reduce_sound':
+Lemma reduce_lessdef_sound:
   forall op rl vl op' rl' r,
   reduce A f n op rl vl = (op', rl') ->
   map valu vl = rs##rl ->
@@ -836,7 +836,7 @@ Lemma reduce_sound':
 Proof.
   unfold reduce; intros.
   destruct (reduce_rec A f n 4%nat op vl) as [[op1 rl1] | ] eqn:?.
-  eapply reduce_rec_sound'; eauto. inv H. eexact Heqo. congruence.
+  eapply reduce_rec_lessdef_sound; eauto. inv H. eexact Heqo. congruence.
   exists r. inv H. auto.
 Qed.
 
@@ -1083,15 +1083,11 @@ Proof.
   eapply Val.lessdef_trans; eauto.
 * (* possibly simplified *)
   destruct (reduce operation combine_op n1 op args vl) as [op' args'] eqn:?.
-  assert (RES: exists v', eval_operation ge sp op' rs##args' m = Some v' /\ Val.lessdef v v').
-  { exploit (reduce_sound' operation combine_op ge sp rs m (fun op vl => eval_operation ge sp op vl m)); eauto.
-    intros. exploit combine_op_sound. intros; eauto. eexact H2. eexact H3. intros (v' & EV & LD).
-    exists v'; auto.
-  }
-  destruct RES as (v' & EV' & LD').
-  assert  (exists v'', eval_operation ge sp op' rs'##args' m' = Some v'' /\ Val.lessdef v' v'').
-  { eapply eval_operation_lessdef; eauto. eapply regs_lessdef_regs; eauto. }
-  destruct H1 as [v'' [EV'' LD'']].
+  exploit (reduce_lessdef_sound operation combine_op ge sp rs m (fun op vl => eval_operation ge sp op vl m)); intros;eauto.
+  exploit combine_op_sound; eauto.
+  destruct H1 as (v' & EV' & LD').
+  exploit (eval_operation_lessdef). eapply regs_lessdef_regs; eauto. eexact MEXT. eexact EV'.
+  intros [v'' [EV'' LD'']].
   econstructor; split.
   eapply exec_Iop. eexact C. erewrite eval_operation_preserved. eexact EV''.
   exact symbols_preserved.
