@@ -1,5 +1,48 @@
-Release 3.12, 2022-11-25
-========================
+# Release 3.13, 2023-07-05
+
+Code generation and optimization:
+- Slightly more precise value analysis, with a better distinction
+  between "any integer value" and "any integer or pointer value". (#490)
+- Recognize a few more nested conditional expressions that can be
+  if-converted into a conditional move.
+- Register allocation: better support for "preferred" registers,
+  e.g. registers R0-R3 on ARM Thumb, which enable more compact
+  instruction encodings.
+- ARM Thumb: use more instructions that can be encoded in 16 bits, producing
+  more compact code.
+- x86: use a shorter instruction encoding for loading unsigned 32-bit
+  constants. (#487)
+
+Bug fixes:
+- `_Noreturn` on function definitions (but not declarations) was
+  ignored sometimes.
+- The argument of `__builtin_va_end` was discarded, is now evaluated
+  for its side effects.
+- Tail call optimization must be disabled in variadic functions,
+  otherwise a `va_list` structure can get out of scope.
+- Nested compound initializers were elaborated in the wrong order,
+  causing compile-time failures later in the compilation pipeline.
+- The signedness of a bit field was determined differently when its
+  type was an enum type and when it was a typedef to an enum type.
+
+ABI conformance:
+- Define `wchar_t` exactly like the ABI says.  On most platforms,
+  CompCert was defining `wchar_t` as `signed int`, but it must be
+  `unsigned int` for AArch64-ELF and `unsigned long` for PowerPC-EABI.
+
+Supported platforms:
+- Removed support for Cygwin 32 bits, which has reached end of life.
+  Cygwin 64 bits remains supported.
+
+Coq development:
+- Support Coq 8.16.0 and 8.16.1, addressing most of the new warnings in 8.16.
+- When installing the Coq development, also install coq-native generated files.
+- Tweak some proof scripts for compatibility with future Coq versions.
+  (#465, #470, #491, #492)
+- Updated the vendored copy of Flocq to version 4.1.1.
+
+
+# Release 3.12, 2022-11-25
 
 New features:
 - Support unstructured `switch` statements such as Duff's device.
@@ -53,8 +96,7 @@ Coq development:
   `undeclared-scope` warning.
 
 
-Release 3.11, 2022-06-27
-========================
+# Release 3.11, 2022-06-27
 
 New features:
 - Support `_Generic` expressions from ISO C11.
@@ -86,7 +128,7 @@ Bug fixes:
   (Before, compiling CompCert with two different OCaml versions could
    have resulted in correct but different allocations.)
 - Hardened the configure script against Cygwin installations that produce
-  \r\n for end-of-lines (#434).
+  `\r\n` for end-of-lines (#434).
 - RISC-V: tail calls to far-away functions were causing link-time errors
   (#436, #437).
 
@@ -96,8 +138,7 @@ Coq development:
 - Minimal Coq version supported is now 8.12.0.
 
 
-Release 3.10, 2021-11-19
-========================
+# Release 3.10, 2021-11-19
 
 Major improvement:
 - Bit fields in structs and unions are now handled in the
@@ -157,8 +198,7 @@ Coq development:
 - Replaced `Global Set Asymmetric Patterns` by more local settings (#408).
 
 
-Release 3.9, 2021-05-10
-=======================
+# Release 3.9, 2021-05-10
 
 New features:
 - New port: AArch64 (ARM 64 bits, "Apple silicon") under macOS.
@@ -223,8 +263,7 @@ Licensing and distribution:
   (plus the Inria non-commercial license).
 
 
-Release 3.8, 2020-11-16
-=======================
+# Release 3.8, 2020-11-16
 
 New features:
 - Support `_Static_assert` from ISO C11.
@@ -274,8 +313,7 @@ Coq and OCaml development:
 - Updated the list of dual-licensed source files.
 
 
-Release 3.7, 2020-03-31
-=======================
+# Release 3.7, 2020-03-31
 
 ISO C conformance:
 - Functions declared `extern` then implemented `inline` remain `extern`
@@ -312,8 +350,7 @@ Coq and OCaml development:
 - OCaml versions prior to 4.05.0 are no longer supported
 
 
-Release 3.6, 2019-09-17
-=======================
+# Release 3.6, 2019-09-17
 
 New features and optimizations:
 - New port targeting the AArch64 architecture: ARMv8 in 64-bit mode.
@@ -335,8 +372,8 @@ New features and optimizations:
 - `__builtin_bswap64` is now available for all platforms.
 
 Usability and diagnostics:
-- Improved the DWARF debug information generated in -g mode.
-- Added options -fcommon and -fno-common to control the generation
+- Improved the DWARF debug information generated in `-g` mode.
+- Added options `-fcommon` and `-fno-common` to control the generation
   of "common" declarations for uninitialized global.
 - Check for reserved keywords `_Complex` and `_Imaginary`.
 - Reject function declarations with multiple `void` parameters.
@@ -353,7 +390,7 @@ Bug fixing:
 - Handle dependencies in sequences of declarations
   (e.g. `int * x, sz = sizeof(x);`).  (#267)
 - Corrected the check for overflow in integer literals.
-- On x86, __builtin_fma was producing wrong code in some cases.
+- On x86, `__builtin_fma` was producing wrong code in some cases.
 - `float` arguments to `__builtin_annot` and `__builtin_ais_annot`
   were uselessly promoted to type `double`.
 
@@ -374,8 +411,7 @@ The clightgen tool:
 - Fix the output of `-dclight`. (#314)
 
 
-Release 3.5, 2019-02-27
-=======================
+# Release 3.5, 2019-02-27
 
 Bug fixing:
 - Modeling error in PowerPC ISA: how register 0 is interpreted when
@@ -393,7 +429,8 @@ Bug fixing:
    modifier still attaches to objects.  This fixes issue 256.
 - Issue with NULL as argument to a variadic function on 64-bit platforms
   (issue 265)
-- Macro __bool_true_false_are_defined was missing from <stdbool.h> (issue 266)
+- Macro `__bool_true_false_are_defined` was missing from `<stdbool.h>`
+  (issue 266)
 
 Coq development:
 - Can now be entirely rechecked using coqchk
@@ -405,12 +442,11 @@ Coq development:
   they will introduce an incompatibility with this CompCert release.
 
 New feature:
-- PowerPC port: add __builtin_isel (conditional move) at types int64, uint64,
-  and _Bool.
+- PowerPC port: add `__builtin_isel` (conditional move) at types
+  `int64`, `uint64`, and `_Bool`.
 
 
-Release 3.4, 2018-09-17
-=======================
+# Release 3.4, 2018-09-17
 
 Bug fixing:
 - Redefinition of a typedef in a different scope was wrongly rejected.
@@ -433,7 +469,7 @@ Bug fixing:
 - PowerPC in hybrid 32/64 bit mode: reject %Q and %R register specifications
   in inline assembly code, since 64-bit integer arguments are not split
   in two registers.
-- x86 64-bit mode: wrong expansion of __builtin_clzl and builtin_ctzl
+- x86 64-bit mode: wrong expansion of `__builtin_clzl` and `builtin_ctzl`
   (issue #127).
 
 New checks for ISO C conformance:
@@ -473,16 +509,14 @@ Others:
 - clightgen adds configuration information to the generated .v file (issue #226)
 
 
-
-Release 3.3, 2018-05-30
-=======================
+# Release 3.3, 2018-05-30
 
 New features:
-- Introduced the __builtin_ais_annot built-in function to communicate
+- Introduced the `__builtin_ais_annot` built-in function to communicate
   source-level annotations to AbsInt's a3 tool suite via a special
   section in object and executable files.
 - Improved C11 support: define the C11 conditional feature macros;
-  define the max_align_t type in stddef.h.
+  define the `max_align_t` type in stddef.h.
 - PowerPC 64-bit port: new built-in functions for 64-bit load-store with
   byte reversal and for 64-bit integer multiply high.
 - x86 64 bits: add support for BSD.
@@ -491,7 +525,7 @@ Bug fixing:
 - Wrong code generated for unions containing several bit fields.
 - Internal compiler errors for some initializers for structs and
   unions containing bit-fields, and for anonymous members of unions.
-- Missing error reporting for <integer> - <ptr> subtraction,
+- Missing error reporting for `<integer> - <ptr>` subtraction,
   causing an internal retyping error later during compilation.
 - String literals are l-values.
 - String literals have array types, not pointer types.
@@ -499,81 +533,80 @@ Bug fixing:
 - Wrong code generated for global variables of size 2^31 bytes or more.
 - struct and union arguments to annotation builtins must be passed by
   reference, regardless of the ABI calling conventions.
-- "e1, e2" has pointer type if "e2" has array type.
+- `e1, e2` has pointer type if `e2` has array type.
 - x86 64 bits: in "symbol + ofs" addressing modes, the offset "ofs"
   must be limited to [-2^24, 2^24) otherwise linking can fail.
 
 New or improved diagnostics (errors and warnings):
 - Warn for comparison of a pointer to a complete type and a pointer to
   an incomplete type.
-- More checks on variables declared in "for" loops: not static, not
+- More checks on variables declared in `for` loops: not static, not
   extern, not function types.
 - Reject empty declarations in K&R functions.
 - Reject arrays of incomplete types.
-- Reject duplicate 'case' or 'default' statements within a 'switch'.
-- Reject 'case' and 'default' statements outside a 'switch'.
-- Check that 'typedef' declares a name and doesn't contain '_Noreturn'.
+- Reject duplicate `case` or `default` statements within a `switch`.
+- Reject `case` and `default` statements outside a `switch`.
+- Check that `typedef` declares a name and doesn't contain `_Noreturn`.
 - Function parameters are in the same scope as function local variables.
 - More comprehensive constant-ness checks for initializers of global
   or static local variables.
 - Make sure an enum cannot have the same tag as a struct or an union.
-- More checks on where the 'auto' storage class can be used.
+- More checks on where the `auto` storage class can be used.
 - Accept empty enum declaration after nonempty enum definition.
 - Reject pointers to incomplete types in ptr - ptr subtraction.
 - When defining a function, take attributes (_Noreturn, etc) from
   earlier declarations of the function into account.
 - Better check for multiple definitions of functions or global variables.
-- Reject illegal initializations of aggregates such as "char c[4] = 42;".
+- Reject illegal initializations of aggregates such as `char c[4] = 42;`.
 - Reject designated initializers where a member of a composite type is
   re-initialized after the composite has been initialized as a whole.
 - Reject casts to struct/union types.
 - Reject sizeof(e) where e designates a bit-field member of a struct or union.
-- "e1, e2" is not a compile-time constant expression even if e1 and e2 are.
-- "main" function must not be "inline"
+- `e1, e2` is not a compile-time constant expression even if `e1` and `e2` are.
+- `main` function must not be `inline`
 - Warn for functions declared extern after having been defined.
 - Warn for function declarations after function definitions when the
   declaration has more attributes than the definition.
 - Warn for assignment of a volatile struct to a non-volatile struct.
-- Warn for "main" function if declared _Noreturn.
+- Warn for `main` function if declared `_Noreturn`.
 
 Coq development:
 - Added support for Coq versions 8.7.2 and 8.8.0.
-- Rewrote "Implicit Arguments" and "Require" inside sections,
+- Rewrote `Implicit Arguments` and `Require` inside sections,
   these are obsolete in 8.8.0.
 - Upgraded Flocq to version 2.6.1.
 - Optionally install the .vo files for reuse by other projects
-  (options -install-coqdev and -coqdevdir to configure script;
-   automatically selected if option -clightgen is given).
+  (options `-install-coqdev` and `-coqdevdir` to configure script;
+   automatically selected if option `-clightgen` is given).
 
 
-Release 3.2, 2018-01-15
-=======================
+# Release 3.2, 2018-01-15
 
 Code generation and optimization:
 - Inline static functions that are called only once.
-  Can be turned off by setting the "noinline" attribute on the function.
+  Can be turned off by setting the `noinline` attribute on the function.
 - More consistent detection and elimination of divisions by 1.
 - ARM in Thumb mode: simpler instruction sequence for branch through jump table.
-- ARM: support and use the "cmn" instruction.
+- ARM: support and use the `cmn` instruction.
 - Issue #208: make value analysis of comparisons more conservative for
-  dubious comparisons such as "(uintptr_t) &global == 0x1234" which are
+  dubious comparisons such as `(uintptr_t) &global == 0x1234` which are
   undefined behavior in CompCert.
 
 Usability:
 - Resurrected support for the Cygwin x86-32 port, which got lost at release 3.0.
-- Support the "noinline" attribute on C function definitions.
-- PowerPC port with Diab toolchain: support -t <target processor> option
+- Support the `noinline` attribute on C function definitions.
+- PowerPC port with Diab toolchain: support `-t <target processor>` option
   and pass it to the Diab tools.
-- Clightgen tool: add -o option to specify output file.
+- Clightgen tool: add `-o` option to specify output file.
 - Pull request #192: improve the printing of Clight intermediate code
   so that it looks more like valid C source.  (Frédéric Besson)
 
 Bug fixing:
-- Issue #P25: make sure sizeof(long double) = sizeof(double) in all contexts.
-- Issue #211: wrong scoping for C99 declarations within a "for" statement.
+- Issue #P25: make sure `sizeof(long double) = sizeof(double)` in all contexts.
+- Issue #211: wrong scoping for C99 declarations within a `for` statement.
 
 Coq and Caml development:
-- Pull request #191: Support Coq version 8.7.0 and 8.7.1 in addition
+- Pull request `#191`: Support Coq version 8.7.0 and 8.7.1 in addition
   to Coq 8.6.1.  Coq 8.6 (.0) is no longer supported owing to an
   incompatibility with 8.7.0.
   (Sigurd Schneider)
@@ -582,8 +615,7 @@ Coq and Caml development:
   and the copyright headers of the dual-licensed files.
 
 
-Release 3.1, 2017-08-18
-=======================
+# Release 3.1, 2017-08-18
 
 Major improvements:
 
@@ -603,17 +635,17 @@ Code generation and optimization:
 
 Usability:
 
-- Add options -finline / -fno-inline to control function inlining.
-- Removed the compilation of '.cm' files written in Cminor concrete syntax.
+- Add options `-finline` / `-fno-inline` to control function inlining.
+- Removed the compilation of `.cm` files written in Cminor concrete syntax.
 - More precise warnings about missing function returns.
-- clightgen: add option "-normalize" to avoid memory loads deep inside
+- clightgen: add option `-normalize` to avoid memory loads deep inside
   expressions.
 
 Bug fixing:
 
-- Issue #179: clightgen produces wrong output for "switch" statements.
+- Issue #179: clightgen produces wrong output for `switch` statements.
 - Issue #196: excessive proof times in .v files produced by clightgen.
-- Do not generate code for functions with "inline" specifier that are
+- Do not generate code for functions with `inline` specifier that are
   neither static nor extern, as per ISO C99.
 - Some line number information was missing for some goto labels and
   switch cases.
@@ -622,23 +654,21 @@ Bug fixing:
 - Issue #P18: ARM addressing overflows caused by 1- underestimation of
   code size, causing mismanagement of constant pool, and 2- large stack
   frames where return address and back link are at offsets >= 4Kb.
-- Pass -no-pie flag to the x86 linker when -pie is the default.
+- Pass `-no-pie` flag to the x86 linker when `-pie` is the default.
 
 Coq and Caml development:
 
 - Support Coq 8.6.1.
 - Improve compatibility with Coq working version.
-- Always generate .merlin and _CoqProject files.
+- Always generate `.merlin` and `_CoqProject` files.
 
 
-Release 3.0.1, 2017-02-14
-=========================
+# Release 3.0.1, 2017-02-14
 
 - Ported to Coq 8.6.
 
 
-Release 3.0, 2017-02-10
-=======================
+# Release 3.0, 2017-02-10
 
 Major improvements:
 
@@ -655,7 +685,7 @@ Major improvements:
   addition to the original x86-32 bit (IA32) code.  (This is the first
   instantiation of the new support for 64-bit targets described
   above.) Support for x86-64 is currently available for Linux and MacOS X.
-  (Run the configure script with 'x86_64-linux' or 'x86_64-macosx'.)
+  (Run the configure script with `x86_64-linux` or `x86_64-macosx`.)
   This is an early port: several ABI incompatibilities remain.
 
 Language features:
@@ -663,23 +693,23 @@ Language features:
 - Support for anonymous structures and unions as members of
   structures or unions.  (ISO C11, section 6.7.2.1, para 13 and 19.)
 - New built-in functions for ARM and PowerPC:
-  __builtin_ctz, __builtin_ctzl, __builtin_ctzll
+  `__builtin_ctz`, `__builtin_ctzl`, `__builtin_ctzll`
   (count trailing zeros, 32 and 64 bits).
 
 Usability:
 
-- Added options -Wxxx and -Wno-xxx (for various values of "xxx")
+- Added options `-Wxxx` and `-Wno-xxx` (for various values of `xxx`)
   to control which warnings are emitted.
-- Added options -Werror=xxx and -Wno-error=xxx (for various values of "xxx")
+- Added options `-Werror=xxx` and `-Wno-error=xxx` (for various values of `xxx`)
   to control which warnings are treated as errors.
 - Support response files where additional command-line arguments can
-  be passed (syntax: @file).
+  be passed (syntax: `@file`).
 - Improved wording of warning and error messages.
 - Improved handling of attributes, distinguishing attributes that apply
   to types from attributes that apply to names.  For example, in
-    __attribute((aligned(8),section("foo"))) int * p;
-  the "aligned" attribute is attached to type "int", while
-  the "section" attribute is attached to name "p".
+    `__attribute((aligned(8),section("foo"))) int * p;`
+  the `aligned` attribute is attached to type `int`, while
+  the `section` attribute is attached to name `p`.
 
 Code generation:
 
@@ -689,23 +719,22 @@ Code generation:
 Bug fixing:
 
 - Issue #155: on ARM, assembly errors caused by large jump tables for
-  "switch" statements and overflow in accessing constant pools.
+  `switch` statements and overflow in accessing constant pools.
 - Issue #151: large inductive definition causes a fatal error in
   32-bit versions of Coq.
-- Issue #143: handle "%lf" printf() format in the reference interpreter
+- Issue #143: handle `%lf` `printf()` format in the reference interpreter
 - Issue #138: struct declarations in K&R function parameters were ignored.
 - Issues #110, #111, #113, #114, #115, #119, #120, #121, #122, #123, #124,
   #125, #126, #127, #128, #129, #130, #133, #138, #144: various cases
   of internal errors and failed assertions that should have been
   proper errors instead.
-- For __builtin_memcpy_aligned, size and alignment arguments of 64-bit
+- For `__builtin_memcpy_aligned`, size and alignment arguments of 64-bit
   integer type were causing a fatal error on a 32-bit target.
 - ARM and x86 ports: wrong register allocation for some calls to
   function pointers. 
 
 
-Release 2.7.1, 2016-07-18
-=========================
+# Release 2.7.1, 2016-07-18
 
 - Ported to Coq 8.5pl2.
 
@@ -716,8 +745,7 @@ Bug fixing:
 - Updates to the Cminor parser.
 
 
-Release 2.7, 2016-06-29
-=======================
+# Release 2.7, 2016-06-29
 
 Major improvement:
 - The proof of semantic preservation now accounts for separate compilation
@@ -729,19 +757,19 @@ Major improvement:
   be obtained by syntactic linking of the source C compilation units.
 
 Language features:
-- Parse the _Noreturn function attribute from ISO C11.
-- New standard includes files: <iso646.h> and <stdnoreturn.h> from ISO C11.
-- New built-in functions: __builtin_clzl, __builtin_clzll
+- Parse the `_Noreturn` function attribute from ISO C11.
+- New standard includes files: `<iso646.h>` and `<stdnoreturn.h>` from ISO C11.
+- New built-in functions: `__builtin_clzl`, `__builtin_clzll`
   (count leading zeros, 32 and 64 bits) for ARM, IA32 and PowerPC;
-  __builtin_ctz, __builtin_ctzl, __builtin_ctzll
+  `__builtin_ctz`, `__builtin_ctzl`, `__builtin_ctzll`
   (count trailing zeros, 32 and 64 bits) for IA32.
 
 Formal C semantics:
-- The semantics of conversions from pointer types to _Bool
+- The semantics of conversions from pointer types to `_Bool`
   is fully defined (again).
 
 Usability:
-- The generation of DWARF debugging information in "-g" mode is now
+- The generation of DWARF debugging information in `-g` mode is now
   supported for ARM and IA32 (in addition to PowerPC).
 
 Coq development:
@@ -761,16 +789,15 @@ OCaml development:
 
 Bug fixing:
 - Some declarations within C expressions were incorrectly ignored
-  (e.g. "sizeof(enum e {A})").
-- ARM in Thumb mode: incorrect "movs" instructions involving the stack
+  (e.g. `sizeof(enum e {A})`).
+- ARM in Thumb mode: incorrect `movs` instructions involving the stack
   pointer register were generated.
 
 
-Release 2.6, 2015-12-21
-=======================
+# Release 2.6, 2015-12-21
 
 Usability:
-- Generation of full DWARF v2 debugging information in "-g" mode,
+- Generation of full DWARF v2 debugging information in `-g` mode,
   including function-local variables.  This is fully supported
   for the PowerPC target with GNU tools or Diab tools.  Support
   for IA32 and ARM is nearly there.
@@ -793,8 +820,8 @@ Coq development:
 - Upgraded the Flocq library to version 2.5.0.
 
 Bug fixing:
-- Issue #71: incorrect initialization of an array of wchar_t
-- Corrected the handling of bit-fields of type _Bool and width > 1
+- Issue #71: incorrect initialization of an array of `wchar_t`
+- Corrected the handling of bit-fields of type `_Bool` and width > 1
 - Removed copy optimization when returning a struct from a function.
 - Full parsing of unprototyped (K&R-style) function definitions.
   (Before, the parsing was incomplete and would reject some definitions.)
@@ -803,37 +830,36 @@ Miscellaneous:
 - The cchecklink tool (for a posteriori validation of assembly
   and linking) was removed.  It is replaced by the Valex tool,
   available from AbsInt.
-- Added a command-line option -conf <config file> to select
-  a different "compcert.ini" configuration file.
-- Removed the command-line options -fstruct-passing=<convention>
-  and -fstruct-return=<convention>, more confusing than useful.
-- Added a command-line option -fstruct-passing that activates
+- Added a command-line option `-conf <config file>` to select
+  a different `compcert.ini` configuration file.
+- Removed the command-line options `-fstruct-passing=<convention>`
+  and `-fstruct-return=<convention>`, more confusing than useful.
+- Added a command-line option `-fstruct-passing` that activates
   ABI-conformant by-value passing of structs and unions as
   function arguments or results.  If this option is not set,
   passing a struct/union as function argument is now rejected.
-- The -fstruct-return command-line option is deprecated and
-  becomes a synonymous for -fstruct-passing.
-- The return type of __builtin_clz() is "int", as documented,
-  and not "unsigned int", as previously implemented.
+- The `-fstruct-return` command-line option is deprecated and
+  becomes a synonymous for `-fstruct-passing`.
+- The return type of `__builtin_clz` is `int`, as documented,
+  and not `unsigned int`, as previously implemented.
 
 
-Release 2.5, 2015-06-12
-=======================
+# Release 2.5, 2015-06-12
 
 Language features:
 - Extended inline assembly in the style of GCC.  (See section 6.5
   of the user's manual.)  The implementation is not as complete
   as that of GCC or Clang.  In particular, the only constraints
-  supported over operands are "r" (register), "m" (memory), and
-  "i" (integer immediate).
+  supported over operands are `r` (register), `m` (memory), and
+  `i` (integer immediate).
 
 Code generation and optimization:
-- Revised translation of '||' and '&&' to Clight so as to
+- Revised translation of `||` and `&&` to Clight so as to
   produce well-typed Clight code.
 - More prudent value analysis of uninitialized declarations of
- "const" global variables.
+  `const` global variables.
 - Revised handling of "common" global declarations, fixes an issue
-  with uninitialized declarations of "const" global variables.
+  with uninitialized declarations of `const` global variables.
 
 Improvements in confidence:
 - Formalized the typing rules for CompCert C in Coq and verified
@@ -848,31 +874,31 @@ Improvements in confidence:
   pointer is out of bounds.
 
 Usability:
-- Generation of DWARF v2 debugging information in "-g" mode.
+- Generation of DWARF v2 debugging information in `-g` mode.
   The information describes C types, global variables, functions,
   but not yet function-local variables.  This is currently available
   only for the PowerPC/Diab target.
 - Added command-line options to turn individual optimizations on or off,
-  and a "-O0" option to turn them all off.
-- Revised handling of arguments to __builtin_annot so that no code
+  and a `-O0` option to turn them all off.
+- Revised handling of arguments to `__builtin_annot` so that no code
   is generated for an argument that is a global variable or a local
   variable whose address is taken.
 - In string and character literals, treat illegal escape sequences
-  (e.g. "\%" or "\0") as an error instead of a warning.
+  (e.g. `\%` or `\0`) as an error instead of a warning.
 - Warn if floating-point literals overflow or underflow when converted
   to FP numbers.
-- In "-g -S" mode, annotate the generated .s file with comments
+- In `-g -S` mode, annotate the generated `.s` file with comments
   containing the C source code.
-- Recognize and accept more of GCC's alternate keywords, e.g. __signed,
-  __volatile__, etc.
-- cchecklink: added option "-files-from" to read .sdump file names
+- Recognize and accept more of GCC's alternate keywords, e.g. `__signed`,
+  `__volatile__`, etc.
+- cchecklink: added option `-files-from` to read `.sdump` file names
     from a file or from standard input.
 
 ABI conformance:
 - Improved ABI conformance for passing values of struct or union types
   as function arguments or results.  Full conformance is achieved on
   IA32/ELF, IA32/MacOSX, PowerPC/EABI, PowerPC/Linux, and ARM/EABI.
-- Support the "va_arg" macro from <stdarg.h> in the case of arguments
+- Support the `va_arg` macro from `<stdarg.h>` in the case of arguments
   of struct or union types.
 
 Coq development:
@@ -880,22 +906,22 @@ Coq development:
   represented by name instead of by structure.  A separate environment
   maps these names to struct/union definitions.  This avoids
   bad algorithmic complexity of operations over structural types.
-- Introduce symbol environments (type Senv.t) as a restricted view on
-  global environments (type Genv.t).
+- Introduce symbol environments (type `Senv.t`) as a restricted view on
+  global environments (type `Genv.t`).
 - Upgraded the Flocq library to version 2.4.0.
 
 Bug fixing:
 - Issue #4: exponential behaviors with deeply-nested struct types.
-- Issue #6: mismatch on the definition of wchar_t
+- Issue #6: mismatch on the definition of `wchar_t`
 - Issue #10: definition of composite type missing from the environment.
 - Issue #13: improved handling of wide string literals
 - Issue #15: variable-argument functions are not eligible for inlining.
-- Issue #19: support empty "switch" statements
+- Issue #19: support empty `switch` statements
 - Issue #20: ABI incompatibility wrt struct passing on IA32.
-- Issue #28: missing type decay in __builtin_memcpy_aligned applied to arrays.
-- Issue #42: emit error if "static" definition follows non-"static" declaration.
-- Issue #44: OSX assembler does not recognize ".global" directive.
-- Protect against redefinition of the __i64_xxx helper library functions.
+- Issue #28: missing type decay in `__builtin_memcpy_aligned` applied to arrays.
+- Issue #42: emit error if `static` definition follows non-`static` declaration.
+- Issue #44: OSX assembler does not recognize `.global` directive.
+- Protect against redefinition of the `__i64_xxx` helper library functions.
 - Revised handling of nonstandard attributes in C type compatibility check.
 - Emit an error on "preprocessing numbers" that are invalid numerical literals.
 - Added missing check for static redefinition following a non-static
@@ -904,17 +930,16 @@ Bug fixing:
   identifier within the same scope.
 
 Miscellaneous:
-- When preprocessing with gcc or clang, use "-std=c99" mode to force
+- When preprocessing with gcc or clang, use `-std=c99` mode to force
   C99 conformance.
 - Use a Makefile instead of ocamlbuild to compile the OCaml code.
 
 
-Release 2.4, 2014-09-17
-=======================
+# Release 2.4, 2014-09-17
 
 Language features:
 - Support C99 compound literals  (ISO C99 section 6.5.2.5).
-- Support "switch" statements over an argument of type "long long".
+- Support `switch` statements over an argument of type `long long`.
 
 Code generation and optimization:
 - Revised and improved support for single-precision floating-point
@@ -922,7 +947,7 @@ Code generation and optimization:
   precision, with conversions to/from single precision as needed,
   in particular when loading/storing a single-precision FP number
   from/to memory.  Now, FP operations whose arguments are of type
-  "float" are performed in single-precision, using the processor's
+  `float` are performed in single-precision, using the processor's
   single FP instructions.  Fewer conversions between double and
   single precision are generated.
 - Value analysis and constant propagation: more precise treatment of
@@ -934,12 +959,12 @@ Improvements in confidence:
   floating-point numbers.
 
 ARM port:
-- Added support for Thumb2 instruction encoding (option -mthumb).
+- Added support for Thumb2 instruction encoding (option `-mthumb`).
   Thumb2 is supported on ARMv7 and up, and produces more compact
   machine code.
 - Exploit some VFPv3 instructions when available.
-- Built-in function '__builtin_cntlz' (count leading zeros)
-  renamed '__builtin_clz' for GCC / Clang compatibility.
+- Built-in function `__builtin_cntlz` (count leading zeros)
+  renamed `__builtin_clz` for GCC / Clang compatibility.
 
 PowerPC port:
 - Refactored the expansion of built-in functions and
@@ -947,11 +972,11 @@ PowerPC port:
   cchecklink.
 - Updated the cchecklink validator accordingly.
 - More efficient code generated for volatile accesses to small data areas.
-- Built-in function '__builtin_cntlz' (count leading zeros)
-  renamed '__builtin_clz' for GCC / Clang compatibility.
+- Built-in function `__builtin_cntlz` (count leading zeros)
+  renamed `__builtin_clz` for GCC / Clang compatibility.
 
 IA32 port:
-- Added built-in functions __builtin_clz and __builtin_ctz
+- Added built-in functions `__builtin_clz` and `__builtin_ctz`
   (count leading / trailing zeros).
 
 Coq development:
@@ -965,29 +990,27 @@ Coq development:
   both 64- and 32-bit floats.
 
 
-Release 2.3pl2, 2014-05-15
-==========================
+# Release 2.3pl2, 2014-05-15
 
 Usability:
-- Re-added support for "__func__" identifier as per ISO C99.
+- Re-added support for `__func__` identifier as per ISO C99.
 - Re-added some popular GCC extensions to ISO C99:
-     . alternate keywords __restrict, __inline__, etc, 
-     . support for empty structs and unions
-     . support '\e' escape in char and string literals, meaning ESC
+     * alternate keywords `__restrict`, `__inline__`, etc, 
+     * support for empty structs and unions
+     * support `\e` escape in char and string literals, meaning ESC
 - Do not assume that the preprocessor removed all comments.
 
 Bug fixing:
-- Fixed regression on initializers of the form  T x[N] = "literal";
-  where T is a typedef for a character type.
-- "asm" statements were causing syntax errors.
-- Better handling of "extern" and "extern inline" function definitions.
+- Fixed regression on initializers of the form  `T x[N] = "literal";`
+  where `T` is a typedef for a character type.
+- `asm` statements were causing syntax errors.
+- Better handling of `extern` and `extern inline` function definitions.
 - Internal error on some octal escape sequences in string literals.
-- Parsing of "#pragma section" directives made more robust and
+- Parsing of `#pragma section` directives made more robust and
   with better error reporting.
 
 
-Release 2.3, 2014-05-05
-=======================
+# Release 2.3, 2014-05-05
 	
 Language features:
 - Support for C99 designated initializers. (ISO C99 section 6.7.8.)
@@ -1002,14 +1025,14 @@ Improvements in confidence:
 - More theorems proved about float<->integer conversions.
 
 Optimizations:
-- Optimize "x != 0", "x == 0", "x != 1", and "x == 1" when x is known
+- Optimize `x != 0`, `x == 0`, `x != 1`, and `x == 1` when x is known
   to be a boolean already, ranging over {0, 1, undef}.
 - More systematic constant propagation in pass Selection, lightens
   the work of later RTL optimisations.
-- IA32: recognize and use the "not" instruction.
+- IA32: recognize and use the `not` instruction.
 
 Usability:
-- Option "-timings" to print compilation times for various passes.
+- Option `-timings` to print compilation times for various passes.
 - Various tweaks in IRC graph coloring to reduce compilation time.
 - IA32: add built-in functions for fused multiply-add
   (require a recent processor with FMA3 extensions).
@@ -1020,13 +1043,13 @@ Improvements in ABI conformance:
 - IA32 and ARM: revised handling of "common" variables to conform with ABI.
 
 Bug fixing:
-- In -fbitfields emulation: "a->f" was not properly rewritten if "a"
+- In -fbitfields emulation: `a->f` was not properly rewritten if `a`
   had "array of structs" type instead of "pointer to struct".
 - Moved analysis of single-precision floats from RTLtyping to Machtyping.
   (RTLtyping was incorrectly rejecting some functions involving
   single-precision floats.)  Simplified LTL semantics and Allocation
   pass accordingly.
-- Assignment to a l-value of "volatile float" type could cause
+- Assignment to a l-value of `volatile float` type could cause
   an internal error in RTLtyping/Machtyping.
 - The case __builtin_fabs applied to integers was missing in the
   C semantics and in C#minor generation.
@@ -1035,8 +1058,7 @@ Bug fixing:
   generation.
 
 
-Release 2.2, 2014-02-24
-=======================
+# Release 2.2, 2014-02-24
 
 Major improvements:
 
@@ -1060,12 +1082,12 @@ Major improvements:
   (Option -fvararg-calls, "on" by default.)
 
 Language features:
-- In "switch" statements, "default" cases can now appear anywhere, not
+- In `switch` statements, `default` cases can now appear anywhere, not
   just as the last case.
 - Support for incomplete array as last field of a struct,
   as specified in ISO C 99.
-- Support for declarations within 'for' loops, as specified in ISO C 99.
-  (E.g. "for (int i = 0; i < 4; i++) ...")
+- Support for declarations within `for` loops, as specified in ISO C 99.
+  (E.g. `for (int i = 0; i < 4; i++) ...`)
 - Revised semantics and implementation of _Alignas(N) attribute
   to better match those of GCC and Clang.
 - Better tolerance for functions declared without prototypes
@@ -1074,7 +1096,7 @@ Language features:
   (register-relative addressing with 32-bit offsets).
 
 Improvements in ABI conformance:
-- For x86/IA32, align struct fields of types "double" or "long long" to 4
+- For x86/IA32, align struct fields of types `double` or `long long` to 4
   instead of 8, as prescribed by the x86 ELF ABI.
 - For PowerPC and ARM, structs and unions returned as function results
   are now passed in integer registers if their sizes are small enough
@@ -1082,26 +1104,26 @@ Improvements in ABI conformance:
 
 Usability:
 - Revised parsing of command-line arguments to be closer to GCC and Clang.
-  In particular, "ccomp -c foo.c -o obj/foo.o" now works as expected,
-  instead of ignoring the "-o" option as in earlier CompCert versions.
+  In particular, `ccomp -c foo.c -o obj/foo.o` now works as expected,
+  instead of ignoring the `-o` option as in earlier CompCert versions.
 - Recognize input files ending in .i and .p as C source files that
   must not be preprocessed.
 - Warn for uses of the following GCC extensions to ISO C:
   zero-sized arrays, empty structs/unions, empty initializer braces.
-- Option "-fno-fpu" to prevent the use of FP registers for some
+- Option `-fno-fpu` to prevent the use of FP registers for some
   integer operations such as block copies.  (Replaces the previous
-  "-fno-sse" option which was x86/IA32-specific, and extends it to
+  `-fno-sse` option which was x86/IA32-specific, and extends it to
   PowerPC and ARM.)
-- Option "-drtl" to record the RTL intermediate representation
-  at every stage of optimization.  (Replaces "-dtailcall", "-dinlining",
-  "-dconstprop", and "-dcse".)
+- Option `-drtl` to record the RTL intermediate representation
+  at every stage of optimization.  (Replaces `-dtailcall`, `-dinlining`,
+  `-dconstprop`, and `-dcse`.)
 - Add CompCert version number and command-line arguments as comments
   in the generated assembly files.
 
 Other performance improvements:
 - Recognize __builtin_fabs as a primitive unary operator instead of
   a built-in function, enabling more optimizations.
-- PowerPC: shorter code generated for "&global_variable + expr".
+- PowerPC: shorter code generated for `&global_variable + expr`.
 
 Improvements in compilation times:
 - More efficient implementation of Kildall's dataflow equation solver,
@@ -1112,7 +1134,7 @@ Improvements in compilation times:
 Bug fixing:
 - Fixed incorrect hypothesis on __builtin_write{16,32}_reversed.
 - Fixed syntax error in __attribute__((__packed__)).
-- Emit clean compile-time error for 'switch' over a value of 64-bit
+- Emit clean compile-time error for `switch` over a value of 64-bit
   integer type (currently not supported).
 - Recognize source files with .i or .p extension as C sources that
   should not be preprocessed.
@@ -1122,8 +1144,7 @@ Coq development:
 - Suppressed the Mfloat64al32 memory_chunk, no longer needed.
 
 
-Release 2.1, 2013-10-28
-=======================
+# Release 2.1, 2013-10-28
 
 Language semantics:
 - More precise modeling of not-a-numbers (NaNs) in floating-point
@@ -1137,9 +1158,9 @@ Language semantics:
 Language features:
 - Support for _Alignas(N) attribute from ISO C 2011.
 - Revised implementation of packed structs, taking advantage of _Alignas.
-- Suppressed the pragma "packed", replaced by a struct-level attribute
-  __packed__(params) or __attribute__(packed(params)).
-- Fixed typing rules for __builtin_annot() to avoid casting arguments
+- Suppressed the pragma `packed`, replaced by a struct-level attribute
+  `__packed__(params)` or `__attribute__(packed(params))`.
+- Fixed typing rules for `__builtin_annot()` to avoid casting arguments
   of small integer or FP types.
 
 Performance improvements:
@@ -1147,7 +1168,7 @@ Performance improvements:
   multiply-high and shifts.
 - Optimize floating-point divisions by powers of 2, turning them
   into multiplications.
-- Optimize "x * 2.0" and "2.0 * x" into "x + x".
+- Optimize `x * 2.0` and `2.0 * x` into `x + x`.
 - PowerPC: more efficient implementation of division on 64-bit integers.
 
 Bug fixing:
@@ -1161,12 +1182,11 @@ Miscellaneous:
 - MacOS X port updated to the latest XCode (version 5.0).
 
 
-Release 2.0, 2013-06-21
-=======================
+# Release 2.0, 2013-06-21
 
 Major improvements:
 
-- Support for C types "long long" and "unsigned long long", that is,
+- Support for C types `long long` and `unsigned long long`, that is,
   64-bit integers.  Regarding arithmetic operations on 64-bit integers,
   . simple operations are expanded in-line and proved correct;
   . more complex operations (division, modulus, conversions to/from floats)
@@ -1185,7 +1205,7 @@ Major improvements:
   The improvements in quality of generated code is significant for
   IA32 (because of its paucity of registers) but less so for ARM and PowerPC.
 
-- Preliminary support for debugging information.  The "-g" flag
+- Preliminary support for debugging information.  The `-g` flag
   causes DWARF debugging information to be generated for line numbers
   and stack structure (Call Frame Information).  With a debugger like
   GDB, this makes it possible to step through the code, put breakpoints
@@ -1194,9 +1214,9 @@ Major improvements:
   it is not possible to print the values of variables.
 
 Improvements in ABI conformance:
-- For IA32 and ARM, function arguments of type "float"
-  (single-precision FP) were incorrectly passed as "double".
-- For PowerPC, fixed alignment of "double" and "long long" arguments
+- For IA32 and ARM, function arguments of type `float`
+  (single-precision FP) were incorrectly passed as `double`.
+- For PowerPC, fixed alignment of `double` and `long long` arguments
   passed on stack.
 
 Improvements in code generation:
@@ -1214,23 +1234,22 @@ Improvements in compiler usability:
   types, avoiding behaviors exponential in the nesting of structs.
 
 Bug fixing:
-- Fixed parsing of labeled statements inside "switch" constructs,
+- Fixed parsing of labeled statements inside `switch` constructs,
   which were causing syntax errors.
-- The "->" operator applied to an array type was causing a type error.
-- Nested conditional expressions "a ? (b ? c : d) : e" were causing
-  a compile-time error if "c", "d" and "e" had different types.
+- The `->` operator applied to an array type was causing a type error.
+- Nested conditional expressions `a ? (b ? c : d) : e` were causing
+  a compile-time error if `c`, `d` and `e` had different types.
 
 Coq development:
 - Adapted the memory model to the needs of the VST project at Princeton:
-  . Memory block identifiers are now of type "positive" instead of "Z"
+  . Memory block identifiers are now of type `positive` instead of `Z`
   . Strengthened invariants in the definition of memory injections
     and the specification of external calls.
 - The LTL intermediate language is now a CFG of basic blocks.
 - Suppressed the LTLin intermediate language, no longer used.
 
 
-Release 1.13, 2013-03-12
-========================
+# Release 1.13, 2013-03-12
 
 Language semantics:
 - Comparisons involving pointers "one past" the end of a block are
@@ -1238,7 +1257,7 @@ Language semantics:
   (Contributed by Robbert Krebbers).
 
 Language features:
-- Arguments to __builtin_annot() that are compile-time constants
+- Arguments to `__builtin_annot()` that are compile-time constants
   are now replaced by their (integer or float) value in the annotation
   generated in the assembly file.
 
@@ -1267,14 +1286,12 @@ Coq development:
   properly transparent.
 
 
-Release 1.12.1, 2013-01-29
-==========================
+# Release 1.12.1, 2013-01-29
 
 Ported to Coq 8.4pl1.  Otherwise functionally identical to release 1.12.
 
 
-Release 1.12, 2013-01-11
-========================
+# Release 1.12, 2013-01-11
 
 Improvements in confidence:
 - Floating-point literals are now parsed and converted to IEEE-754 binary
@@ -1285,30 +1302,30 @@ Language semantics:
 - Comparison between function pointers is now correctly defined
   in the semantics of CompCert C (it was previously undefined behavior,
   by mistake).
-- Bit-fields of 'enum' type are now treated as either unsigned or signed,
+- Bit-fields of `enum` type are now treated as either unsigned or signed,
   whichever is able to represent all values of the enum.
   (Previously: always signed.)
-- The "&&" and "||" operators are now primitive in CompCert C and are
+- The `&&` and `||` operators are now primitive in CompCert C and are
   given explicit semantic rules, instead of being expressed in terms
-  of "_ ? _ : _" as in previous CompCert releases.
-- Added a "Ebuiltin" expression form (invocation of built-in function)
-  to CompCert C, and a "Sbuiltin" statement form to Clight.
+  of `_ ? _ : _` as in previous CompCert releases.
+- Added a `Ebuiltin` expression form (invocation of built-in function)
+  to CompCert C, and a `Sbuiltin` statement form to Clight.
   Used it to simplify the encoding of annotations, memcpy, and volatile
   memory accesses.
 
 Performance improvements:
-- Better code generated for "&&" and "||" operators.
+- Better code generated for `&&` and `||` operators.
 - More aggressive elimination of conditional branches during constant
   propagation, taking better advantage of inferred constants.
 
 Language features:
-- By popular demand, "asm" statements for inline assembly are now supported
+- By popular demand, `asm` statements for inline assembly are now supported
   if the flag -finline-asm is set.  Use with extreme caution, as the
   semantic preservation proof assumes these statements have no effect
   on the processor state.
 
 Internal simplifications and reorganization:
-- Clight, Csharpminor, Cminor: suppressed the "Econdition" conditional
+- Clight, Csharpminor, Cminor: suppressed the `Econdition` conditional
   expressions, no longer useful.
 - Clight: a single loop form, the three C loops are derived forms.
 - Clight: volatile memory accesses are materialized as builtin operations.
@@ -1317,8 +1334,8 @@ Internal simplifications and reorganization:
   whose address is never taken by temporary, nonadressable variables.
   (This used to be done in Cminorgen.)
 - Csharpminor: simplified semantics.
-- Cminor: suppressed the "Oboolval" and "Onotbool" operators,
-  which can be expressed in terms of "Ocmpu" at no performance costs.
+- Cminor: suppressed the `Oboolval` and `Onotbool` operators,
+  which can be expressed in terms of `Ocmpu` at no performance costs.
 - All languages: programs are now presented as a list of global definitions
   (of functions or variables) instead of two lists, one for functions
   and the other for variables.
@@ -1334,8 +1351,7 @@ Other changes:
   no longer support PowerPC.
 
 
-Release 1.11, 2012-07-13
-========================
+# Release 1.11, 2012-07-13
 
 Improvements in confidence:
 - Floating-point numbers and arithmetic operations, previously axiomatized,
@@ -1343,48 +1359,47 @@ Improvements in confidence:
   of S. Boldo and G. Melquiond.
 
 Language semantics:
-- In accordance with ISO C standards, the signed division min_int / -1
-  and the signed remainder min_int % -1 (where min_int is the smallest
+- In accordance with ISO C standards, the signed division `min_int / -1`
+  and the signed remainder `min_int % -1` (where `min_int` is the smallest
   representable signed integer) now have undefined semantics and are
   treated as "going wrong" behaviors.
-  (Previously, they were defined with results min_int and 0 respectively,
+  (Previously, they were defined with results `min_int` and 0 respectively,
   but this behavior requires unnatural code to be generated on IA32 and
   PowerPC.)
 
 Performance improvements:
 - Function inlining is now implemented.  The functions that are inlined
-  are those declared "inline" in the C source, provided they are not
+  are those declared `inline` in the C source, provided they are not
   recursive.
 - Constant propagation is now able to propagate the initial values of
-  "const" global variables.
+  `const` global variables.
 - Added option -ffloat-const-prop to control the propagation of
   floating-point constants; see user's manual for documentation.
 - Common subexpression elimination can now eliminate memory loads
   following a memory store at the same location.
-- ARM: make use of the "fcmpzd" and "fmdrr" instructions.
+- ARM: make use of the `fcmpzd` and `fmdrr` instructions.
 
 New tool:
 - The "cchecklink" tool performs a posteriori validation of the
   assembling and linking phases.  It is available for PowerPC-EABI
   only.  It takes as inputs an ELF-PowerPC executable as produced
   by the linker, as well as .sdump files (abstract assembly) as
-  produced by "ccomp -sdump", and checks that the executable contains
+  produced by `ccomp -sdump`, and checks that the executable contains
   properly-assembled and linked code and data corresponding to those
   produced by CompCert.
 
 Other changes:
-- Elimination of "static" functions and "static" global variables that
+- Elimination of `static` functions and `static` global variables that
   are not referenced in the generated code.
 - The memory model was enriched with "max" permissions in addition to
   "current" permissions, to better reason over "const" blocks and
   already-deallocated blocks.
 - More efficient implementation of the memory model, resulting
-  in faster interpretation of source files by "ccomp -interp".
-- Added option "-falign-functions" to control alignment of function code.
+  in faster interpretation of source files by `ccomp -interp`.
+- Added option `-falign-functions` to control alignment of function code.
 
 
-Release 1.10, 2012-03-13
-========================
+# Release 1.10, 2012-03-13
 
 Improvements in confidence:
 - CompCert C now natively supports volatile types.  Its semantics fully
@@ -1399,9 +1414,9 @@ Improvements in confidence:
   in the strict sense.
 
 Language features:
-- Support for _Bool type from ISO C99.
-- Support for _Alignof(ty) operator from ISO C 2011
-  and __alignof__(ty), __alignof__(expr) from GCC.
+- Support for `_Bool` type from ISO C99.
+- Support for `_Alignof(ty)` operator from ISO C 2011
+  and `__alignof__(ty)`, `__alignof__(expr)` from GCC.
 
 Performance improvements:
 - Improvements in instruction selection, especially for integer casts
@@ -1421,15 +1436,14 @@ Performance improvements:
 Other improvements:
 - PowerPC/EABI: uninitialized global variables now go in common (bss) section.
 - PowerPC: work around limited excursion of conditional branch instructions.
-- PowerPC: added __builtin_fnmadd() and __builtin_fnmsub().
+- PowerPC: added `__builtin_fnmadd()` and `__builtin_fnmsub()`.
 - Reference interpreter: better printing of pointer values and locations.
 - Added command-line options -Wp,<opt> -Wa,<opt> -Wl,<opt> to pass
   specific options to the preprocessor, assembler, or linker, respectively.
 - More complete Cminor parser and printer (contributed by Andrew Tolmach).
 
 
-Release 1.9.1, 2011-11-28
-=========================
+# Release 1.9.1, 2011-11-28
 
 Bug fixes:
 - Initialization of a char array by a short string literal was wrongly rejected
@@ -1438,59 +1452,58 @@ Bug fixes:
   machine trap.
 
 Improvements:
-- Added language option -flongdouble to treat "long double" like "double".
+- Added language option -flongdouble to treat `long double` like `double`.
 - The reference interpreter (ccomp -interp) now supports 2-argument main
   functions (int main(int, char **)).
 - Improved but still very experimental emulation of packed structs
   (-fpacked-structs)
 - Coq->Caml extraction: extract Coq pairs to Caml pairs and Coq
-  characters to Caml "char" type.
+  characters to Caml `char` type.
 
 
-Release 1.9, 2011-08-22
-=======================
+# Release 1.9, 2011-08-22
 
 - The reduction semantics of CompCert C was made executable and turned
   into a reference interpreter for CompCert C, enabling animation of
   the semantics.  (Thanks to Brian Campbell for suggesting this approach.)
-  Usage is:  ccomp -interp [options] source.c
+  Usage is:  `ccomp -interp [options] source.c`
   Options include:
-    -trace      to print a detailed trace of reduction steps
-    -random     to randomize execution order
-    -all        to explore all possible execution orders in parallel
+    `-trace`      to print a detailed trace of reduction steps
+    `-random`     to randomize execution order
+    `-all`        to explore all possible execution orders in parallel
 
 - Revised and strengthened the top-level statements of semantic preservation.
   In particular, we now show:
-  . backward simulation for the whole compiler without assuming
+  * backward simulation for the whole compiler without assuming
     a deterministic external world;
-  . if the source program goes wrong after performing some I/O,
+  * if the source program goes wrong after performing some I/O,
     the compiled code performs at least these I/O before continuing
     with an arbitrary behavior.
 
 - Fixed two omissions in the semantics of CompCert C
   (reported by Brian Campbell):
-  . Functions calls through a function pointer had undefined semantics.
-  . Conditional expressions "e1 ? e2 : e3" where e2 and e3 have different
+  * Functions calls through a function pointer had undefined semantics.
+  * Conditional expressions `e1 ? e2 : e3` where `e2` and `e3` have different
     types were missing a cast to their common type.
 
 - Support for "read-modify-write" operations over volatiles
-  (such as e++ or --e or e |= 1 where e has volatile type)
-  through a new presimplification (flag -fvolatile-rmw, "on" by default).
+  (such as `e++` or `--e` or `e |= 1` where `e` has volatile type)
+  through a new presimplification (flag `-fvolatile-rmw`, "on" by default).
 
 - New optimization pass: Redundant Reload Elimination, which fixes up
   inefficiencies introduced during the Reload pass.  On x86, it increases
   performance by up to 10%.  On PowerPC and ARM, the effect is negligible.
 
 - Revised handling of annotation statements.  Now they come in two forms:
-    1. __builtin_annot("format", x1, ..., xN)
+    1. `__builtin_annot("format", x1, ..., xN)`
        (arbitrarily many arguments; no code generated, even if some
         of the xi's were spilled; no return value)
-    2. __builtin_annot_intval("format", x1)
+    2. `__builtin_annot_intval("format", x1)`
        (one integer argument, reloaded in a register if needed,
         returned as result).
 
 - Related clean-ups in the handling of external functions and
-  compiler built-ins.  In particular, __builtin_memcpy is now
+  compiler built-ins.  In particular, `__builtin_memcpy` is now
   fully specified.
 
 - ARM code generator was ported to the new ABI (EABI in ARM parlance,
@@ -1507,17 +1520,16 @@ Release 1.9, 2011-08-22
   for insertion in a bit field and for some comparisons against 0.
 
 
-Release 1.8.2, 2011-05-24
-=========================
+# Release 1.8.2, 2011-05-24
 
-- Support for "aligned" and "section" attributes on global variables, e.g.
-    __attribute__((aligned(16))) int x;
+- Support for `aligned` and `section` attributes on global variables, e.g.
+    `__attribute__((aligned(16))) int x;`
 
 - Experimental emulation of packed structs (flag -fpacked-structs).
 
 - Pointer comparisons now treated as unsigned comparisons (previously: signed).
   This fixes an issue with arrays straddling the 0x8000_0000 boundary.
-  Consequently, the "ofs" part of pointer values "Vptr b ofs" is
+  Consequently, the `ofs` part of pointer values `Vptr b ofs` is
   now treated as unsigned (previously: signed).
 
 - Elimination of unreferenced labels now performed by a separate pass
@@ -1533,7 +1545,7 @@ Release 1.8.2, 2011-05-24
 
 - Emulation of assignment between structs and between unions was
   simplified and made more efficient, thanks to a better implementation
-  of __builtin_memcpy.
+  of `__builtin_memcpy`.
 
 - Improvements to the compiler driver:
     .  -E option now prints preprocessed result to standard output
@@ -1542,8 +1554,7 @@ Release 1.8.2, 2011-05-24
        input files
 
 
-Release 1.8.1, 2011-03-14
-=========================
+# Release 1.8.1, 2011-03-14
 
 - Adapted to Coq 8.3pl1.
 
@@ -1556,17 +1567,16 @@ Release 1.8.1, 2011-03-14
 - Initialization of global C variables made more robust and proved correct.
 
 - ABI conformance improved:
-     . the "char" type is now signed for x86, remains unsigned for PowerPC and ARM
-     . placement of bit-fields now follows SVR4 conventions (affects PowerPC)
+     * the `char` type is now signed for x86, remains unsigned for PowerPC and ARM
+     * placement of bit-fields now follows SVR4 conventions (affects PowerPC)
 
 - Bug fixes in the C pre-simplifier:
-     . nontermination with some recursive struct types
-     . issues with zero-width bit fields
-     . elimination of struct assignments duplicating some volatile accesses
+     * nontermination with some recursive struct types
+     * issues with zero-width bit fields
+     * elimination of struct assignments duplicating some volatile accesses
 
 
-Release 1.8, 2010-09-21
-=======================
+# Release 1.8, 2010-09-21
 
 - The input language to the proved part of the compiler is no longer
   Clight but CompCert C: a larger subset of the C language supporting
@@ -1581,8 +1591,8 @@ Release 1.8, 2010-09-21
   CompCert's compilation strategy is not a very good match for the
   x86 architecture, therefore the performance of the generated code
   is not as good as for the PowerPC port, but still usable.
-  (About 75% of the performance of gcc -O1 for x86, compared with
-   > 90% for PowerPC.)
+  (About 75% of the performance of `gcc -O1` for x86, compared with
+   more than 90% for PowerPC.)
 
 - More faithful semantics for volatile accesses:
   . volatile reads and writes from a volatile global variable are treated
@@ -1591,13 +1601,13 @@ Release 1.8, 2010-09-21
   . volatile reads and writes from other locations are treated like
     regular loads and stores.
 
-- Introduced __builtin_memcpy() and __builtin_memcpy_words(), use them
-  instead of memcpy() to compile struct and union assignments.
+- Introduced `__builtin_memcpy()` and `__builtin_memcpy_words()`, use them
+  instead of `memcpy()` to compile struct and union assignments.
 
-- Introduced __builtin_annotation() to transmit assertions from
+- Introduced `__builtin_annotation()` to transmit assertions from
   the source program all the way to the generated assembly code.
 
-- Elimination of some useless casts around "&", "|" and "^" bitwise operators.
+- Elimination of some useless casts around `&`, `|` and `^` bitwise operators.
 
 - Produce fewer "moves" during RTL generation.  This speeds up the
   rest of compilation and slightly improves the result of register
@@ -1613,25 +1623,23 @@ Release 1.8, 2010-09-21
 - Fixed some bugs in the emulation of bit fields.
 
 
-Release 1.7.1, 2010-04-13
-=========================
+# Release 1.7.1, 2010-04-13
 
 Bug fixes in the new C pre-simplifier:
 - Missing cast on return value for some functions
 - Incorrect simplification of some uses of || and &&
 - Nontermination in the presence of a bit field of size exactly 32 bits.
 - Global initializers for structs containing bit fields.
-- Wrong type in volatile reads from variables of type 'unsigned int'.
+- Wrong type in volatile reads from variables of type `unsigned int`.
 
 Small improvements to the PowerPC port:
-- Added __builtin_trap() built-in function.
-- Support for '#pragma reserve_register' (EABI)
+- Added `__builtin_trap()` built-in function.
+- Support for `#pragma reserve_register` (EABI)
 - Less aggressive alignment of global variables.
-- Generate '.type' and '.size' directives (EABI).
+- Generate `.type` and `.size` directives (EABI).
 
 
-Release 1.7, 2010-03-31
-=======================
+# Release 1.7, 2010-03-31
 
 - New implementation of the C type-checker, simplifier, and translation to
   Clight.  Compared with the previous CIL-based solution, the new
@@ -1643,7 +1651,7 @@ Release 1.7, 2010-03-31
     . passing structs and union by value (option -fstruct-passing)
     . bit-fields in structs (option -fbitfields)
 
-- The "volatile" modifier is now honored.  Volatile accesses are represented
+- The `volatile` modifier is now honored.  Volatile accesses are represented
   in Clight by calls to built-in functions, which are preserved throughout
   the compilation chain, then turned into processor loads and stores
   at the end.
@@ -1671,38 +1679,36 @@ Release 1.7, 2010-03-31
 - Minor improvements in the handling of global environments and the
   construction of the initial memory state.
 
-- Bug fixes in the handling of '#pragma section' and '#pragma set_section'.
+- Bug fixes in the handling of `#pragma section` and `#pragma set_section`.
 
 - The C test suite was enriched and restructured.
 
 
-Release 1.6, 2010-01-13
-=======================
+# Release 1.6, 2010-01-13
 
-- Support Clight initializers of the form "int * x = &y;".
+- Support Clight initializers of the form `int * x = &y;`.
 
 - Fixed spurious compile-time error on Clight initializers of the form
-  "const enum E x[2] = { E_1, E_2 };".
+  `const enum E x[2] = { E_1, E_2 };`.
 
-- Produce informative error message if a 'return' without argument
-  occurs in a non-void function, or if a 'return' with an argument
+- Produce informative error message if a `return` without argument
+  occurs in a non-void function, or if a `return` with an argument
   occurs in a void function.
 
-- Preliminary support for '#pragma section' and '#pragma set_section'.
+- Preliminary support for `#pragma section` and `#pragma set_section`.
 
 - Preliminary support for small data areas in PowerPC code generator.
 
 - Back-end: added support for jump tables; used them to compile
-  dense 'switch' statements.
+  dense `switch` statements.
 
 - PowerPC code generator: force conversion to single precision before
   doing a "store single float" instruction.
 
 
-Release 1.5, 2009-08-28
-=======================
+# Release 1.5, 2009-08-28
 
-- Support for "goto" in the source language Clight.
+- Support for `goto` in the source language Clight.
 
 - Added small-step semantics for Clight.
 
@@ -1713,11 +1719,11 @@ Release 1.5, 2009-08-28
   (during the C to Clight initial translation).
 
 - Fixed spurious compile-time error on Clight statements of the form
-  "x = f(...);" where x is a global variable.
+  `x = f(...);` where x is a global variable.
 
 - Fixed spurious compile-time error on Clight initializers where
   the initial value is the result of a floating-point computation
-  (e.g. "double x = 3.14159 / 2;").
+  (e.g. `double x = 3.14159 / 2;`).
 
 - Simplified the interface of the generic dataflow solver.
 
@@ -1733,13 +1739,11 @@ Release 1.5, 2009-08-28
   processor-independent parts.
 
 
-Release 1.4.1, 2009-06-05
-=========================
+# Release 1.4.1, 2009-06-05
 
 - Adapted to Coq 8.2-1.  No changes in functionality.
 
-Release 1.4, 2009-04-20
-=======================
+# Release 1.4, 2009-04-20
 
 - Modularized the processor dependencies in the back-end.
 
@@ -1753,12 +1757,12 @@ Release 1.4, 2009-04-20
 - Clight: added support for conditional expressions (a ? b : c);
   removed support for array accesses a[i], now a derived form.
 
-- C front-end: honor "static" modifiers on globals.
+- C front-end: honor `static` modifiers on globals.
 
 - New optimization over RTL: turning calls into tail calls when possible.
 
 - Instruction selection pass: elimination of redundant casts following
-  a memory load of a "small" memory quantity.
+  a memory load of a `small` memory quantity.
 
 - Linearization pass: improved the linearization heuristic.
 
@@ -1768,10 +1772,9 @@ Release 1.4, 2009-04-20
   checks in pointer comparisons.
 
 
-Release 1.3, 2008-08-11
-=======================
+# Release 1.3, 2008-08-11
 
-- Added "goto" and labeled statements to Cminor.  Extended RTLgen and
+- Added `goto` and labeled statements to Cminor.  Extended RTLgen and
     its proof accordingly.
 
 - Introduced small-step transition semantics for Cminor; used it in
@@ -1797,15 +1800,14 @@ Release 1.3, 2008-08-11
 
 - Improved instruction selection for complex conditions involving || and &&.
 
-- Improved translation of Cminor "switch" statements to RTL decision trees.
+- Improved translation of Cminor `switch` statements to RTL decision trees.
 
-- Fixed error in C parser and simplifier related to "for" loops with
+- Fixed error in C parser and simplifier related to `for` loops with
     complex expressions as condition.
 
 - More benchmark programs in test/
 
 
-Release 1.2, 2008-04-03
-=======================
+# Release 1.2, 2008-04-03
 
 - First public release
