@@ -759,7 +759,7 @@ Opaque loadind.
   traceEq.
   (* match states *)
   econstructor; eauto. apply agree_set_other; auto. 
-  unfold rs3; Simpl. rewrite F by congruence. reflexivity.
+  unfold rs3; Simpl; rewrite F by congruence; reflexivity.
 + (* Direct call *)
   exploit transl_epilogue_correct; eauto. 
   intros (rs2 & m2' & A & B & C & D & E & F). 
