@@ -34,6 +34,8 @@ Require Import Cop.
 Require Import Csyntax.
 Require Import Csem.
 
+Local Ltac Tauto.intuition_solver ::= auto with bool.
+
 Section STRATEGY.
 
 Variable ge: genv.

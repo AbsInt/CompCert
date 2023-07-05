@@ -20,6 +20,8 @@
 Require Import Psatz Zquot.
 Require Import Coqlib.
 
+Local Ltac Tauto.intuition_solver ::= auto with crelations zarith bool.
+
 (** ** Modulo arithmetic *)
 
 (** We define and state properties of equality and arithmetic modulo a

@@ -18,6 +18,8 @@
 
 Require Import Coqlib.
 
+Local Ltac Tauto.intuition_solver ::= auto with zarith bool.
+
 Module ISet.
 
 (** "Raw", non-dependent implementation.  A set of intervals is a

@@ -21,6 +21,8 @@ Require Import Zwf.
 Require Coq.Program.Wf.
 Require Import Recdef.
 
+Local Ltac Tauto.intuition_solver ::= auto with zarith bool.
+
 Definition interv : Type := (Z * Z)%type.
 
 (** * Membership *)

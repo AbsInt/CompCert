@@ -27,6 +27,8 @@ Require Import Memory.
 Require Import Globalenvs.
 Require Import Builtins.
 
+Local Ltac Tauto.intuition_solver ::= auto with mem.
+
 (** Backwards compatibility for Hint Rewrite locality attributes. *)
 Set Warnings "-unsupported-attributes".
 

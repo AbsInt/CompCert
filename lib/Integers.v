@@ -20,6 +20,8 @@ Require Import Eqdep_dec Zquot Zwf.
 Require Import Coqlib Zbits.
 Require Archi.
 
+Local Ltac Tauto.intuition_solver ::= auto with zarith bool.
+
 (** Backwards compatibility for Hint Rewrite locality attributes. *)
 Set Warnings "-unsupported-attributes".
 

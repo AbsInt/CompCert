@@ -29,6 +29,8 @@ Require Import Integers.
 
 Set Implicit Arguments.
 
+Local Ltac Tauto.intuition_solver ::= auto with sets.
+
 (** * Closures of transitions relations *)
 
 Section CLOSURES.

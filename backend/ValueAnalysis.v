@@ -17,6 +17,8 @@ Require Import Values Memory Globalenvs Builtins Events.
 Require Import Registers Op RTL.
 Require Import ValueDomain ValueAOp Liveness.
 
+Local Ltac Tauto.intuition_solver ::= auto with exfalso bool va.
+
 (** * The dataflow analysis *)
 
 Definition areg (ae: aenv) (r: reg) : aval := AE.get r ae.
@@ -527,7 +529,7 @@ Proof.
 - (* romatch *)
   apply romatch_exten with bc.
   eapply romatch_alloc; eauto. eapply mmatch_below; eauto.
-  simpl; intros. destruct (eq_block b sp); intuition.
+  simpl; intros. destruct (eq_block b sp); intuition info_auto with *.
 - (* mmatch *)
   constructor; simpl; intros.
   + (* stack *)

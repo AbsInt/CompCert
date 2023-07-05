@@ -488,7 +488,7 @@ Module OrderedLoc <: OrderedType.
     destruct H0. auto.
     destruct H.
     right.  split. auto.
-    intuition.
+    intuition try lia.
     right; split. congruence. eapply OrderedTyp.lt_trans; eauto.
   Qed.
   Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.

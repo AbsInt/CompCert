@@ -22,6 +22,8 @@ Require Import Csharpminor Switch Cminor Cminorgen.
 
 Local Open Scope error_monad_scope.
 
+Local Ltac Tauto.intuition_solver ::= auto with exfalso.
+
 Definition match_prog (p: Csharpminor.program) (tp: Cminor.program) :=
   match_program (fun cu f tf => transl_fundef f = OK tf) eq p tp.
 

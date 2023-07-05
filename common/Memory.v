@@ -46,6 +46,8 @@ Local Unset Case Analysis Schemes.
 
 Local Notation "a # b" := (PMap.get b a) (at level 1).
 
+Local Ltac Tauto.intuition_solver ::= auto with zarith bool exfalso.
+
 Module Mem <: MEM.
 
 Definition perm_order' (po: option permission) (p: permission) :=

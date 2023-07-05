@@ -25,6 +25,8 @@ Require Import Program.
 Require Archi.
 Import ListNotations.
 
+Local Ltac Tauto.intuition_solver ::= auto with exfalso bool.
+
 Close Scope R_scope.
 Open Scope Z_scope.
 Set Asymmetric Patterns.
