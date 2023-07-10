@@ -529,7 +529,7 @@ Proof.
 - (* romatch *)
   apply romatch_exten with bc.
   eapply romatch_alloc; eauto. eapply mmatch_below; eauto.
-  simpl; intros. destruct (eq_block b sp); intuition info_auto with *.
+  simpl; intros. destruct (eq_block b sp); intuition.
 - (* mmatch *)
   constructor; simpl; intros.
   + (* stack *)
