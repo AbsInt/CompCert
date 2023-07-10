@@ -1940,7 +1940,7 @@ Proof.
   rewrite PMap.gsspec. destruct (peq b bf). subst b.
   destruct (zle lo ofs); simpl.
   destruct (zlt ofs hi); simpl.
-  exfalso; intuition.
+  exfalso; intuition auto with zarith.
   auto. auto.
   auto.
 Qed.
@@ -1983,7 +1983,7 @@ Theorem valid_access_free_1:
 Proof.
   intros. inv H. constructor; auto with mem.
   red; intros. eapply perm_free_1; eauto.
-  destruct (zlt lo hi). intuition. right. lia.
+  destruct (zlt lo hi). intuition auto with zarith. right. lia.
 Qed.
 
 Theorem valid_access_free_2:
@@ -2178,7 +2178,7 @@ Proof.
   destruct (zlt ofs0 lo). eapply perm_drop_3; eauto.
   destruct (zle hi ofs0). eapply perm_drop_3; eauto.
   apply perm_implies with p. eapply perm_drop_1; eauto. lia.
-  generalize (size_chunk_pos chunk); intros. intuition.
+  generalize (size_chunk_pos chunk); intros. intuition auto with zarith exfalso.
   eapply perm_drop_3; eauto.
 Qed.
 
@@ -2219,7 +2219,7 @@ Proof.
   destruct (eq_block b' b). subst b'.
   destruct (zlt ofs0 lo). eapply perm_drop_3; eauto.
   destruct (zle hi ofs0). eapply perm_drop_3; eauto.
-  apply perm_implies with p. eapply perm_drop_1; eauto. lia. intuition.
+  apply perm_implies with p. eapply perm_drop_1; eauto. lia. intuition auto with zarith exfalso.
   eapply perm_drop_3; eauto.
   rewrite pred_dec_false; eauto.
   red; intros; elim n0; red; intros.
@@ -2793,7 +2793,7 @@ Proof.
   eapply range_perm_drop_1; eauto. lia. auto with mem.
   eapply perm_drop_4; eauto. eapply perm_max. apply perm_implies with p0. eauto.
   eauto with mem.
-  intuition.
+  intuition auto with zarith.
 (* align *)
   intros. eapply mi_align0 with (ofs := ofs) (p := p0); eauto.
   red; intros; eapply perm_drop_4; eauto.
@@ -3405,7 +3405,7 @@ Proof.
   exploit mi_no_overlap; eauto.
   instantiate (1 := x - delta1). apply H2. lia.
   instantiate (1 := x - delta2). apply H3. lia.
-  intuition.
+  intuition auto with zarith.
 Qed.
 
 Theorem aligned_area_inject:

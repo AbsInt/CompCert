@@ -765,7 +765,7 @@ Proof.
   induction vars; simpl; intros.
   contradiction.
   rewrite PTree.grspec. destruct (PTree.elt_eq id (fst a)). auto.
-  destruct H. intuition. eauto.
+  destruct H; intuition auto with exfalso.
 Qed.
 
 Definition cenv_compat (cenv: compilenv) (vars: list (ident * Z)) (tsz: Z) : Prop :=

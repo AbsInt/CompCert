@@ -121,7 +121,7 @@ Proof (Z_mod_two_p_range wordsize).
 Lemma Z_mod_modulus_range':
   forall x, -1 < Z_mod_modulus x < modulus.
 Proof.
-  intros. generalize (Z_mod_modulus_range x); intuition.
+  intros. generalize (Z_mod_modulus_range x); intuition auto with zarith.
 Qed.
 
 Lemma Z_mod_modulus_eq:
@@ -3335,7 +3335,7 @@ Proof.
   rewrite andb_false_iff.
   generalize (bits_size_2 a i).
   generalize (bits_size_2 b i).
-  zify; intuition.
+  zify; intuition auto with zarith.
 Qed.
 
 Corollary and_interval:

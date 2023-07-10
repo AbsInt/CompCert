@@ -195,7 +195,7 @@ Proof.
   simpl; split; intros.
   destruct H. clear IHl. lia. rewrite IHl in H. clear IHl. lia.
   destruct (zeq (hi - 1) x); auto. right. rewrite IHl. clear IHl. lia.
-  simpl; intuition.
+  simpl; intuition auto with zarith.
 Qed.
 
 End ELEMENTS.

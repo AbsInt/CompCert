@@ -2256,7 +2256,7 @@ Proof.
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
   exploit (H2 (fun x => C(Ebinop op a1' x ty))).
     eapply leftcontext_compose; eauto. repeat constructor. auto. intros [E [F G]].
-  simpl; intuition. eapply star_trans; eauto.
+  simpl; intuition auto with bool. eapply star_trans; eauto.
 (* cast *)
   exploit (H0 (fun x => C(Ecast x ty))).
     eapply leftcontext_compose; eauto. repeat constructor. intros [A [B D]].
@@ -2365,7 +2365,7 @@ Proof.
   rewrite exprlist_app_simple. simpl. rewrite H5; rewrite A; auto.
   repeat rewrite exprlist_app_assoc. simpl.
   intros [E F].
-  simpl; intuition.
+  simpl; intuition auto with bool.
   eapply star_trans; eauto.
 
 (* skip *)

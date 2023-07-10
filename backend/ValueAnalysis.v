@@ -527,7 +527,7 @@ Proof.
 - (* romatch *)
   apply romatch_exten with bc.
   eapply romatch_alloc; eauto. eapply mmatch_below; eauto.
-  simpl; intros. destruct (eq_block b sp); intuition.
+  simpl; intros. destruct (eq_block b sp); intuition auto with va.
 - (* mmatch *)
   constructor; simpl; intros.
   + (* stack *)
@@ -621,7 +621,7 @@ Proof.
   simpl; intros. destruct (eq_block b sp); auto.
 - (* romatch *)
   apply romatch_exten with bc; auto.
-  simpl; intros. destruct (eq_block b sp); intuition.
+  simpl; intros. destruct (eq_block b sp); intuition auto with va.
 - (* mmatch top *)
   constructor; simpl; intros.
   + destruct (eq_block b sp). congruence. elim n. eapply bc_stack; eauto.
@@ -708,7 +708,7 @@ Proof.
   simpl; intros. destruct (eq_block b sp); congruence.
 - (* romatch *)
   apply romatch_exten with bc; auto.
-  simpl; intros. destruct (eq_block b sp); intuition.
+  simpl; intros. destruct (eq_block b sp); intuition auto with va.
 - (* mmatch top *)
   constructor; simpl; intros.
   + destruct (eq_block b sp). congruence. elim n. eapply bc_stack; eauto.
@@ -791,7 +791,7 @@ Proof.
   eapply ematch_incr; eauto.
 - (* romem *)
   apply romatch_exten with callee; auto.
-  intros; simpl. destruct (eq_block b sp); intuition.
+  intros; simpl. destruct (eq_block b sp); intuition auto with va.
 - (* mmatch *)
   constructor; simpl; intros.
   + (* stack *)
@@ -902,7 +902,7 @@ Proof.
   eapply ematch_incr; eauto.
 - (* romem *)
   apply romatch_exten with callee; auto.
-  intros; simpl. destruct (eq_block b sp); intuition.
+  intros; simpl. destruct (eq_block b sp); intuition auto with va.
 - (* mmatch *)
   constructor; simpl; intros.
   + (* stack *)

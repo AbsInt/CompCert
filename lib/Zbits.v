@@ -170,12 +170,12 @@ Lemma Z_mod_two_p_range:
 Proof.
   intros; unfold Z_mod_two_p. generalize (two_power_nat_pos n); intros.
   destruct x.
-  - intuition.
+  - lia.
   - apply P_mod_two_p_range.
   - set (r := P_mod_two_p p n).
     assert (0 <= r < two_power_nat n) by apply P_mod_two_p_range.
     destruct (zeq r 0).
-    + intuition.
+    + intuition  auto with crelations zarith bool.
     + Psatz.lia.
 Qed.
 
@@ -192,10 +192,8 @@ Proof.
     set (r := P_mod_two_p p n) in *.
     rewrite <- B in C.
     change (Z.neg p) with (- (Z.pos p)). destruct (zeq r 0).
-    + symmetry. apply Zmod_unique with (-q). rewrite C; rewrite e. Psatz.lia.
-      intuition.
-    + symmetry. apply Zmod_unique with (-q - 1). rewrite C. Psatz.lia.
-      intuition.
+    + symmetry. apply Zmod_unique with (-q). rewrite C; rewrite e. lia. lia.
+    + symmetry. apply Zmod_unique with (-q - 1). rewrite C. lia. lia.
 Qed.
 
 (** ** Bit-level operations and properties *)

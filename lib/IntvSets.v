@@ -61,7 +61,7 @@ Proof.
   * tauto.
   * split; intros. congruence.
     exfalso. destruct H0. lia. exploit BELOW; eauto. lia.
-+ rewrite IHok. intuition.
++ rewrite IHok. intuition auto.
 Qed.
 
 Fixpoint contains (L H: Z) (s: t) : bool :=
@@ -75,11 +75,11 @@ Lemma contains_In:
   (contains l0 h0 s = true <-> (forall x, l0 <= x < h0 -> In x s)).
 Proof.
   induction 2; simpl.
-- intuition. elim (H0 l0); lia.
+- intuition auto with zarith bool. elim (H0 l0); lia.
 - destruct (zle h0 h); simpl.
   destruct (zle l l0); simpl.
-  intuition.
-  rewrite IHok. intuition. destruct (H3 x); auto. exfalso.
+  intuition auto with zarith.
+  rewrite IHok. intuition auto with zarith. destruct (H3 x); auto. exfalso.
   destruct (H3 l0). lia. lia. exploit BELOW; eauto. lia.
   rewrite IHok. intuition. destruct (H3 x); auto. exfalso.
   destruct (H3 h). lia. lia. exploit BELOW; eauto. lia.
@@ -144,7 +144,7 @@ Proof.
   destruct (zlt h l0).
   simpl. rewrite IHok. intuition lia.
   destruct (zlt h0 l).
-  simpl. intuition. exploit BELOW; eauto. lia.
+  simpl. intuition auto with zarith. exploit BELOW; eauto. lia.
   destruct (zlt l l0).
   destruct (zlt h0 h); simpl. clear IHok. split.
   intros [A | [A | A]].
@@ -156,7 +156,7 @@ Proof.
   auto.
   intuition lia.
   destruct (zlt h0 h); simpl.
-  intuition. exploit BELOW; eauto. lia.
+  intuition auto with zarith. exploit BELOW; eauto. lia.
   rewrite IHok. intuition. extlia.
 Qed.
 
@@ -205,18 +205,18 @@ Proof.
   tauto.
   assert (ok (Cons l0 h0 s0)) by (constructor; auto).
   destruct (zle h l0).
-  rewrite IHok; auto. simpl. intuition. extlia.
+  rewrite IHok; auto. simpl. intuition auto with zarith. extlia.
   exploit BELOW0; eauto. intros. extlia.
   destruct (zle h0 l).
-  simpl in IHok0; rewrite IHok0. intuition. extlia.
+  simpl in IHok0; rewrite IHok0. intuition auto with zarith. extlia.
   exploit BELOW; eauto. intros; extlia.
   destruct (zle l l0).
   destruct (zle h0 h).
-  simpl. simpl in IHok0; rewrite IHok0. intuition.
-  simpl. rewrite IHok; auto. simpl. intuition.  exploit BELOW0; eauto. intros; extlia.
+  simpl. simpl in IHok0; rewrite IHok0. intuition auto with zarith.
+  simpl. rewrite IHok; auto. simpl. intuition auto with zarith.  exploit BELOW0; eauto. intros; extlia.
   destruct (zle h h0).
-  simpl. rewrite IHok; auto. simpl. intuition.
-  simpl. simpl in IHok0; rewrite IHok0. intuition.
+  simpl. rewrite IHok; auto. simpl. intuition auto with zarith.
+  simpl. simpl in IHok0; rewrite IHok0. intuition auto with zarith.
   exploit BELOW; eauto. intros; extlia.
 Qed.
 
@@ -325,9 +325,7 @@ Qed.
 
 Theorem In_interval: forall x l h, In x (interval l h) <-> l <= x < h.
 Proof.
-  intros. unfold In, interval; destruct (zlt l h); simpl.
-  intuition.
-  intuition.
+  intros. unfold In, interval; destruct (zlt l h); simpl; intuition auto with zarith.
 Qed.
 
 Program Definition add (l h: Z) (s: t) : t :=
@@ -355,7 +353,7 @@ Proof.
   unfold remove, In; intros.
   destruct (zlt l h).
   simpl. apply R.In_remove. apply proj2_sig.
-  intuition.
+  intuition auto with zarith.
 Qed.
 
 Program Definition inter (s1 s2: t) : t := R.inter s1 s2.

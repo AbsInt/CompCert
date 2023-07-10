@@ -796,11 +796,11 @@ Proof.
 (* mem extends *)
 - inv H. inv H1. inv H6. inv H4.
   exploit volatile_load_extends; eauto. intros [v' [A B]].
-  exists v'; exists m1'; intuition. constructor; auto.
+  exists v'; exists m1'; intuition auto with mem. constructor; auto.
 (* mem injects *)
 - inv H0. inv H2. inv H7. inversion H5; subst.
   exploit volatile_load_inject; eauto. intros [v' [A B]].
-  exists f; exists v'; exists m1'; intuition. constructor; auto.
+  exists f; exists v'; exists m1'; intuition auto with mem. constructor; auto.
   red; intros. congruence.
 (* trace length *)
 - inv H; inv H0; simpl; lia.
@@ -882,7 +882,7 @@ Proof.
   eapply eventval_match_lessdef; eauto. apply Val.load_result_lessdef; auto.
   auto with mem.
 - exploit Mem.store_within_extends; eauto. intros [m2' [A B]].
-  exists m2'; intuition.
+  exists m2'; intuition auto with mem.
 + econstructor; eauto.
 + eapply Mem.store_unchanged_on; eauto.
   unfold loc_out_of_bounds; intros.
@@ -959,11 +959,11 @@ Proof.
 (* mem extends*)
 - inv H. inv H1. inv H6. inv H7. inv H4.
   exploit volatile_store_extends; eauto. intros [m2' [A [B C]]].
-  exists Vundef; exists m2'; intuition. constructor; auto.
+  exists Vundef; exists m2'; intuition auto with mem. constructor; auto.
 (* mem inject *)
 - inv H0. inv H2. inv H7. inv H8. inversion H5; subst.
   exploit volatile_store_inject; eauto. intros [m2' [A [B [C D]]]].
-  exists f; exists Vundef; exists m2'; intuition. constructor; auto. red; intros; congruence.
+  exists f; exists Vundef; exists m2'; intuition auto with mem. constructor; auto. red; intros; congruence.
 (* trace length *)
 - inv H; inv H0; simpl; lia.
 (* receptive *)
@@ -1025,7 +1025,7 @@ Proof.
   intros [m3' [A B]].
   exploit Mem.store_within_extends. eexact B. eauto. eauto.
   intros [m2' [C D]].
-  exists (Vptr b Ptrofs.zero); exists m2'; intuition.
+  exists (Vptr b Ptrofs.zero); exists m2'; intuition auto with mem.
   econstructor; eauto.
   eapply UNCHANGED; eauto.
 (* mem injects *)
@@ -1313,12 +1313,12 @@ Proof.
 - inv H; auto.
 (* mem extends *)
 - inv H.
-  exists Vundef; exists m1'; intuition.
+  exists Vundef; exists m1'; intuition auto with mem.
   econstructor; eauto.
   eapply eventval_list_match_lessdef; eauto.
 (* mem injects *)
 - inv H0.
-  exists f; exists Vundef; exists m1'; intuition.
+  exists f; exists Vundef; exists m1'; intuition auto with mem.
   econstructor; eauto.
   eapply eventval_list_match_inject; eauto.
   red; intros; congruence.
@@ -1358,12 +1358,12 @@ Proof.
 - inv H; auto.
 (* mem extends *)
 - inv H. inv H1. inv H6.
-  exists v2; exists m1'; intuition.
+  exists v2; exists m1'; intuition auto with mem.
   econstructor; eauto.
   eapply eventval_match_lessdef; eauto.
 (* mem inject *)
 - inv H0. inv H2. inv H7.
-  exists f; exists v'; exists m1'; intuition.
+  exists f; exists v'; exists m1'; intuition auto with mem.
   econstructor; eauto.
   eapply eventval_match_inject; eauto.
   red; intros; congruence.
@@ -1401,11 +1401,11 @@ Proof.
 - inv H; auto.
 (* mem extends *)
 - inv H.
-  exists Vundef; exists m1'; intuition.
+  exists Vundef; exists m1'; intuition auto with mem.
   econstructor; eauto.
 (* mem injects *)
 - inv H0.
-  exists f; exists Vundef; exists m1'; intuition.
+  exists f; exists Vundef; exists m1'; intuition auto with mem.
   econstructor; eauto.
   red; intros; congruence.
 (* trace length *)
