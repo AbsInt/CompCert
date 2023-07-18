@@ -539,7 +539,7 @@ let expand_instruction instr =
                         {sig_args = []; sig_res = Tvoid; sig_cc = cc_default}));
        (* Allocate frame *)
        let sz' = Z.of_uint sz in
-       emit (Psubl_ri (RSP, sz'));
+       emit (Psubq_ri (RSP, sz'));
        emit (Pcfi_adjust sz');
        (* Stack chaining *)
        let addr1 = linear_addr RSP (Z.of_uint (sz + 8)) in
