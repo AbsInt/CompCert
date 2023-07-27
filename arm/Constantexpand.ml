@@ -114,15 +114,17 @@ let estimate_size = function
   | _ -> 1
 
 let expand_constants () =
-  let consts = Hashtbl.fold (fun bf lbl c ->
-      Float64 (lbl, bf)::c)
-      float_labels [] in
-  let consts = Hashtbl.fold (fun bf lbl c ->
-      Float32 (lbl, bf)::c)
-      float32_labels consts in
-  let consts = Hashtbl.fold (fun (id,ofs) lbl c ->
-      Symbol (lbl,id,ofs)::c)
-      symbol_labels consts in
+  (* The order of the constants should be float32/float64 and then symbols,
+     since symbols allow largers offsets. *)
+  let consts =
+    Hashtbl.fold (fun (id,ofs) lbl c -> Symbol (lbl,id,ofs)::c)
+                 symbol_labels [] in
+  let consts =
+    Hashtbl.fold (fun bf lbl c -> Float64 (lbl, bf)::c)
+                 float_labels consts in
+  let consts =
+    Hashtbl.fold (fun bf lbl c -> Float32 (lbl, bf)::c)
+                 float32_labels consts in
   if consts <> [] then
     emit (Pconstants consts);
   reset_constants ()
