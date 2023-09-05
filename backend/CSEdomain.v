@@ -13,14 +13,9 @@
 (** The abstract domain for value numbering, used in common
     subexpression elimination. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Values.
-Require Import Memory.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
+Require Import Coqlib Maps.
+Require Import AST Integers Values Memory.
+Require Import Op Registers RTL.
 
 (** Value numbers are represented by positive integers.  Equations are
   of the form [valnum = rhs] or [valnum >= rhs], where the right-hand
@@ -132,6 +127,8 @@ Record numbering_holds (valu: valuation) (ge: genv) (sp: val)
 
 Global Hint Resolve num_holds_wf num_holds_eq num_holds_reg: cse.
 
+(** The initial value numbering, at function entry. *)
+
 Lemma empty_numbering_holds:
   forall valu ge sp rs m,
   numbering_holds valu ge sp rs m empty_numbering.
@@ -145,3 +142,72 @@ Proof.
 - rewrite PTree.gempty in H; discriminate.
 Qed.
 
+(** Simplification of comparisons when the two arguments have the same value number,
+    and therefore are equal. *)
+
+Definition combine_comparison (c: comparison) (x y: valnum) : option bool :=
+  if eq_valnum x y then
+    Some (match c with
+            | Ceq | Cle | Cge => true
+            | Cne | Clt | Cgt => false
+          end)
+  else
+    None.
+
+Lemma combine_comparison_cmp_sound:
+  forall (valu: valnum -> val) c x y res res',
+  combine_comparison c x y = Some res' ->
+  Val.cmp_bool c (valu x) (valu y) = Some res ->
+  res = res'.
+Proof.
+  unfold combine_comparison; intros. destruct (eq_valnum x y); inv H.
+  destruct (valu y); simpl in H0; inv H0.
+  destruct c; simpl; unfold Int.lt; rewrite ? Int.eq_true, ? zlt_false by lia; auto.
+Qed.
+
+Lemma combine_comparison_cmpu_sound:
+  forall (valu: valnum -> val) m c x y res res',
+  combine_comparison c x y = Some res' ->
+  Val.cmpu_bool (Mem.valid_pointer m) c (valu x) (valu y) = Some res ->
+  res = res'.
+Proof.
+  unfold combine_comparison, Val.cmpu_bool; intros. destruct (eq_valnum x y); inv H.
+  destruct (valu y).
+- discriminate.
+- inv H0. destruct c; simpl; unfold Int.ltu; rewrite ? Int.eq_true, ? zlt_false by lia; auto.
+- discriminate.
+- discriminate.
+- discriminate.
+- destruct Archi.ptr64; try discriminate.
+  rewrite dec_eq_true in H0. destruct andb in H0; inv H0.
+  destruct c; simpl; unfold Ptrofs.ltu; rewrite ? Ptrofs.eq_true, ? zlt_false by lia; auto.
+Qed.
+
+Lemma combine_comparison_cmpl_sound:
+  forall (valu: valnum -> val) c x y res res',
+  combine_comparison c x y = Some res' ->
+  Val.cmpl_bool c (valu x) (valu y) = Some res ->
+  res = res'.
+Proof.
+  unfold combine_comparison; intros. destruct (eq_valnum x y); inv H.
+  destruct (valu y); simpl in H0; inv H0.
+  destruct c; simpl; unfold Int64.lt; rewrite ? Int64.eq_true, ? zlt_false by lia; auto.
+Qed.
+
+Lemma combine_comparison_cmplu_sound:
+  forall (valu: valnum -> val) m c x y res res',
+  combine_comparison c x y = Some res' ->
+  Val.cmplu_bool (Mem.valid_pointer m) c (valu x) (valu y) = Some res ->
+  res = res'.
+Proof.
+  unfold combine_comparison, Val.cmplu_bool; intros. destruct (eq_valnum x y); inv H.
+  destruct (valu y).
+- discriminate.
+- discriminate.
+- inv H0. destruct c; simpl; unfold Int64.ltu; rewrite ? Int64.eq_true, ? zlt_false by lia; auto.
+- discriminate.
+- discriminate.
+- destruct (negb Archi.ptr64); try discriminate.
+  rewrite dec_eq_true in H0. destruct andb in H0; inv H0.
+  destruct c; simpl; unfold Ptrofs.ltu; rewrite ? Ptrofs.eq_true, ? zlt_false by lia; auto.
+Qed.
