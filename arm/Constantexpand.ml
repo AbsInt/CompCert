@@ -162,7 +162,7 @@ let expand_instruction = function
     end
   | Ploadsymbol(r1, id, ofs) ->
     let o = camlint_of_coqint ofs in
-    if o >= -32768l && o <= 32767l && !Clflags.option_mthumb then begin
+    if o >= -32768l && o <= 32767l && Archi.thumb2_support then begin
       emit (Ploadsymbol_imm (r1,id,ofs));
       2
     end else begin
