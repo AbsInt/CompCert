@@ -360,13 +360,7 @@ struct
       fprintf oc "	vmul.f64 %a, %a, %a\n" freg r1 freg r2 freg r3
     | Pfsubd(r1, r2, r3) ->
       fprintf oc "	vsub.f64 %a, %a, %a\n" freg r1 freg r2 freg r3
-    | Pflid(r1, f) ->
-      let f = camlint64_of_coqint(Floats.Float.to_bits f) in
-      let lbl = label_literal64 f in
-      fprintf oc "	movw	r14, #:lower16:.L%d\n" lbl;
-      fprintf oc "	movt	r14, #:upper16:.L%d\n" lbl;
-      fprintf oc "	vldr	%a, [r14, #0] @ %.12g\n"
-        freg r1 (Int64.float_of_bits f)
+    | Pflid(r1, f) -> assert false (* Should be eliminated in expand constants *)
     | Pfcmpd(r1, r2) ->
       fprintf oc "	vcmp.f64 %a, %a\n" freg r1 freg r2;
       fprintf oc "	vmrs APSR_nzcv, FPSCR\n"

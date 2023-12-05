@@ -20,10 +20,7 @@ let _0 = Integers.Int.zero
 
 (* Options controlling the output of the constants *)
 
-let literals_in_code = ref true     (* to be turned into a proper option *)
-
 let vfpv3 = Configuration.model >= "armv7"
-
 
 (* Record current code position and latest position at which to
    emit float and symbol constants. *)
@@ -33,10 +30,7 @@ let size_constants = ref 0
 let max_pos_constants = ref max_int
 
 let distance_to_emit_constants () =
-  if !literals_in_code
-  then !max_pos_constants - (!currpos + !size_constants)
-  else max_int
-
+  !max_pos_constants - (!currpos + !size_constants)
 
 (* Associate labels to floating-point constants and to symbols *)
 
@@ -135,34 +129,25 @@ let expand_instruction = function
     if vfpv3 && is_immediate_float64 f' then begin
       emit (Pflid_imm (r1,f));
       1
-    end else if !literals_in_code then begin
+    end else begin
       let lbl = label_float f in
       emit (Pflid_lbl (r1,lbl,f));
       1
-    end else begin
-      emit (Pflid (r1,f));
-      3
     end
   | Pflis (r1,f) ->
     let f' = camlint_of_coqint(Floats.Float32.to_bits f) in
     if vfpv3 && is_immediate_float32 f' then begin
       emit (Pflis_imm (r1,f));
       1
-    end else if !literals_in_code then begin
+    end else begin
       let lbl = label_float32 f in
       emit (Pflis_lbl (r1,lbl,f));
       1
-    end else begin
-      let lo =  coqint_of_camlint (Int32.logand f' 0xFFFFl)
-      and hi = coqint_of_camlint (Int32.shift_right_logical f' 16) in
-      emit (Pmovw (IR14,lo));
-      emit (Pmovt (IR14,hi));
-      emit (Pfcpy_fi (r1,IR14));
-      3
     end
   | Ploadsymbol(r1, id, ofs) ->
     let o = camlint_of_coqint ofs in
-    if o >= -32768l && o <= 32767l && Archi.thumb2_support then begin
+    if o >= -32768l && o <= 32767l && Archi.thumb2_support
+       && (not !Clflags.option_Osize) then begin
       emit (Ploadsymbol_imm (r1,id,ofs));
       2
     end else begin

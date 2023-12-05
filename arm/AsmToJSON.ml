@@ -28,7 +28,7 @@ let mnemonic_names = StringSet.of_list
       "Pflid_lbl"; "Pflis_lbl"; "Pdmb"; "Pdsb"; "Peor"; "Pfabsd"; "Pfabss";
       "Pfaddd"; "Pfadds"; "Pfcmpd"; "Pfcmps"; "Pfcmpzd"; "Pfcmpzs"; "Pfcpyd";
       "Pfcpy_fs"; "Pfcpy_if";"Pfcvtds"; "Pfcvtsd"; "Pfdivd"; "Pfdivs"; "Pfldd";
-      "Pflid"; "Pflds"; "Pflid_imm"; "Pflis_imm"; "Pfmuld"; "Pfmuls"; "Pfnegd";
+      "Pflds"; "Pflid_imm"; "Pflis_imm"; "Pfmuld"; "Pfmuls"; "Pfnegd";
       "Pfnegs"; "Pfsitod"; "Pfsitos"; "Pfsqrt"; "Pfstd"; "Pfsts"; "Pfsubd";
       "Pfsubs"; "Pftosizd"; "Pftosizs"; "Pftouizd"; "Pftouizs"; "Pfuitod";
       "Pfuitos"; "Pinlineasm"; "Pisb"; "Plabel"; "Pldr"; "Ploadsymbol_lbl";
@@ -193,6 +193,7 @@ let pp_instructions pp ic =
     | Pcfi_rel_offset _ -> assert false
     (* Should be eliminated in constant expansion step *)
     | Pflis(r1, f) -> assert false
+    | Pflid(r1, f) -> assert false
     | Ploadsymbol(r1, id, ofs) -> assert false
     (* ARM instructions *)
     | Padc(r1, r2, so) -> instruction pp "Padc" [Ireg r1; Ireg r2; Shift so]
@@ -230,7 +231,6 @@ let pp_instructions pp ic =
     | Pfdivs(r1, r2, r3) -> instruction pp "Pfdivs" [SFreg r1; SFreg r2; SFreg r3]
     | Pfldd(r1, r2, n) | Pfldd_a(r1, r2, n) -> instruction pp "Pfldd" [DFreg r1; Ireg r2; Long n]
     | Pflds(r1, r2, n) -> instruction pp "Pflds" [SFreg r1; Ireg r2; Long n]
-    | Pflid(r1, f) -> instruction pp "Pflid" [DFreg r1; Float64 f]
     | Pfmuld(r1, r2, r3) -> instruction pp "Pfmuld" [DFreg r1; DFreg r2; DFreg r3]
     | Pfmuls(r1, r2, r3) -> instruction pp "Pfmuls" [SFreg r1; SFreg r2; SFreg r3]
     | Pfnegd(r1, r2) -> instruction pp "Pfnegd" [DFreg r1; DFreg r2]
