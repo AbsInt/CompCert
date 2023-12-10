@@ -165,8 +165,8 @@ let pp_instructions pp ic =
     | Pcvtl2w _
     | Pcvtw2l _ -> assert false
     (* RISC-V instructions *)
-    | Paddil(rd, rs, imm) -> instruction pp "Paddil" [Ireg rd; Ireg0 rs; Int imm]
-    | Paddiw(rd, rs, imm) -> instruction pp "Paddiw" [Ireg rd; Ireg0 rs; Int64 imm]
+    | Paddil(rd, rs, imm) -> instruction pp "Paddil" [Ireg rd; Ireg0 rs; Int64 imm]
+    | Paddiw(rd, rs, imm) -> instruction pp "Paddiw" [Ireg rd; Ireg0 rs; Int imm]
     | Paddl(rd, rs1, rs2) -> instruction pp "Paddl" [Ireg rd; Ireg0 rs1; Ireg0 rs2]
     | Paddw(rd, rs1, rs2) -> instruction pp "Paddw" [Ireg rd; Ireg0 rs1; Ireg0 rs2]
     | Pandil(rd, rs, imm) -> instruction pp "Pandil" [Ireg rd; Ireg0 rs; Int64 imm]
