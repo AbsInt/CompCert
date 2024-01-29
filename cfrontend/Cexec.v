@@ -508,7 +508,6 @@ Definition do_ef_free
   | Vptr b lo :: nil =>
       do vsz <- Mem.load Mptr m b (Ptrofs.unsigned lo - size_chunk Mptr);
       do sz <- do_alloc_size vsz;
-      check (zlt 0 (Ptrofs.unsigned sz));
       do m' <- Mem.free m b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz);
       Some(w, E0, Vundef, m')
   | Vint n :: nil =>
@@ -630,7 +629,7 @@ Proof with try congruence.
   replace (Vlong Int64.zero) with Vnullptr. split; constructor.
   unfold Vnullptr; rewrite H0; auto.
 + destruct vargs... mydestr.
-  split. apply SIZE in Heqo0. econstructor; eauto. congruence. lia.
+  split. apply SIZE in Heqo0. econstructor; eauto. congruence.
   constructor.
 - (* EF_memcpy *)
   unfold do_ef_memcpy. destruct vargs... destruct v... destruct vargs...
@@ -687,7 +686,7 @@ Proof.
   inv H0. erewrite SIZE by eauto. rewrite H1, H2. auto.
 - (* EF_free *)
   inv H; unfold do_ef_free.
-+ inv H0. rewrite H1. erewrite SIZE by eauto. rewrite zlt_true. rewrite H3. auto. lia.
++ inv H0. rewrite H1. erewrite SIZE by eauto. rewrite H2. auto.
 + inv H0. unfold Vnullptr; destruct Archi.ptr64; auto.
 - (* EF_memcpy *)
   inv H; unfold do_ef_memcpy.
