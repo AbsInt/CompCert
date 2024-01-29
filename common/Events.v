@@ -1068,7 +1068,6 @@ Inductive extcall_free_sem (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
   | extcall_free_sem_ptr: forall b lo sz m m',
       Mem.load Mptr m b (Ptrofs.unsigned lo - size_chunk Mptr) = Some (Vptrofs sz) ->
-      Ptrofs.unsigned sz > 0 ->
       Mem.free m b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) = Some m' ->
       extcall_free_sem ge (Vptr b lo :: nil) m E0 Vundef m'
   | extcall_free_sem_null: forall m,
@@ -1090,13 +1089,13 @@ Proof.
 (* readonly *)
 - eapply unchanged_on_readonly; eauto. inv H.
 + eapply Mem.free_unchanged_on; eauto.
-  intros. red; intros. elim H6.
+  intros. red; intros. elim H5.
   apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
   eapply Mem.free_range_perm; eauto.
 + apply Mem.unchanged_on_refl.
 (* mem extends *)
 - inv H.
-+ inv H1. inv H8. inv H6.
++ inv H1. inv H7. inv H5.
   exploit Mem.load_extends; eauto. intros [v' [A B]].
   assert (v' = Vptrofs sz).
   { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
@@ -1108,7 +1107,7 @@ Proof.
   unfold loc_out_of_bounds; intros.
   assert (Mem.perm m1 b i Max Nonempty).
   { apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-    eapply Mem.free_range_perm. eexact H4. eauto. }
+    eapply Mem.free_range_perm. eexact H3. eauto. }
   tauto.
 + inv H1. inv H5. replace v2 with Vnullptr.
   exists Vundef; exists m1'; intuition auto.
@@ -1117,18 +1116,17 @@ Proof.
   unfold Vnullptr in *; destruct Archi.ptr64; inv H3; auto.
 (* mem inject *)
 - inv H0.
-+ inv H2. inv H7. inv H9.
++ inv H2. inv H6. inv H8.
   exploit Mem.load_inject; eauto. intros [v' [A B]].
   assert (v' = Vptrofs sz).
   { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
   subst v'.
   assert (P: Mem.range_perm m1 b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) Cur Freeable).
     eapply Mem.free_range_perm; eauto.
-  exploit Mem.address_inject; eauto.
-    apply Mem.perm_implies with Freeable; auto with mem.
-    apply P. instantiate (1 := lo).
-    generalize (size_chunk_pos Mptr); lia.
-  intro EQ.
+  assert (EQ: Ptrofs.unsigned (Ptrofs.add lo (Ptrofs.repr delta)) = Ptrofs.unsigned lo + delta).
+  { eapply Mem.address_inject_gen with (p := Freeable); eauto.
+    right. apply P.
+    generalize (size_chunk_pos Mptr), (Ptrofs.unsigned_range sz); lia. }
   exploit Mem.free_parallel_inject; eauto. intros (m2' & C & D).
   exists f, Vundef, m2'; split.
   apply extcall_free_sem_ptr with (sz := sz) (m' := m2').

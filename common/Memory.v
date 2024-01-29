@@ -3262,6 +3262,23 @@ Qed.
 (** The following lemmas establish the absence of machine integer overflow
   during address computations. *)
 
+Lemma address_inject_gen:
+  forall f m1 m2 b1 ofs1 b2 delta p,
+  inject f m1 m2 ->
+  perm m1 b1 (Ptrofs.unsigned ofs1) Cur p \/ perm m1 b1 (Ptrofs.unsigned ofs1 - 1) Cur p ->
+  f b1 = Some (b2, delta) ->
+  Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)) = Ptrofs.unsigned ofs1 + delta.
+Proof.
+  intros.
+  assert (perm m1 b1 (Ptrofs.unsigned ofs1) Max Nonempty
+       \/ perm m1 b1 (Ptrofs.unsigned ofs1 - 1) Max Nonempty)
+  by (destruct H0; eauto with mem).
+  exploit mi_representable; eauto. intros [A B].
+  assert (0 <= delta <= Ptrofs.max_unsigned).
+    generalize (Ptrofs.unsigned_range ofs1). lia.
+  unfold Ptrofs.add. repeat rewrite Ptrofs.unsigned_repr; lia.
+Qed.
+
 Lemma address_inject:
   forall f m1 m2 b1 ofs1 b2 delta p,
   inject f m1 m2 ->
@@ -3269,8 +3286,18 @@ Lemma address_inject:
   f b1 = Some (b2, delta) ->
   Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)) = Ptrofs.unsigned ofs1 + delta.
 Proof.
+  intros; eapply address_inject_gen; eauto.
+Qed.
+
+Lemma address_inject_1:
+  forall f m1 m2 b1 ofs1 b2 delta p,
+  inject f m1 m2 ->
+  perm m1 b1 (Ptrofs.unsigned ofs1 - 1) Cur p ->
+  f b1 = Some (b2, delta) ->
+  Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta)) = Ptrofs.unsigned ofs1 + delta.
+Proof.
   intros.
-  assert (perm m1 b1 (Ptrofs.unsigned ofs1) Max Nonempty) by eauto with mem.
+  assert (perm m1 b1 (Ptrofs.unsigned ofs1 - 1) Max Nonempty) by eauto with mem.
   exploit mi_representable; eauto. intros [A B].
   assert (0 <= delta <= Ptrofs.max_unsigned).
     generalize (Ptrofs.unsigned_range ofs1). lia.
