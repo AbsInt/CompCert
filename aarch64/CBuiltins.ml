@@ -41,9 +41,6 @@ let builtins = {
     "__uint128_t", int128_type ]
   else []);
   builtin_functions = [
-    (* Synchronization *)
-    "__builtin_fence",
-      (TVoid [], [], false);
     (* Integer arithmetic *)
     "__builtin_cls",
       (TInt(IInt, []), [TInt(IInt, [])], false);
