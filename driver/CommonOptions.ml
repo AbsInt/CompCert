@@ -61,7 +61,6 @@ let language_support_options =
     Exact "-fnone", Unit (unset_all all_language_support_options);
     Exact "-fbitfields", Unit (fun () -> ()); ]
   @ f_opt "longdouble" option_flongdouble
-  @ f_opt "struct-return" option_fstruct_passing
   @ f_opt "struct-passing" option_fstruct_passing
   @ f_opt "vararg-calls" option_fvararg_calls
   @ f_opt "unprototyped" option_funprototyped
@@ -76,7 +75,6 @@ let language_support_help =
   -flongdouble   Treat 'long double' as 'double' [off]
   -fstruct-passing  Support passing structs and unions by value as function
                     results or function arguments [off]
-  -fstruct-return   Like -fstruct-passing (deprecated)
   -fvararg-calls Support calls to variable-argument functions [on]
   -funprototyped Support calls to old-style functions without prototypes [on]
   -funstructured-switch Support non-structured 'switch' statements [off]
