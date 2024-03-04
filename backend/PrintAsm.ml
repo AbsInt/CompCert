@@ -84,9 +84,9 @@ module Printer(Target:TARGET) =
       print_debug_label oc s;
       fprintf oc "%a:\n" Target.symbol name;
       print_location oc (C2C.atom_location name);
-      Target.cfi_startproc oc;
+      cfi_startproc oc;
       Target.print_instructions oc fn;
-      Target.cfi_endproc oc;
+      cfi_endproc oc;
       print_debug_label oc e;
       Target.print_fun_info oc name;
       emit_constants oc lit;

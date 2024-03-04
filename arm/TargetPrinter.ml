@@ -537,10 +537,6 @@ struct
 
   let print_jumptable _ _ = ()
 
-  let cfi_startproc = cfi_startproc
-
-  let cfi_endproc = cfi_endproc
-
   let print_optional_fun_info oc =
     if !Clflags.option_mthumb then
       fprintf oc "	.thumb_func\n"

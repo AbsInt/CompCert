@@ -883,9 +883,6 @@ module Target(System: SYSTEM):TARGET =
 
     let name_of_section = name_of_section
 
-    let cfi_startproc = cfi_startproc
-    let cfi_endproc = cfi_endproc
-
     let print_instructions oc fn =
       current_function_sig := fn.fn_sig;
       List.iter (print_instruction oc) fn.fn_code

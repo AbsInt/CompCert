@@ -33,8 +33,6 @@ module type SYSTEM =
       val name_of_section: section_name -> string
       val creg: out_channel -> int -> unit
       val print_file_line: out_channel -> string -> int -> unit
-      val cfi_startproc: out_channel -> unit
-      val cfi_endproc: out_channel -> unit
       val cfi_adjust: out_channel -> int32 -> unit
       val cfi_rel_offset: out_channel -> string -> int32 -> unit
       val print_prologue: out_channel -> unit
@@ -155,9 +153,6 @@ module Linux_System : SYSTEM =
       print_file_line oc comment file line
 
     (* Emit .cfi directives *)
-    let cfi_startproc = cfi_startproc
-
-    let cfi_endproc = cfi_endproc
 
     let cfi_adjust = cfi_adjust
 
@@ -259,9 +254,6 @@ module Diab_System : SYSTEM =
       print_file_line_d2 oc comment file line
 
     (* Emit .cfi directives *)
-    let cfi_startproc oc = ()
-
-    let cfi_endproc oc = ()
 
     let cfi_adjust oc delta = ()
 

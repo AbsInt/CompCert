@@ -674,9 +674,6 @@ module Target(System: SYSTEM): TARGET =
 
     let default_falignment = 4
 
-    let cfi_startproc oc = ()
-    let cfi_endproc oc = ()
-
   end
 
 let sel_target () =
