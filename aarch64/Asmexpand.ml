@@ -423,6 +423,7 @@ let expand_instruction instr =
         current_function_stacksize := Z.to_int64 sz
       end;
       expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz));
+      emit (Pcfi_adjust sz);
       expand_storeptr X15 XSP ofs
   | Pfreeframe (sz, ofs) ->
       expand_addimm64 XSP XSP (coqint_of_camlint64 !current_function_stacksize)

@@ -348,7 +348,10 @@ Inductive instruction : Type :=
   | Pbtbl   (r: ireg)  (tbl: list label)            (**r N-way branch through a jump table *)
   | Pbuiltin: external_function -> list (builtin_arg preg)
               -> builtin_res preg -> instruction    (**r built-in function (pseudo) *)
-  | Pnop : instruction.                             (**r nop instruction *)
+  | Pnop : instruction                             (**r nop instruction *)
+  | Pcfi_rel_offset (ofs: int)                      (**r .cfi_rel_offset debug directive *)
+  | Pcfi_adjust (ofs: int).                         (**r .cfi_adjust debug directive *)
+
 
 
 (** The pseudo-instructions are the following:
@@ -964,11 +967,14 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
           end
       | _ => Stuck
       end
+  | Pcfi_rel_offset _ =>
+      Next (nextinstr rs) m
   | Pbuiltin ef args res =>
       Stuck (**r treated specially below *)
 
   (** The following instructions and directives are not generated directly by Asmgen,
       so we do not model them. *)
+  | Pcfi_adjust _
   | Pfence
 
   | Pfmvxs _ _

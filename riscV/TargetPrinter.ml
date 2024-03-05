@@ -525,6 +525,9 @@ module Target : TARGET =
          fprintf oc "%s end pseudoinstr btbl\n" comment
       | Pnop ->
         fprintf oc "	nop\n"
+      | Pcfi_adjust sz -> cfi_adjust oc (camlint_of_coqint sz)
+      | Pcfi_rel_offset ofs ->
+        cfi_rel_offset oc "x1" (camlint_of_coqint ofs)
       | Pbuiltin(ef, args, res) ->
          begin match ef with
            | EF_annot(kind,txt, targs) ->

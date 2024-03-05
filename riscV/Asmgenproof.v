@@ -403,8 +403,8 @@ Lemma transl_find_label:
   end.
 Proof.
   intros. monadInv H. destruct (zlt Ptrofs.max_unsigned (list_length_z x.(fn_code))); inv EQ0.
-  monadInv EQ. rewrite transl_code'_transl_code in EQ0. unfold fn_code. 
-  simpl. destruct (storeind_ptr_label X1 X2 (fn_retaddr_ofs f) x) as [A B]; rewrite B. 
+  monadInv EQ. rewrite transl_code'_transl_code in EQ0. unfold fn_code.
+  simpl. erewrite tail_nolabel_find_label by (apply storeind_ptr_label). simpl.
   eapply transl_code_label; eauto.
 Qed.
 
@@ -450,7 +450,9 @@ Proof.
   destruct (zlt Ptrofs.max_unsigned (list_length_z x.(fn_code))); inv EQ0. monadInv EQ.
   rewrite transl_code'_transl_code in EQ0.
   exists x; exists true; split; auto. unfold fn_code.
-  constructor. apply (storeind_ptr_label X1 X2 (fn_retaddr_ofs f0) x).
+  constructor.  eapply is_tail_trans.
+  2: apply (storeind_ptr_label X1 X2 (fn_retaddr_ofs f0) (Pcfi_rel_offset (Ptrofs.to_int (fn_retaddr_ofs f0)) :: x)).
+  repeat constructor.
 - exact transf_function_no_overflow.
 Qed.
 
@@ -932,28 +934,32 @@ Local Transparent destroyed_by_op.
   intros [m3' [P Q]].
   (* Execution of function prologue *)
   monadInv EQ0. rewrite transl_code'_transl_code in EQ1.
+  set (x1 := Pcfi_rel_offset (Ptrofs.to_int (fn_retaddr_ofs f)) :: x0) in *.
   set (tfbody := Pallocframe (fn_stacksize f) (fn_link_ofs f) ::
-                 storeind_ptr RA SP (fn_retaddr_ofs f) x0) in *.
+                 storeind_ptr RA SP (fn_retaddr_ofs f) x1) in *.
   set (tf := {| fn_sig := Mach.fn_sig f; fn_code := tfbody |}) in *.
   set (rs2 := nextinstr (rs0#X30 <- (parent_sp s) #SP <- sp #X31 <- Vundef)).
-  exploit (storeind_ptr_correct tge tf SP (fn_retaddr_ofs f) RA x0 rs2 m2').
+  exploit (storeind_ptr_correct tge tf SP (fn_retaddr_ofs f) RA x1 rs2 m2').
     rewrite chunk_of_Tptr in P. change (rs2 X1) with (rs0 X1). rewrite ATLR. 
     change (rs2 X2) with sp. eexact P. 
     congruence. congruence.
   intros (rs3 & U & V).
+  set (rs4 := nextinstr rs3).
   assert (EXEC_PROLOGUE:
             exec_straight tge tf
               tf.(fn_code) rs0 m'
-              x0 rs3 m3').
+              x0 rs4 m3').
   { change (fn_code tf) with tfbody; unfold tfbody.
     apply exec_straight_step with rs2 m2'.
     unfold exec_instr. rewrite C. fold sp.
     rewrite <- (sp_val _ _ _ AG). rewrite chunk_of_Tptr in F. rewrite F. reflexivity.
-    reflexivity. 
-    eexact U. }
+    reflexivity.
+    eapply exec_straight_trans with (rs2 := rs3) (m2 := m3').
+    eexact U. eapply exec_straight_one; eauto.
+  }
   exploit exec_straight_steps_2; eauto using functions_transl. lia. constructor.
   intros (ofs' & X & Y).                    
-  left; exists (State rs3 m3'); split.
+  left; exists (State rs4 m3'); split.
   eapply exec_straight_steps_1; eauto. lia. constructor.
   econstructor; eauto.
   rewrite X; econstructor; eauto. 
@@ -965,8 +971,9 @@ Local Transparent destroyed_by_op.
 Local Transparent destroyed_at_function_entry.
   simpl; intros; Simpl.
   unfold sp; congruence.
-  intros. rewrite V by auto with asmgen. reflexivity.
-
+  intros. unfold rs4; Simpl. unfold rs4; intros.
+  unfold rs4 in * ; intros.
+  rewrite nextinstr_inv; try apply V; eauto with asmgen.
 - (* external function *)
   exploit functions_translated; eauto.
   intros [tf [A B]]. simpl in B. inv B.

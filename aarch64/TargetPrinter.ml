@@ -605,7 +605,7 @@ module Target(System: SYSTEM): TARGET =
     | Pcfi_adjust sz ->
         cfi_adjust oc (camlint_of_coqint sz)
     | Pcfi_rel_offset ofs ->
-        cfi_rel_offset oc "lr" (camlint_of_coqint ofs)
+        cfi_rel_offset oc "x30" (camlint_of_coqint ofs)
     | Pbuiltin(ef, args, res) ->
         begin match ef with
           | EF_annot(kind,txt, targs) ->
