@@ -528,9 +528,11 @@ module FixupHF = struct
       end;
       fixup_outgoing act
     | (fr, Single, sr) :: act ->
-      let fr = freg_param fr
-      and sr = sreg_param sr in
-      emit (Pfcpy_sf (sr, fr));
+      if (2 * fr) <> sr then begin
+        let fr = freg_param fr
+        and sr = sreg_param sr in
+        emit (Pfcpy_sf (sr, fr))
+      end;
       fixup_outgoing act
 
   let rec fixup_incoming = function
