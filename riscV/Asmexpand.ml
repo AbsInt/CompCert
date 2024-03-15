@@ -676,6 +676,7 @@ let expand_instruction instr =
         let extra_sz = if n >= 8 then 0 else align ((8 - n) * wordsize) 16 in
         let full_sz = Z.add sz (Z.of_uint extra_sz) in
         expand_addptrofs X2 X2 (Ptrofs.repr (Z.neg full_sz));
+        emit (Pcfi_adjust sz);
         expand_storeind_ptr X30 X2 ofs;
         let va_ofs =
           Z.add full_sz (Z.of_sint ((n - 8) * wordsize)) in
@@ -683,6 +684,7 @@ let expand_instruction instr =
         save_arguments n va_ofs
       end else begin
         expand_addptrofs X2 X2 (Ptrofs.repr (Z.neg sz));
+        emit (Pcfi_adjust sz);
         expand_storeind_ptr X30 X2 ofs;
         vararg_start_ofs := None
       end
