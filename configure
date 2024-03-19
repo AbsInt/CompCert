@@ -504,19 +504,19 @@ missingtools=false
 echo "Testing Coq... " | tr -d '\n'
 coq_ver=$(${COQBIN}coqc -v 2>/dev/null | tr -d '\r' | sed -n -e 's/The Coq Proof Assistant, version \([^ ]*\).*$/\1/p')
 case "$coq_ver" in
-  8.12.0|8.12.1|8.12.2|8.13.0|8.13.1|8.13.2|8.14.0|8.14.1|8.15.0|8.15.1|8.15.2|8.16.0|8.16.1|8.17.0|8.17.1)
+  8.12.0|8.12.1|8.12.2|8.13.0|8.13.1|8.13.2|8.14.0|8.14.1|8.15.0|8.15.1|8.15.2|8.16.0|8.16.1|8.17.0|8.17.1|8.18.0)
         echo "version $coq_ver -- good!";;
   ?*)
         echo "version $coq_ver -- UNSUPPORTED"
         if $ignore_coq_version; then
             echo "Warning: this version of Coq is unsupported, proceed at your own risks."
         else
-            echo "Error: CompCert requires a version of Coq between 8.12.0 and 8.17.1"
+            echo "Error: CompCert requires a version of Coq between 8.12.0 and 8.18.0"
             missingtools=true
         fi;;
   "")
         echo "NOT FOUND"
-        echo "Error: make sure Coq version 8.15.2 is installed."
+        echo "Error: make sure Coq is installed."
         missingtools=true;;
 esac
 
