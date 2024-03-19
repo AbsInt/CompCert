@@ -1,6 +1,6 @@
 (**
 This file is part of the Flocq formalization of floating-point
-arithmetic in Coq: http://flocq.gforge.inria.fr/
+arithmetic in Coq: https://flocq.gitlabpages.inria.fr/
 
 Copyright (C) 2011-2018 Sylvie Boldo
 #<br />#
@@ -988,7 +988,7 @@ Lemma iter_nat_plus :
   iter_nat (p + q) x = iter_nat p (iter_nat q x).
 Proof.
 induction q.
-now rewrite plus_0_r.
+now rewrite Nat.add_0_r.
 intros x.
 rewrite <- plus_n_Sm.
 apply IHq.
@@ -1012,13 +1012,13 @@ Proof.
 induction p ; intros x.
 rewrite Pos2Nat.inj_xI.
 simpl.
-rewrite plus_0_r.
+rewrite Nat.add_0_r.
 rewrite iter_nat_plus.
 rewrite (IHp (f x)).
 apply IHp.
 rewrite Pos2Nat.inj_xO.
 simpl.
-rewrite plus_0_r.
+rewrite Nat.add_0_r.
 rewrite iter_nat_plus.
 rewrite (IHp x).
 apply IHp.
