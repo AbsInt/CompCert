@@ -497,8 +497,8 @@ Ltac UNCHANGED :=
   apply leftcontext_leftcontextlist_ind; intros.
 
 - (* base *)
-  TR. rewrite <- app_nil_end; auto. red; auto.
-  intros. rewrite <- app_nil_end; auto.
+  TR. rewrite app_nil_r; auto. red; auto.
+  intros. rewrite app_nil_r; auto.
 - (* deref *)
   inv H1.
   exploit H0; eauto. intros [dst' [sl1' [sl2' [a' [tmp' [P [Q [R S]]]]]]]].
@@ -848,7 +848,7 @@ Proof.
   split. apply tr_top_val_val; eauto.
   split. instantiate (1 := nil); auto.
   split. apply incl_refl.
-  intros. rewrite <- app_nil_end. constructor; auto.
+  intros. rewrite app_nil_r. constructor; auto.
 (* base *)
   subst r. exploit tr_expr_leftcontext; eauto.
   intros [dst' [sl1 [sl2 [a' [tmp' [P [Q [R S]]]]]]]].

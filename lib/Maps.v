@@ -1589,7 +1589,7 @@ Proof.
   intros m EQV. apply H_base.
   intros. destruct (T.get k m) as [v|] eqn:G; auto.
   apply EQV in G. contradiction.
-Qed.
+Defined.
 
 Let H_rec':
   forall k v l a,
@@ -1608,7 +1608,7 @@ Proof.
   + apply EQV. simpl; auto.
   + congruence.
   + apply EQV in H. simpl in H. intuition congruence.
-Qed.
+Defined.
 
 Lemma fold_ind_aux:
   forall l,

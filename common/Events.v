@@ -100,7 +100,7 @@ Lemma E0_left: forall t, E0 ** t = t.
 Proof. auto. Qed.
 
 Lemma E0_right: forall t, t ** E0 = t.
-Proof. intros. unfold E0, Eapp. rewrite <- app_nil_end. auto. Qed.
+Proof. intros. unfold E0, Eapp. rewrite app_nil_r. auto. Qed.
 
 Lemma Eapp_assoc: forall t1 t2 t3, (t1 ** t2) ** t3 = t1 ** (t2 ** t3).
 Proof. intros. unfold Eapp, trace. apply app_ass. Qed.

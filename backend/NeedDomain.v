@@ -864,7 +864,7 @@ Proof.
   rewrite Mem.weak_valid_pointer_spec in *.
   rewrite ! Mem.valid_pointer_nonempty_perm in *.
   destruct H0; [left|right]; eauto.
-Qed.
+Defined.
 
 Let weak_valid_pointer_no_overflow:
   forall b1 ofs b2 delta,
@@ -873,7 +873,7 @@ Let weak_valid_pointer_no_overflow:
   0 <= Ptrofs.unsigned ofs + Ptrofs.unsigned (Ptrofs.repr delta) <= Ptrofs.max_unsigned.
 Proof.
   unfold inject_id; intros. inv H. rewrite Z.add_0_r. apply Ptrofs.unsigned_range_2.
-Qed.
+Defined.
 
 Let valid_different_pointers_inj:
   forall b1 ofs1 b2 ofs2 b1' delta1 b2' delta2,
@@ -886,7 +886,7 @@ Let valid_different_pointers_inj:
   Ptrofs.unsigned (Ptrofs.add ofs1 (Ptrofs.repr delta1)) <> Ptrofs.unsigned (Ptrofs.add ofs2 (Ptrofs.repr delta2)).
 Proof.
   unfold inject_id; intros. left; congruence.
-Qed.
+Defined.
 
 Lemma default_needs_of_condition_sound:
   forall cond args1 b args2,

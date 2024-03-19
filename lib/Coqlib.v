@@ -833,6 +833,12 @@ Qed.
 
 (** Properties of [List.app] (concatenation) *)
 
+Lemma app_ass:
+  forall (A: Type) (l1 l2 l3: list A), (l1 ++ l2) ++ l3 = l1 ++ (l2 ++ l3).
+Proof.
+  intros; symmetry; apply app_assoc.
+Qed.
+
 Lemma list_append_injective_l:
   forall (A: Type) (l1 l2 l1' l2': list A),
   l1 ++ l2 = l1' ++ l2' -> List.length l1 = List.length l1' -> l1 = l1' /\ l2 = l2'.
@@ -1052,7 +1058,7 @@ Proof.
     elim H4. apply in_or_app. tauto.
     auto.
   induction a; simpl; intros.
-  rewrite <- app_nil_end. auto.
+  rewrite app_nil_r. auto.
   inversion H0. apply H. auto.
   red; intro; elim H3. apply in_or_app. tauto.
   red; intro; elim H3. apply in_or_app. tauto.

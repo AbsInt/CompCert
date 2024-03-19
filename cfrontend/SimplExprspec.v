@@ -768,7 +768,7 @@ Lemma finish_meets_spec_1:
   forall dst sl a sl' a',
   finish dst sl a = (sl', a') -> sl' = sl ++ final dst a.
 Proof.
-  intros. destruct dst; simpl in *; inv H. apply app_nil_end. apply app_nil_end. auto.
+  intros. destruct dst; simpl in *; inv H; rewrite ? app_nil_r; auto.
 Qed.
 
 Lemma finish_meets_spec_2:
@@ -900,7 +900,7 @@ Opaque makeif.
 + (* for value *)
   monadInv H0. exploit H; eauto. intros [tmp [A B]].
   econstructor; split; eauto. intros; apply tr_expr_add_dest.
-  rewrite (app_nil_end sl).
+  rewrite <- (app_nil_r sl).
   apply tr_cast_val with (dst := For_val); auto.
 + (* for effects *)
   exploit H; eauto. intros [tmp [A B]].

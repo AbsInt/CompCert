@@ -513,7 +513,7 @@ Qed.
 Corollary boidl_rev_cons: forall i il,
   boidl (rev il ++ i :: nil) = boidl (rev il) ++ boid i.
 Proof.
-  intros. rewrite boidl_app. simpl. rewrite <- app_nil_end. auto.
+  intros. rewrite boidl_app. simpl. rewrite app_nil_r. auto.
 Qed. 
 
 Definition byte_of_int (n: int) := Byte.repr (Int.unsigned n).

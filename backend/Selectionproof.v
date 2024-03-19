@@ -188,7 +188,7 @@ Hypothesis HF: helper_functions_declared cunit hf.
 Let HF': helper_functions_declared tprog hf.
 Proof.
   apply helper_functions_preserved. eapply helper_functions_declared_linkorder; eauto.
-Qed.
+Defined.
 
 Variable sp: val.
 Variable e: env.
@@ -547,7 +547,8 @@ Hypothesis HF: helper_functions_declared cunit hf.
 Let HF': helper_functions_declared tprog hf.
 Proof.
   apply helper_functions_preserved. eapply helper_functions_declared_linkorder; eauto.
-Qed.
+Defined.
+
 Lemma sel_switch_int_correct:
   forall dfl cases arg sp e m i t le,
   validate_switch Int.modulus dfl cases t = true ->
