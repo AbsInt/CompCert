@@ -1,15 +1,13 @@
-(****************************************************************************)
-(*                                                                          *)
-(*                                   Menhir                                 *)
-(*                                                                          *)
-(*           Jacques-Henri Jourdan, CNRS, LRI, Université Paris Sud         *)
-(*                                                                          *)
-(*  Copyright Inria. All rights reserved. This file is distributed under    *)
-(*  the terms of the GNU Lesser General Public License as published by the  *)
-(*  Free Software Foundation, either version 3 of the License, or (at your  *)
-(*  option) any later version, as described in the file LICENSE.            *)
-(*                                                                          *)
-(****************************************************************************)
+(******************************************************************************)
+(*                                                                            *)
+(*                                   Menhir                                   *)
+(*                                                                            *)
+(*  Copyright Inria and CNRS. All rights reserved. This file is distributed   *)
+(*  under the terms of the GNU Lesser General Public License as published by  *)
+(*  the Free Software Foundation, either version 3 of the License, or (at     *)
+(*  your option) any later version, as described in the file LICENSE.         *)
+(*                                                                            *)
+(******************************************************************************)
 
 From Coq Require Import List Syntax.
 Import ListNotations.
@@ -84,8 +82,8 @@ CoInductive buffer : Type :=
   Buf_cons { buf_head : token; buf_tail : buffer }.
 
 (* Note: Coq 8.12.0 wants a Declare Scope command,
-   but this breaks compatibility with Coq < 8.10. *)
-Declare Scope buffer_scope.
+   but this breaks compatibility with Coq < 8.10.
+   Declare Scope buffer_scope. *)
 Delimit Scope buffer_scope with buf.
 Bind Scope buffer_scope with buffer.
 

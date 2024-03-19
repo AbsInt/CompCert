@@ -1,15 +1,13 @@
-(****************************************************************************)
-(*                                                                          *)
-(*                                   Menhir                                 *)
-(*                                                                          *)
-(*           Jacques-Henri Jourdan, CNRS, LRI, Université Paris Sud         *)
-(*                                                                          *)
-(*  Copyright Inria. All rights reserved. This file is distributed under    *)
-(*  the terms of the GNU Lesser General Public License as published by the  *)
-(*  Free Software Foundation, either version 3 of the License, or (at your  *)
-(*  option) any later version, as described in the file LICENSE.            *)
-(*                                                                          *)
-(****************************************************************************)
+(******************************************************************************)
+(*                                                                            *)
+(*                                   Menhir                                   *)
+(*                                                                            *)
+(*  Copyright Inria and CNRS. All rights reserved. This file is distributed   *)
+(*  under the terms of the GNU Lesser General Public License as published by  *)
+(*  the Free Software Foundation, either version 3 of the License, or (at     *)
+(*  your option) any later version, as described in the file LICENSE.         *)
+(*                                                                            *)
+(******************************************************************************)
 
 From Coq Require Import ZArith List Relations RelationClasses.
 Import ListNotations.
@@ -75,7 +73,7 @@ rewrite Nat.compare_eq_iff in *; destruct H; assumption.
 rewrite <- nat_compare_lt in *.
 apply (Nat.lt_trans _ _ _ H H0).
 rewrite <- nat_compare_gt in *.
-apply (gt_trans _ _ _ H H0).
+apply (Nat.lt_trans _ _ _ H0 H).
 Qed.
 
 (** A pair of comparable is comparable. **)

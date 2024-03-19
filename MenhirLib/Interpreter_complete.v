@@ -1,15 +1,13 @@
-(****************************************************************************)
-(*                                                                          *)
-(*                                   Menhir                                 *)
-(*                                                                          *)
-(*           Jacques-Henri Jourdan, CNRS, LRI, Université Paris Sud         *)
-(*                                                                          *)
-(*  Copyright Inria. All rights reserved. This file is distributed under    *)
-(*  the terms of the GNU Lesser General Public License as published by the  *)
-(*  Free Software Foundation, either version 3 of the License, or (at your  *)
-(*  option) any later version, as described in the file LICENSE.            *)
-(*                                                                          *)
-(****************************************************************************)
+(******************************************************************************)
+(*                                                                            *)
+(*                                   Menhir                                   *)
+(*                                                                            *)
+(*  Copyright Inria and CNRS. All rights reserved. This file is distributed   *)
+(*  under the terms of the GNU Lesser General Public License as published by  *)
+(*  the Free Software Foundation, either version 3 of the License, or (at     *)
+(*  your option) any later version, as described in the file LICENSE.         *)
+(*                                                                            *)
+(******************************************************************************)
 
 From Coq Require Import List Arith.
 Import ListNotations.
@@ -788,9 +786,9 @@ Proof.
   - assert (Hptd := next_ptd_cost ptd). destruct next_ptd=>//. by rewrite Hptd.
   - rewrite Nat.add_0_r. assert (IH1 := IH ptd). destruct next_ptd_iter as [ptd'|].
     + specialize (IH ptd'). destruct next_ptd_iter as [ptd''|].
-      * by rewrite IH1 IH -!plus_assoc.
-      * rewrite IH1. by apply plus_lt_compat_l.
-    + by apply lt_plus_trans.
+      * by rewrite IH1 IH -!Nat.add_assoc.
+      * rewrite IH1. by apply Nat.add_lt_mono_l.
+    + by apply Nat.lt_le_trans with (1 := IH1), Nat.le_add_r.
 Qed.
 
 (** We now prove the top-level parsing function. The only thing that
@@ -816,8 +814,8 @@ Proof.
   destruct next_ptd_iter.
   - destruct Hparse as (? & -> & ?). apply (f_equal S) in Hcost.
     rewrite -ptd_cost_build_from_pt Nat.add_0_r in Hcost. rewrite Hcost.
-    apply le_lt_n_Sm, le_plus_l.
-  - rewrite Hparse. split; [|split]=>//. apply lt_le_S in Hcost.
+    apply Nat.lt_succ_r, Nat.le_add_r.
+  - rewrite Hparse. split; [|split]=>//. apply Nat.le_succ_l in Hcost.
     by rewrite -ptd_cost_build_from_pt Nat.add_0_r in Hcost.
 Qed.
 
