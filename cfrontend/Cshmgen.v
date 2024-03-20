@@ -687,6 +687,17 @@ Fixpoint transl_statement (ce: composite_env) (tyret: type) (nbrk ncnt: nat)
           OK (make_funcall x res sg tb tcl)
       | _ => Error(msg "Cshmgen.transl_stmt(call)")
       end
+  | Clight.Stailcall b cl =>
+      match classify_fun (typeof b) with
+      | fun_case_f args res cconv =>
+          do tb <- transl_expr ce b;
+          do tcl <- transl_arglist ce cl args;
+          let sg := {| sig_args := typlist_of_arglist cl args;
+                       sig_res  := rettype_of_type res;
+                       sig_cc   := cconv |} in
+          OK (Stailcall sg tb tcl)
+      | _ => Error(msg "Cshmgen.transl_stmt(tailcall)")
+      end
   | Clight.Sbuiltin x ef tyargs bl =>
       do tbl <- transl_arglist ce bl tyargs;
       OK(Sbuiltin x ef tbl)
