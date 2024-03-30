@@ -1976,7 +1976,7 @@ Remark addressing_not_long:
 Proof.
   intros. inv H.
   assert (A: forall ty, In ty (type_of_addressing addr) -> ty = Tptr).
-  { intros. destruct addr; simpl in H; intuition. }
+  { intros. try (apply diff_false_true in H0). destruct addr; simpl in H; intuition auto. }
   assert (B: In (env r) (type_of_addressing addr)).
   { rewrite <- H5. apply in_map; auto. }
   assert (C: env r = Tint).
