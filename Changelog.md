@@ -1,3 +1,29 @@
+# Release 3.14, 2024-05-xx
+
+Code generation and optimization:
+- Improved CSE of Ocmp (comparison) and Osel (conditional move) instructions.
+- Replace "conditional move" with "move" if the two sources are equal.
+- ARM: we can use `movt`/`movw` in ARM mode, not just in Thumb2 mode (#503).
+
+Usability:
+- Generate CFI debugging directives for AArch64 and for RISC-V.
+- Remove `-fstruct-return` command-line option, which has been deprecated for a long time.
+
+Bug fixes:
+- x86 under Windows/Cygwin64: wrong `sub` instruction generated for `allocframe` operation.
+- ARM: fix PC displacement overflow involving floating-point constants.
+- ARM: fix error on printing of "s17" register.
+
+Formal semantics:
+- The big-step semantics for Clight now supports the two models for function arguments (either as stack-allocated variables or as register-like temporaries).
+- Semantics of the `free()` external call extended to support zero-sized blocks (#509).
+
+Coq development:
+- Support Coq 8.17, 8.18, 8.19, addressing most of the new warnings.
+- Update vendored copy of Flocq to version 4.1.4.
+- Update vendored copy of Menhirlib to version 20231231.
+
+
 # Release 3.13, 2023-07-04
 
 Code generation and optimization:
