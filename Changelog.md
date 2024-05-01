@@ -1,27 +1,32 @@
 # Release 3.14, 2024-05-xx
 
-Code generation and optimization:
-- Improved CSE of Ocmp (comparison) and Osel (conditional move) instructions.
-- Replace "conditional move" with "move" if the two sources are equal.
-- ARM: we can use `movt`/`movw` in ARM mode, not just in Thumb2 mode (#503).
+ISO C conformance:
+- `free` has well-defined semantics on blocks of size 0 (#509).
 
-Usability:
-- Generate CFI debugging directives for AArch64 and for RISC-V.
-- Remove `-fstruct-return` command-line option, which has been deprecated for a long time.
+Code generation and optimization:
+- More simplifications of comparison operations and selection operations during the CSE pass.
+- Replace selection operations with moves if both branches are equal.
+- ARM 32 bits: several minor improvements to the generated code (#503 and more).
 
 Bug fixes:
-- x86 under Windows/Cygwin64: wrong `sub` instruction generated for `allocframe` operation.
+- x86 under Windows: the wrong `sub` instruction was generated for `Pallocframe`.
 - ARM: fix PC displacement overflow involving floating-point constants.
 - ARM: fix error on printing of "s17" register.
+- RISC-V: do not use 64-bit FP registers for `memcpy` if option `-fno-fpu` is given.
+
+Usability:
+- Added generation of CFI debugging directives for AArch64 and RISC-V.
+- Removed the command-line option `-fstruct-return`, deprecated since release 2.6.
 
 Formal semantics:
 - The big-step semantics for Clight now supports the two models for function arguments (either as stack-allocated variables or as register-like temporaries).
-- Semantics of the `free()` external call extended to support zero-sized blocks (#509).
 
 Coq development:
-- Support Coq 8.17, 8.18, 8.19, addressing most of the new warnings.
-- Update vendored copy of Flocq to version 4.1.4.
-- Update vendored copy of Menhirlib to version 20231231.
+- Support Coq 8.17, 8.18, and 8.19.
+- Revised most uses of the `intuition` tactic (#496 and more).
+- Address most other deprecation warnings from Coq 8.18 and 8.19.
+- Updated local copy of MenhirLib to version 20231231.
+- Updated local copy of Flocq to version 4.1.4.
 
 
 # Release 3.13, 2023-07-04
