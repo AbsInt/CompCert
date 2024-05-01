@@ -1,8 +1,0 @@
-glob_s = { a = -12, b = 1 }
-glob_t = { c = 123, d = 1, e = -45 }
-glob_u_u = { u = -3 }
-glob_u_v = { v = 6 }
-loc_s = { a = -12, b = 1 }
-loc_t = { c = 123, d = 1, e = -45 }
-loc_u_u = { u = -3 }
-loc_u_v = { v = 6 }

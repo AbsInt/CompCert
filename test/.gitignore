@@ -1,8 +1,0 @@
-# CompCert-generated files
-*.s
-*.sdump
-*.parsed.c
-*.compcert.c
-*.light.c
-*.compcert
-*.gcc

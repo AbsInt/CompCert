@@ -1,6 +1,0 @@
-#!/bin/sh
-
-if test -n "$INTERP"
-then exit $EXPECT_FAIL
-else exit $RUN
-fi

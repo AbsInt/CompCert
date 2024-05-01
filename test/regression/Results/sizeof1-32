@@ -1,3 +1,0 @@
-sizeof(struct s) = 20, sizeof(tbl) = 20
-sizeof(struct bits1) = 1, sizeof(b1) = 1
-sizeof(struct bits2) = 8, sizeof(b2) = 8
