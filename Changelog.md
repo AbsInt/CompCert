@@ -1,4 +1,4 @@
-# Release 3.14, 2024-05-xx
+# Release 3.14, 2024-05-02
 
 ISO C conformance:
 - `free` has well-defined semantics on blocks of size 0 (#509).
@@ -27,6 +27,10 @@ Coq development:
 - Address most other deprecation warnings from Coq 8.18 and 8.19.
 - Updated local copy of MenhirLib to version 20231231.
 - Updated local copy of Flocq to version 4.1.4.
+
+Distribution:
+- The small test suite was moved to a separate Git repository.
+  Use `git submodule init && git submodule update` to download it.
 
 
 # Release 3.13, 2023-07-04
