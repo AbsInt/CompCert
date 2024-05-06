@@ -359,7 +359,6 @@ clean:
 	rm -f .lia.cache
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
-	$(MAKE) -C test clean
 
 distclean:
 	$(MAKE) clean
