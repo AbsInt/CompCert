@@ -1,0 +1,36 @@
+name: Latest
+
+on:
+  push:
+    branches:
+      - 'master'
+  workflow_dispatch:
+
+jobs:
+  latest:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [aarch64, arm, ppc, riscv, x86_32, x86_64]
+    env:
+      target: ${{ matrix.target }}
+      os: linux
+      jobs: 4
+      opamroot: /home/coq/.opam
+      configopts: -ignore-coq-version
+    container:
+      image: coqorg/coq:latest-ocaml-4.14-flambda
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: OPAM dependencies
+        run: tools/runner.sh opam_install menhir
+      - name: Configure
+        run: tools/runner.sh configure
+      - name: Build
+        run: tools/runner.sh build_ccomp
+      - name: Check proof
+        run: tools/runner.sh check_proof
