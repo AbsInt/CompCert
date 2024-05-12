@@ -1,0 +1,17 @@
+(rule
+ (targets SelectOp.v)
+ (action
+  (with-stdout-to %{targets}
+   (run ndfun %{dep:SelectOp.vp}))))
+
+(rule
+ (targets ConstpropOp.v)
+ (action
+  (with-stdout-to %{targets}
+   (run ndfun %{dep:ConstpropOp.vp}))))
+
+(rule
+ (targets SelectLong.v)
+ (action
+  (with-stdout-to %{targets}
+   (run ndfun %{dep:SelectLong.vp}))))
