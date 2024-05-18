@@ -998,7 +998,10 @@ Proof.
   assert (classify_cast (Tint I32 Signed a) t2 <> cast_case_default ->
           classify_cast (Tint i s a) t2 <> cast_case_default).
   {
-    unfold classify_cast. destruct t2; try congruence. destruct f; congruence.
+    unfold classify_cast. destruct t2; try congruence.
+    destruct i0; auto.
+    destruct i; congruence.
+    destruct f; congruence.
     destruct Archi.ptr64; congruence.
   }
   destruct i; auto.
@@ -1010,6 +1013,7 @@ Proof.
   unfold wt_bool, wt_cast; unfold classify_bool; intros.
   destruct ty; simpl in *; try congruence;
   try (destruct Archi.ptr64; congruence).
+  destruct i; congruence.
   destruct f; congruence.
 Qed.
 
@@ -1018,9 +1022,9 @@ Lemma wt_cast_int:
 Proof.
   intros; red; simpl.
   destruct Archi.ptr64; [ | destruct (Ctypes.intsize_eq i2 I32)].
-- destruct i2; congruence.
+- destruct i2; try congruence. destruct i1; congruence.
 - subst i2; congruence.
-- destruct i2; congruence.
+- destruct i2; try congruence. destruct i1; congruence.
 Qed.
  
 Lemma type_combine_cast:

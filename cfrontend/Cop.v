@@ -91,6 +91,7 @@ Inductive classify_cast_cases : Type :=
   | cast_case_l2s (si1: signedness)                (**r long -> single *)
   | cast_case_f2l (si2:signedness)                 (**r double -> long *)
   | cast_case_s2l (si2:signedness)                 (**r single -> long *)
+  | cast_case_bool2bool                            (**r bool -> bool *)
   | cast_case_i2bool                               (**r int -> bool *)
   | cast_case_l2bool                               (**r long -> bool *)
   | cast_case_f2bool                               (**r double -> bool *)
@@ -105,6 +106,7 @@ Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   (* To [void] *)
   | Tvoid, _ => cast_case_void
   (* To [_Bool] *)
+  | Tint IBool _ _, Tint IBool _ _ => cast_case_bool2bool
   | Tint IBool _ _, Tint _ _ _ => cast_case_i2bool
   | Tint IBool _ _, Tlong _ _ => cast_case_l2bool
   | Tint IBool _ _, Tfloat F64 _ => cast_case_f2bool
@@ -283,6 +285,12 @@ Definition sem_cast (v: val) (t1 t2: type) (m: mem): option val :=
           end
       | _ => None
       end
+  | cast_case_bool2bool =>
+      match v with
+      | Vint n =>
+          if Int.eq n Int.zero || Int.eq n Int.one then Some v else None
+      | _ => None
+      end
   | cast_case_i2bool =>
       match v with
       | Vint n =>
@@ -385,12 +393,14 @@ Inductive classify_bool_cases : Type :=
   | bool_case_l                           (**r long *)
   | bool_case_f                           (**r double float *)
   | bool_case_s                           (**r single float *)
+  | bool_case_b                           (**r Boolean *)
   | bool_default.
 
 Definition classify_bool (ty: type) : classify_bool_cases :=
-  match typeconv ty with
+  match ty with
+  | Tint IBool _ _ => bool_case_b
   | Tint _ _ _ => bool_case_i
-  | Tpointer _ _ => if Archi.ptr64 then bool_case_l else bool_case_i
+  | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ => if Archi.ptr64 then bool_case_l else bool_case_i
   | Tfloat F64 _ => bool_case_f
   | Tfloat F32 _ => bool_case_s
   | Tlong _ _ => bool_case_l
@@ -428,6 +438,13 @@ Definition bool_val (v: val) (t: type) (m: mem) : option bool :=
   | bool_case_s =>
       match v with
       | Vsingle f => Some (negb (Float32.cmp Ceq f Float32.zero))
+      | _ => None
+      end
+  | bool_case_b =>
+      match v with
+      | Vint n =>
+          if Int.eq n Int.zero then Some false else
+          if Int.eq n Int.one then Some true else None
       | _ => None
       end
   | bool_default => None
@@ -1479,56 +1496,47 @@ Lemma cast_bool_bool_val:
   forall v t m,
   sem_cast v t (Tint IBool Signed noattr) m =
   match bool_val v t m with None => None | Some b => Some(Val.of_bool b) end.
-  intros.
-  assert (A: classify_bool t =
-    match t with
-    | Tint _ _ _ => bool_case_i
-    | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ => if Archi.ptr64 then bool_case_l else bool_case_i
-    | Tfloat F64 _ => bool_case_f
-    | Tfloat F32 _ => bool_case_s
-    | Tlong _ _ => bool_case_l
-    | _ => bool_default
+Proof.
+  assert (A: forall ty,
+    match classify_cast ty (Tint IBool Signed noattr) with
+    | cast_case_bool2bool => classify_bool ty = bool_case_b
+    | cast_case_i2bool => classify_bool ty = bool_case_i
+    | cast_case_l2bool => classify_bool ty = bool_case_l
+    | cast_case_f2bool => classify_bool ty = bool_case_f
+    | cast_case_s2bool => classify_bool ty = bool_case_s
+    | cast_case_default => classify_bool ty = bool_default
+    | _ => False
     end).
-  {
-    unfold classify_bool; destruct t; simpl; auto. destruct i; auto.
+  { unfold classify_bool, classify_cast; destruct ty; simpl typeconv.
+  - auto.
+  - destruct i; auto.
+  - auto.
+  - destruct f; auto. 
+  - destruct Archi.ptr64; auto.
+  - destruct Archi.ptr64; auto.
+  - destruct Archi.ptr64; auto.
+  - auto.
+  - auto.
   }
-  unfold bool_val. rewrite A.
-  unfold sem_cast, classify_cast; remember Archi.ptr64 as ptr64; destruct t; simpl; auto; destruct v; auto.
-  destruct (Int.eq i0 Int.zero); auto.
-  destruct ptr64; auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i0)); auto.
-  destruct (Int64.eq i Int64.zero); auto.
-  destruct (negb ptr64); auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
-  destruct f; auto.
-  destruct f; auto.
-  destruct f; auto.
-  destruct f; auto.
-  destruct (Float.cmp Ceq f0 Float.zero); auto.
-  destruct f; auto.
-  destruct (Float32.cmp Ceq f0 Float32.zero); auto.
-  destruct f; auto. 
-  destruct ptr64; auto.
-  destruct (Int.eq i Int.zero); auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto. destruct (Int64.eq i Int64.zero); auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
-  destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto. destruct (Int.eq i Int.zero); auto.
-  destruct ptr64; auto. destruct (Int64.eq i Int64.zero); auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
-  destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto. destruct (Int.eq i Int.zero); auto.
-  destruct ptr64; auto. destruct (Int64.eq i Int64.zero); auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto.
-  destruct ptr64; auto. destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
-  destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
+  intros. unfold sem_cast, bool_val. specialize (A t).
+  remember Archi.ptr64 as ptr64.
+  destruct (classify_cast t (Tint IBool Signed noattr)); try contradiction; rewrite A.
+  - destruct v; auto.
+    predSpec Int.eq Int.eq_spec i Int.zero. subst; simpl; auto.
+    predSpec Int.eq Int.eq_spec i Int.one; subst; simpl; auto.
+  - destruct v; auto.
+    destruct (Int.eq i Int.zero); auto.
+    destruct ptr64; auto.
+    destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
+  - destruct v; auto.
+    destruct (Int64.eq i Int64.zero); auto.
+    destruct ptr64; simpl; auto.
+    destruct (Mem.weak_valid_pointer m b (Ptrofs.unsigned i)); auto.
+  - destruct v; auto.
+    destruct (Float.cmp Ceq f Float.zero); auto.
+  - destruct v; auto.
+    destruct (Float32.cmp Ceq f Float32.zero); auto.
+  - auto.
 Qed.
 
 (** Relation between Boolean value and Boolean negation. *)
@@ -1602,6 +1610,9 @@ Lemma cast_val_is_casted:
 Proof.
   unfold sem_cast; intros.
   destruct ty, ty'; simpl in H; DestructCases; constructor; auto.
+  simpl. destruct (orb_prop _ _ Heqb) as [A|A]; rewrite ?A; apply Int.same_if_eq in A.
+  - auto.
+  - subst i1; auto.
 Qed.
 
 End VAL_CASTED.
@@ -1613,9 +1624,11 @@ Lemma cast_val_casted:
 Proof.
   intros. unfold sem_cast; inversion H; clear H; subst v ty; simpl.
 - destruct Archi.ptr64; [ | destruct (intsize_eq sz I32)].
-+ destruct sz; f_equal; f_equal; assumption.
++ destruct sz; f_equal; f_equal; try assumption.
+  revert H0; simpl; predSpec Int.eq Int.eq_spec n Int.zero; intros; subst n; auto.
 + subst sz; auto.
-+ destruct sz; f_equal; f_equal; assumption.
++ destruct sz; f_equal; f_equal; try assumption.
+  revert H0; simpl; predSpec Int.eq Int.eq_spec n Int.zero; intros; subst n; auto.
 - auto.
 - auto.
 - destruct Archi.ptr64; auto.

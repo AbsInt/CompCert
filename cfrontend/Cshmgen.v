@@ -165,6 +165,7 @@ Definition make_cast (from to: type) (e: expr) :=
   | cast_case_l2s si1 => OK (make_singleoflong e si1)
   | cast_case_f2l si2 => OK (make_longoffloat e si2)
   | cast_case_s2l si2 => OK (make_longofsingle e si2)
+  | cast_case_bool2bool => OK e
   | cast_case_i2bool => OK (make_cmpu_ne_zero e)
   | cast_case_f2bool => OK (Ebinop (Ocmpf Cne) e (make_floatconst Float.zero))
   | cast_case_s2bool => OK (Ebinop (Ocmpfs Cne) e (make_singleconst Float32.zero))
@@ -184,6 +185,7 @@ Definition make_boolean (e: expr) (ty: type) :=
   | bool_case_f => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
   | bool_case_s => Ebinop (Ocmpfs Cne) e (make_singleconst Float32.zero)
   | bool_case_l => Ebinop (Ocmplu Cne) e (make_longconst Int64.zero)
+  | bool_case_b => e
   | bool_default => e   (**r should not happen *)
   end.
 
@@ -191,7 +193,7 @@ Definition make_boolean (e: expr) (ty: type) :=
 
 Definition make_notbool (e: expr) (ty: type) :=
   match classify_bool ty with
-  | bool_case_i => OK (Ebinop (Ocmpu Ceq) e (make_intconst Int.zero))
+  | bool_case_i | bool_case_b => OK (Ebinop (Ocmpu Ceq) e (make_intconst Int.zero))
   | bool_case_f => OK (Ebinop (Ocmpf Ceq) e (make_floatconst Float.zero))
   | bool_case_s => OK (Ebinop (Ocmpfs Ceq) e (make_singleconst Float32.zero))
   | bool_case_l => OK (Ebinop (Ocmplu Ceq) e (make_longconst Int64.zero))

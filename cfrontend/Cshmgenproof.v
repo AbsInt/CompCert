@@ -453,6 +453,11 @@ Proof.
   econstructor; split. econstructor; eauto with cshm. simpl. eauto.
   unfold Val.cmpfs, Val.cmpfs_bool. simpl. rewrite <- Float32.cmp_ne_eq.
   destruct (Float32.cmp Cne f Float32.zero); constructor.
+- (* bool zero *)
+  exists (Vint i); split; auto. replace false with (negb (Int.eq i Int.zero)). constructor. rewrite Heqb0; auto.
+- (* bool one *)
+  exists (Vint i); split; auto. replace true with (negb (Int.eq i Int.zero)). constructor.
+  apply Int.same_if_eq in Heqb1; subst i; auto.
 Qed.
 
 Lemma make_neg_correct:
@@ -505,6 +510,10 @@ Proof.
   destruct (Float.cmp Ceq f Float.zero); auto.
 - econstructor; eauto with cshm. simpl. unfold Val.cmpfs, Val.cmpfs_bool.
   destruct (Float32.cmp Ceq f Float32.zero); auto.
+- econstructor; eauto with cshm. simpl. unfold Val.cmpu, Val.cmpu_bool, Int.cmpu.
+  destruct (Int.eq i Int.zero). auto.
+  destruct (Int.eq i Int.one). auto.
+  discriminate.
 Qed.
 
 Lemma make_notint_correct:
