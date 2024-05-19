@@ -1623,7 +1623,7 @@ Proof.
   destruct v; auto with ty. constructor; red. apply Int.sign_ext_idem; lia.
   destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; lia.
   destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
-  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; lia.
+  destruct v; auto with ty. unfold Val.norm_bool. destruct Val.is_bool; constructor; red. apply Int.zero_ext_idem; lia.
 - inv AC. destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
 - destruct f; inv AC; destruct v; auto with ty.
 - inv AC. unfold Mptr. destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
@@ -1648,7 +1648,7 @@ Proof.
   constructor; red. apply Int.zero_ext_idem; lia.
   destruct (proj_bytes vl). auto with ty. destruct Archi.ptr64 eqn:SF; auto with ty. 
   destruct (proj_bytes vl); auto with ty.
-  constructor; red. apply Int.zero_ext_idem; lia.
+  unfold Val.norm_bool. destruct Val.is_bool; constructor; red. apply Int.zero_ext_idem; lia.
 - inv ACC. unfold decode_val. destruct (proj_bytes vl). auto with ty.
   destruct Archi.ptr64 eqn:SF; auto with ty. 
 - destruct f; inv ACC; unfold decode_val; destruct (proj_bytes vl); auto with ty.
