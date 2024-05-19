@@ -992,14 +992,16 @@ Definition transl_load (chunk: memory_chunk) (addr: Op.addressing)
       do rd <- ireg_of dst; transl_addressing 4 addr args (Pldrw_a rd) k
   | Many64 =>
       do rd <- ireg_of dst; transl_addressing 8 addr args (Pldrx_a rd) k
+  | _ =>
+      Error (msg "Asmgen.transl_load")
   end.
 
 Definition transl_store (chunk: memory_chunk) (addr: Op.addressing)
                         (args: list mreg) (src: mreg) (k: code) : res code :=
   match chunk with
-  | Mint8unsigned | Mint8signed =>
+  | Mint8unsigned =>
       do r1 <- ireg_of src; transl_addressing 1 addr args (Pstrb r1) k
-  | Mint16unsigned | Mint16signed =>
+  | Mint16unsigned =>
       do r1 <- ireg_of src; transl_addressing 2 addr args (Pstrh r1) k
   | Mint32 =>
       do r1 <- ireg_of src; transl_addressing 4 addr args (Pstrw r1) k
@@ -1013,6 +1015,8 @@ Definition transl_store (chunk: memory_chunk) (addr: Op.addressing)
       do r1 <- ireg_of src; transl_addressing 4 addr args (Pstrw_a r1) k
   | Many64 =>
       do r1 <- ireg_of src; transl_addressing 8 addr args (Pstrx_a r1) k
+  | _ =>
+      Error (msg "Asmgen.transl_store")
   end.
 
 (** Register-indexed loads and stores *)

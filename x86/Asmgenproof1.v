@@ -1501,20 +1501,8 @@ Proof.
   exploit transl_addressing_mode_correct; eauto. intro EA.
   assert (EA': eval_addrmode ge x rs = a). destruct a; simpl in H1; try discriminate; inv EA; auto.
   rewrite <- EA' in H1. destruct chunk; ArgsInv.
-(* int8signed *)
-  eapply mk_storebyte_correct; eauto.
-  destruct (eval_addrmode ge x rs); simpl; auto. rewrite <- Mem.store_signed_unsigned_8; auto.
 (* int8unsigned *)
   eapply mk_storebyte_correct; eauto.
-(* int16signed *)
-  econstructor; split.
-  apply exec_straight_one. simpl. unfold exec_store.
-  replace (Mem.storev Mint16unsigned m (eval_addrmode ge x rs) (rs x0))
-     with (Mem.storev Mint16signed m (eval_addrmode ge x rs) (rs x0)).
-  rewrite H1. eauto.
-  destruct (eval_addrmode ge x rs); simpl; auto. rewrite Mem.store_signed_unsigned_16; auto.
-  auto.
-  intros. Simplifs.
 (* int16unsigned *)
   econstructor; split.
   apply exec_straight_one. simpl. unfold exec_store. rewrite H1. eauto. auto.

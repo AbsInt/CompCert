@@ -1851,16 +1851,8 @@ Local Transparent destroyed_by_store.
   intros; Simpl. apply H7; auto. destruct TEMP0; destruct H10; congruence.
   }
   destruct chunk; monadInv H.
-- (* Mint8signed *)
-  assert (Mem.storev Mint8unsigned m a (rs (preg_of src)) = Some m').
-    rewrite <- H1. destruct a; simpl; auto. symmetry. apply Mem.store_signed_unsigned_8.
-  clear H1. eapply BASE; eauto; erewrite ireg_of_eq by eauto; auto.
 - (* Mint8unsigned *)
   eapply BASE; eauto; erewrite ireg_of_eq by eauto; auto.
-- (* Mint16signed *)
-  assert (Mem.storev Mint16unsigned m a (rs (preg_of src)) = Some m').
-    rewrite <- H1. destruct a; simpl; auto. symmetry. apply Mem.store_signed_unsigned_16.
-  clear H1. eapply BASE; eauto; erewrite ireg_of_eq by eauto; auto.
 - (* Mint16unsigned *)
   eapply BASE; eauto; erewrite ireg_of_eq by eauto; auto.
 - (* Mint32 *)

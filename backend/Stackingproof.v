@@ -1310,6 +1310,42 @@ Qed.
 
 End FRAME_PROPERTIES.
 
+(** * Simplification of loads and stores *)
+
+Lemma simplify_load_correct: forall chunk m a v,
+  Mem.loadv chunk m a = Some v ->
+  exists v', Mem.loadv (simplify_load chunk) m a = Some v' /\ Val.lessdef v v'.
+Proof.
+  intros. destruct a; simpl in *; try discriminate.
+  destruct chunk; simpl; try (exists v; auto; fail).
+  rewrite Mem.load_bool_int8_unsigned in H.
+  destruct (Mem.load Mint8unsigned m b (Ptrofs.unsigned i)) as [v'|]; simpl in H; inv H.
+  exists v'; auto using Val.norm_bool_is_lessdef.
+Qed.
+
+Lemma simplify_store_correct: forall chunk m a v m',
+  Mem.storev chunk m a v = Some m' ->
+  Mem.storev (simplify_store chunk) m a v = Some m'.
+Proof.
+  intros. destruct a; simpl in *; try discriminate. rewrite <- H. symmetry.
+  destruct chunk; simpl; auto.
+- apply Mem.store_bool_unsigned_8.
+- apply Mem.store_signed_unsigned_8.
+- apply Mem.store_signed_unsigned_16.
+Qed.
+
+Lemma simplify_load_destroyed: forall chunk addr,
+  destroyed_by_load (simplify_load chunk) addr = destroyed_by_load chunk addr.
+Proof.
+  intros; destruct chunk; reflexivity.
+Qed.
+
+Lemma simplify_store_destroyed: forall chunk addr,
+  destroyed_by_store (simplify_store chunk) addr = destroyed_by_store chunk addr.
+Proof.
+  intros; destruct chunk; reflexivity.
+Qed.
+
 (** * Call stack invariants *)
 
 (** This is the memory assertion that captures the contents of the stack frames
@@ -1919,12 +1955,16 @@ Proof.
   apply sep_proj2 in SEP. apply sep_proj2 in SEP. apply sep_proj1 in SEP. eexact SEP.
   eauto. eauto.
   intros [v' [C D]].
+  exploit simplify_load_correct; eauto. 
+  intros [v'' [E F]].
+  assert (G: Val.inject j v v'').
+  { inv F; auto. inv D; auto. }
   econstructor; split.
   apply plus_one. econstructor.
   instantiate (1 := a'). rewrite <- A. apply eval_addressing_preserved. exact symbols_preserved.
-  eexact C. eauto.
+  eexact E. eauto.
   econstructor; eauto with coqlib.
-  apply agree_regs_set_reg. rewrite transl_destroyed_by_load. apply agree_regs_undef_regs; auto. auto.
+  apply agree_regs_set_reg. rewrite transl_destroyed_by_load, simplify_load_destroyed. apply agree_regs_undef_regs; auto. auto.
   apply agree_locs_set_reg. apply agree_locs_undef_locs. auto. apply destroyed_by_load_caller_save. auto.
 
 - (* Lstore *)
@@ -1942,9 +1982,9 @@ Proof.
   econstructor; split.
   apply plus_one. econstructor.
   instantiate (1 := a'). rewrite <- A. apply eval_addressing_preserved. exact symbols_preserved.
-  eexact C. eauto.
+  apply simplify_store_correct. eexact C. eauto.
   econstructor. eauto. eauto. eauto.
-  rewrite transl_destroyed_by_store. apply agree_regs_undef_regs; auto.
+  rewrite transl_destroyed_by_store, simplify_store_destroyed. apply agree_regs_undef_regs; auto.
   apply agree_locs_undef_locs. auto. apply destroyed_by_store_caller_save.
   auto. eauto with coqlib.
   eapply frame_undef_regs; eauto.

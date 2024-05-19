@@ -727,12 +727,8 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
 Definition transl_store (chunk: memory_chunk) (addr: addressing)
                        (args: list mreg) (src: mreg) (k: code) :=
   match chunk with
-  | Mint8signed =>
-      transl_memory_access_int Pstrb mk_immed_mem_small src addr args k
   | Mint8unsigned =>
       transl_memory_access_int Pstrb mk_immed_mem_word src addr args k
-  | Mint16signed =>
-      transl_memory_access_int Pstrh mk_immed_mem_small src addr args k
   | Mint16unsigned =>
       transl_memory_access_int Pstrh mk_immed_mem_small src addr args k
   | Mint32 =>

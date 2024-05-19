@@ -1331,18 +1331,14 @@ Lemma transl_store_correct:
   /\ forall r, r <> PC -> r <> X31 -> rs'#r = rs#r.
 Proof.
   intros until m'; intros TR EV STORE. 
-  assert (A: exists mk_instr chunk',
+  assert (A: exists mk_instr,
       transl_memory_access mk_instr addr args k = OK c
    /\ (forall base ofs rs,
-        exec_instr ge fn (mk_instr base ofs) rs m = exec_store ge chunk' rs m (preg_of src) base ofs)
-   /\ Mem.storev chunk m a rs#(preg_of src) = Mem.storev chunk' m a rs#(preg_of src)).
+        exec_instr ge fn (mk_instr base ofs) rs m = exec_store ge chunk rs m (preg_of src) base ofs)).
   { unfold transl_store in TR; destruct chunk; ArgsInv;
-    (econstructor; econstructor; split; [eassumption | split; [ intros; simpl; reflexivity | auto]]).
-    destruct a; auto. apply Mem.store_signed_unsigned_8. 
-    destruct a; auto. apply Mem.store_signed_unsigned_16. 
+    (econstructor; split; [eassumption | intros; simpl; reflexivity]).
   }
-  destruct A as (mk_instr & chunk' & B & C & D).
-  rewrite D in STORE; clear D. 
+  destruct A as (mk_instr & B & C).
   eapply transl_store_access_correct; eauto with asmgen.
 Qed.
 

@@ -868,10 +868,10 @@ Definition transl_store (chunk: memory_chunk) (addr: addressing)
                         (args: list mreg) (src: mreg) (k: code) :=
   let temp := int_temp_for src in
   match chunk with
-  | Mint8signed | Mint8unsigned =>
+  | Mint8unsigned =>
       do r <- ireg_of src;
       transl_memory_access (Pstb r) (Pstbx r) true addr args temp k
-  | Mint16signed | Mint16unsigned =>
+  | Mint16unsigned =>
       do r <- ireg_of src;
       transl_memory_access (Psth r) (Psthx r) true addr args temp k
   | Mint32  =>
