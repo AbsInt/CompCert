@@ -452,6 +452,7 @@ Nondetfunction singleofintu (e: expr) :=
 
 Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
   match chunk with
+  | Mbool => true
   | Mint8signed => true
   | Mint8unsigned => true
   | Mint16signed => true
@@ -466,6 +467,7 @@ Definition can_use_Aindexed2 (chunk: memory_chunk): bool :=
 
 Definition can_use_Aindexed2shift (chunk: memory_chunk) (s: shift): bool :=
   match chunk with
+  | Mbool => false
   | Mint8signed => false
   | Mint8unsigned => true
   | Mint16signed => false

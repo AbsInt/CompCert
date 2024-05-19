@@ -33,6 +33,7 @@ Require Import Values.
 
 Definition size_chunk (chunk: memory_chunk) : Z :=
   match chunk with
+  | Mbool => 1
   | Mint8signed => 1
   | Mint8unsigned => 1
   | Mint16signed => 2
@@ -87,6 +88,7 @@ Qed.
 
 Definition align_chunk (chunk: memory_chunk) : Z :=
   match chunk with
+  | Mbool => 1
   | Mint8signed => 1
   | Mint8unsigned => 1
   | Mint16signed => 2
@@ -369,7 +371,7 @@ Definition proj_value (q: quantity) (vl: list memval) : val :=
 
 Definition encode_val (chunk: memory_chunk) (v: val) : list memval :=
   match v, chunk with
-  | Vint n, (Mint8signed | Mint8unsigned) => inj_bytes (encode_int 1%nat (Int.unsigned n))
+  | Vint n, (Mbool | Mint8signed | Mint8unsigned) => inj_bytes (encode_int 1%nat (Int.unsigned n))
   | Vint n, (Mint16signed | Mint16unsigned) => inj_bytes (encode_int 2%nat (Int.unsigned n))
   | Vint n, Mint32 => inj_bytes (encode_int 4%nat (Int.unsigned n))
   | Vptr b ofs, Mint32 => if Archi.ptr64 then List.repeat Undef 4%nat else inj_value Q32 v
@@ -386,6 +388,7 @@ Definition decode_val (chunk: memory_chunk) (vl: list memval) : val :=
   match proj_bytes vl with
   | Some bl =>
       match chunk with
+      | Mbool => Val.norm_bool (Vint (Int.zero_ext 8 (Int.repr (decode_int bl))))
       | Mint8signed => Vint(Int.sign_ext 8 (Int.repr (decode_int bl)))
       | Mint8unsigned => Vint(Int.zero_ext 8 (Int.repr (decode_int bl)))
       | Mint16signed => Vint(Int.sign_ext 16 (Int.repr (decode_int bl)))
@@ -458,10 +461,9 @@ Qed.
 Definition decode_encode_val (v1: val) (chunk1 chunk2: memory_chunk) (v2: val) : Prop :=
   match v1, chunk1, chunk2 with
   | Vundef, _, _ => v2 = Vundef
-  | Vint n, Mint8signed, Mint8signed => v2 = Vint(Int.sign_ext 8 n)
-  | Vint n, Mint8unsigned, Mint8signed => v2 = Vint(Int.sign_ext 8 n)
-  | Vint n, Mint8signed, Mint8unsigned => v2 = Vint(Int.zero_ext 8 n)
-  | Vint n, Mint8unsigned, Mint8unsigned => v2 = Vint(Int.zero_ext 8 n)
+  | Vint n, (Mbool | Mint8signed | Mint8unsigned), Mint8signed => v2 = Vint(Int.sign_ext 8 n)
+  | Vint n, (Mbool | Mint8signed | Mint8unsigned), Mint8unsigned => v2 = Vint(Int.zero_ext 8 n)
+  | Vint n, (Mbool | Mint8signed | Mint8unsigned), Mbool => v2 = Val.norm_bool (Vint (Int.zero_ext 8 n))
   | Vint n, Mint16signed, Mint16signed => v2 = Vint(Int.sign_ext 16 n)
   | Vint n, Mint16unsigned, Mint16signed => v2 = Vint(Int.sign_ext 16 n)
   | Vint n, Mint16signed, Mint16unsigned => v2 = Vint(Int.zero_ext 16 n)
@@ -480,18 +482,18 @@ Definition decode_encode_val (v1: val) (chunk1 chunk2: memory_chunk) (v2: val) :
   | Vlong n, Mint64, Mint64 => v2 = Vlong n
   | Vlong n, Mint64, Mfloat64 => v2 = Vfloat(Float.of_bits n)
   | Vlong n, Many64, Many64 => v2 = Vlong n
-  | Vlong n, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mfloat64|Many32), _ => v2 = Vundef
+  | Vlong n, (Mbool|Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mfloat64|Many32), _ => v2 = Vundef
   | Vlong n, _, _ => True (**r nothing meaningful to say about v2 *)
   | Vfloat f, Mfloat64, Mfloat64 => v2 = Vfloat f
   | Vfloat f, Mfloat64, Mint64 => v2 = Vlong(Float.to_bits f)
   | Vfloat f, Many64, Many64 => v2 = Vfloat f
-  | Vfloat f, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mint64|Many32), _ => v2 = Vundef
+  | Vfloat f, (Mbool|Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mfloat32|Mint64|Many32), _ => v2 = Vundef
   | Vfloat f, _, _ => True   (* nothing interesting to say about v2 *)
   | Vsingle f, Mfloat32, Mfloat32 => v2 = Vsingle f
   | Vsingle f, Mfloat32, Mint32 => v2 = Vint(Float32.to_bits f)
   | Vsingle f, Many32, Many32 => v2 = Vsingle f
   | Vsingle f, Many64, Many64 => v2 = Vsingle f
-  | Vsingle f, (Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mint64|Mfloat64|Many64), _ => v2 = Vundef
+  | Vsingle f, (Mbool|Mint8signed|Mint8unsigned|Mint16signed|Mint16unsigned|Mint32|Mint64|Mfloat64|Many64), _ => v2 = Vundef
   | Vsingle f, _, _ => True (* nothing interesting to say about v2 *)
   end.
 
@@ -518,9 +520,9 @@ Ltac solve_decode_encode_val_general :=
   | |- context [ Int.repr(decode_int (encode_int 2 (Int.unsigned _))) ] => rewrite decode_encode_int_2
   | |- context [ Int.repr(decode_int (encode_int 4 (Int.unsigned _))) ] => rewrite decode_encode_int_4
   | |- context [ Int64.repr(decode_int (encode_int 8 (Int64.unsigned _))) ] => rewrite decode_encode_int_8
-  | |- Vint (Int.sign_ext _ (Int.sign_ext _ _)) = Vint _ => f_equal; apply Int.sign_ext_idem; lia
-  | |- Vint (Int.zero_ext _ (Int.zero_ext _ _)) = Vint _ => f_equal; apply Int.zero_ext_idem; lia
-  | |- Vint (Int.sign_ext _ (Int.zero_ext _ _)) = Vint _ => f_equal; apply Int.sign_ext_zero_ext; lia
+  | |- context [ Int.sign_ext _ (Int.sign_ext _ _) ] => rewrite Int.sign_ext_idem by lia
+  | |- context [ Int.zero_ext _ (Int.zero_ext _ _) ] => rewrite Int.zero_ext_idem by lia
+  | |- context [ Int.sign_ext _ (Int.zero_ext _ _) ] => rewrite Int.sign_ext_zero_ext by lia
   end.
 
 Lemma decode_encode_val_general:
@@ -544,7 +546,8 @@ Lemma decode_encode_val_similar:
   v2 = Val.load_result chunk2 v1.
 Proof.
   intros until v2; intros TY SZ DE.
-  destruct chunk1; destruct chunk2; simpl in TY; try discriminate; simpl in SZ; try extlia;
+  unfold decode_encode_val in DE; destruct chunk1; destruct chunk2;
+  simpl in TY; try discriminate; simpl in SZ; try extlia;
   destruct v1; auto.
 Qed.
 
@@ -555,6 +558,7 @@ Proof.
   intros. unfold decode_val.
   destruct (proj_bytes cl).
 - destruct chunk; simpl; rewrite ? Int.sign_ext_idem, ? Int.zero_ext_idem by lia; auto.
+  unfold Val.norm_bool; destruct Val.is_bool; auto. rewrite Int.zero_ext_idem by lia; auto.
 - Local Opaque Val.load_result.
   destruct chunk; simpl;
   (exact I || apply Val.load_result_type || destruct Archi.ptr64; (exact I || apply Val.load_result_type)).
@@ -609,6 +613,7 @@ Lemma decode_val_cast:
   forall chunk l,
   let v := decode_val chunk l in
   match chunk with
+  | Mbool => v = Val.norm_bool v
   | Mint8signed => v = Val.sign_ext 8 v
   | Mint8unsigned => v = Val.zero_ext 8 v
   | Mint16signed => v = Val.sign_ext 16 v
@@ -616,9 +621,10 @@ Lemma decode_val_cast:
   | _ => True
   end.
 Proof.
-  intros. 
-  assert (A: Val.has_rettype v (rettype_of_chunk chunk)) by apply decode_val_rettype.
-  destruct chunk; auto; simpl in A; destruct v; try contradiction; simpl; congruence.
+  intros. unfold v, decode_val.
+  destruct (proj_bytes l).
+- destruct chunk; simpl; rewrite ? Int.sign_ext_idem, ? Int.zero_ext_idem, ? Val.norm_bool_idem by lia; auto.
+- destruct chunk; auto.
 Qed.
 
 (** Pointers cannot be forged. *)
@@ -695,7 +701,7 @@ Inductive shape_decoding (chunk: memory_chunk): list memval -> val -> Prop :=
       (forall mv, In mv mvl -> exists j, mv = Fragment v q j /\ S j <> size_quantity_nat q) ->
       shape_decoding chunk (Fragment v q i :: mvl) (Val.load_result chunk v)
   | shape_decoding_b: forall b mvl v,
-      match v with Vint _ => True | Vlong _ => True | Vfloat _ => True | Vsingle _ => True |  _ => False end ->
+      match v with Vptr _ _ => False | _ => True end ->
       (forall mv, In mv mvl -> exists b', mv = Byte b') ->
       shape_decoding chunk (Byte b :: mvl) v
   | shape_decoding_u: forall mvl,
@@ -747,6 +753,7 @@ Proof.
   destruct (proj_bytes (mv1 :: mvl)) as [bl|] eqn:PB.
   exploit (A mv1); eauto with coqlib. intros [b1 EQ1]; subst mv1.
   destruct chunk; (apply shape_decoding_u || apply shape_decoding_b); eauto with coqlib.
+  unfold Val.norm_bool; destruct Val.is_bool; auto.
   destruct chunk, Archi.ptr64; (apply shape_decoding_u || apply C); auto.
 Qed.
 
@@ -857,7 +864,8 @@ Proof.
   intros. unfold decode_val.
   destruct (proj_bytes vl1) as [bl1|] eqn:PB1.
   exploit proj_bytes_inject; eauto. intros PB2. rewrite PB2.
-  destruct chunk; constructor.
+  destruct chunk; auto.
+  unfold Val.norm_bool; destruct Val.is_bool; auto.
   assert (A: forall q fn,
      Val.inject f (Val.load_result chunk (proj_value q vl1))
                   (match proj_bytes vl2 with

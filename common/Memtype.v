@@ -312,12 +312,17 @@ Axiom load_cast:
   forall m chunk b ofs v,
   load chunk m b ofs = Some v ->
   match chunk with
+  | Mbool => v = Val.norm_bool v
   | Mint8signed => v = Val.sign_ext 8 v
   | Mint8unsigned => v = Val.zero_ext 8 v
   | Mint16signed => v = Val.sign_ext 16 v
   | Mint16unsigned => v = Val.zero_ext 16 v
   | _ => True
   end.
+
+Axiom load_bool_int8_unsigned:
+  forall m b ofs,
+  load Mbool m b ofs = option_map Val.norm_bool (load Mint8unsigned m b ofs).
 
 Axiom load_int8_signed_unsigned:
   forall m b ofs,
@@ -490,6 +495,9 @@ Axiom loadbytes_store_other:
 (** [store] is insensitive to the signedness or the high bits of
   small integer quantities. *)
 
+Axiom store_bool_unsigned_8:
+  forall m b ofs v,
+  store Mbool m b ofs v = store Mint8unsigned m b ofs v.
 Axiom store_signed_unsigned_8:
   forall m b ofs v,
   store Mint8signed m b ofs v = store Mint8unsigned m b ofs v.

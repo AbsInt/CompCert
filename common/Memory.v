@@ -687,6 +687,7 @@ Theorem load_cast:
   forall m chunk b ofs v,
   load chunk m b ofs = Some v ->
   match chunk with
+  | Mbool => v = Val.norm_bool v
   | Mint8signed => v = Val.sign_ext 8 v
   | Mint8unsigned => v = Val.zero_ext 8 v
   | Mint16signed => v = Val.sign_ext 16 v
@@ -697,6 +698,19 @@ Proof.
   intros. exploit load_result; eauto.
   set (l := getN (size_chunk_nat chunk) ofs m.(mem_contents)#b).
   intros. subst v. apply decode_val_cast.
+Qed.
+
+Theorem load_bool_int8_unsigned:
+  forall m b ofs,
+  load Mbool m b ofs = option_map Val.norm_bool (load Mint8unsigned m b ofs).
+Proof.
+  intros. unfold load.
+  change (size_chunk_nat Mbool) with (size_chunk_nat Mint8unsigned).
+  set (cl := getN (size_chunk_nat Mint8unsigned) ofs m.(mem_contents)#b).
+  destruct (valid_access_dec m Mbool b ofs Readable).
+  rewrite pred_dec_true; auto. unfold decode_val.
+  destruct (proj_bytes cl); auto.
+  rewrite pred_dec_false; auto.
 Qed.
 
 Theorem load_int8_signed_unsigned:
@@ -1333,6 +1347,11 @@ Proof.
   elim n. apply valid_access_compat with chunk1; auto. lia.
   elim n. apply valid_access_compat with chunk2; auto. lia.
 Qed.
+
+Theorem store_bool_unsigned_8:
+  forall m b ofs v,
+  store Mbool m b ofs v = store Mint8unsigned m b ofs v.
+Proof. intros. apply store_similar_chunks; auto. Qed.
 
 Theorem store_signed_unsigned_8:
   forall m b ofs v,

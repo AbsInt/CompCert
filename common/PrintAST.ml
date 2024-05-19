@@ -37,6 +37,7 @@ let name_of_rettype = function
   | Tint16unsigned -> "int16u"
 
 let name_of_chunk = function
+  | Mbool -> "bool"
   | Mint8signed -> "int8s"
   | Mint8unsigned -> "int8u"
   | Mint16signed -> "int16s"

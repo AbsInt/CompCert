@@ -725,7 +725,7 @@ Qed.
 
 Definition store_argument (chunk: memory_chunk) :=
   match chunk with
-  | Mint8signed | Mint8unsigned => I (Int.repr 255)
+  | Mbool | Mint8signed | Mint8unsigned => I (Int.repr 255)
   | Mint16signed | Mint16unsigned => I (Int.repr 65535)
   | _ => All
   end.
@@ -756,6 +756,8 @@ Proof.
   change 8 with (Int.size (Int.repr 255)). apply iagree_eqmod; auto.
 - InvAgree. apply SAME. simpl; f_equal. apply encode_int_8_mod.
   change 8 with (Int.size (Int.repr 255)). apply iagree_eqmod; auto.
+- InvAgree. apply SAME. simpl; f_equal. apply encode_int_8_mod.
+  change 8 with (Int.size (Int.repr 255)). apply iagree_eqmod; auto.
 - InvAgree. apply SAME. simpl; f_equal. apply encode_int_16_mod.
   change 16 with (Int.size (Int.repr 65535)). apply iagree_eqmod; auto.
 - InvAgree. apply SAME. simpl; f_equal. apply encode_int_16_mod.
@@ -775,6 +777,9 @@ Lemma store_argument_load_result:
 Proof.
   unfold store_argument; intros; destruct chunk;
   auto using Val.load_result_lessdef; InvAgree; simpl.
+- apply Val.norm_bool_lessdef.
+  apply zero_ext_sound with (v := Vint i) (w := Vint i0) (x := All) (n := 8).
+  auto. lia.
 - apply sign_ext_sound with (v := Vint i) (w := Vint i0) (x := All) (n := 8).
   auto. compute; auto.
 - apply zero_ext_sound with (v := Vint i) (w := Vint i0) (x := All) (n := 8).

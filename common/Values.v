@@ -272,6 +272,10 @@ Definition notint (v: val) : val :=
 
 Definition of_bool (b: bool): val := if b then Vtrue else Vfalse.
 
+Definition is_bool (v: val) : bool := eq v Vtrue || eq v Vfalse.
+
+Definition norm_bool (v: val) : val := if is_bool v then v else Vundef.
+
 Definition boolval (v: val) : val :=
   match v with
   | Vint n => of_bool (negb (Int.eq n Int.zero))
@@ -1005,6 +1009,7 @@ Definition select (cmp: option bool) (v1 v2: val) (ty: typ) :=
 
 Definition load_result (chunk: memory_chunk) (v: val) :=
   match chunk, v with
+  | Mbool, Vint n => norm_bool (Vint (Int.zero_ext 8 n))
   | Mint8signed, Vint n => Vint (Int.sign_ext 8 n)
   | Mint8unsigned, Vint n => Vint (Int.zero_ext 8 n)
   | Mint16signed, Vint n => Vint (Int.sign_ext 16 n)
@@ -1025,6 +1030,8 @@ Lemma load_result_rettype:
   forall chunk v, has_rettype (load_result chunk v) (rettype_of_chunk chunk).
 Proof.
   intros. unfold has_rettype; destruct chunk; destruct v; simpl; auto.
+- unfold norm_bool. destruct is_bool; auto. 
+  rewrite Int.zero_ext_idem by lia; auto.
 - rewrite Int.sign_ext_idem by lia; auto.
 - rewrite Int.zero_ext_idem by lia; auto.
 - rewrite Int.sign_ext_idem by lia; auto.
@@ -1076,6 +1083,18 @@ Proof.
   intros. destruct ob; simpl in H.
   destruct b0; simpl in H; inv H; auto.
   inv H.
+Qed.
+
+Theorem of_bool_is_bool:
+  forall b, is_bool (of_bool b) = true.
+Proof.
+  destruct b; reflexivity.
+Qed.
+
+Theorem norm_bool_idem:
+  forall v, norm_bool (norm_bool v) = norm_bool v.
+Proof.
+  intros; unfold norm_bool. destruct (is_bool v) eqn:E; auto. rewrite E; auto.
 Qed.
 
 Theorem notbool_negb_1:
@@ -2027,6 +2046,18 @@ Proof.
   intros. inv H. auto. destruct chunk; simpl; auto.
 Qed.
 
+Lemma norm_bool_is_lessdef:
+  forall v, lessdef (norm_bool v) v.
+Proof.
+  intros; unfold norm_bool. destruct is_bool; auto.
+Qed.
+
+Lemma norm_bool_lessdef:
+  forall v1 v2, lessdef v1 v2 -> lessdef (norm_bool v1) (norm_bool v2).
+Proof.
+  intros; inv H; auto.
+Qed.
+
 Lemma zero_ext_lessdef:
   forall n v1 v2, lessdef v1 v2 -> lessdef (zero_ext n v1) (zero_ext n v2).
 Proof.
@@ -2254,7 +2285,9 @@ Lemma load_result_inject:
   inject f v1 v2 ->
   inject f (Val.load_result chunk v1) (Val.load_result chunk v2).
 Proof.
-  intros. inv H; destruct chunk; simpl; try constructor; destruct Archi.ptr64; econstructor; eauto.
+  intros. unfold Val.load_result.
+  inv H; destruct chunk; try constructor; try (destruct Archi.ptr64; econstructor; now eauto).
+  unfold norm_bool. destruct is_bool; auto.
 Qed.
 
 Remark add_inject:

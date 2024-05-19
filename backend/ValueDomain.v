@@ -834,7 +834,16 @@ Proof.
   intros. unfold sgn. repeat destruct zle; auto with va.
 Qed.
 
-Hint Resolve vmatch_uns vmatch_uns_undef vmatch_sgn vmatch_sgn_undef : va.
+Lemma vmatch_norm_bool_uns: forall v p, vmatch (Val.norm_bool v) (Uns p 1).
+Proof.
+  intros. unfold Val.norm_bool, Val.is_bool.
+  destruct (Val.eq v Vtrue). simpl; subst v. constructor. lia. apply (is_uns_usize Int.one).
+  destruct (Val.eq v Vfalse). simpl; subst v. constructor. lia.
+  apply is_uns_mon with 0. apply (is_uns_usize Int.zero). lia.
+  apply vmatch_Uns_undef.
+Qed.
+
+Hint Resolve vmatch_uns vmatch_uns_undef vmatch_sgn vmatch_sgn_undef vmatch_norm_bool_uns: va.
 
 Lemma vmatch_Uns_1:
   forall p v, vmatch v (Uns p 1) -> v = Vundef \/ v = Vint Int.zero \/ v = Vint Int.one.
@@ -2931,6 +2940,10 @@ Qed.
 Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   match chunk, v with
   | _, Vbot => Vbot
+  | Mbool, I i =>
+      let j := Int.zero_ext 8 i in
+      if Int.eq j Int.zero || Int.eq j Int.one then I j else Uns Pbot 1
+  | Mbool, _ => Uns (provenance v) 1
   | Mint8signed, I i => I (Int.sign_ext 8 i)
   | Mint8signed, Uns p n => if zlt n 8 then Uns (provenance v) n else Sgn (provenance v) 8
   | Mint8signed, Sgn p n => Sgn (provenance v) (Z.min n 8)
@@ -2961,12 +2974,17 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   | Many64, _ => v
   end.
 
+
 Lemma vnormalize_sound:
   forall chunk v x, vmatch v x -> vmatch (Val.load_result chunk v) (vnormalize chunk x).
 Proof.
   unfold Val.load_result, vnormalize; generalize Archi.ptr64; intros ptr64;
   induction 1; destruct chunk; eauto using is_zero_ext_uns, is_sign_ext_sgn with va;
   try (destruct ptr64; auto with va; fail).
+- set (j := Int.zero_ext 8 i). unfold Val.norm_bool, Val.is_bool.
+  predSpec Int.eq Int.eq_spec j Int.zero. rewrite H. apply vmatch_i.
+  predSpec Int.eq Int.eq_spec j Int.one. rewrite H0. apply vmatch_i.
+  simpl. unfold proj_sumbool, Vtrue, Vfalse. rewrite ! dec_eq_false by congruence. apply vmatch_Uns_undef.
 - destruct (zlt n 8); constructor; auto with va.
   apply is_sign_ext_uns; auto.
   apply is_sign_ext_sgn; auto with va.
@@ -2989,6 +3007,8 @@ Lemma vnormalize_cast:
 Proof.
   intros. exploit Mem.load_cast; eauto. exploit Mem.load_type; eauto.
   destruct chunk; simpl; intros.
+- (* bool *)
+  rewrite H2. auto with va.
 - (* int8signed *)
   rewrite H2. destruct v; simpl; constructor. lia. apply is_sign_ext_sgn; auto with va.
 - (* int8unsigned *)
@@ -3039,6 +3059,15 @@ Lemma vnormalize_monotone:
   vge x y -> vge (vnormalize chunk x) (vnormalize chunk y).
 Proof with (auto using provenance_monotone, provenance_ifptr_ge with va).
 Local Opaque provenance.
+  assert (BOOL: forall p i,
+          vge (Uns p 1) (if Int.eq i Int.zero || Int.eq i Int.one then I i else Uns Pbot 1)).
+  {
+    intros. predSpec Int.eq Int.eq_spec i Int.zero; subst.
+    apply vge_uns_i. lia. red; intros. apply Int.bits_zero.
+    predSpec Int.eq Int.eq_spec i Int.one; subst.
+    apply vge_uns_i. lia. apply (is_uns_usize Int.one).
+    apply vge_uns_uns. lia. auto with va.
+  }
   induction 1;
   unfold vnormalize; generalize Archi.ptr64; intro ptr64; subst; 
   destruct chunk eqn:C; simpl;

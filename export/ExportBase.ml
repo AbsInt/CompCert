@@ -167,6 +167,7 @@ let astrettype p = function
   | AST.Tint16unsigned -> fprintf p "AST.Tint16unsigned"
 
 let name_of_chunk = function
+  | Mbool -> "Mbool"
   | Mint8signed -> "Mint8signed"
   | Mint8unsigned -> "Mint8unsigned"
   | Mint16signed -> "Mint16signed"
