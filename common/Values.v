@@ -153,6 +153,7 @@ Defined.
 Definition has_rettype (v: val) (r: rettype) : Prop :=
   match r, v with
   | Tret t, _ => has_type v t
+  | Tbool, Vint n => n = Int.zero \/ n = Int.one
   | Tint8signed, Vint n => n = Int.sign_ext 8 n
   | Tint8unsigned, Vint n => n = Int.zero_ext 8 n
   | Tint16signed, Vint n => n = Int.sign_ext 16 n
@@ -1030,8 +1031,11 @@ Lemma load_result_rettype:
   forall chunk v, has_rettype (load_result chunk v) (rettype_of_chunk chunk).
 Proof.
   intros. unfold has_rettype; destruct chunk; destruct v; simpl; auto.
-- unfold norm_bool. destruct is_bool; auto. 
-  rewrite Int.zero_ext_idem by lia; auto.
+- set (j := Int.zero_ext 8 i).
+  unfold norm_bool, is_bool, Vtrue, Vfalse.
+  destruct (eq (Vint j) (Vint Int.one)). simpl; intuition congruence.
+  destruct (eq (Vint j) (Vint Int.zero)). simpl; intuition congruence.
+  simpl; auto.
 - rewrite Int.sign_ext_idem by lia; auto.
 - rewrite Int.zero_ext_idem by lia; auto.
 - rewrite Int.sign_ext_idem by lia; auto.

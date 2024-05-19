@@ -616,7 +616,10 @@ Fixpoint typlist_of_arglist (al: list Clight.expr) (tyl: typelist)
     For example, in the x86 ABI, a return value of type "char" is
     returned in register AL, leaving the top 24 bits of EAX
     unspecified.  Hence, a cast to type "char" is needed to sign- or
-    zero-extend the returned integer before using it. *)
+    zero-extend the returned integer before using it.
+    Function results of type "_Bool" are generally returned as
+    one byte that is equal to 0 or to 1.  Hence, the appropriate normalization
+    is a cast to "unsigned char", not to "_Bool". *)
 
 Definition make_normalization (t: type) (a: expr) :=
   match t with

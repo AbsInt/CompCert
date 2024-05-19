@@ -161,6 +161,7 @@ let asttype p t =
 let astrettype p = function
   | AST.Tret t -> asttype p t
   | AST.Tvoid -> fprintf p "AST.Tvoid"
+  | AST.Tbool -> fprintf p "AST.Tbool"
   | AST.Tint8signed -> fprintf p "AST.Tint8signed"
   | AST.Tint8unsigned -> fprintf p "AST.Tint8unsigned"
   | AST.Tint16signed -> fprintf p "AST.Tint16signed"

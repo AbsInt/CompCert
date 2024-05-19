@@ -145,6 +145,7 @@ Definition valty (t: typ) : Type :=
 Definition valretty (t: rettype) : Type :=
   match t with
   | Tret t => valty t
+  | Tbool => { n: int | n = Int.zero \/ n = Int.one }
   | Tint8signed => { n: int | n = Int.sign_ext 8 n }
   | Tint8unsigned => { n: int | n = Int.zero_ext 8 n }
   | Tint16signed => { n: int | n = Int.sign_ext 16 n }
@@ -161,10 +162,7 @@ Definition inj_num (t: rettype) : valretty t -> val :=
   | Tret Tfloat => Vfloat
   | Tret Tsingle => Vsingle
   | Tret (Tany32 | Tany64) => fun _ => Vundef
-  | Tint8signed => fun n => Vint (proj1_sig n)
-  | Tint8unsigned => fun n => Vint (proj1_sig n)
-  | Tint16signed => fun n => Vint (proj1_sig n)
-  | Tint16unsigned => fun n => Vint (proj1_sig n)
+  | Tbool | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => fun n => Vint (proj1_sig n)
   | Tvoid => fun _ => Vundef
   end.
 

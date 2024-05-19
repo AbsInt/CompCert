@@ -31,6 +31,7 @@ let name_of_type = function
 let name_of_rettype = function
   | Tret t -> name_of_type t
   | Tvoid -> "void"
+  | Tbool -> "bool"
   | Tint8signed -> "int8s"
   | Tint8unsigned -> "int8u"
   | Tint16signed -> "int16s"

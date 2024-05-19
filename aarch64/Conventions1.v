@@ -380,7 +380,7 @@ Definition return_value_needs_normalization (t: rettype) : bool :=
   | Archi.Apple => false
   | Archi.AAPCS64 =>
       match t with
-      | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => true
+      | Tbool | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => true
       | _ => false
       end
   end.

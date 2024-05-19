@@ -94,6 +94,7 @@ Fixpoint subtype_list (tyl1 tyl2: list typ) : bool :=
 
 Inductive rettype : Type :=
   | Tret (t: typ)                       (**r like type [t] *)
+  | Tbool                               (**r Boolean value (0 or 1) *)
   | Tint8signed                         (**r 8-bit signed integer *)
   | Tint8unsigned                       (**r 8-bit unsigned integer *)
   | Tint16signed                        (**r 16-bit signed integer *)
@@ -109,7 +110,7 @@ Global Opaque rettype_eq.
 Definition proj_rettype (r: rettype) : typ :=
   match r with
   | Tret t => t
-  | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => Tint
+  | Tbool | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => Tint
   | Tvoid => Tint
   end.
 
@@ -201,7 +202,7 @@ Proof. unfold Mptr, Tptr; destruct Archi.ptr64; auto. Qed.
 
 Definition rettype_of_chunk (c: memory_chunk) : rettype :=
   match c with
-  | Mbool => Tint8unsigned
+  | Mbool => Tbool
   | Mint8signed => Tint8signed
   | Mint8unsigned => Tint8unsigned
   | Mint16signed => Tint16signed
