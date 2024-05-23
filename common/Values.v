@@ -1027,15 +1027,18 @@ Definition load_result (chunk: memory_chunk) (v: val) :=
   | _, _ => Vundef
   end.
 
+Lemma norm_bool_cases:
+  forall v, norm_bool v = Vundef \/ norm_bool v = Vfalse \/ norm_bool v = Vtrue.
+Proof.
+  intros. unfold norm_bool, is_bool.
+  destruct (eq v Vtrue); auto. destruct (eq v Vfalse); auto.
+Qed.
+
 Lemma load_result_rettype:
   forall chunk v, has_rettype (load_result chunk v) (rettype_of_chunk chunk).
 Proof.
   intros. unfold has_rettype; destruct chunk; destruct v; simpl; auto.
-- set (j := Int.zero_ext 8 i).
-  unfold norm_bool, is_bool, Vtrue, Vfalse.
-  destruct (eq (Vint j) (Vint Int.one)). simpl; intuition congruence.
-  destruct (eq (Vint j) (Vint Int.zero)). simpl; intuition congruence.
-  simpl; auto.
+- destruct (norm_bool_cases (Vint (Int.zero_ext 8 i))) as [A | [A | A]]; rewrite A; simpl; auto.
 - rewrite Int.sign_ext_idem by lia; auto.
 - rewrite Int.zero_ext_idem by lia; auto.
 - rewrite Int.sign_ext_idem by lia; auto.

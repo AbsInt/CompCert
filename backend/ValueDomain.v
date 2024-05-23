@@ -836,11 +836,9 @@ Qed.
 
 Lemma vmatch_norm_bool_uns: forall v p, vmatch (Val.norm_bool v) (Uns p 1).
 Proof.
-  intros. unfold Val.norm_bool, Val.is_bool.
-  destruct (Val.eq v Vtrue). simpl; subst v. constructor. lia. apply (is_uns_usize Int.one).
-  destruct (Val.eq v Vfalse). simpl; subst v. constructor. lia.
-  apply is_uns_mon with 0. apply (is_uns_usize Int.zero). lia.
-  apply vmatch_Uns_undef.
+  intros. destruct (Val.norm_bool_cases v) as [A | [A | A]]; rewrite A; constructor.
+  lia. apply is_uns_zero_ext; auto.
+  lia. apply is_uns_zero_ext; auto.
 Qed.
 
 Hint Resolve vmatch_uns vmatch_uns_undef vmatch_sgn vmatch_sgn_undef vmatch_norm_bool_uns: va.

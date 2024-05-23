@@ -558,11 +558,7 @@ Proof.
   intros. unfold decode_val.
   destruct (proj_bytes cl).
 - destruct chunk; simpl; rewrite ? Int.sign_ext_idem, ? Int.zero_ext_idem by lia; auto.
-  set (j := Int.zero_ext 8 (Int.repr (decode_int l))).
-  unfold Val.norm_bool, Val.is_bool, Vtrue, Vfalse.
-  destruct (Val.eq (Vint j) (Vint Int.one)). simpl; intuition congruence.
-  destruct (Val.eq (Vint j) (Vint Int.zero)). simpl; intuition congruence.
-  simpl; auto.
+  destruct (Val.norm_bool_cases (Vint (Int.zero_ext 8 (Int.repr (decode_int l))))) as [A | [A | A]]; rewrite A; simpl; auto.
 - Local Opaque Val.load_result.
   destruct chunk; simpl;
   (exact I || apply Val.load_result_type || destruct Archi.ptr64; (exact I || apply Val.load_result_type)).
