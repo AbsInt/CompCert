@@ -178,7 +178,7 @@ let expand_builtin_memcpy sz al args =
 
 let expand_builtin_vload_common chunk addr res =
   match chunk, res with
-  | Mint8unsigned, BR(IR res) ->
+  | (Mbool | Mint8unsigned), BR(IR res) ->
      emit (Pmovzb_rm (res,addr))
   | Mint8signed, BR(IR res) ->
      emit (Pmovsb_rm (res,addr))
@@ -215,7 +215,7 @@ let expand_builtin_vload chunk args res =
 
 let expand_builtin_vstore_common chunk addr src tmp =
   match chunk, src with
-  | (Mint8signed | Mint8unsigned), BA(IR src) ->
+  | (Mbool | Mint8signed | Mint8unsigned), BA(IR src) ->
      if Archi.ptr64 || Asmgen.low_ireg src then
        emit (Pmovb_mr (addr,src))
      else begin

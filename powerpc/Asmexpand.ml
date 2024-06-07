@@ -229,7 +229,7 @@ let expand_load_int64 hi lo base ofs_hi ofs_lo k =
 
 let expand_builtin_vload_1 chunk addr res =
   match chunk, res with
-  | Mint8unsigned, BR(IR res) ->
+  | (Mbool | Mint8unsigned), BR(IR res) ->
       expand_volatile_access
         (fun c r k -> Plbz(res, c, r) :: k)
         (fun r1 r2 k -> Plbzx(res, r1, r2) :: k)
@@ -303,7 +303,7 @@ let expand_store_int64 hi lo base ofs_hi ofs_lo k =
 let expand_builtin_vstore_1 chunk addr src =
   let temp = temp_for_vstore src in
   match chunk, src with
-  | (Mint8signed | Mint8unsigned), BA(IR src) ->
+  | (Mbool | Mint8signed | Mint8unsigned), BA(IR src) ->
       expand_volatile_access
         (fun c r k-> Pstb(src, c, r) :: k)
         (fun r1 r2 k -> Pstbx(src, r1, r2) :: k)

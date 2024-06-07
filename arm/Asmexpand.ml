@@ -179,7 +179,7 @@ let offset_in_range chunk ofs =
 
 let expand_builtin_vload_common chunk base ofs res =
   match chunk, res with
-  | Mint8unsigned, BR(IR res) ->
+  | (Mbool | Mint8unsigned), BR(IR res) ->
      emit (Pldrb (res, base, SOimm ofs))
   | Mint8signed, BR(IR res) ->
      emit (Pldrsb (res, base, SOimm ofs))
@@ -232,7 +232,7 @@ let expand_builtin_vload chunk args res =
 
 let expand_builtin_vstore_common chunk base ofs src =
   match chunk, src with
-  | (Mint8signed | Mint8unsigned), BA(IR src) ->
+  | (Mbool | Mint8signed | Mint8unsigned), BA(IR src) ->
      emit (Pstrb (src, base, SOimm ofs))
   | (Mint16signed | Mint16unsigned), BA(IR src) ->
      emit (Pstrh (src, base, SOimm ofs))
