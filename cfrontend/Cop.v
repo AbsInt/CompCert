@@ -104,25 +104,28 @@ Definition classify_cast (tfrom tto: type) : classify_cast_cases :=
   match tto, tfrom with
   (* To [void] *)
   | Tvoid, _ => cast_case_void
-  (* To [_Bool] *)
-  | Tint IBool _ _, Tint _ _ _ => cast_case_i2bool
-  | Tint IBool _ _, Tlong _ _ => cast_case_l2bool
-  | Tint IBool _ _, Tfloat F64 _ => cast_case_f2bool
-  | Tint IBool _ _, Tfloat F32 _ => cast_case_s2bool
-  | Tint IBool _ _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) => 
-      if Archi.ptr64 then cast_case_l2bool else cast_case_i2bool
-  (* To [int] other than [_Bool] *)
+  (* To [int] *)
   | Tint sz2 si2 _, Tint _ _ _ =>
-      if Archi.ptr64 then cast_case_i2i sz2 si2
-      else if intsize_eq sz2 I32 then cast_case_pointer
-      else cast_case_i2i sz2 si2
-  | Tint sz2 si2 _, Tlong _ _ => cast_case_l2i sz2 si2
-  | Tint sz2 si2 _, Tfloat F64 _ => cast_case_f2i sz2 si2
-  | Tint sz2 si2 _, Tfloat F32 _ => cast_case_s2i sz2 si2
+      match sz2 with
+      | IBool => cast_case_i2bool
+      | I32 => if Archi.ptr64 then cast_case_i2i sz2 si2 else cast_case_pointer
+      | _ => cast_case_i2i sz2 si2
+      end
+  | Tint sz2 si2 _, Tlong _ _ =>
+      if intsize_eq sz2 IBool then cast_case_l2bool else cast_case_l2i sz2 si2
+  | Tint sz2 si2 _, Tfloat F64 _ =>
+      if intsize_eq sz2 IBool then cast_case_f2bool else cast_case_f2i sz2 si2
+  | Tint sz2 si2 _, Tfloat F32 _ =>
+      if intsize_eq sz2 IBool then cast_case_s2bool else  cast_case_s2i sz2 si2
   | Tint sz2 si2 _, (Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _) =>
-      if Archi.ptr64 then cast_case_l2i sz2 si2
-      else if intsize_eq sz2 I32 then cast_case_pointer
-      else cast_case_i2i sz2 si2
+      if Archi.ptr64 then  (**r like long to int *)
+        if intsize_eq sz2 IBool then cast_case_l2bool else cast_case_l2i sz2 si2
+      else
+        match sz2 with     (**r like int to int *)
+        | IBool => cast_case_i2bool
+        | I32 => cast_case_pointer
+        | _ => cast_case_i2i sz2 si2
+        end
   (* To [long] *)
   | Tlong _ _, Tlong _ _ =>
       if Archi.ptr64 then cast_case_pointer else cast_case_l2l
@@ -1589,7 +1592,6 @@ Ltac DestructCases :=
   | [H: match ?x with _ => _ end = Some _ |- _ ] => destruct x eqn:?; DestructCases
   | [H: Some _ = Some _ |- _ ] => inv H; DestructCases
   | [H: None = Some _ |- _ ] => discriminate H
-  | [H: @eq intsize _ _ |- _ ] => discriminate H || (clear H; DestructCases)
   | [ |- val_casted (Vint (if ?x then Int.zero else Int.one)) _ ] =>
        try (constructor; destruct x; reflexivity)
   | [ |- val_casted (Vint _) (Tint ?sz ?sg _) ] =>
@@ -1601,7 +1603,8 @@ Lemma cast_val_is_casted:
   forall v ty ty' v' m, sem_cast v ty ty' m = Some v' -> val_casted v' ty'.
 Proof.
   unfold sem_cast; intros.
-  destruct ty, ty'; simpl in H; DestructCases; constructor; auto.
+  destruct ty, ty'; simpl in H; DestructCases; InvBooleans; subst;
+  try discriminate; constructor; auto.
 Qed.
 
 End VAL_CASTED.
@@ -1612,10 +1615,11 @@ Lemma cast_val_casted:
   forall v ty m, val_casted v ty -> sem_cast v ty ty m = Some v.
 Proof.
   intros. unfold sem_cast; inversion H; clear H; subst v ty; simpl.
-- destruct Archi.ptr64; [ | destruct (intsize_eq sz I32)].
-+ destruct sz; f_equal; f_equal; assumption.
-+ subst sz; auto.
-+ destruct sz; f_equal; f_equal; assumption.
+- destruct sz.
+  + congruence.
+  + congruence.
+  + destruct Archi.ptr64; congruence.
+  + simpl in H0. congruence.
 - auto.
 - auto.
 - destruct Archi.ptr64; auto.
