@@ -495,6 +495,7 @@ Lemma store_normalized_range_sound:
 Proof.
   intros. unfold Val.load_result; remember Archi.ptr64 as ptr64.
   destruct chunk; simpl in *; destruct v; auto.
+- inv H. apply is_uns_1 in H4; destruct H4; subst i; auto.
 - inv H. rewrite is_sgn_sign_ext in H4 by lia. rewrite H4; auto.
 - inv H. rewrite is_uns_zero_ext in H4 by lia. rewrite H4; auto.
 - inv H. rewrite is_sgn_sign_ext in H4 by lia. rewrite H4; auto.

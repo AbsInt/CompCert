@@ -94,6 +94,7 @@ Fixpoint subtype_list (tyl1 tyl2: list typ) : bool :=
 
 Inductive rettype : Type :=
   | Tret (t: typ)                       (**r like type [t] *)
+  | Tbool                               (**r Boolean value (0 or 1) *)
   | Tint8signed                         (**r 8-bit signed integer *)
   | Tint8unsigned                       (**r 8-bit unsigned integer *)
   | Tint16signed                        (**r 16-bit signed integer *)
@@ -109,7 +110,7 @@ Global Opaque rettype_eq.
 Definition proj_rettype (r: rettype) : typ :=
   match r with
   | Tret t => t
-  | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => Tint
+  | Tbool | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => Tint
   | Tvoid => Tint
   end.
 
@@ -159,6 +160,7 @@ Definition signature_main :=
   chunk of memory being accessed. *)
 
 Inductive memory_chunk : Type :=
+  | Mbool           (**r 8-bit integer containing 0 or 1 *)
   | Mint8signed     (**r 8-bit signed integer *)
   | Mint8unsigned   (**r 8-bit unsigned integer *)
   | Mint16signed    (**r 16-bit signed integer *)
@@ -180,6 +182,7 @@ Definition Mptr : memory_chunk := if Archi.ptr64 then Mint64 else Mint32.
 
 Definition type_of_chunk (c: memory_chunk) : typ :=
   match c with
+  | Mbool => Tint
   | Mint8signed => Tint
   | Mint8unsigned => Tint
   | Mint16signed => Tint
@@ -199,6 +202,7 @@ Proof. unfold Mptr, Tptr; destruct Archi.ptr64; auto. Qed.
 
 Definition rettype_of_chunk (c: memory_chunk) : rettype :=
   match c with
+  | Mbool => Tbool
   | Mint8signed => Tint8signed
   | Mint8unsigned => Tint8unsigned
   | Mint16signed => Tint16signed

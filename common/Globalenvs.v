@@ -988,7 +988,7 @@ Definition read_as_zero (m: mem) (b: block) (ofs len: Z) : Prop :=
   (align_chunk chunk | p) ->
   Mem.load chunk m b p =
   Some (match chunk with
-        | Mint8unsigned | Mint8signed | Mint16unsigned | Mint16signed | Mint32 => Vint Int.zero
+        | Mbool | Mint8unsigned | Mint8signed | Mint16unsigned | Mint16signed | Mint32 => Vint Int.zero
         | Mint64 => Vlong Int64.zero
         | Mfloat32 => Vsingle Float32.zero
         | Mfloat64 => Vfloat Float.zero

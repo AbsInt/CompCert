@@ -269,7 +269,7 @@ Definition wt_bool (ty: type) : Prop :=
 
 Definition wt_int (n: int) (sz: intsize) (sg: signedness) : Prop :=
   match sz, sg with
-  | IBool, _ => Int.zero_ext 8 n = n
+  | IBool, _ => n = Int.zero \/ n = Int.one
   | I8, Unsigned => Int.zero_ext 8 n = n
   | I8, Signed => Int.sign_ext 8 n = n
   | I16, Unsigned => Int.zero_ext 16 n = n
@@ -1623,7 +1623,8 @@ Proof.
   destruct v; auto with ty. constructor; red. apply Int.sign_ext_idem; lia.
   destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; lia.
   destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
-  destruct v; auto with ty. constructor; red. apply Int.zero_ext_idem; lia.
+  destruct v; auto with ty.
+  destruct (Val.norm_bool_cases (Vint (Int.zero_ext 8 i))) as [A | [A | A]]; rewrite A; constructor; red; auto.
 - inv AC. destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
 - destruct f; inv AC; destruct v; auto with ty.
 - inv AC. unfold Mptr. destruct Archi.ptr64 eqn:SF; destruct v; auto with ty.
@@ -1648,7 +1649,7 @@ Proof.
   constructor; red. apply Int.zero_ext_idem; lia.
   destruct (proj_bytes vl). auto with ty. destruct Archi.ptr64 eqn:SF; auto with ty. 
   destruct (proj_bytes vl); auto with ty.
-  constructor; red. apply Int.zero_ext_idem; lia.
+  destruct (Val.norm_bool_cases (Vint (Int.zero_ext 8 (Int.repr (decode_int l))))) as [A | [A | A]]; rewrite A; constructor; red; auto.
 - inv ACC. unfold decode_val. destruct (proj_bytes vl). auto with ty.
   destruct Archi.ptr64 eqn:SF; auto with ty. 
 - destruct f; inv ACC; unfold decode_val; destruct (proj_bytes vl); auto with ty.
@@ -1676,7 +1677,13 @@ Proof.
       ** apply Int.sign_zero_ext_widen; lia.
       ** apply Int.zero_ext_widen; lia.
   + auto.
-  + apply Int.zero_ext_widen; lia.
+  + assert (width = 1) by lia. subst width.
+    assert (0 <= Int.unsigned (Int.zero_ext 1 n) < 2).
+    { rewrite Int.zero_ext_mod. apply Z.mod_pos_bound. lia. split. lia. reflexivity. }
+    rewrite <- (Int.repr_unsigned (Int.zero_ext 1 n)).
+    set (i := Int.unsigned (Int.zero_ext 1 n)) in *.
+    assert (i = 0 \/ i = 1) by lia.
+    destruct H2 as [E|E]; rewrite E; auto.
 Qed.
 
 Lemma wt_deref_loc:

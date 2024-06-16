@@ -804,10 +804,10 @@ Definition transl_load (chunk: memory_chunk) (addr: addressing)
 Definition transl_store (chunk: memory_chunk) (addr: addressing)
            (args: list mreg) (src: mreg) (k: code) :=
   match chunk with
-  | Mint8signed | Mint8unsigned =>
+  | Mint8unsigned =>
       do r <- ireg_of src;
       transl_memory_access (Psb r)  addr args k
-  | Mint16signed | Mint16unsigned =>
+  | Mint16unsigned =>
       do r <- ireg_of src;
       transl_memory_access (Psh r)  addr args k
   | Mint32 =>

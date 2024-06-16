@@ -1565,17 +1565,8 @@ Lemma transl_load_correct:
    /\ rs'#(preg_of dst) = v
    /\ forall r, data_preg r = true -> r <> preg_of dst -> rs'#r = rs#r.
 Proof.
-  intros. destruct chunk; simpl in H.
-  eapply transl_load_int_correct; eauto.
-  eapply transl_load_int_correct; eauto.
-  eapply transl_load_int_correct; eauto.
-  eapply transl_load_int_correct; eauto.
-  eapply transl_load_int_correct; eauto.
-  discriminate.
-  eapply transl_load_float_correct; eauto.
-  eapply transl_load_float_correct; eauto.
-  discriminate.
-  discriminate.
+  intros. destruct chunk; simpl in H; try discriminate;
+  eauto using transl_load_int_correct, transl_load_float_correct.
 Qed.
 
 Lemma transl_store_correct:
@@ -1587,21 +1578,8 @@ Lemma transl_store_correct:
       exec_straight ge fn c rs m k rs' m'
    /\ forall r, data_preg r = true -> preg_notin r (destroyed_by_store chunk addr) -> rs'#r = rs#r.
 Proof.
-  intros. destruct chunk; simpl in H.
-- assert (Mem.storev Mint8unsigned m a (rs (preg_of src)) = Some m').
-    rewrite <- H1. destruct a; simpl; auto. symmetry. apply Mem.store_signed_unsigned_8.
-  clear H1. eapply transl_store_int_correct; eauto.
-- eapply transl_store_int_correct; eauto.
-- assert (Mem.storev Mint16unsigned m a (rs (preg_of src)) = Some m').
-    rewrite <- H1. destruct a; simpl; auto. symmetry. apply Mem.store_signed_unsigned_16.
-  clear H1. eapply transl_store_int_correct; eauto.
-- eapply transl_store_int_correct; eauto.
-- eapply transl_store_int_correct; eauto.
-- discriminate.
-- eapply transl_store_float_correct; eauto.
-- eapply transl_store_float_correct; eauto.
-- discriminate.
-- discriminate.
+  intros. destruct chunk; simpl in H; try discriminate;
+  eauto using transl_store_int_correct, transl_store_float_correct.
 Qed.
 
 End CONSTRUCTORS.

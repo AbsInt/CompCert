@@ -161,12 +161,14 @@ let asttype p t =
 let astrettype p = function
   | AST.Tret t -> asttype p t
   | AST.Tvoid -> fprintf p "AST.Tvoid"
+  | AST.Tbool -> fprintf p "AST.Tbool"
   | AST.Tint8signed -> fprintf p "AST.Tint8signed"
   | AST.Tint8unsigned -> fprintf p "AST.Tint8unsigned"
   | AST.Tint16signed -> fprintf p "AST.Tint16signed"
   | AST.Tint16unsigned -> fprintf p "AST.Tint16unsigned"
 
 let name_of_chunk = function
+  | Mbool -> "Mbool"
   | Mint8signed -> "Mint8signed"
   | Mint8unsigned -> "Mint8unsigned"
   | Mint16signed -> "Mint16signed"

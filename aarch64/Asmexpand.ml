@@ -270,7 +270,7 @@ let expand_builtin_memcpy  sz al args =
 let expand_builtin_vload_common chunk base ofs res =
   let addr = ADimm(base, ofs) in
   match chunk, res with
-  | Mint8unsigned, BR(IR res) ->
+  | (Mbool | Mint8unsigned), BR(IR res) ->
      emit (Pldrb(W, res, addr))
   | Mint8signed, BR(IR res) ->
      emit (Pldrsb(W, res, addr))
@@ -313,7 +313,7 @@ let expand_builtin_vload chunk args res =
 let expand_builtin_vstore_common chunk base ofs src =
   let addr = ADimm(base, ofs) in
   match chunk, src with
-  | (Mint8signed | Mint8unsigned), BA(IR src) ->
+  | (Mbool | Mint8signed | Mint8unsigned), BA(IR src) ->
      emit (Pstrb(src, addr))
   | (Mint16signed | Mint16unsigned), BA(IR src) ->
      emit (Pstrh(src, addr))

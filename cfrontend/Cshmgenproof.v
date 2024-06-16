@@ -1052,7 +1052,7 @@ Proof.
   + destruct s; econstructor; eauto; simpl; congruence.
   + destruct s; econstructor; eauto; simpl; congruence.
   + auto.
-  + econstructor; eauto; simpl; congruence.
+  + econstructor; eauto. destruct H3; subst n; reflexivity.
 - auto.
 - destruct i.
   + destruct s; econstructor; eauto. 

@@ -767,9 +767,7 @@ Proof.
     destruct (zle sz 2). extlia.
     destruct (zle sz 4). extlia.
     auto.
-  destruct chunk; simpl in *; auto.
-  apply Z.divide_1_l.
-  apply Z.divide_1_l.
+  destruct chunk; simpl in *; auto using Z.divide_1_l.
   apply H2; lia.
   apply H2; lia.
 Qed.

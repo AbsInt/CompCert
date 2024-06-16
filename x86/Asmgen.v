@@ -672,9 +672,9 @@ Definition transl_store (chunk: memory_chunk)
                         (k: code) : res code :=
   do am <- transl_addressing addr args;
   match chunk with
-  | Mint8unsigned | Mint8signed =>
+  | Mint8unsigned =>
       do r <- ireg_of src; mk_storebyte am r k
-  | Mint16unsigned | Mint16signed =>
+  | Mint16unsigned =>
       do r <- ireg_of src; OK(Pmovw_mr am r :: k)
   | Mint32 =>
       do r <- ireg_of src; OK(Pmovl_mr am r :: k)

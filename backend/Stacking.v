@@ -62,6 +62,32 @@ Fixpoint restore_callee_save_rec (rl: list mreg) (ofs: Z) (k: Mach.code) :=
 Definition restore_callee_save (fe: frame_env) (k: Mach.code) :=
   restore_callee_save_rec fe.(fe_used_callee_save) fe.(fe_ofs_callee_save) k.
 
+(** * Simplification of loads and stores *)
+
+(** Some memory loads and stores don't correspond directly to a processor
+    instruction.  For instance, there's only one "store 8 bits" instruction
+    for the three memory chunks [Mint8unsigned],  [Mint8signed], [Mbool].
+    Here, we map all three chunks to [Mint8unsigned] stores
+    and have only one processor instruction for the latter. *)
+
+Definition simplify_store (chunk: memory_chunk) : memory_chunk :=
+  match chunk with
+  | Mbool => Mint8unsigned
+  | Mint8signed => Mint8unsigned
+  | Mint16signed => Mint16unsigned
+  | _ => chunk
+  end.
+
+(** Likewise, there is no "load Boolean" instruction that does exactly
+    what a load with chunk [Mbool] does.  We replace [Mbool] loads
+    with [Mint8unsigned] loads, which are always more defined. *)
+
+Definition simplify_load (chunk: memory_chunk) : memory_chunk :=
+  match chunk with
+  | Mbool => Mint8unsigned
+  | _ => chunk
+  end.
+
 (** * Code transformation. *)
 
 (** Translation of operations and addressing mode.
@@ -134,9 +160,9 @@ Definition transl_instr
   | Lop op args res =>
       Mop (transl_op fe op) args res :: k
   | Lload chunk addr args dst =>
-      Mload chunk (transl_addr fe addr) args dst :: k
+      Mload (simplify_load chunk) (transl_addr fe addr) args dst :: k
   | Lstore chunk addr args src =>
-      Mstore chunk (transl_addr fe addr) args src :: k
+      Mstore (simplify_store chunk) (transl_addr fe addr) args src :: k
   | Lcall sig ros =>
       Mcall sig ros :: k
   | Ltailcall sig ros =>

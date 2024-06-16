@@ -256,7 +256,7 @@ let expand_builtin_memcpy  sz al args =
 
 let expand_builtin_vload_common chunk base ofs res =
   match chunk, res with
-  | Mint8unsigned, BR(IR res) ->
+  | (Mbool | Mint8unsigned), BR(IR res) ->
      emit (Plbu (res, base, Ofsimm ofs))
   | Mint8signed, BR(IR res) ->
      emit (Plb  (res, base, Ofsimm ofs))
@@ -307,7 +307,7 @@ let expand_builtin_vload chunk args res =
 
 let expand_builtin_vstore_common chunk base ofs src =
   match chunk, src with
-  | (Mint8signed | Mint8unsigned), BA(IR src) ->
+  | (Mbool | Mint8signed | Mint8unsigned), BA(IR src) ->
      emit (Psb (src, base, Ofsimm ofs))
   | (Mint16signed | Mint16unsigned), BA(IR src) ->
      emit (Psh (src, base, Ofsimm ofs))
