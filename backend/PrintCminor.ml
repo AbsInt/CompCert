@@ -40,9 +40,41 @@ let precedence = function
   | Ebinop((Oor|Oorl), _, _) -> (6, LtoR)
   | Eload _ -> (15, RtoL)
 
+(* Reserved keywords *)
+
+module StringSet = Set.Make(String)
+
+let keywords = StringSet.of_list [
+  "absf"; "abss"; "any32"; "any64";
+  "builtin";
+  "case";
+  "default";
+  "else"; "exit"; "extern";
+  "float"; "float32"; "float64"; "floatofint"; "floatofintu";
+    "floatoflong"; "floatoflongu";
+  "goto";
+  "if"; "int"; "int16"; "int16s"; "int16u"; "int32"; "int64";
+    "int8"; "int8s"; "int8u"; "intoffloat"; "intoflong";
+    "intofsingle"; "intuoffloat"; "intuofsingle";
+  "long"; "longoffloat"; "longofint"; "longofintu"; "longuoffloat"; "loop";
+  "match";
+  "readonly"; "return";
+  "single"; "singleofint"; "singleofintu"; "singleoflong"; "singleoflongu";
+  "stack"; "switch"; "switchl";
+  "tailcall";
+  "var"; "void"; "volatile";
+  "while"
+]
+
 (* Naming idents. *)
 
-let ident_name id = "'" ^ Camlcoq.extern_atom id ^ "'"
+let re_ident = Str.regexp {|[A-Za-z_][A-Za-z_$0-9]*$\|\$[1-9][0-9]*$|}
+
+let ident_name id =
+  let s = Camlcoq.extern_atom id in
+  if Str.string_match re_ident s 0 && not (StringSet.mem s keywords)
+  then s
+  else "'" ^ s ^ "'"
 
 (* Naming operators *)
 
