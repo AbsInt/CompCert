@@ -143,6 +143,10 @@ let rec print_stmt p s =
                 (temp_name id)
                 expr (15, e1)
                 print_expr_list (true, el)
+  | Stailcall(e1, el) ->
+      fprintf p "@[<hv 2>return %a@,(@[<hov 0>%a@]);@ /*tailcall*/@]"
+                expr (15, e1)
+                print_expr_list (true, el)
   | Sbuiltin(None, ef, tyargs, el) ->
       fprintf p "@[<hv 2>builtin %s@,(@[<hov 0>%a@]);@]"
                 (name_of_external ef)

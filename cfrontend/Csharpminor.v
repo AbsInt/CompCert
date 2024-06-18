@@ -62,6 +62,7 @@ Inductive stmt : Type :=
   | Sset : ident -> expr -> stmt
   | Sstore : memory_chunk -> expr -> expr -> stmt
   | Scall : option ident -> signature -> expr -> list expr -> stmt
+  | Stailcall: signature -> expr -> list expr -> stmt
   | Sbuiltin : option ident -> external_function -> list expr -> stmt
   | Sseq: stmt -> stmt -> stmt
   | Sifthenelse: expr -> stmt -> stmt -> stmt
@@ -389,6 +390,15 @@ Inductive step: state -> trace -> state -> Prop :=
       funsig fd = sig ->
       step (State f (Scall optid sig a bl) k e le m)
         E0 (Callstate fd vargs (Kcall optid f e le k) m)
+
+  | step_tailcall: forall f sig a bl k e le m vf vargs fd m',
+      eval_expr e le m a vf ->
+      eval_exprlist e le m bl vargs ->
+      Genv.find_funct ge vf = Some fd ->
+      funsig fd = sig ->
+      Mem.free_list m (blocks_of_env e) = Some m' ->
+      step (State f (Stailcall sig a bl) k e le m)
+        E0 (Callstate fd vargs (call_cont k) m')
 
   | step_builtin: forall f optid ef bl k e le m vargs t vres m',
       eval_exprlist e le m bl vargs ->

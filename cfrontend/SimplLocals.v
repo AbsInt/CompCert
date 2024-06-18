@@ -119,6 +119,8 @@ Fixpoint simpl_stmt (cenv: compilenv) (s: statement) : res statement :=
   | Scall optid a al =>
       do x <- check_opttemp cenv optid;
       OK (Scall optid (simpl_expr cenv a) (simpl_exprlist cenv al))
+  | Stailcall a al =>
+      OK (Stailcall (simpl_expr cenv a) (simpl_exprlist cenv al))
   | Sbuiltin optid ef tyargs al =>
       do x <- check_opttemp cenv optid;
       OK (Sbuiltin optid ef tyargs (simpl_exprlist cenv al))
@@ -208,6 +210,7 @@ Fixpoint addr_taken_stmt (s: statement) : VSet.t :=
   | Sassign a b => VSet.union (addr_taken_expr a) (addr_taken_expr b)
   | Sset id a => addr_taken_expr a
   | Scall optid a bl => VSet.union (addr_taken_expr a) (addr_taken_exprlist bl)
+  | Stailcall a bl => VSet.union (addr_taken_expr a) (addr_taken_exprlist bl)
   | Sbuiltin optid ef tyargs bl => addr_taken_exprlist bl
   | Ssequence s1 s2 => VSet.union (addr_taken_stmt s1) (addr_taken_stmt s2)
   | Sifthenelse a s1 s2 =>

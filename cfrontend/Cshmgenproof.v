@@ -1572,6 +1572,9 @@ Proof.
   simpl in TR. destruct (classify_fun (typeof e)); monadInv TR.
   unfold make_funcall.
   destruct o; auto; destruct Conventions1.return_value_needs_normalization; auto.
+- (* tailcall *)
+  simpl in TR. destruct (classify_fun (typeof e)); monadInv TR.
+  auto.
 - (* builtin *)
   auto.
 - (* seq *)
@@ -1651,6 +1654,12 @@ Proof.
   split; auto; eapply match_Kcall_normalize; eauto.
 Qed.
 
+Lemma call_cont_is_call_cont:
+  forall k, Clight.is_call_cont (Clight.call_cont k).
+Proof.
+  induction k; simpl; auto.
+Qed.
+
 (** The simulation proof *)
 
 Lemma transl_step:
@@ -1724,6 +1733,26 @@ Proof.
     eapply match_Kcall_normalize  with (ce := prog_comp_env cu') (cu := cu); eauto.
     intros. eapply make_normalization_correct; eauto. constructor; eauto.
     exact I.
+
+- (* tailcall *)
+  revert TR. simpl. case_eq (classify_fun (typeof a)); try congruence.
+  intros targs tres cc CF TR. monadInv TR. inv MTR.
+  exploit functions_translated; eauto. intros (cu' & tfd & FIND & TFD & LINK').
+  rewrite H in CF. simpl in CF. inv CF.
+  set (sg := {| sig_args := typlist_of_arglist al targs;
+                sig_res := rettype_of_type (fn_return f);
+                sig_cc := cc |}) in *.
+  assert (SIG: funsig tfd = sg).
+  { unfold sg; erewrite typlist_of_arglist_eq by eauto.
+    eapply transl_fundef_sig1; eauto. rewrite H3; auto. }
+  econstructor; split.
+  apply plus_one. eapply step_tailcall; eauto.
+  eapply transl_expr_correct with (cunit := cu); eauto.
+  eapply transl_arglist_correct with (cunit := cu); eauto.
+  eapply match_env_free_blocks; eauto.
+  eapply match_callstate with (ce := prog_comp_env cu); eauto.
+  eapply match_cont_call_cont. eauto.
+  apply call_cont_is_call_cont.
 
 - (* builtin *)
   monadInv TR. inv MTR.

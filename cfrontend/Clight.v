@@ -98,6 +98,7 @@ Inductive statement : Type :=
   | Sassign : expr -> expr -> statement (**r assignment [lvalue = rvalue] *)
   | Sset : ident -> expr -> statement   (**r assignment [tempvar = rvalue] *)
   | Scall: option ident -> expr -> list expr -> statement (**r function call *)
+  | Stailcall: expr -> list expr -> statement (**r function call in tail position *)
   | Sbuiltin: option ident -> external_function -> typelist -> list expr -> statement (**r builtin invocation *)
   | Ssequence : statement -> statement -> statement  (**r sequence *)
   | Sifthenelse : expr  -> statement -> statement -> statement (**r conditional *)
@@ -579,6 +580,17 @@ Inductive step: state -> trace -> state -> Prop :=
       type_of_fundef fd = Tfunction tyargs tyres cconv ->
       step (State f (Scall optid a al) k e le m)
         E0 (Callstate fd vargs (Kcall optid f e le k) m)
+
+  | step_tailcall:   forall f a al k e le m tyargs tyres cconv vf vargs fd m',
+      classify_fun (typeof a) = fun_case_f tyargs tyres cconv ->
+      eval_expr e le m a vf ->
+      eval_exprlist e le m al tyargs vargs ->
+      Genv.find_funct ge vf = Some fd ->
+      type_of_fundef fd = Tfunction tyargs tyres cconv ->
+      fn_return f = tyres ->
+      Mem.free_list m (blocks_of_env e) = Some m' ->
+      step (State f (Stailcall a al) k e le m)
+        E0 (Callstate fd vargs (call_cont k) m')
 
   | step_builtin:   forall f optid ef tyargs al k e le m vargs t vres m',
       eval_exprlist e le m al tyargs vargs ->
