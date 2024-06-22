@@ -92,11 +92,8 @@ and rtyp p = function
   | Tunion(id, _) ->
       fprintf p "(Tunion %a noattr)" ident id
 
-and typlist p = function
-  | Tnil ->
-      fprintf p "Tnil"
-  | Tcons(t, tl) ->
-      fprintf p "@[<hov 2>(Tcons@ %a@ %a)@]" typ t typlist tl
+and typlist p tl =
+  print_list typ p tl
 
 (* Access modes for members of structs or unions *)
 

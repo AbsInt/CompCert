@@ -191,12 +191,12 @@ Fixpoint seq_of_labeled_statement (sl: labeled_statements) : statement :=
 
 (** Extract the values from a list of function arguments *)
 
-Inductive cast_arguments (m: mem): exprlist -> typelist -> list val -> Prop :=
+Inductive cast_arguments (m: mem): exprlist -> list type -> list val -> Prop :=
   | cast_args_nil:
-      cast_arguments m Enil Tnil nil
+      cast_arguments m Enil nil nil
   | cast_args_cons: forall v ty el targ1 targs v1 vl,
       sem_cast v ty targ1 m = Some v1 -> cast_arguments m el targs vl ->
-      cast_arguments m (Econs (Eval v ty) el) (Tcons targ1 targs) (v1 :: vl).
+      cast_arguments m (Econs (Eval v ty) el) (targ1 :: targs) (v1 :: vl).
 
 (** ** Reduction semantics for expressions *)
 
@@ -832,7 +832,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
+      type_of_fundef f = Tfunction nil type_int32s cc_default ->
       initial_state p (Callstate f nil Kstop m0).
 
 (** A final state is a [Returnstate] with an empty continuation. *)

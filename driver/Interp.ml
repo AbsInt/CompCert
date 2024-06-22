@@ -627,14 +627,13 @@ let fixup_main p =
       None
   | Some main_fd ->
       match type_of_fundef main_fd with
-      | Tfunction(Tnil, Ctypes.Tint(I32, Signed, _), _) ->
+      | Tfunction([], Ctypes.Tint(I32, Signed, _), _) ->
           Some p
-      | Tfunction(Tcons(Ctypes.Tint _,
-                  Tcons(Tpointer(Tpointer(Ctypes.Tint(I8,_,_),_),_), Tnil)),
+      | Tfunction([Ctypes.Tint _; Tpointer(Tpointer(Ctypes.Tint(I8,_,_),_),_)],
                   Ctypes.Tint _, _) as ty ->
           Some (change_main_function p
                    (call_main3_function p.Ctypes.prog_main ty))
-      | Tfunction(Tnil, ty_res, _) as ty ->
+      | Tfunction([], ty_res, _) as ty ->
           Some (change_main_function p
                    (call_other_main_function p.Ctypes.prog_main ty ty_res))
       | _ ->

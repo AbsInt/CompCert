@@ -140,13 +140,13 @@ with eval_simple_rvalue: expr -> val -> Prop :=
   | esr_alignof: forall ty1 ty,
       eval_simple_rvalue (Ealignof ty1 ty) (Vptrofs (Ptrofs.repr (alignof ge ty1))).
 
-Inductive eval_simple_list: exprlist -> typelist -> list val -> Prop :=
+Inductive eval_simple_list: exprlist -> list type -> list val -> Prop :=
   | esrl_nil:
-      eval_simple_list Enil Tnil nil
+      eval_simple_list Enil nil nil
   | esrl_cons: forall r rl ty tyl v vl v',
       eval_simple_rvalue r v' -> sem_cast v' (typeof r) ty m = Some v ->
       eval_simple_list rl tyl vl ->
-      eval_simple_list (Econs r rl) (Tcons ty tyl) (v :: vl).
+      eval_simple_list (Econs r rl) (ty :: tyl) (v :: vl).
 
 Scheme eval_simple_rvalue_ind2 := Minimality for eval_simple_rvalue Sort Prop
   with eval_simple_lvalue_ind2 := Minimality for eval_simple_lvalue Sort Prop.
@@ -3032,7 +3032,7 @@ Inductive bigstep_program_terminates (p: program): trace -> int -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
+      type_of_fundef f = Tfunction nil type_int32s cc_default ->
       eval_funcall ge m0 f nil t m1 (Vint r) ->
       bigstep_program_terminates p t r.
 
@@ -3042,7 +3042,7 @@ Inductive bigstep_program_diverges (p: program): traceinf -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
+      type_of_fundef f = Tfunction nil type_int32s cc_default ->
       evalinf_funcall ge m0 f nil t ->
       bigstep_program_diverges p t.
 

@@ -717,10 +717,10 @@ Section EXPRS.
 Variable e: env.
 Variable w: world.
 
-Fixpoint sem_cast_arguments (vtl: list (val * type)) (tl: typelist) (m: mem) : option (list val) :=
+Fixpoint sem_cast_arguments (vtl: list (val * type)) (tl: list type) (m: mem) : option (list val) :=
   match vtl, tl with
-  | nil, Tnil => Some nil
-  | (v1,t1)::vtl, Tcons t1' tl =>
+  | nil, nil => Some nil
+  | (v1,t1)::vtl, t1'::tl =>
       do v <- sem_cast v1 t1 t1' m; do vl <- sem_cast_arguments vtl tl m; Some(v::vl)
   | _, _ => None
   end.
@@ -2308,7 +2308,7 @@ Definition do_initial_state (p: program): option (genv * state) :=
   do m0 <- Genv.init_mem p;
   do b <- Genv.find_symbol ge p.(prog_main);
   do f <- Genv.find_funct_ptr ge b;
-  check (type_eq (type_of_fundef f) (Tfunction Tnil type_int32s cc_default));
+  check (type_eq (type_of_fundef f) (Tfunction nil type_int32s cc_default));
   Some (ge, Callstate f nil Kstop m0).
 
 Definition at_final_state (S: state): option int :=

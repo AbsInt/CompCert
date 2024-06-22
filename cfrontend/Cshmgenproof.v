@@ -41,19 +41,12 @@ Proof.
   eexact H.
 - intros. destruct f; simpl in H0.
 + monadInv H0. constructor; auto.
-+ destruct (signature_eq (ef_sig e) (signature_of_type t t0 c)); inv H0.
++ destruct signature_eq; inv H0.
   constructor; auto.
 - intros; red; auto.
 Qed.
 
 (** * Properties of operations over types *)
-
-Remark transl_params_types:
-  forall params,
-  map typ_of_type (map snd params) = typlist_of_typelist (type_of_params params).
-Proof.
-  induction params; simpl. auto. destruct a as [id ty]; simpl. f_equal; auto.
-Qed.
 
 Lemma transl_fundef_sig1:
   forall ce f tf args res cc,
@@ -62,9 +55,7 @@ Lemma transl_fundef_sig1:
   funsig tf = signature_of_type args res cc.
 Proof.
   intros. inv H.
-- monadInv H1. simpl. inversion H0.
-  unfold signature_of_function, signature_of_type.
-  f_equal. apply transl_params_types.
+- monadInv H1. simpl. inversion H0. reflexivity.
 - simpl in H0. unfold funsig. congruence.
 Qed.
 
@@ -1940,7 +1931,7 @@ Proof.
   exploit function_ptr_translated; eauto. intros (cu & tf & A & B & C).
   assert (D: Genv.find_symbol tge (AST.prog_main tprog) = Some b).
   { destruct TRANSL as (P & Q & R). rewrite Q. rewrite symbols_preserved. auto. }
-  assert (E: funsig tf = signature_of_type Tnil type_int32s cc_default).
+  assert (E: funsig tf = signature_of_type nil type_int32s cc_default).
   { eapply transl_fundef_sig2; eauto. }
   econstructor; split.
   econstructor; eauto. apply (Genv.init_mem_match TRANSL). eauto.

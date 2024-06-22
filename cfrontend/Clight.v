@@ -98,7 +98,7 @@ Inductive statement : Type :=
   | Sassign : expr -> expr -> statement (**r assignment [lvalue = rvalue] *)
   | Sset : ident -> expr -> statement   (**r assignment [tempvar = rvalue] *)
   | Scall: option ident -> expr -> list expr -> statement (**r function call *)
-  | Sbuiltin: option ident -> external_function -> typelist -> list expr -> statement (**r builtin invocation *)
+  | Sbuiltin: option ident -> external_function -> list type -> list expr -> statement (**r builtin invocation *)
   | Ssequence : statement -> statement -> statement  (**r sequence *)
   | Sifthenelse : expr  -> statement -> statement -> statement (**r conditional *)
   | Sloop: statement -> statement -> statement (**r infinite loop *)
@@ -440,14 +440,14 @@ Combined Scheme eval_expr_lvalue_ind from eval_expr_ind2, eval_lvalue_ind2.
   and produces the list of cast values [vl].  It is used to
   evaluate the arguments of function calls. *)
 
-Inductive eval_exprlist: list expr -> typelist -> list val -> Prop :=
+Inductive eval_exprlist: list expr -> list type -> list val -> Prop :=
   | eval_Enil:
-      eval_exprlist nil Tnil nil
+      eval_exprlist nil nil nil
   | eval_Econs:   forall a bl ty tyl v1 v2 vl,
       eval_expr a v1 ->
       sem_cast v1 (typeof a) ty m = Some v2 ->
       eval_exprlist bl tyl vl ->
-      eval_exprlist (a :: bl) (Tcons ty tyl) (v2 :: vl).
+      eval_exprlist (a :: bl) (ty :: tyl) (v2 :: vl).
 
 End EXPR.
 
@@ -687,7 +687,7 @@ Inductive initial_state (p: program): state -> Prop :=
       Genv.init_mem p = Some m0 ->
       Genv.find_symbol ge p.(prog_main) = Some b ->
       Genv.find_funct_ptr ge b = Some f ->
-      type_of_fundef f = Tfunction Tnil type_int32s cc_default ->
+      type_of_fundef f = Tfunction nil type_int32s cc_default ->
       initial_state p (Callstate f nil Kstop m0).
 
 (** A final state is a [Returnstate] with an empty continuation. *)

@@ -578,20 +578,20 @@ with transl_lvalue (ce: composite_env) (a: Clight.expr) {struct a} : res (expr *
    casted to the corresponding types in [tyl].
    Used for function applications. *)
 
-Fixpoint transl_arglist (ce: composite_env) (al: list Clight.expr) (tyl: typelist)
+Fixpoint transl_arglist (ce: composite_env) (al: list Clight.expr) (tyl: list type)
                          {struct al}: res (list expr) :=
   match al, tyl with
-  | nil, Tnil => OK nil
-  | a1 :: a2, Tcons ty1 ty2 =>
+  | nil, nil => OK nil
+  | a1 :: a2, ty1 :: ty2 =>
       do ta1 <- transl_expr ce a1;
       do ta1' <- make_cast (typeof a1) ty1 ta1;
       do ta2 <- transl_arglist ce a2 ty2;
       OK (ta1' :: ta2)
-  | a1 :: a2, Tnil =>
+  | a1 :: a2, nil =>
       (* Tolerance for calls to K&R or variadic functions *)
       do ta1 <- transl_expr ce a1;
       do ta1' <- make_cast (typeof a1) (default_argument_conversion (typeof a1)) ta1;
-      do ta2 <- transl_arglist ce a2 Tnil;
+      do ta2 <- transl_arglist ce a2 nil;
       OK (ta1' :: ta2)
   | _, _ =>
       Error(msg "Cshmgen.transl_arglist: arity mismatch")
@@ -599,15 +599,15 @@ Fixpoint transl_arglist (ce: composite_env) (al: list Clight.expr) (tyl: typelis
 
 (** Compute the argument signature that corresponds to a function application. *)
 
-Fixpoint typlist_of_arglist (al: list Clight.expr) (tyl: typelist)
+Fixpoint typlist_of_arglist (al: list Clight.expr) (tyl: list type)
                             {struct al}: list AST.typ :=
   match al, tyl with
   | nil, _ => nil
-  | a1 :: a2, Tcons ty1 ty2 =>
+  | a1 :: a2, cons ty1 ty2 =>
       typ_of_type ty1 :: typlist_of_arglist a2 ty2
-  | a1 :: a2, Tnil =>
+  | a1 :: a2, nil =>
       (* Tolerance for calls to K&R or variadic functions *)
-      typ_of_type (default_argument_conversion (typeof a1)) :: typlist_of_arglist a2 Tnil
+      typ_of_type (default_argument_conversion (typeof a1)) :: typlist_of_arglist a2 nil
   end.
 
 (** Translate a function call.

@@ -76,12 +76,9 @@ Inductive type : Type :=
   | Tfloat: floatsize -> attr -> type              (**r floating-point types *)
   | Tpointer: type -> attr -> type                 (**r pointer types ([*ty]) *)
   | Tarray: type -> Z -> attr -> type              (**r array types ([ty[len]]) *)
-  | Tfunction: typelist -> type -> calling_convention -> type    (**r function types *)
+  | Tfunction: list type -> type -> calling_convention -> type    (**r function types *)
   | Tstruct: ident -> attr -> type                 (**r struct types *)
-  | Tunion: ident -> attr -> type                  (**r union types *)
-with typelist : Type :=
-  | Tnil: typelist
-  | Tcons: type -> typelist -> typelist.
+  | Tunion: ident -> attr -> type.                  (**r union types *)
 
 Lemma intsize_eq: forall (s1 s2: intsize), {s1=s2} + {s1<>s2}.
 Proof.
@@ -93,23 +90,28 @@ Proof.
   decide equality.
 Defined.
 
+Lemma floatsize_eq: forall (s1 s2: floatsize), {s1=s2} + {s1<>s2}.
+Proof.
+  decide equality.
+Defined.
+
 Lemma attr_eq: forall (a1 a2: attr), {a1=a2} + {a1<>a2}.
 Proof.
   decide equality. decide equality. apply N.eq_dec. apply bool_dec.
 Defined.
 
-Lemma type_eq: forall (ty1 ty2: type), {ty1=ty2} + {ty1<>ty2}
-with typelist_eq: forall (tyl1 tyl2: typelist), {tyl1=tyl2} + {tyl1<>tyl2}.
+Lemma type_eq: forall (ty1 ty2: type), {ty1=ty2} + {ty1<>ty2}.
 Proof.
-  assert (forall (x y: floatsize), {x=y} + {x<>y}) by decide equality.
-  generalize ident_eq zeq bool_dec ident_eq intsize_eq signedness_eq attr_eq; intros.
-  decide equality.
-  decide equality.
-  decide equality.
-  decide equality.
+  fix REC 1.
+  decide equality; auto using ident_eq, zeq, bool_dec, ident_eq, intsize_eq, signedness_eq, floatsize_eq, attr_eq, list_eq_dec, calling_convention_eq.
 Defined.
 
-Global Opaque intsize_eq signedness_eq attr_eq type_eq typelist_eq.
+Lemma typelist_eq: forall (tyl1 tyl2: list type), {tyl1=tyl2} + {tyl1<>tyl2}.
+Proof.
+  auto using list_eq_dec, type_eq.
+Defined.
+
+Global Opaque intsize_eq signedness_eq floatsize_eq attr_eq type_eq typelist_eq.
 
 (** Extract the attributes of a type. *)
 
@@ -1044,11 +1046,8 @@ Fixpoint rank_members (ce: composite_env) (m: members) : nat :=
 
 (** Extracting a type list from a function parameter declaration. *)
 
-Fixpoint type_of_params (params: list (ident * type)) : typelist :=
-  match params with
-  | nil => Tnil
-  | (id, ty) :: rem => Tcons ty (type_of_params rem)
-  end.
+Definition type_of_params (params: list (ident * type)) : list type :=
+  List.map snd params.
 
 (** Translating C types to Cminor types and function signatures. *)
 
@@ -1078,13 +1077,10 @@ Definition rettype_of_type (t: type) : AST.rettype :=
   | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tvoid
   end.
 
-Fixpoint typlist_of_typelist (tl: typelist) : list AST.typ :=
-  match tl with
-  | Tnil => nil
-  | Tcons hd tl => typ_of_type hd :: typlist_of_typelist tl
-  end.
+Definition typlist_of_typelist (tl: list type) : list AST.typ :=
+  List.map typ_of_type tl.
 
-Definition signature_of_type (args: typelist) (res: type) (cc: calling_convention): signature :=
+Definition signature_of_type (args: list type) (res: type) (cc: calling_convention): signature :=
   mksignature (typlist_of_typelist args) (rettype_of_type res) cc.
 
 (** * Construction of the composite environment *)
@@ -1505,7 +1501,7 @@ Variable F: Type.
 
 Inductive fundef : Type :=
   | Internal: F -> fundef
-  | External: external_function -> typelist -> type -> calling_convention -> fundef.
+  | External: external_function -> list type -> type -> calling_convention -> fundef.
 
 (** A program, or compilation unit, is composed of:
 - a list of definitions of functions and global variables;
@@ -1806,8 +1802,7 @@ Next Obligation.
 + discriminate.
 + destruct e; inv H. split; constructor.
 + destruct e; inv H. split; constructor.
-+ destruct (external_function_eq e e0 && typelist_eq t t1 && type_eq t0 t2 && calling_convention_eq c c0) eqn:A; inv H.
-  InvBooleans. subst. split; constructor.
++ destruct andb eqn:A; inv H. InvBooleans. subst. split; constructor.
 Defined.
 
 Remark link_fundef_either:
@@ -1816,7 +1811,7 @@ Proof.
   simpl; intros. unfold link_fundef in H. destruct f1, f2; try discriminate.
 - destruct e; inv H. auto.
 - destruct e; inv H. auto.
-- destruct (external_function_eq e e0 && typelist_eq t t1 && type_eq t0 t2 && calling_convention_eq c c0); inv H; auto.
+- destruct andb; inv H; auto.
 Qed.
 
 Global Opaque Linker_fundef.

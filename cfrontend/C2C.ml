@@ -311,9 +311,8 @@ let make_builtin_memcpy args =
       if not (Z.eq (Z.modulo sz1 al1) Z.zero) then
         error "alignment argument of '__builtin_memcpy_aligned' must be a divisor of the size";
       (* Issue #28: must decay array types to pointer types *)
-      Ebuiltin( AST.EF_memcpy(sz1, al1),
-               Tcons(typeconv(typeof dst),
-                     Tcons(typeconv(typeof src), Tnil)),
+      Ebuiltin(AST.EF_memcpy(sz1, al1),
+               [typeconv(typeof dst); typeconv(typeof src)],
                Econs(dst, Econs(src, Enil)), Tvoid)
   | _ ->
     assert false
@@ -328,7 +327,7 @@ let va_list_ptr e =
 
 let make_builtin_va_arg_by_val helper ty ty_ret arg =
   let ty_fun =
-    Tfunction(Tcons(Tpointer(Tvoid, noattr), Tnil), ty_ret,  AST.cc_default) in
+    Tfunction([Tpointer(Tvoid, noattr)], ty_ret,  AST.cc_default) in
   Ecast
     (Ecall(Evalof(Evar(intern_string helper, ty_fun), ty_fun),
            Econs(va_list_ptr arg, Enil),
@@ -337,7 +336,7 @@ let make_builtin_va_arg_by_val helper ty ty_ret arg =
 
 let make_builtin_va_arg_by_ref helper ty arg =
   let ty_fun =
-    Tfunction(Tcons(Tpointer(Tvoid, noattr), Tcons(Ctyping.size_t, Tnil)),
+    Tfunction([Tpointer(Tvoid, noattr); Ctyping.size_t],
               Tpointer(Tvoid, noattr),  AST.cc_default) in
   let ty_ptr =
     Tpointer(ty, noattr) in
@@ -464,7 +463,7 @@ let rec convertTyp env ?bitwidth t =
   | C.TFun(tres, targs, va, a) ->
       checkFunctionType env tres targs;
       Tfunction(begin match targs with
-                | None -> Tnil
+                | None -> []
                 | Some tl -> convertParams env tl
                 end,
                 convertTyp env tres,
@@ -493,8 +492,8 @@ let rec convertTyp env ?bitwidth t =
       convertIkind ik (convertAttr a)
 
 and convertParams env = function
-    | [] -> Tnil
-    | (id, ty) :: rem -> Tcons(convertTyp env ty, convertParams env rem)
+    | [] -> []
+    | (id, ty) :: rem -> convertTyp env ty :: convertParams env rem
 
 (* Convert types for the arguments to a function call.  The types for
    fixed arguments are taken from the function prototype.  The types
@@ -504,12 +503,12 @@ and convertParams env = function
 
 let rec convertTypArgs env tl el =
   match tl, el with
-  | _, [] -> Tnil
+  | _, [] -> []
   | [], e1 :: el ->
-      Tcons(convertTyp env (Cutil.default_argument_conversion env e1.etyp),
-            convertTypArgs env [] el)
+      convertTyp env (Cutil.default_argument_conversion env e1.etyp) ::
+      convertTypArgs env [] el
   | (id, t1) :: tl, e1 :: el ->
-      Tcons(convertTyp env t1, convertTypArgs env tl el)
+      convertTyp env t1 :: convertTypArgs env tl el
 
 (* Convert types for the arguments to inline asm statements and to
    the special built-in functions __builtin_annot, __builtin_ais_annot_
@@ -520,10 +519,10 @@ let rec convertTypArgs env tl el =
    and avoid inserting compiled code to convert the arguments. *)
 
 let rec convertTypAnnotArgs env = function
-  | [] -> Tnil
+  | [] -> []
   | e1 :: el ->
-      Tcons(convertTyp env (Cutil.unary_conversion env e1.etyp),
-            convertTypAnnotArgs env el)
+      convertTyp env (Cutil.unary_conversion env e1.etyp) ::
+      convertTypAnnotArgs env el
 
 let convertField env sid f =
   let id = intern_string f.fld_name
@@ -893,7 +892,7 @@ let rec convertExpr env e =
           let targ = convertTyp env
                          (Cutil.default_argument_conversion env arg.etyp) in
           Ebuiltin(AST.EF_annot_val(P.of_int 1,coqstring_of_camlstring txt, typ_of_type targ),
-                   Tcons(targ, Tnil), convertExprList env [arg],
+                   [targ], convertExprList env [arg],
                    convertTyp env e.etyp)
       | _ ->
           error "argument 1 of '__builtin_annot_intval' must be a string literal";
@@ -936,9 +935,8 @@ let rec convertExpr env e =
   | C.ECall({edesc = C.EVar {name = "__builtin_va_copy"}}, [arg1; arg2]) ->
       let dst = convertExpr env arg1 in
       let src = convertExpr env arg2 in
-      Ebuiltin( AST.EF_memcpy(Z.of_uint CBuiltins.size_va_list, Z.of_uint 4),
-               Tcons(Tpointer(Tvoid, noattr),
-                 Tcons(Tpointer(Tvoid, noattr), Tnil)),
+      Ebuiltin(AST.EF_memcpy(Z.of_uint CBuiltins.size_va_list, Z.of_uint 4),
+               [Tpointer(Tvoid, noattr); Tpointer(Tvoid, noattr)],
                Econs(va_list_ptr dst, Econs(va_list_ptr src, Enil)),
                Tvoid)
 
@@ -1363,8 +1361,6 @@ let helper_functions () = [
 ]
 
 let helper_function_declaration (name, tyres, tyargs) =
-  let tyargs =
-    List.fold_right (fun t tl -> Tcons(t, tl)) tyargs Tnil in
   let ef =
     AST.EF_runtime(coqstring_of_camlstring name,
                    signature_of_type tyargs tyres AST.cc_default) in

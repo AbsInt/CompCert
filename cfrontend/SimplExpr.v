@@ -201,7 +201,7 @@ Definition make_set (bf: bitfield) (id: ident) (l: expr) : statement :=
   | None => Sset id l
   | Some chunk =>
       let typtr := Tpointer (typeof l) noattr in
-      Sbuiltin (Some id) (EF_vload chunk) (Tcons typtr Tnil) ((Eaddrof l typtr):: nil)
+      Sbuiltin (Some id) (EF_vload chunk) (typtr :: nil) ((Eaddrof l typtr):: nil)
   end.
 
 (** Translation of a "valof" operation.
@@ -223,7 +223,7 @@ Definition make_assign (bf: bitfield) (l r: expr) : statement :=
   | Some chunk =>
       let ty := typeof l in
       let typtr := Tpointer ty noattr in
-      Sbuiltin None (EF_vstore chunk) (Tcons typtr (Tcons ty Tnil))
+      Sbuiltin None (EF_vstore chunk) (typtr :: ty :: nil)
                     (Eaddrof l typtr :: r :: nil)
   end.
 

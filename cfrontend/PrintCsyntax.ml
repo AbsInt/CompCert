@@ -109,7 +109,7 @@ let rec name_cdecl id ty =
       else Buffer.add_string b id;
       Buffer.add_char b '(';
       let rec add_args first = function
-      | Tnil ->
+      | [] ->
           if first then
             Buffer.add_string b
                (if cconv.cc_vararg <> None then "..." else "void")
@@ -117,7 +117,7 @@ let rec name_cdecl id ty =
             Buffer.add_string b ", ..."
           else
             ()
-      | Tcons(t1, tl) ->
+      | t1 :: tl ->
           if not first then Buffer.add_string b ", ";
           Buffer.add_string b (name_cdecl "" t1);
           add_args false tl in

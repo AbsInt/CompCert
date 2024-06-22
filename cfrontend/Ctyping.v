@@ -201,6 +201,16 @@ Fixpoint type_combine (ty1 ty2: type) : res type :=
       then OK (Tarray t sz1 (attr_combine a1 a2))
       else Error (msg "incompatible array types")
   | Tfunction args1 res1 cc1, Tfunction args2 res2 cc2 =>
+      let fix typelist_combine (tl1 tl2: list type) : res (list type) :=
+        match tl1, tl2 with
+        | nil, nil => OK nil
+        | t1 :: tl1, t2 :: tl2 =>
+            do t <- type_combine t1 t2;
+            do tl <- typelist_combine tl1 tl2;
+            OK (t :: tl)
+        | _, _ =>
+            Error (msg "incompatible function types")
+        end in
       do res <- type_combine res1 res2;
       do args <-
         (if cc1.(cc_unproto) then OK args2 else
@@ -218,17 +228,6 @@ Fixpoint type_combine (ty1 ty2: type) : res type :=
       else Error (msg "incompatible union types")
   | _, _ =>
       Error (msg "incompatible types")
-  end
-
-with typelist_combine (tl1 tl2: typelist) : res typelist :=
-  match tl1, tl2 with
-  | Tnil, Tnil => OK Tnil
-  | Tcons t1 tl1, Tcons t2 tl2 =>
-      do t <- type_combine t1 t2;
-      do tl <- typelist_combine tl1 tl2;
-      OK (Tcons t tl)
-  | _, _ =>
-      Error (msg "incompatible function types")
   end.
 
 Definition is_void (ty: type) : bool :=
@@ -314,16 +313,16 @@ Inductive wt_val : val -> type -> Prop :=
   | wt_val_void: forall v,
       wt_val v Tvoid.
 
-Inductive wt_arguments: exprlist -> typelist -> Prop :=
+Inductive wt_arguments: exprlist -> list type -> Prop :=
   | wt_arg_nil:
-      wt_arguments Enil Tnil
+      wt_arguments Enil nil
   | wt_arg_cons: forall a al ty tyl,
       wt_cast (typeof a) ty ->
       wt_arguments al tyl ->
-      wt_arguments (Econs a al) (Tcons ty tyl)
+      wt_arguments (Econs a al) (ty :: tyl)
   | wt_arg_extra: forall a al,  (**r tolerance for varargs *)
       strict = false ->
-      wt_arguments (Econs a al) Tnil.
+      wt_arguments (Econs a al) nil.
 
 Definition subtype (t1 t2: type) : Prop :=
   forall v, wt_val v t1 -> wt_val v t2.
@@ -399,7 +398,7 @@ Inductive wt_rvalue : expr -> Prop :=
       (* This typing rule is specialized to the builtin invocations generated
          by C2C, which are either __builtin_sel or builtins returning void. *)
          (ty = Tvoid /\ sig_res (ef_sig ef) = AST.Tvoid)
-      \/ (tyargs = Tcons type_bool (Tcons ty (Tcons ty Tnil))
+      \/ (tyargs = type_bool :: ty :: ty :: nil
           /\ let t := typ_of_type ty in
              let sg := mksignature (AST.Tint :: t :: t :: nil) t cc_default in
              ef = EF_builtin "__builtin_sel"%string sg) ->
@@ -586,12 +585,12 @@ Definition check_literal (v: val) (t: type) : res unit :=
   | _, _ => Error (msg "wrong literal")
   end.
 
-Fixpoint check_arguments (el: exprlist) (tyl: typelist) : res unit :=
+Fixpoint check_arguments (el: exprlist) (tyl: list type) : res unit :=
   match el, tyl with
-  | Enil, Tnil => OK tt
+  | Enil, nil => OK tt
   | Enil, _ => Error (msg "not enough arguments")
-  | _, Tnil => if strict then Error (msg "too many arguments") else OK tt
-  | Econs e1 el, Tcons ty1 tyl => do x <- check_cast (typeof e1) ty1; check_arguments el tyl
+  | _, nil => if strict then Error (msg "too many arguments") else OK tt
+  | Econs e1 el, ty1 :: tyl => do x <- check_cast (typeof e1) ty1; check_arguments el tyl
   end.
 
 Definition check_rval (e: expr) : res unit :=
@@ -751,7 +750,7 @@ Definition ecall (fn: expr) (args: exprlist) : res expr :=
       Error (msg "call: not a function")
   end.
 
-Definition ebuiltin (ef: external_function) (tyargs: typelist) (args: exprlist) (tyres: type) : res expr :=
+Definition ebuiltin (ef: external_function) (tyargs: list type) (args: exprlist) (tyres: type) : res expr :=
   do x1 <- check_rvals args;
   do x2 <- check_arguments args tyargs;
   if type_eq tyres Tvoid

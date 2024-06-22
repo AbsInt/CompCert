@@ -56,12 +56,12 @@ Definition make_cast (a: expr) (tto: type) : expr :=
 
 Definition Sdebug_temp (id: ident) (ty: type) :=
   Sbuiltin None (EF_debug 2%positive id (typ_of_type ty :: nil))
-                (Tcons (typeconv ty) Tnil)
+                (typeconv ty :: nil)
                 (Etempvar id ty :: nil).
 
 Definition Sdebug_var (id: ident) (ty: type) :=
   Sbuiltin None (EF_debug 5%positive id (AST.Tptr :: nil))
-                (Tcons (Tpointer ty noattr) Tnil)
+                (Tpointer ty noattr :: nil)
                 (Eaddrof (Evar id ty) (Tpointer ty noattr) :: nil).
 
 Definition Sset_debug (id: ident) (ty: type) (a: expr) :=

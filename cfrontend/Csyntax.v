@@ -54,7 +54,7 @@ Inductive expr : Type :=
   | Ecomma (r1 r2: expr) (ty: type)       (**r sequence expression [r1, r2] *)
   | Ecall (r1: expr) (rargs: exprlist) (ty: type)
                                              (**r function call [r1(rargs)] *)
-  | Ebuiltin (ef: external_function) (tyargs: typelist) (rargs: exprlist) (ty: type)
+  | Ebuiltin (ef: external_function) (tyargs: list type) (rargs: exprlist) (ty: type)
                                                  (**r builtin function call *)
   | Eloc (b: block) (ofs: ptrofs) (bf: bitfield) (ty: type)
                        (**r memory location, result of evaluating a l-value *)
@@ -109,7 +109,7 @@ Definition Eselection (r1 r2 r3: expr) (ty: type) :=
   let t := typ_of_type ty in
   let sg := mksignature (AST.Tint :: t :: t :: nil) t cc_default in
   Ebuiltin (EF_builtin "__builtin_sel"%string sg)
-           (Tcons type_bool (Tcons ty (Tcons ty Tnil)))
+           (type_bool :: ty :: ty :: nil)
            (Econs r1 (Econs r2 (Econs r3 Enil)))
            ty.
 

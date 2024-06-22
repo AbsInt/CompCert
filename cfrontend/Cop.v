@@ -1003,7 +1003,7 @@ Definition sem_cmp (c:comparison)
 (** ** Function applications *)
 
 Inductive classify_fun_cases : Type :=
-  | fun_case_f (targs: typelist) (tres: type) (cc: calling_convention) (**r (pointer to) function *)
+  | fun_case_f (targs: list type) (tres: type) (cc: calling_convention) (**r (pointer to) function *)
   | fun_default.
 
 Definition classify_fun (ty: type) :=
