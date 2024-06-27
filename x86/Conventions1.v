@@ -280,9 +280,9 @@ Fixpoint loc_arguments_win64
 Definition loc_arguments (s: signature) : list (rpair loc) :=
   if Archi.ptr64
   then if Archi.win64
-       then loc_arguments_win64 s.(sig_args) 0 0
-       else loc_arguments_elf64 s.(sig_args) 0 0 0
-  else loc_arguments_32 s.(sig_args) 0.
+       then loc_arguments_win64 (proj_sig_args s) 0 0
+       else loc_arguments_elf64 (proj_sig_args s) 0 0 0
+  else loc_arguments_32 (proj_sig_args s) 0.
 
 (** Argument locations are either caller-save registers or [Outgoing]
   stack slots at nonnegative offsets. *)

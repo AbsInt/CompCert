@@ -1061,6 +1061,25 @@ Definition typ_of_type (t: type) : AST.typ :=
   | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tptr
   end.
 
+Definition argtype_of_type (t: type) : AST.rettype :=
+  match t with
+  | Tvoid => AST.Tvoid
+  | Tint I32 _ _ => AST.Tint
+  | Tint I8 Signed _ => AST.Tint8signed
+  | Tint I8 Unsigned _ => AST.Tint8unsigned
+  | Tint I16 Signed _ => AST.Tint16signed
+  | Tint I16 Unsigned _ => AST.Tint16unsigned
+  | Tint IBool _ _ => AST.Tbool
+  | Tlong _ _ => AST.Tlong
+  | Tfloat F32 _ => AST.Tsingle
+  | Tfloat F64 _ => AST.Tfloat
+  | Tpointer _ _ => AST.Tptr
+  | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tptr
+  end.
+
+(** In CompCert C, array, function, struct and union types cannot
+    appear as function return types. *)
+
 Definition rettype_of_type (t: type) : AST.rettype :=
   match t with
   | Tvoid => AST.Tvoid
@@ -1077,11 +1096,8 @@ Definition rettype_of_type (t: type) : AST.rettype :=
   | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tvoid
   end.
 
-Definition typlist_of_typelist (tl: list type) : list AST.typ :=
-  List.map typ_of_type tl.
-
 Definition signature_of_type (args: list type) (res: type) (cc: calling_convention): signature :=
-  mksignature (typlist_of_typelist args) (rettype_of_type res) cc.
+  mksignature (List.map argtype_of_type args) (rettype_of_type res) cc.
 
 (** * Construction of the composite environment *)
 

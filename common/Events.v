@@ -26,6 +26,7 @@ Require Import Values.
 Require Import Memory.
 Require Import Globalenvs.
 Require Import Builtins.
+Local Open Scope asttyp_scope.
 
 (** Backwards compatibility for Hint Rewrite locality attributes. *)
 Set Warnings "-unsupported-attributes".
@@ -779,7 +780,7 @@ Qed.
 Lemma volatile_load_ok:
   forall chunk,
   extcall_properties (volatile_load_sem chunk)
-                     (mksignature (Tptr :: nil) (rettype_of_chunk chunk) cc_default).
+                     (Tptr ::: nil ---> rettype_of_chunk chunk).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -943,7 +944,7 @@ Qed.
 Lemma volatile_store_ok:
   forall chunk,
   extcall_properties (volatile_store_sem chunk)
-                     (mksignature (Tptr :: type_of_chunk chunk :: nil) Tvoid cc_default).
+                     (Tptr ::: rettype_of_chunk chunk ::: nil ---> Tvoid).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -988,7 +989,7 @@ Inductive extcall_malloc_sem (ge: Senv.t):
 
 Lemma extcall_malloc_ok:
   extcall_properties extcall_malloc_sem
-                     (mksignature (Tptr :: nil) Tptr cc_default).
+                     (Tptr ::: nil ---> Tptr).
 Proof.
   assert (UNCHANGED:
     forall (P: block -> Z -> Prop) m lo hi v m' b m'',
@@ -1075,7 +1076,7 @@ Inductive extcall_free_sem (ge: Senv.t):
 
 Lemma extcall_free_ok:
   extcall_properties extcall_free_sem
-                     (mksignature (Tptr :: nil) Tvoid cc_default).
+                     (Tptr ::: nil ---> Tvoid).
 Proof.
   constructor; intros.
 (* well typed *)
@@ -1183,7 +1184,7 @@ Inductive extcall_memcpy_sem (sz al: Z) (ge: Senv.t):
 Lemma extcall_memcpy_ok:
   forall sz al,
   extcall_properties (extcall_memcpy_sem sz al)
-                     (mksignature (Tptr :: Tptr :: nil) Tvoid cc_default).
+                     (Tptr ::: Tptr ::: nil ---> Tvoid).
 Proof.
   intros. constructor.
 - (* return type *)
@@ -1295,7 +1296,7 @@ Inductive extcall_annot_sem (text: string) (targs: list typ) (ge: Senv.t):
 Lemma extcall_annot_ok:
   forall text targs,
   extcall_properties (extcall_annot_sem text targs)
-                     (mksignature targs Tvoid cc_default).
+                     (List.map Tret targs ---> Tvoid).
 Proof.
   intros; constructor; intros.
 (* well typed *)
@@ -1340,7 +1341,7 @@ Inductive extcall_annot_val_sem (text: string) (targ: typ) (ge: Senv.t):
 Lemma extcall_annot_val_ok:
   forall text targ,
   extcall_properties (extcall_annot_val_sem text targ)
-                     (mksignature (targ :: nil) targ cc_default).
+                     (targ ::: nil ---> targ).
 Proof.
   intros; constructor; intros.
 (* well typed *)

@@ -871,7 +871,7 @@ let rec convertExpr env e =
       let targs2 = convertTypAnnotArgs env args2 in
       Ebuiltin(
          AST.EF_debug(P.of_int64 kind, intern_string text,
-                 typlist_of_typelist targs2),
+                 List.map typ_of_type targs2),
         targs2, convertExprList env args2, convertTyp env e.etyp)
 
   | C.ECall({edesc = C.EVar {name = "__builtin_annot"}}, args) ->
@@ -879,7 +879,7 @@ let rec convertExpr env e =
       | {edesc = C.EConst(CStr txt)} :: args1 ->
           let targs1 = convertTypAnnotArgs env args1 in
           Ebuiltin(
-             AST.EF_annot(P.of_int 1,coqstring_of_camlstring txt, typlist_of_typelist targs1),
+             AST.EF_annot(P.of_int 1,coqstring_of_camlstring txt, List.map typ_of_type targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "argument 1 of '__builtin_annot' must be a string literal";
@@ -908,7 +908,7 @@ let rec convertExpr env e =
         let targs1 = convertTypAnnotArgs env args1 in
         AisAnnot.validate_ais_annot env !currentLocation txt args1;
           Ebuiltin(
-             AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), typlist_of_typelist targs1),
+             AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), List.map typ_of_type targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "argument 1 of '__builtin_ais_annot' must be a string literal";

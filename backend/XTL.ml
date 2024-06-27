@@ -175,7 +175,7 @@ let type_instr = function
       ()
   | Xbuiltin(ef, args, res) ->
       let sg = ef_sig ef in
-      type_builtin_args args sg.sig_args;
+      type_builtin_args args (proj_sig_args sg);
       type_builtin_res res (proj_sig_res sg)
   | Xbranch s ->
       ()

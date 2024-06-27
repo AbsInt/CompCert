@@ -18,6 +18,7 @@
 
 Require Import String Coqlib.
 Require Import AST Integers Floats Values Memdata.
+Local Open Scope asttyp_scope.
 
 (** This module provides definitions and mechanisms to associate semantics
   with names of built-in functions.
@@ -419,34 +420,34 @@ Definition standard_builtin_table : list (string * standard_builtin) :=
 Definition standard_builtin_sig (b: standard_builtin) : signature :=
   match b with
   | BI_select t =>
-      mksignature (Tint :: t :: t :: nil) t cc_default
+      Tint ::: t ::: t ::: nil ---> t
   | BI_fabs | BI_fsqrt =>
-      mksignature (Tfloat :: nil) Tfloat cc_default
+      Tfloat ::: nil ---> Tfloat
   | BI_fabsf =>
-      mksignature (Tsingle :: nil) Tsingle cc_default
+      Tsingle ::: nil ---> Tsingle
   | BI_negl =>
-      mksignature (Tlong :: nil) Tlong cc_default
+      Tlong ::: nil ---> Tlong
   | BI_addl | BI_subl | BI_i64_umulh| BI_i64_smulh 
   | BI_i64_sdiv | BI_i64_udiv | BI_i64_smod | BI_i64_umod =>
-      mksignature (Tlong :: Tlong :: nil) Tlong cc_default
+      Tlong ::: Tlong ::: nil ---> Tlong
   | BI_mull =>
-      mksignature (Tint :: Tint :: nil) Tlong cc_default
+      Tint ::: Tint ::: nil ---> Tlong
   | BI_i32_bswap =>
-      mksignature (Tint :: nil) Tint cc_default
+      Tint ::: nil ---> Tint
   | BI_i64_bswap =>
-      mksignature (Tlong :: nil) Tlong cc_default
+      Tlong ::: nil ---> Tlong
   | BI_i16_bswap =>
-      mksignature (Tint :: nil) Tint cc_default
+      Tint ::: nil ---> Tint
   | BI_unreachable =>
       mksignature nil Tvoid cc_default
   | BI_i64_shl  | BI_i64_shr | BI_i64_sar =>
-      mksignature (Tlong :: Tint :: nil) Tlong cc_default
+      Tlong ::: Tint ::: nil ---> Tlong
   | BI_i64_dtos | BI_i64_dtou =>
-      mksignature (Tfloat :: nil) Tlong cc_default
+      Tfloat ::: nil ---> Tlong
   | BI_i64_stod | BI_i64_utod =>
-      mksignature (Tlong :: nil) Tfloat cc_default
+      Tlong ::: nil ---> Tfloat
   | BI_i64_stof | BI_i64_utof =>
-      mksignature (Tlong :: nil) Tsingle cc_default
+      Tlong ::: nil ---> Tsingle
   end.
 
 Program Definition standard_builtin_sem (b: standard_builtin) : builtin_sem (sig_res (standard_builtin_sig b)) :=

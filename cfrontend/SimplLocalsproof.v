@@ -1138,7 +1138,7 @@ Local Opaque Conventions1.parameter_needs_normalization.
     eauto.
   intros (tle & tm' & U & V & X & Y & Z).
   exists tle, tm'; split; [|auto].
-  destruct (Conventions1.parameter_needs_normalization (rettype_of_type ty)); [|assumption].
+  destruct (Conventions1.parameter_needs_normalization (argtype_of_type ty)); [|assumption].
   assert (A: tle!id = Some v').
   { erewrite bind_parameter_temps_inv by eauto. apply PTree.gss. }
   eapply star_left. constructor.

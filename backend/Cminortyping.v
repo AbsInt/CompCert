@@ -138,15 +138,15 @@ Fixpoint type_stmt (tret: rettype) (e: S.typenv) (s: stmt) : res S.typenv :=
       do e1 <- type_expr e a1 Tptr; type_expr e1 a2 (type_of_chunk chunk)
   | Scall optid sg fn args =>
       do e1 <- type_expr e fn Tptr;
-      do e2 <- type_exprlist e1 args sg.(sig_args);
+      do e2 <- type_exprlist e1 args (proj_sig_args sg);
       opt_set e2 optid (proj_sig_res sg)
   | Stailcall sg fn args =>
       assertion (rettype_eq sg.(sig_res) tret);
       do e1 <- type_expr e fn Tptr;
-      type_exprlist e1 args sg.(sig_args)
+      type_exprlist e1 args (proj_sig_args sg)
   | Sbuiltin optid ef args =>
       let sg := ef_sig ef in
-      do e1 <- type_exprlist e args sg.(sig_args);
+      do e1 <- type_exprlist e args (proj_sig_args sg);
       opt_set e1 optid (proj_sig_res sg)
   | Sseq s1 s2 =>
       do e1 <- type_stmt tret e s1; type_stmt tret e1 s2
@@ -181,7 +181,7 @@ Fixpoint type_stmt (tret: rettype) (e: S.typenv) (s: stmt) : res S.typenv :=
 Definition typenv := ident -> typ.
 
 Definition type_function (f: function) : res typenv :=
-  do e1 <- S.set_list S.initial f.(fn_params) f.(fn_sig).(sig_args);
+  do e1 <- S.set_list S.initial f.(fn_params) (proj_sig_args f.(fn_sig));
   do e2 <- type_stmt f.(fn_sig).(sig_res) e1 f.(fn_body);
   S.solve e2.
 
@@ -225,15 +225,15 @@ Inductive wt_stmt: stmt -> Prop :=
       wt_expr a1 Tptr -> wt_expr a2 (type_of_chunk chunk) ->
       wt_stmt (Sstore chunk a1 a2)
   | wt_Scall: forall optid sg a1 al,
-      wt_expr a1 Tptr -> list_forall2 wt_expr al sg.(sig_args) ->
+      wt_expr a1 Tptr -> list_forall2 wt_expr al (proj_sig_args sg) ->
       wt_opt_assign optid sg.(sig_res) ->
       wt_stmt (Scall optid sg a1 al)
   | wt_Stailcall: forall sg a1 al,
-      wt_expr a1 Tptr -> list_forall2 wt_expr al sg.(sig_args) ->
+      wt_expr a1 Tptr -> list_forall2 wt_expr al (proj_sig_args sg) ->
       sg.(sig_res) = tret ->
       wt_stmt (Stailcall sg a1 al)
   | wt_Sbuiltin: forall optid ef al,
-      list_forall2 wt_expr al (ef_sig ef).(sig_args) ->
+      list_forall2 wt_expr al (proj_sig_args (ef_sig ef)) ->
       wt_opt_assign optid (ef_sig ef).(sig_res) ->
       wt_stmt (Sbuiltin optid ef al)
   | wt_Sseq: forall s1 s2,
@@ -269,7 +269,7 @@ End SPEC.
 Inductive wt_function (env: typenv) (f: function) : Prop :=
   wt_function_intro:
     type_function f = OK env ->     (**r to ensure uniqueness of [env] *)
-    List.map env f.(fn_params) = f.(fn_sig).(sig_args) ->
+    List.map env f.(fn_params) = proj_sig_args f.(fn_sig) ->
     wt_stmt env f.(fn_sig).(sig_res) f.(fn_body) ->
     wt_function env f.
 
@@ -451,7 +451,7 @@ Inductive wt_state: state -> Prop :=
       wt_state (State f s k sp e m)
   | wt_call_state: forall f args k m
         (WT_FD: wt_fundef f)
-        (WT_ARGS: Val.has_type_list args (funsig f).(sig_args))
+        (WT_ARGS: Val.has_type_list args (proj_sig_args (funsig f)))
         (WT_CONT: wt_cont_call k (funsig f).(sig_res)),
       wt_state (Callstate f args k m)
   | wt_return_state: forall v k m tret

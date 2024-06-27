@@ -1387,7 +1387,7 @@ Qed.
 Lemma typlist_of_arglist_eq:
   forall al tyl vl,
   Clight.eval_exprlist ge e le m al tyl vl ->
-  typlist_of_arglist al tyl = typlist_of_typelist tyl.
+  typlist_of_arglist al tyl = List.map argtype_of_type tyl.
 Proof.
   induction 1; simpl.
   auto.

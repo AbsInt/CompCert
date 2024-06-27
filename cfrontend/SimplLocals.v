@@ -167,7 +167,7 @@ Fixpoint store_params (cenv: compilenv) (params: list (ident * type))
   | nil => s
   | (id, ty) :: params' =>
       if VSet.mem id cenv then
-        if Conventions1.parameter_needs_normalization (rettype_of_type ty)
+        if Conventions1.parameter_needs_normalization (argtype_of_type ty)
         then Ssequence (Sset id (make_cast (Etempvar id ty) ty))
                        (store_params cenv params' s)
         else store_params cenv params' s

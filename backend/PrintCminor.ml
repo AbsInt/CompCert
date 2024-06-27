@@ -224,7 +224,7 @@ let name_of_type = function
 
 let print_sig p sg =
   List.iter
-    (fun t -> fprintf p "%s ->@ " (name_of_type t))
+    (fun t -> fprintf p "%s ->@ " (name_of_rettype t))
     sg.sig_args;
   fprintf p "%s" (name_of_rettype sg.sig_res)
 

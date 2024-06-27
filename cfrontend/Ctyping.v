@@ -400,7 +400,7 @@ Inductive wt_rvalue : expr -> Prop :=
          (ty = Tvoid /\ sig_res (ef_sig ef) = AST.Tvoid)
       \/ (tyargs = type_bool :: ty :: ty :: nil
           /\ let t := typ_of_type ty in
-             let sg := mksignature (AST.Tint :: t :: t :: nil) t cc_default in
+             let sg := (AST.Tint ::: t ::: t ::: nil ---> t)%asttyp in
              ef = EF_builtin "__builtin_sel"%string sg) ->
       wt_rvalue (Ebuiltin ef tyargs rargs ty)
   | wt_Eparen: forall r tycast ty,
@@ -1831,7 +1831,7 @@ Proof.
 - (* builtin *) subst. destruct H7 as [(A & B) | (A & B)].
 + subst ty. auto with ty.
 + simpl in B. set (T := typ_of_type ty) in *. 
-  set (sg := mksignature (AST.Tint :: T :: T :: nil) T cc_default) in *.
+  set (sg := (AST.Tint ::: T ::: T ::: nil ---> T)%asttyp) in *.
   assert (LK: lookup_builtin_function "__builtin_sel"%string sg = Some (BI_standard (BI_select T))).
   { unfold sg, T; destruct ty as   [ | ? ? ? | ? | [] ? | ? ? | ? ? ? | ? ? ? | ? ? | ? ? ];
     simpl; unfold Tptr; destruct Archi.ptr64; reflexivity. }

@@ -1081,7 +1081,7 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
                          (map R (regs_of_rpair res')));
       assertion (no_caller_saves e2);
       do e3 <- add_equation_ros ros ros' e2;
-      do e4 <- add_equations_args args (sig_args sg) args' e3;
+      do e4 <- add_equations_args args (proj_sig_args sg) args' e3;
       track_moves env mv1 e4
   | BStailcall sg ros args mv1 ros' =>
       let args' := loc_arguments sg in
@@ -1089,7 +1089,7 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
       assertion (rettype_eq sg.(sig_res) f.(RTL.fn_sig).(sig_res));
       assertion (ros_compatible_tailcall ros');
       do e1 <- add_equation_ros ros ros' empty_eqs;
-      do e2 <- add_equations_args args (sig_args sg) args' e1;
+      do e2 <- add_equations_args args (proj_sig_args sg) args' e1;
       track_moves env mv1 e2
   | BSbuiltin ef args res mv1 args' res' mv2 s =>
       do e1 <- track_moves env mv2 e;

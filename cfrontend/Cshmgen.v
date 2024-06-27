@@ -600,14 +600,14 @@ Fixpoint transl_arglist (ce: composite_env) (al: list Clight.expr) (tyl: list ty
 (** Compute the argument signature that corresponds to a function application. *)
 
 Fixpoint typlist_of_arglist (al: list Clight.expr) (tyl: list type)
-                            {struct al}: list AST.typ :=
+                            {struct al}: list AST.rettype :=
   match al, tyl with
   | nil, _ => nil
-  | a1 :: a2, cons ty1 ty2 =>
-      typ_of_type ty1 :: typlist_of_arglist a2 ty2
+  | a1 :: a2, ty1 :: ty2 =>
+      argtype_of_type ty1 :: typlist_of_arglist a2 ty2
   | a1 :: a2, nil =>
       (* Tolerance for calls to K&R or variadic functions *)
-      typ_of_type (default_argument_conversion (typeof a1)) :: typlist_of_arglist a2 nil
+      argtype_of_type (default_argument_conversion (typeof a1)) :: typlist_of_arglist a2 nil
   end.
 
 (** Translate a function call.
@@ -749,7 +749,7 @@ Definition transl_var (ce: composite_env) (v: ident * type) :=
   do sz <- sizeof ce (snd v); OK (fst v, sz).
 
 Definition signature_of_function (f: Clight.function) :=
-  {| sig_args := map typ_of_type (map snd (Clight.fn_params f));
+  {| sig_args := map argtype_of_type (map snd (Clight.fn_params f));
      sig_res  := rettype_of_type (Clight.fn_return f);
      sig_cc   := Clight.fn_callconv f |}.
 

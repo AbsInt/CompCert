@@ -1936,7 +1936,7 @@ Inductive match_states: RTL.state -> LTL.state -> Prop :=
         (ARGS: Val.lessdef_list args (map (fun p => Locmap.getpair p ls) (loc_arguments (funsig tf))))
         (AG: agree_callee_save (parent_locset ts) ls)
         (MEM: Mem.extends m m')
-        (WTARGS: Val.has_type_list args (sig_args (funsig tf))),
+        (WTARGS: Val.has_type_list args (proj_sig_args (funsig tf))),
       match_states (RTL.Callstate s f args m)
                    (LTL.Callstate ts tf ls m')
   | match_states_return:

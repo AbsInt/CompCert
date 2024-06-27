@@ -269,8 +269,8 @@ let re_asm_param_2 = Str.regexp "%\\([QR]?\\)\\([0-9]+\\)"
 let print_inline_asm print_preg oc txt sg args res =
   let (operands, ty_operands) =
     match sg.sig_res with
-    | Tvoid -> (args, sg.sig_args)
-    | tres -> (builtin_arg_of_res res :: args, proj_rettype tres :: sg.sig_args) in
+    | Tvoid -> (args, proj_sig_args sg)
+    | tres -> (builtin_arg_of_res res :: args, proj_rettype tres :: proj_sig_args sg) in
   let print_fragment = function
   | Str.Text s ->
       output_string oc s

@@ -89,8 +89,8 @@ Fixpoint subtype_list (tyl1 tyl2: list typ) : bool :=
   | _, _ => false
   end.
 
-(** To describe the values returned by functions, we use the more precise
-    types below. *)
+(** To describe function arguments and function return values,
+    we use the more precise types below. *)
 
 Inductive rettype : Type :=
   | Tret (t: typ)                       (**r like type [t] *)
@@ -139,21 +139,29 @@ Defined.
 Global Opaque calling_convention_eq.
 
 Record signature : Type := mksignature {
-  sig_args: list typ;
+  sig_args: list rettype;
   sig_res: rettype;
   sig_cc: calling_convention
 }.
 
+Definition proj_sig_args (s: signature) : list typ := List.map proj_rettype s.(sig_args).
 Definition proj_sig_res (s: signature) : typ := proj_rettype s.(sig_res).
 
 Definition signature_eq: forall (s1 s2: signature), {s1=s2} + {s1<>s2}.
 Proof.
-  generalize rettype_eq, list_typ_eq, calling_convention_eq; decide equality.
+  generalize rettype_eq, list_eq_dec, calling_convention_eq; decide equality.
 Defined.
 Global Opaque signature_eq.
 
-Definition signature_main :=
-  {| sig_args := nil; sig_res := Tint; sig_cc := cc_default |}.
+Declare Scope asttyp_scope.
+Infix ":::" := (@cons rettype)
+  (at level 60, right associativity) : asttyp_scope.
+Notation "x ---> y" := {| sig_args := x; sig_res := y; sig_cc := cc_default |} 
+  (at level 70, right associativity) : asttyp_scope.
+Delimit Scope asttyp_scope with asttyp.
+Local Open Scope asttyp_scope.
+
+Definition signature_main :=  nil ---> Tint.
 
 (** Memory accesses (load and store instructions) are annotated by
   a ``memory chunk'' indicating the type, size and signedness of the
@@ -521,15 +529,15 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_external name sg => sg
   | EF_builtin name sg => sg
   | EF_runtime name sg => sg
-  | EF_vload chunk => mksignature (Tptr :: nil) (rettype_of_chunk chunk) cc_default
-  | EF_vstore chunk => mksignature (Tptr :: type_of_chunk chunk :: nil) Tvoid cc_default
-  | EF_malloc => mksignature (Tptr :: nil) Tptr cc_default
-  | EF_free => mksignature (Tptr :: nil) Tvoid cc_default
-  | EF_memcpy sz al => mksignature (Tptr :: Tptr :: nil) Tvoid cc_default
-  | EF_annot kind text targs => mksignature targs Tvoid cc_default
-  | EF_annot_val kind text targ => mksignature (targ :: nil) targ cc_default
+  | EF_vload chunk => Tptr ::: nil ---> rettype_of_chunk chunk
+  | EF_vstore chunk => Tptr ::: rettype_of_chunk chunk ::: nil ---> Tvoid
+  | EF_malloc => Tptr ::: nil ---> Tptr
+  | EF_free => Tptr ::: nil ---> Tvoid
+  | EF_memcpy sz al => Tptr ::: Tptr ::: nil ---> Tvoid
+  | EF_annot kind text targs => List.map Tret targs ---> Tvoid
+  | EF_annot_val kind text targ => targ ::: nil ---> targ
   | EF_inline_asm text sg clob => sg
-  | EF_debug kind text targs => mksignature targs Tvoid cc_default
+  | EF_debug kind text targs => List.map Tret targs ---> Tvoid
   end.
 
 (** Whether an external function should be inlined by the compiler. *)
@@ -563,7 +571,7 @@ Definition ef_reloads (ef: external_function) : bool :=
 
 Definition external_function_eq: forall (ef1 ef2: external_function), {ef1=ef2} + {ef1<>ef2}.
 Proof.
-  generalize ident_eq string_dec signature_eq chunk_eq typ_eq list_eq_dec zeq Int.eq_dec; intros.
+  generalize ident_eq string_dec signature_eq chunk_eq typ_eq rettype_eq list_eq_dec zeq Int.eq_dec; intros.
   decide equality.
 Defined.
 Global Opaque external_function_eq.

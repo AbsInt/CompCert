@@ -118,14 +118,14 @@ Inductive wt_instr : instruction -> Prop :=
   | wt_Icall:
       forall sig ros args res s,
       match ros with inl r => env r = Tptr | inr s => True end ->
-      map env args = sig.(sig_args) ->
+      map env args = proj_sig_args sig ->
       env res = proj_sig_res sig ->
       valid_successor s ->
       wt_instr (Icall sig ros args res s)
   | wt_Itailcall:
       forall sig ros args,
       match ros with inl r => env r = Tptr | inr s => True end ->
-      map env args = sig.(sig_args) ->
+      map env args = proj_sig_args sig ->
       sig.(sig_res) = funct.(fn_sig).(sig_res) ->
       tailcall_possible sig ->
       wt_instr (Itailcall sig ros args)
@@ -133,7 +133,7 @@ Inductive wt_instr : instruction -> Prop :=
       forall ef args res s,
       match ef with
       | EF_annot _ _ _ | EF_debug _ _ _ => True
-      | _ => map type_of_builtin_arg args = (ef_sig ef).(sig_args)
+      | _ => map type_of_builtin_arg args = proj_sig_args (ef_sig ef)
       end ->
       type_of_builtin_res res = proj_sig_res (ef_sig ef) ->
       valid_successor s ->
@@ -170,7 +170,7 @@ End WT_INSTR.
 Record wt_function (f: function) (env: regenv): Prop :=
   mk_wt_function {
     wt_params:
-      map env f.(fn_params) = f.(fn_sig).(sig_args);
+      map env f.(fn_params) = proj_sig_args f.(fn_sig);
     wt_norepet:
       list_norepet f.(fn_params);
     wt_instrs:
@@ -294,11 +294,11 @@ Definition type_instr (e: S.typenv) (i: instruction) : res S.typenv :=
   | Icall sig ros args res s =>
       do x <- check_successor s;
       do e1 <- type_ros e ros;
-      do e2 <- S.set_list e1 args sig.(sig_args);
+      do e2 <- S.set_list e1 args (proj_sig_args sig);
       S.set e2 res (proj_sig_res sig)
   | Itailcall sig ros args =>
       do e1 <- type_ros e ros;
-      do e2 <- S.set_list e1 args sig.(sig_args);
+      do e2 <- S.set_list e1 args (proj_sig_args sig);
       if rettype_eq sig.(sig_res) f.(fn_sig).(sig_res) then
         if tailcall_is_possible sig
         then OK e2
@@ -310,7 +310,7 @@ Definition type_instr (e: S.typenv) (i: instruction) : res S.typenv :=
       do e1 <-
         match ef with
         | EF_annot _ _ _ | EF_debug _ _ _ => OK e
-        | _ => type_builtin_args e args sig.(sig_args)
+        | _ => type_builtin_args e args (proj_sig_args sig)
         end;
       type_builtin_res e1 res (proj_sig_res sig)
  | Icond cond args s1 s2 =>
@@ -352,7 +352,7 @@ Definition check_params_norepet (params: list reg): res unit :=
 
 Definition type_function : res regenv :=
   do e1 <- type_code S.initial;
-  do e2 <- S.set_list e1 f.(fn_params) f.(fn_sig).(sig_args);
+  do e2 <- S.set_list e1 f.(fn_params) (proj_sig_args f.(fn_sig));
   do te <- S.solve e2;
   do x1 <- check_params_norepet f.(fn_params);
   do x2 <- check_successor f.(fn_entrypoint);
@@ -760,7 +760,7 @@ Proof.
   intros. destruct H.
   destruct (type_code_complete te S.initial) as (e1 & A & B).
   auto. apply S.satisf_initial.
-  destruct (S.set_list_complete te f.(fn_params) f.(fn_sig).(sig_args) e1) as (e2 & C & D); auto.
+  destruct (S.set_list_complete te f.(fn_params) (proj_sig_args f.(fn_sig)) e1) as (e2 & C & D); auto.
   destruct (S.solve_complete te e2) as (te' & E); auto.
   exists te'; unfold type_function.
   rewrite A; simpl. rewrite C; simpl. rewrite E; simpl.
@@ -896,7 +896,7 @@ Inductive wt_state: state -> Prop :=
       forall s f args m,
       wt_stackframes s (funsig f) ->
       wt_fundef f ->
-      Val.has_type_list args (sig_args (funsig f)) ->
+      Val.has_type_list args (proj_sig_args (funsig f)) ->
       wt_state (Callstate s f args m)
   | wt_state_return:
       forall s v m sg,

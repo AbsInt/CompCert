@@ -51,7 +51,7 @@ let set_current_function f =
   current_function := f; next_label := None; current_code := []
 
 let get_current_function_args () =
-  (!current_function).fn_sig.sig_args
+  proj_sig_args (!current_function).fn_sig
 
 let is_current_function_variadic () =
   (!current_function).fn_sig.sig_cc.cc_vararg <> None
