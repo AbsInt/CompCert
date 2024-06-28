@@ -1163,33 +1163,34 @@ Proof.
   { eapply tr_function_linkorder; eauto. }
   inversion TR; subst.
   exploit Mem.alloc_parallel_inject. eauto. eauto. apply Z.le_refl.
-    instantiate (1 := fn_stacksize f'). inv H1. extlia.
+    instantiate (1 := fn_stacksize f'). inv H2. extlia.
   intros [F' [m1' [sp' [A [B [C [D E]]]]]]].
   left; econstructor; split.
   eapply plus_one. eapply exec_function_internal; eauto.
-  rewrite H6. econstructor.
+  rewrite H5; eauto using Val.has_argtype_list_inject.
+  rewrite H7. econstructor.
   instantiate (1 := F'). apply match_stacks_inside_base.
   assert (SP: sp' = Mem.nextblock m'0) by (eapply Mem.alloc_result; eauto).
   rewrite <- SP in MS0.
   eapply match_stacks_invariant; eauto.
     intros. destruct (eq_block b1 stk).
-    subst b1. rewrite D in H8; inv H8. eelim Plt_strict; eauto.
-    rewrite E in H8; auto.
-    intros. exploit Mem.perm_alloc_inv. eexact H. eauto.
+    subst b1. rewrite D in H9; inv H9. eelim Plt_strict; eauto.
+    rewrite E in H9; auto.
+    intros. exploit Mem.perm_alloc_inv. eexact H0. eauto.
     destruct (eq_block b1 stk); intros; auto.
-    subst b1. rewrite D in H8; inv H8. eelim Plt_strict; eauto.
+    subst b1. rewrite D in H9; inv H9. eelim Plt_strict; eauto.
     intros. eapply Mem.perm_alloc_1; eauto.
     intros. exploit Mem.perm_alloc_inv. eexact A. eauto.
     rewrite dec_eq_false; auto with ordered_type.
   auto. auto. auto. eauto. auto.
-  rewrite H5. apply agree_regs_init_regs. eauto. auto. inv H1; auto. congruence. auto.
+  rewrite H6. apply agree_regs_init_regs. eauto. auto. inv H2; auto. congruence. auto.
   eapply Mem.valid_new_block; eauto.
   red; intros. split.
-  eapply Mem.perm_alloc_2; eauto. inv H1; extlia.
-  intros; red; intros. exploit Mem.perm_alloc_inv. eexact H. eauto.
+  eapply Mem.perm_alloc_2; eauto. inv H2; extlia.
+  intros; red; intros. exploit Mem.perm_alloc_inv. eexact H0. eauto.
   destruct (eq_block b stk); intros.
-  subst. rewrite D in H9; inv H9. inv H1; extlia.
-  rewrite E in H9; auto. eelim Mem.fresh_block_alloc. eexact A. eapply Mem.mi_mappedblocks; eauto.
+  subst. rewrite D in H10; inv H10. inv H2; extlia.
+  rewrite E in H10; auto. eelim Mem.fresh_block_alloc. eexact A. eapply Mem.mi_mappedblocks; eauto.
   auto.
   intros. exploit Mem.perm_alloc_inv; eauto. rewrite dec_eq_true. lia.
 
@@ -1226,7 +1227,7 @@ Proof.
   eauto. auto.
   apply agree_regs_incr with F; auto.
   auto. auto. auto.
-  rewrite H2. eapply range_private_alloc_left; eauto.
+  rewrite H3. eapply range_private_alloc_left; eauto.
   auto. auto.
 
 - (* external function *)

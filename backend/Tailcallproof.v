@@ -532,14 +532,19 @@ Proof.
     instantiate (1 := 0). lia.
     instantiate (1 := fn_stacksize f). lia.
   intros [m'1 [ALLOC EXT]].
-  assert (fn_stacksize (transf_function f) = fn_stacksize f /\
-          fn_entrypoint (transf_function f) = fn_entrypoint f /\
-          fn_params (transf_function f) = fn_params f).
+  assert (EQ: fn_stacksize (transf_function f) = fn_stacksize f /\
+              fn_entrypoint (transf_function f) = fn_entrypoint f /\
+              fn_params (transf_function f) = fn_params f /\
+              fn_sig (transf_function f) = fn_sig f).
+  {
     unfold transf_function. destruct (zeq (fn_stacksize f) 0 && option_eq zeq (cc_vararg (sig_cc (fn_sig f))) None); auto.
-  destruct H0 as [EQ1 [EQ2 EQ3]].
+  }
+  destruct EQ as (EQ1 & EQ2 & EQ3 & EQ4).
   left. econstructor; split.
-  simpl. eapply exec_function_internal; eauto. rewrite EQ1; eauto.
-  rewrite EQ2. rewrite EQ3. constructor; auto.
+  simpl. eapply exec_function_internal; eauto.
+  rewrite EQ4; eauto using Val.has_argtype_list_lessdef.
+  rewrite EQ1; eauto.
+  rewrite EQ2, EQ3. constructor; auto.
   apply regs_lessdef_init_regs. auto.
 
 - (* external call *)

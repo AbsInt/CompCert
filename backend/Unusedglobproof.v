@@ -1019,10 +1019,10 @@ Proof.
   { rewrite STK, TSTK.
     apply match_stacks_incr with j; auto.
     intros. destruct (eq_block b1 stk).
-    subst b1. rewrite F in H1; inv H1. split; apply Ple_refl.
-    rewrite G in H1 by auto. congruence. }
+    subst b1. rewrite F in H2; inv H2. split; apply Ple_refl.
+    rewrite G in H2 by auto. congruence. }
   econstructor; split.
-  eapply exec_function_internal; eauto.
+  eapply exec_function_internal; eauto using Val.has_argtype_list_inject.
   eapply match_states_regular with (j := j'); eauto.
   apply init_regs_inject; auto. apply val_inject_list_incr with j; auto.
 

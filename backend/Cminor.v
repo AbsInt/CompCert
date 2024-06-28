@@ -534,6 +534,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f s' k' sp e m)
 
   | step_internal_function: forall f vargs k m m' sp e,
+      Val.has_argtype_list vargs f.(fn_sig).(sig_args) ->
       Mem.alloc m 0 f.(fn_stackspace) = (m', sp) ->
       set_locals f.(fn_vars) (set_params vargs f.(fn_params)) = e ->
       step (Callstate (Internal f) vargs k m)
@@ -721,6 +722,7 @@ Inductive eval_funcall:
         mem -> val -> Prop :=
   | eval_funcall_internal:
       forall m f vargs m1 sp e t e2 m2 out vres m3,
+      list_forall2 Val.has_argtype vargs f.(fn_sig).(sig_args) ->
       Mem.alloc m 0 f.(fn_stackspace) = (m1, sp) ->
       set_locals f.(fn_vars) (set_params vargs f.(fn_params)) = e ->
       exec_stmt f (Vptr sp Ptrofs.zero) e m1 f.(fn_body) t e2 m2 out ->
@@ -846,6 +848,7 @@ CoInductive evalinf_funcall:
         mem -> fundef -> list val -> traceinf -> Prop :=
   | evalinf_funcall_internal:
       forall m f vargs m1 sp e t,
+      list_forall2 Val.has_argtype vargs f.(fn_sig).(sig_args) ->
       Mem.alloc m 0 f.(fn_stackspace) = (m1, sp) ->
       set_locals f.(fn_vars) (set_params vargs f.(fn_params)) = e ->
       execinf_stmt f (Vptr sp Ptrofs.zero) e m1 f.(fn_body) t ->
@@ -997,11 +1000,11 @@ Proof.
   apply eval_funcall_exec_stmt_ind2; intros.
 
 (* funcall internal *)
-  destruct (H2 k) as [S [A B]].
+  destruct (H3 k) as [S [A B]].
   assert (call_cont k = k) by (apply call_cont_is_call_cont; auto).
   eapply star_left. econstructor; eauto.
   eapply star_trans. eexact A.
-  inversion B; clear B; subst out; simpl in H3; simpl; try contradiction.
+  inversion B; clear B; subst out; simpl in H4; simpl; try contradiction.
   (* Out normal *)
   subst vres. apply star_one. apply step_skip_call; auto.
   (* Out_return None *)
@@ -1012,7 +1015,7 @@ Proof.
   replace k with (call_cont k') by congruence.
   apply star_one. eapply step_return_1; eauto.
   (* Out_tailcall_return *)
-  subst vres. red in H4. subst m3. rewrite H6. apply star_refl.
+  subst vres. red in H5. subst m3. rewrite H7. apply star_refl.
 
   reflexivity. traceEq.
 

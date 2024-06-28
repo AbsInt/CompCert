@@ -558,7 +558,7 @@ Opaque builtin_strength_reduction.
   intros [m2' [A B]].
   simpl. unfold transf_function.
   left; exists O; econstructor; split.
-  eapply exec_function_internal; simpl; eauto.
+  eapply exec_function_internal; simpl; eauto using Val.has_argtype_list_lessdef.
   simpl. econstructor; eauto.
   constructor.
   apply init_regs_lessdef; auto.

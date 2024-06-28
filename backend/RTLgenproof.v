@@ -1534,7 +1534,7 @@ Proof.
     eapply add_vars_wf; eauto. eapply add_vars_wf; eauto. apply init_mapping_wf.
   edestruct Mem.alloc_extends as [tm' []]; eauto; try apply Z.le_refl.
   econstructor; split.
-  left; apply plus_one. eapply exec_function_internal; simpl; eauto.
+  left; apply plus_one. eapply exec_function_internal; simpl; eauto using Val.has_argtype_list_lessdef.
   simpl. econstructor; eauto.
   econstructor; eauto.
   inversion MS; subst; econstructor; eauto.

@@ -1085,7 +1085,7 @@ Ltac UseTransfer :=
   exploit Mem.alloc_extends; eauto. apply Z.le_refl. apply Z.le_refl.
   intros (tm' & A & B).
   econstructor; split.
-  econstructor; simpl; eauto.
+  econstructor; simpl; eauto using Val.has_argtype_list_lessdef.
   simpl. econstructor; eauto.
   apply eagree_init_regs; auto.
   apply mextends_agree; auto.

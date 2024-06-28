@@ -969,9 +969,9 @@ Proof.
   econstructor; eauto.
   inv WTI; simpl. auto. rewrite <- H3. auto.
   (* internal function *)
-  simpl in *. inv H5.
+  simpl in *. inv H6.
   econstructor; eauto.
-  inv H1. apply wt_init_regs; auto. rewrite wt_params0. auto.
+  inv H2. apply wt_init_regs; auto. rewrite wt_params0. auto.
   (* external function *)
   econstructor; eauto.
   eapply external_call_well_typed; eauto.

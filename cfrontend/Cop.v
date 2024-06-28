@@ -1639,7 +1639,21 @@ Proof.
   intros. apply cast_val_casted. eapply cast_val_is_casted; eauto.
 Qed.
 
-(** Moreover, casted values belong to the machine type corresponding to the
+(** Moreover, casted values belong to the machine argument type corresponding
+    to the C type. *)
+
+Lemma val_casted_has_argtype:
+  forall v ty, val_casted v ty -> Val.has_argtype v (argtype_of_type ty).
+Proof.
+  destruct 1; simpl; unfold Tptr; rewrite ? H; auto.
+- destruct sz; [destruct si | destruct si | | ]; simpl in *; auto.
+  destruct (Int.eq n Int.zero); auto.
+- destruct Archi.ptr64; auto.
+- destruct Archi.ptr64; auto.
+- destruct Archi.ptr64; auto.
+Qed.
+
+(** Likewise, casted values belong to the machine type corresponding to the
     C type. *)
 
 Lemma val_casted_has_type:

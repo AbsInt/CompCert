@@ -150,9 +150,37 @@ Proof.
   auto.
 Defined.
 
+(** Strict matching between values and extended types:
+    the value cannot be [Vundef], unless the type is [Tvoid]. *)
+
+Definition has_argtype (v: val) (r: rettype) : Prop :=
+  match r, v with
+  | Tint, Vint _ => True
+  | Tint, Vptr _ _ => Archi.ptr64 = false
+  | Tlong, Vlong _ => True
+  | Tlong, Vptr _ _ => Archi.ptr64 = true
+  | Tfloat, Vfloat _ => True
+  | Tsingle, Vsingle _ => True
+  | Tany32, (Vint _ | Vsingle _) => True
+  | Tany32, Vptr _ _ => Archi.ptr64 = false
+  | Tany64, (Vint _ | Vlong _ | Vptr _ _ | Vsingle _ | Vfloat _) => True
+  | Tbool, Vint n => n = Int.zero \/ n = Int.one
+  | Tint8signed, Vint n => n = Int.sign_ext 8 n
+  | Tint8unsigned, Vint n => n = Int.zero_ext 8 n
+  | Tint16signed, Vint n => n = Int.sign_ext 16 n
+  | Tint16unsigned, Vint n => n = Int.zero_ext 16 n
+  | Tvoid, _ => True
+  | _, _ => False
+  end.
+
+Definition has_argtype_list : list val -> list rettype -> Prop := list_forall2 has_argtype.
+
+(** Lax matching between values and extended types:
+    [Vundef] belongs to every type. *)
+
 Definition has_rettype (v: val) (r: rettype) : Prop :=
   match r, v with
-  | Tret t, _ => has_type v t
+  | Tret t, _ => Val.has_type v t
   | Tbool, Vint n => n = Int.zero \/ n = Int.one
   | Tint8signed, Vint n => n = Int.sign_ext 8 n
   | Tint8unsigned, Vint n => n = Int.zero_ext 8 n
@@ -165,7 +193,7 @@ Definition has_rettype (v: val) (r: rettype) : Prop :=
 Lemma has_proj_rettype: forall v r,
   has_rettype v r -> has_type v (proj_rettype r).
 Proof.
-  destruct r; simpl; intros; auto; destruct v; try contradiction; exact I.
+  intros. destruct r as [[] | | | | | | ], v; simpl in *; auto; contradiction.
 Qed.
 
 (** Truth values.  Non-zero integers are treated as [True].
@@ -2230,6 +2258,20 @@ Proof.
   apply normalize_lessdef. destruct b; auto.
 Qed.
 
+Lemma has_argtype_lessdef: forall v r v',
+  has_argtype v r -> lessdef v v' -> has_argtype v' r.
+Proof.
+  intros. inv H0; auto. destruct r as [[] | | | | | | ]; exact I || elim H.
+Qed.
+
+Lemma has_argtype_list_lessdef: forall vl rl vl',
+  has_argtype_list vl rl -> lessdef_list vl vl' -> has_argtype_list vl' rl.
+Proof.
+  unfold has_argtype_list; intros. revert vl vl' H0 rl H. induction 1; intros.
+- inv H. constructor.
+- inv H1. constructor; eauto using has_argtype_lessdef.
+Qed.
+
 (** * Values and memory injections *)
 
 (** A memory injection [f] is a function from addresses to either [None]
@@ -2544,6 +2586,20 @@ Proof.
 - subst ob; auto.
 - subst ob'; destruct ob as [b|]; auto.
   apply normalize_inject. destruct b; auto.
+Qed.
+
+Lemma has_argtype_inject: forall v r v',
+  has_argtype v r -> inject f v v' -> has_argtype v' r.
+Proof.
+  intros. inv H0; destruct r as [[] | | | | | | ]; try contradiction; auto.
+Qed.
+
+Lemma has_argtype_list_inject: forall vl rl vl',
+  has_argtype_list vl rl -> inject_list f vl vl' -> has_argtype_list vl' rl.
+Proof.
+  unfold has_argtype_list; intros. revert vl vl' H0 rl H. induction 1; intros.
+- inv H. constructor.
+- inv H1. constructor; eauto using has_argtype_inject.
 Qed.
 
 End VAL_INJ_OPS.

@@ -1409,7 +1409,7 @@ Proof.
   exploit Mem.alloc_extends. eauto. eauto. apply Z.le_refl. apply Z.le_refl.
   intros [m2' [A B]].
   left; econstructor; split.
-  apply plus_one; econstructor; simpl; eauto.
+  apply plus_one; econstructor; simpl; eauto using Val.has_argtype_list_lessdef.
   econstructor; simpl; eauto.
   apply match_cont_other; auto.
   apply set_locals_lessdef. apply set_params_lessdef; auto.

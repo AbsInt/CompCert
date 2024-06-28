@@ -449,6 +449,7 @@ Inductive step: state -> trace -> state -> Prop :=
         E0 (State f s' k' e le m)
 
   | step_internal_function: forall f vargs k m m1 e le,
+      Val.has_argtype_list vargs f.(fn_sig).(sig_args) ->
       list_norepet (map fst f.(fn_vars)) ->
       list_norepet f.(fn_params) ->
       list_disjoint f.(fn_params) f.(fn_temps) ->
