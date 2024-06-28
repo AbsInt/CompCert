@@ -15,6 +15,7 @@ Require Import Zwf Coqlib Maps Zbits Integers Floats Lattice.
 Require Import Compopts AST.
 Require Import Values Memory Globalenvs Builtins Events.
 Require Import Registers RTL.
+Require Conventions1.
 
 (** The abstract domains for value analysis *)
 
@@ -3140,6 +3141,31 @@ Proof.
   intros v a E; destruct v; simpl in E; inv E; constructor.
 Qed.
 
+(** Lifting an extended type to a value approximation. *)
+
+Definition of_xtype (r: rettype) (p: aptr) : aval :=
+  match r with
+  | Tbool => Uns p 1
+  | Tint8signed => Sgn p 8
+  | Tint8unsigned => Uns p 8
+  | Tint16signed => Sgn p 16
+  | Tint16unsigned => Uns p 16
+  | _ => Ifptr p
+  end.
+
+Lemma of_xtype_arg_sound: forall v r p,
+  Val.has_argtype v r ->
+  vmatch v (Ifptr p) ->
+  vmatch v (of_xtype r p).
+Proof.
+  intros. destruct r, v; simpl in *; try contradiction; auto with va.
+- constructor. lia. apply is_uns_zero_ext. destruct H; subst i; auto.
+- constructor. lia. apply is_sgn_sign_ext. lia. auto.
+- constructor. lia. apply is_uns_zero_ext. auto.
+- constructor. lia. apply is_sgn_sign_ext. lia. auto.
+- constructor. lia. apply is_uns_zero_ext. auto.
+Qed.
+
 (** * Abstracting memory blocks *)
 
 Inductive acontent : Type :=
@@ -4588,36 +4614,47 @@ Proof.
   unfold AVal.eq; red; intros. subst av. inv H0.
 Qed.
 
-Fixpoint einit_regs (rl: list reg) : aenv :=
-  match rl with
-  | r1 :: rs => AE.set r1 (Ifptr Nonstack) (einit_regs rs)
-  | nil => AE.top
+Fixpoint einit_regs (rl: list reg) (tl: list rettype) : aenv :=
+  match rl, tl with
+  | nil, _ => AE.top
+  | r1 :: rs, t1 :: ts =>
+      let a1 :=
+        if Conventions1.parameter_needs_normalization t1
+        then Ifptr Nonstack
+        else of_xtype t1 Nonstack in
+      AE.set r1 a1 (einit_regs rs ts)
+  | r1 :: rs, nil => AE.set r1 (Ifptr Nonstack) (einit_regs rs nil)
   end.
 
 Lemma ematch_init:
-  forall rl vl,
+  forall rl vl tl,
+  Val.has_argtype_list vl tl ->
   (forall v, In v vl -> vmatch bc v (Ifptr Nonstack)) ->
-  ematch (init_regs vl rl) (einit_regs rl).
+  ematch (init_regs vl rl) (einit_regs rl tl).
 Proof.
-  induction rl; simpl; intros.
-- red; intros. rewrite Regmap.gi. simpl.
-  constructor.
-- destruct vl as [ | v1 vs ].
-  + assert (ematch (init_regs nil rl) (einit_regs rl)).
-    { apply IHrl. simpl; tauto. }
-    replace (init_regs nil rl) with (Regmap.init Vundef) in H0 by (destruct rl; auto).
-    red; intros. rewrite AE.gsspec. destruct (peq r a).
-    rewrite Regmap.gi. constructor.
-    apply H0.
-    red; intros EQ; rewrite EQ in H0. specialize (H0 xH). simpl in H0. inv H0.
-    unfold AVal.eq, AVal.bot. congruence.
-  + assert (ematch (init_regs vs rl) (einit_regs rl)).
-    { apply IHrl. eauto with coqlib. }
-    red; intros. rewrite Regmap.gsspec. rewrite AE.gsspec. destruct (peq r a).
-    auto with coqlib.
-    apply H0.
-    red; intros EQ; rewrite EQ in H0. specialize (H0 xH). simpl in H0. inv H0.
-    unfold AVal.eq, AVal.bot. congruence.
+Local Opaque Conventions1.parameter_needs_normalization.
+  assert (A: forall rs ae, ematch rs ae -> ae <> AE.Bot).
+  { intros; red; intros EQ. rewrite EQ in H. specialize (H 1%positive). simpl in H. inv H. }
+  assert (B: ~AVal.eq (Ifptr Nonstack) AVal.bot) by (unfold AVal.eq, AVal.bot; congruence).
+  assert (C: forall t, ~AVal.eq (of_xtype t Nonstack) AVal.bot).
+  { intros. unfold AVal.eq, AVal.bot; destruct t; simpl; congruence. }
+  induction rl; simpl; intros vl tl T V.
+- red; intros. rewrite Regmap.gi. simpl. constructor.
+- inv T.
+  + assert (REC: ematch (init_regs nil rl) (einit_regs rl nil)).
+    { apply IHrl. constructor. auto. }
+    replace (init_regs nil rl) with (Regmap.init Vundef) in REC by (destruct rl; auto).
+    red; intros. rewrite AE.gsspec by eauto. destruct (peq r a).
+    rewrite Regmap.gi; constructor.
+    apply REC.
+  + assert (REC: ematch (init_regs al rl) (einit_regs rl bl)).
+    { apply IHrl; eauto with coqlib. }
+    red; intros. rewrite Regmap.gsspec, AE.gsspec; eauto.
+    * destruct (peq r a).
+      destruct (Conventions1.parameter_needs_normalization b1);
+      auto using of_xtype_arg_sound with coqlib.
+      apply REC.
+    * destruct (Conventions1.parameter_needs_normalization b1); auto.
 Qed.
 
 Fixpoint eforget (rl: list reg) (ae: aenv) {struct rl} : aenv :=

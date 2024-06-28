@@ -191,7 +191,7 @@ Definition mfunction_entry :=
 
 Definition analyze (rm: romem) (f: function): PMap.t VA.t :=
   let lu := Liveness.last_uses f in
-  let entry := VA.State (einit_regs f.(fn_params)) mfunction_entry in
+  let entry := VA.State (einit_regs f.(fn_params) f.(fn_sig).(sig_args)) mfunction_entry in
   match DS.fixpoint f.(fn_code) successors_instr (transfer' f lu rm)
                     f.(fn_entrypoint) entry with
   | None => PMap.init (VA.State AE.top mtop)
@@ -259,6 +259,7 @@ Definition romem_for (p: program) : romem :=
 Lemma analyze_entrypoint:
   forall rm f vl m bc,
   (forall v, In v vl -> vmatch bc v (Ifptr Nonstack)) ->
+  Val.has_argtype_list vl f.(fn_sig).(sig_args) ->
   mmatch bc m mfunction_entry ->
   exists ae am,
      (analyze rm f)!!(fn_entrypoint f) = VA.State ae am
@@ -268,7 +269,7 @@ Proof.
   intros.
   unfold analyze.
   set (lu := Liveness.last_uses f).
-  set (entry := VA.State (einit_regs f.(fn_params)) mfunction_entry).
+  set (entry := VA.State (einit_regs f.(fn_params) f.(fn_sig).(sig_args)) mfunction_entry).
   destruct (DS.fixpoint (fn_code f) successors_instr (transfer' f lu rm)
                         (fn_entrypoint f) entry) as [res|] eqn:FIX.
 - assert (A: VA.ge res!!(fn_entrypoint f) entry) by (eapply DS.fixpoint_entry; eauto).
@@ -280,7 +281,7 @@ Proof.
   auto.
 - exists AE.top, mtop.
   split. apply PMap.gi.
-  split. apply ematch_ge with (einit_regs (fn_params f)).
+  split. apply ematch_ge with (einit_regs (fn_params f) f.(fn_sig).(sig_args)).
   apply ematch_init; auto. apply AE.ge_top.
   eapply mmatch_top'; eauto.
 Qed.
@@ -295,7 +296,7 @@ Lemma analyze_successor:
 Proof.
   unfold analyze; intros.
   set (lu := Liveness.last_uses f) in *.
-  set (entry := VA.State (einit_regs f.(fn_params)) mfunction_entry) in *.
+  set (entry := VA.State (einit_regs f.(fn_params) f.(fn_sig).(sig_args)) mfunction_entry) in *.
   destruct (DS.fixpoint (fn_code f) successors_instr (transfer' f lu rm)
                         (fn_entrypoint f) entry) as [res|] eqn:FIX.
 - assert (A: VA.ge res!!s (transfer' f lu rm n res#n)).
