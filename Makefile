@@ -64,6 +64,23 @@ COQCOPTS ?= \
 cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality
 flocq/IEEE754/Bits.vo: COQCOPTS += -w -opaque-let
 
+ifneq (,$(TIMING))
+  # does this coq version support -time-file ? (Coq >= 8.18)
+  ifeq (,$(shell "$(COQBIN)coqc" -time-file /dev/null 2>&1))
+    COQCOPTS += -time-file $<.timing
+  endif
+endif
+
+ifneq (,$(PROFILING))
+  # does this coq version dupport -profile ? (Coq >= 8.19)
+  ifeq (,$(shell "$(COQBIN)coqc" -profile /dev/null 2>&1))
+    COQCOPTS += -profile $<.prof.json
+    PROFILE_ZIP = gzip -f $<.prof.json
+  else
+  endif
+endif
+PROFILE_ZIP ?= true
+
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
@@ -262,6 +279,7 @@ latexdoc:
 	@rm -f doc/$(*F).glob
 	@echo "COQC $*.v"
 	@$(COQC) -dump-glob doc/$(*F).glob $*.v
+	@$(PROFILE_ZIP)
 
 %.v: %.vp tools/ndfun
 	@rm -f $*.v
