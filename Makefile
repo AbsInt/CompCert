@@ -64,6 +64,11 @@ COQCOPTS ?= \
 cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality
 flocq/IEEE754/Bits.vo: COQCOPTS += -w -opaque-let
 
+ifneq ($(INSTALL_COQDEV),true)
+# Disable costly generation of .cmx files, which are not used locally
+  COQCOPTS += -w -deprecated-native-compiler-option -native-compiler no
+endif
+
 ifneq (,$(TIMING))
   # does this coq version support -time-file ? (Coq >= 8.18)
   ifeq (,$(shell "$(COQBIN)coqc" -time-file /dev/null 2>&1))
@@ -368,6 +373,7 @@ endif
 clean:
 	rm -f $(patsubst %, %/*.vo*, $(DIRS))
 	rm -f $(patsubst %, %/.*.aux, $(DIRS))
+	rm -rf $(patsubst %, %/.coq-native, $(DIRS))
 	rm -rf doc/html doc/*.glob
 	rm -f driver/Version.ml
 	rm -f compcert.ini compcert.config
