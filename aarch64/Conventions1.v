@@ -263,7 +263,7 @@ Definition fixed_arguments (s: signature) : Z :=
   when calling a function with signature [s].  *)
 
 Definition loc_arguments (s: signature) : list (rpair loc) :=
-  loc_arguments_rec s.(sig_args) (fixed_arguments s) 0 0 0.
+  loc_arguments_rec (proj_sig_args s) (fixed_arguments s) 0 0 0.
 
 (** Argument locations are either caller-save registers or [Outgoing]
   stack slots at nonnegative offsets. *)
@@ -375,12 +375,12 @@ Qed.
     normalization is needed.
  *)
 
-Definition return_value_needs_normalization (t: rettype) : bool :=
+Definition return_value_needs_normalization (t: xtype) : bool :=
   match Archi.abi with
   | Archi.Apple => false
   | Archi.AAPCS64 =>
       match t with
-      | Tbool | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => true
+      | Xbool | Xint8signed | Xint8unsigned | Xint16signed | Xint16unsigned => true
       | _ => false
       end
   end.

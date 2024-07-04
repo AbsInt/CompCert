@@ -822,7 +822,7 @@ let expand_builtin_inline name args res =
 
 let set_cr6 sg =
   if (sg.sig_cc.cc_vararg <> None) || sg.sig_cc.cc_unproto then begin
-    if List.exists (function Tfloat | Tsingle -> true | _ -> false) sg.sig_args
+    if List.exists (function Xfloat | Xsingle -> true | _ -> false) sg.sig_args
     then emit (Pcreqv(CRbit_6, CRbit_6, CRbit_6))
     else emit (Pcrxor(CRbit_6, CRbit_6, CRbit_6))
   end
@@ -847,7 +847,7 @@ let expand_instruction instr =
       if variadic then begin
         emit (Pmflr GPR0);
         emit (Pbl(intern_string "__compcert_va_saveregs",
-                  {sig_args = []; sig_res = Tvoid; sig_cc = cc_default}));
+                  {sig_args = []; sig_res = Xvoid; sig_cc = cc_default}));
         emit (Pmtlr GPR0)
       end;
       current_function_stacksize := sz;

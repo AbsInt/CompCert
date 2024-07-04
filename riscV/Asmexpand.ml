@@ -123,7 +123,7 @@ let fixup_gen single double sg =
         end
     | _, _ -> ()
   in
-    List.iter2 fixup sg.sig_args (Conventions1.loc_arguments sg)
+    List.iter2 fixup (proj_sig_args sg) (Conventions1.loc_arguments sg)
 
 let fixup_call sg =
   fixup_gen move_single_arg move_double_arg sg
@@ -394,7 +394,7 @@ let rec args_size l ri rf ofs =
    but not arguments passed in FP registers. *)
 
 let arguments_size sg =
-  let (ri, _, ofs) = args_size sg.sig_args 0 0 0 in
+  let (ri, _, ofs) = args_size (proj_sig_args sg) 0 0 0 in
   ri + ofs
 
 let save_arguments first_reg base_ofs =

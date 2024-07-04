@@ -320,7 +320,7 @@ Definition fixed_arguments (s: signature) : Z :=
   when calling a function with signature [s].  *)
 
 Definition loc_arguments (s: signature) : list (rpair loc) :=
-  loc_arguments_rec s.(sig_args) (fixed_arguments s) 0 0 0.
+  loc_arguments_rec (proj_sig_args s) (fixed_arguments s) 0 0 0.
 
 (** Argument locations are either non-temporary registers or [Outgoing]
   stack slots at nonnegative offsets. *)
@@ -434,5 +434,5 @@ Qed.
 
 (** No normalization needed. *)
 
-Definition return_value_needs_normalization (t: rettype) := false.
-Definition parameter_needs_normalization (t: rettype) := false.
+Definition return_value_needs_normalization (t: xtype) := false.
+Definition parameter_needs_normalization (t: xtype) := false.

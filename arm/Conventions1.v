@@ -288,11 +288,11 @@ Fixpoint loc_arguments_sf
 Definition loc_arguments (s: signature) : list (rpair loc) :=
   match Archi.abi with
   | Archi.Softfloat =>
-      loc_arguments_sf s.(sig_args) (-4)
+      loc_arguments_sf (proj_sig_args s) (-4)
   | Archi.Hardfloat =>
       if s.(sig_cc).(cc_vararg)
-      then loc_arguments_sf s.(sig_args) (-4)
-      else loc_arguments_hf s.(sig_args) 0 0 0
+      then loc_arguments_sf (proj_sig_args s) (-4)
+      else loc_arguments_hf (proj_sig_args s) 0 0 0
   end.
 
 (** Argument locations are either non-temporary registers or [Outgoing]
@@ -446,9 +446,9 @@ Proof.
     destruct l as [r | [] ofs ty]; auto. intros (A & B); split; auto. rewrite B; apply Z.divide_1_l. }
   assert (Y: forall p, forall_rpair (loc_argument_charact 0) p -> forall_rpair loc_argument_acceptable p).
   { destruct p0; simpl; intuition auto. }
-  assert (In p (loc_arguments_sf (sig_args s) (-4)) -> forall_rpair loc_argument_acceptable p).
+  assert (In p (loc_arguments_sf (proj_sig_args s) (-4)) -> forall_rpair loc_argument_acceptable p).
   { intros. exploit loc_arguments_sf_charact; eauto. }
-  assert (In p (loc_arguments_hf (sig_args s) 0 0 0) -> forall_rpair loc_argument_acceptable p).
+  assert (In p (loc_arguments_hf (proj_sig_args s) 0 0 0) -> forall_rpair loc_argument_acceptable p).
   { intros. exploit loc_arguments_hf_charact; eauto. }
   destruct Archi.abi; [ | destruct (cc_vararg (sig_cc s)) ]; auto.
 Qed.
@@ -466,5 +466,5 @@ Qed.
 
 (** No normalization needed. *)
 
-Definition return_value_needs_normalization (t: rettype) := false.
-Definition parameter_needs_normalization (t: rettype) := false.
+Definition return_value_needs_normalization (t: xtype) := false.
+Definition parameter_needs_normalization (t: xtype) := false.

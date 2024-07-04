@@ -469,7 +469,7 @@ module FixupEABI = struct
     in fixup 0 tyl
 
   let fixup_arguments dir sg =
-    fixup_conventions dir sg.sig_args
+    fixup_conventions dir (proj_sig_args sg)
 
   let fixup_result dir sg =
     fixup_conventions dir (proj_sig_res sg :: [])
@@ -556,7 +556,7 @@ module FixupHF = struct
     if sg.sig_cc.cc_vararg <> None then
       FixupEABI.fixup_arguments dir sg
     else begin
-      let act = fixup_actions (Array.make 16 false) 0 sg.sig_args in
+      let act = fixup_actions (Array.make 16 false) 0 (proj_sig_args sg) in
       match dir with
       | Outgoing -> fixup_outgoing act
       | Incoming -> fixup_incoming act

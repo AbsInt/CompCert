@@ -19,6 +19,7 @@
 Require Import String Coqlib.
 Require Import AST Integers Floats Values.
 Require Import Builtins0.
+Local Open Scope asttyp_scope.
 
 Inductive platform_builtin : Type :=
   | BI_isel
@@ -48,15 +49,15 @@ Definition platform_builtin_table : list (string * platform_builtin) :=
 Definition platform_builtin_sig (b: platform_builtin) : signature :=
   match b with
   | BI_isel | BI_uisel =>
-     mksignature (Tint :: Tint :: Tint :: nil) Tint cc_default
+     [Xint; Xint; Xint ---> Xint]
   | BI_isel64 | BI_uisel64 =>
-     mksignature (Tint :: Tlong :: Tlong :: nil) Tlong cc_default
+     [Xint; Xlong; Xlong ---> Xlong]
   | BI_bsel =>
-     mksignature (Tint :: Tint :: Tint :: nil) Tbool cc_default
+     [Xint; Xint; Xint ---> Xbool]
   | BI_mulhw | BI_mulhwu =>
-     mksignature (Tint :: Tint :: nil) Tint cc_default
+     [Xint; Xint ---> Xint]
   | BI_mulhd | BI_mulhdu =>
-     mksignature (Tlong :: Tlong :: nil) Tlong cc_default
+     [Xlong; Xlong ---> Xlong]
   end.
 
 Definition isel {A: Type} (c: int) (n1 n2: A) : A :=
@@ -68,17 +69,17 @@ Program Definition bsel (c n1 n2: int) : { n : int | n = Int.zero \/ n = Int.one
 Definition platform_builtin_sem (b: platform_builtin) : builtin_sem (sig_res (platform_builtin_sig b)) :=
   match b with
   | BI_isel | BI_uisel =>
-    mkbuiltin_n3t Tint Tint Tint Tint isel
+    mkbuiltin_n3t Tint Tint Tint Xint isel
   | BI_isel64 | BI_uisel64 =>
-    mkbuiltin_n3t Tint Tlong Tlong Tlong isel
+    mkbuiltin_n3t Tint Tlong Tlong Xlong isel
   | BI_bsel =>
-    mkbuiltin_n3t Tint Tint Tint Tbool bsel
+    mkbuiltin_n3t Tint Tint Tint Xbool bsel
   | BI_mulhw =>
-    mkbuiltin_n2t Tint Tint Tint Int.mulhs
+    mkbuiltin_n2t Tint Tint Xint Int.mulhs
   | BI_mulhwu =>
-    mkbuiltin_n2t Tint Tint Tint Int.mulhu
+    mkbuiltin_n2t Tint Tint Xint Int.mulhu
   | BI_mulhd =>
-    mkbuiltin_n2t Tlong Tlong Tlong Int64.mulhs
+    mkbuiltin_n2t Tlong Tlong Xlong Int64.mulhs
   | BI_mulhdu =>
-    mkbuiltin_n2t Tlong Tlong Tlong Int64.mulhu
+    mkbuiltin_n2t Tlong Tlong Xlong Int64.mulhu
   end.

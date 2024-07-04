@@ -1783,7 +1783,7 @@ Proof.
   constructor; unfold wt_int; auto.
 - destruct v; try contradiction; constructor; auto.
 - destruct f; destruct v; try contradiction; constructor.
-- destruct v; destruct Archi.ptr64 eqn:P64; try contradiction; constructor; auto.
+- destruct v; try contradiction; constructor; auto.
 - destruct v; contradiction || constructor.
 - destruct v; contradiction || constructor.
 - destruct v; contradiction || constructor.
