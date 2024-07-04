@@ -420,34 +420,34 @@ Definition standard_builtin_table : list (string * standard_builtin) :=
 Definition standard_builtin_sig (b: standard_builtin) : signature :=
   match b with
   | BI_select t =>
-      Tint ::: t ::: t ::: nil ---> t
+      [Tint; t; t ---> t]
   | BI_fabs | BI_fsqrt =>
-      Tfloat ::: nil ---> Tfloat
+      [Tfloat ---> Tfloat]
   | BI_fabsf =>
-      Tsingle ::: nil ---> Tsingle
+      [Tsingle ---> Tsingle]
   | BI_negl =>
-      Tlong ::: nil ---> Tlong
+      [Tlong ---> Tlong]
   | BI_addl | BI_subl | BI_i64_umulh| BI_i64_smulh 
   | BI_i64_sdiv | BI_i64_udiv | BI_i64_smod | BI_i64_umod =>
-      Tlong ::: Tlong ::: nil ---> Tlong
+      [Tlong; Tlong ---> Tlong]
   | BI_mull =>
-      Tint ::: Tint ::: nil ---> Tlong
+      [Tint; Tint ---> Tlong]
   | BI_i32_bswap =>
-      Tint ::: nil ---> Tint
+      [Tint ---> Tint]
   | BI_i64_bswap =>
-      Tlong ::: nil ---> Tlong
+      [Tlong ---> Tlong]
   | BI_i16_bswap =>
-      Tint ::: nil ---> Tint
+      [Tint ---> Tint]
   | BI_unreachable =>
       mksignature nil Tvoid cc_default
   | BI_i64_shl  | BI_i64_shr | BI_i64_sar =>
-      Tlong ::: Tint ::: nil ---> Tlong
+      [Tlong; Tint ---> Tlong]
   | BI_i64_dtos | BI_i64_dtou =>
-      Tfloat ::: nil ---> Tlong
+      [Tfloat ---> Tlong]
   | BI_i64_stod | BI_i64_utod =>
-      Tlong ::: nil ---> Tfloat
+      [Tlong ---> Tfloat]
   | BI_i64_stof | BI_i64_utof =>
-      Tlong ::: nil ---> Tsingle
+      [Tlong ---> Tsingle]
   end.
 
 Program Definition standard_builtin_sem (b: standard_builtin) : builtin_sem (sig_res (standard_builtin_sig b)) :=

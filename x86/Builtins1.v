@@ -34,7 +34,7 @@ Definition platform_builtin_table : list (string * platform_builtin) :=
 
 Definition platform_builtin_sig (b: platform_builtin) : signature :=
   match b with
-  | BI_fmin | BI_fmax => Tfloat ::: Tfloat ::: nil ---> Tfloat
+  | BI_fmin | BI_fmax => [Tfloat; Tfloat ---> Tfloat]
   end.
 
 Definition platform_builtin_sem (b: platform_builtin) : builtin_sem (sig_res (platform_builtin_sig b)) :=

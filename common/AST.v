@@ -154,14 +154,16 @@ Defined.
 Global Opaque signature_eq.
 
 Declare Scope asttyp_scope.
-Infix ":::" := (@cons rettype)
-  (at level 60, right associativity) : asttyp_scope.
-Notation "x ---> y" := {| sig_args := x; sig_res := y; sig_cc := cc_default |} 
-  (at level 70, right associativity) : asttyp_scope.
+Notation "[ ---> y ]" := (mksignature nil y cc_default) : asttyp_scope.
+Notation "[ x ---> y ]" :=
+  (mksignature (@cons rettype x nil) y cc_default) : asttyp_scope.
+Notation "[ x1 ; x2 ; .. ; xn ---> y ]" :=
+  (mksignature (@cons rettype x1 (@cons rettype x2 .. (@cons rettype xn nil) ..)) y cc_default) : asttyp_scope.
+
 Delimit Scope asttyp_scope with asttyp.
 Local Open Scope asttyp_scope.
 
-Definition signature_main :=  nil ---> Tint.
+Definition signature_main :=  [ ---> Tint].
 
 (** Memory accesses (load and store instructions) are annotated by
   a ``memory chunk'' indicating the type, size and signedness of the
@@ -529,15 +531,15 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_external name sg => sg
   | EF_builtin name sg => sg
   | EF_runtime name sg => sg
-  | EF_vload chunk => Tptr ::: nil ---> rettype_of_chunk chunk
-  | EF_vstore chunk => Tptr ::: rettype_of_chunk chunk ::: nil ---> Tvoid
-  | EF_malloc => Tptr ::: nil ---> Tptr
-  | EF_free => Tptr ::: nil ---> Tvoid
-  | EF_memcpy sz al => Tptr ::: Tptr ::: nil ---> Tvoid
-  | EF_annot kind text targs => List.map Tret targs ---> Tvoid
-  | EF_annot_val kind text targ => targ ::: nil ---> targ
+  | EF_vload chunk => [Tptr ---> rettype_of_chunk chunk]
+  | EF_vstore chunk => [Tptr; rettype_of_chunk chunk ---> Tvoid]
+  | EF_malloc => [Tptr ---> Tptr]
+  | EF_free => [Tptr ---> Tvoid]
+  | EF_memcpy sz al => [Tptr; Tptr ---> Tvoid]
+  | EF_annot kind text targs => mksignature (List.map Tret targs) Tvoid cc_default
+  | EF_annot_val kind text targ => [targ ---> targ]
   | EF_inline_asm text sg clob => sg
-  | EF_debug kind text targs => List.map Tret targs ---> Tvoid
+  | EF_debug kind text targs => mksignature (List.map Tret targs) Tvoid cc_default
   end.
 
 (** Whether an external function should be inlined by the compiler. *)

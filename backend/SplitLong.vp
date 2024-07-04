@@ -43,13 +43,13 @@ Class helper_functions := mk_helper_functions {
   i64_smulh: ident;                     (**r signed multiply high *)
 }.
 
-Definition sig_l_l := (Tlong ::: nil ---> Tlong)%asttyp.
-Definition sig_l_f := (Tlong ::: nil ---> Tfloat)%asttyp.
-Definition sig_l_s := (Tlong ::: nil ---> Tsingle)%asttyp.
-Definition sig_f_l := (Tfloat ::: nil ---> Tlong)%asttyp.
-Definition sig_ll_l := (Tlong ::: Tlong ::: nil ---> Tlong)%asttyp.
-Definition sig_li_l := (Tlong ::: Tint ::: nil ---> Tlong)%asttyp.
-Definition sig_ii_l := (Tint ::: Tint ::: nil ---> Tlong)%asttyp.
+Definition sig_l_l := [Tlong ---> Tlong]%asttyp.
+Definition sig_l_f := [Tlong ---> Tfloat]%asttyp.
+Definition sig_l_s := [Tlong ---> Tsingle]%asttyp.
+Definition sig_f_l := [Tfloat ---> Tlong]%asttyp.
+Definition sig_ll_l := [Tlong; Tlong ---> Tlong]%asttyp.
+Definition sig_li_l := [Tlong; Tint ---> Tlong]%asttyp.
+Definition sig_ii_l := [Tint; Tint ---> Tlong]%asttyp.
 
 Section SELECT.
 
