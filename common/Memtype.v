@@ -301,10 +301,10 @@ Axiom load_type:
   load chunk m b ofs = Some v ->
   Val.has_type v (type_of_chunk chunk).
 
-Axiom load_rettype:
+Axiom load_xtype:
   forall m chunk b ofs v,
   load chunk m b ofs = Some v ->
-  Val.has_rettype v (rettype_of_chunk chunk).
+  Val.has_rettype v (xtype_of_chunk chunk).
 
 (** For a small integer or float type, the value returned by [load]
   is invariant under the corresponding cast. *)

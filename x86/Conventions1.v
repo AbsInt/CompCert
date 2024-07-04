@@ -456,13 +456,13 @@ Qed.
     AH, leaving the top 16 bits of EAX unspecified.  Hence, return
     values of small integer types need re-normalization after calls. *)
 
-Definition return_value_needs_normalization (t: rettype) : bool :=
+Definition return_value_needs_normalization (t: xtype) : bool :=
   match t with
-  | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => true
+  | Xint8signed | Xint8unsigned | Xint16signed | Xint16unsigned => true
   | _ => false
   end.
 
 (** Function parameters are passed in normalized form and do not need
     to be re-normalized at function entry. *)
 
-Definition parameter_needs_normalization (t: rettype) := false.
+Definition parameter_needs_normalization (t: xtype) := false.

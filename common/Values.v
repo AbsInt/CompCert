@@ -151,49 +151,75 @@ Proof.
 Defined.
 
 (** Strict matching between values and extended types:
-    the value cannot be [Vundef], unless the type is [Tvoid]. *)
+    the value cannot be [Vundef], unless the type is [Tvoid].
+    This matching is used to characterize arguments to function calls. *)
 
-Definition has_argtype (v: val) (r: rettype) : Prop :=
-  match r, v with
-  | Tint, Vint _ => True
-  | Tint, Vptr _ _ => Archi.ptr64 = false
-  | Tlong, Vlong _ => True
-  | Tlong, Vptr _ _ => Archi.ptr64 = true
-  | Tfloat, Vfloat _ => True
-  | Tsingle, Vsingle _ => True
-  | Tany32, (Vint _ | Vsingle _) => True
-  | Tany32, Vptr _ _ => Archi.ptr64 = false
-  | Tany64, (Vint _ | Vlong _ | Vptr _ _ | Vsingle _ | Vfloat _) => True
-  | Tbool, Vint n => n = Int.zero \/ n = Int.one
-  | Tint8signed, Vint n => n = Int.sign_ext 8 n
-  | Tint8unsigned, Vint n => n = Int.zero_ext 8 n
-  | Tint16signed, Vint n => n = Int.sign_ext 16 n
-  | Tint16unsigned, Vint n => n = Int.zero_ext 16 n
-  | Tvoid, _ => True
+Definition has_argtype (v: val) (x: xtype) : Prop :=
+  match x, v with
+  | Xbool, Vint n => n = Int.zero \/ n = Int.one
+  | Xint8signed, Vint n => n = Int.sign_ext 8 n
+  | Xint8unsigned, Vint n => n = Int.zero_ext 8 n
+  | Xint16signed, Vint n => n = Int.sign_ext 16 n
+  | Xint16unsigned, Vint n => n = Int.zero_ext 16 n
+  | Xint, Vint _ => True
+  | Xint, Vptr _ _ => Archi.ptr64 = false
+  | Xlong, Vlong _ => True
+  | Xlong, Vptr _ _ => Archi.ptr64 = true
+  | Xfloat, Vfloat _ => True
+  | Xsingle, Vsingle _ => True
+  | Xptr, Vptr _ _ => True
+  | Xptr, Vint _ => Archi.ptr64 = false
+  | Xptr, Vlong _ => Archi.ptr64 = true
+  | Xany32, (Vint _ | Vsingle _) => True
+  | Xany32, Vptr _ _ => Archi.ptr64 = false
+  | Xany64, (Vint _ | Vlong _ | Vptr _ _ | Vsingle _ | Vfloat _) => True
+  | Xvoid, _ => True
   | _, _ => False
   end.
 
-Definition has_argtype_list : list val -> list rettype -> Prop := list_forall2 has_argtype.
+Definition has_argtype_list : list val -> list xtype -> Prop := list_forall2 has_argtype.
 
 (** Lax matching between values and extended types:
-    [Vundef] belongs to every type. *)
+    [Vundef] belongs to every type.
+    This matching is used to characterize return values from external calls
+    and built-in functions. *)
 
-Definition has_rettype (v: val) (r: rettype) : Prop :=
+Definition has_rettype (v: val) (r: xtype) : Prop :=
   match r, v with
-  | Tret t, _ => Val.has_type v t
-  | Tbool, Vint n => n = Int.zero \/ n = Int.one
-  | Tint8signed, Vint n => n = Int.sign_ext 8 n
-  | Tint8unsigned, Vint n => n = Int.zero_ext 8 n
-  | Tint16signed, Vint n => n = Int.sign_ext 16 n
-  | Tint16unsigned, Vint n => n = Int.zero_ext 16 n
+  | Xbool, Vint n => n = Int.zero \/ n = Int.one
+  | Xint8signed, Vint n => n = Int.sign_ext 8 n
+  | Xint8unsigned, Vint n => n = Int.zero_ext 8 n
+  | Xint16signed, Vint n => n = Int.sign_ext 16 n
+  | Xint16unsigned, Vint n => n = Int.zero_ext 16 n
+  | Xint, Vint _ => True
+  | Xint, Vptr _ _ => Archi.ptr64 = false
+  | Xlong, Vlong _ => True
+  | Xlong, Vptr _ _ => Archi.ptr64 = true
+  | Xfloat, Vfloat _ => True
+  | Xsingle, Vsingle _ => True
+  | Xptr, Vptr _ _ => True
+  | Xptr, Vint _ => Archi.ptr64 = false
+  | Xptr, Vlong _ => Archi.ptr64 = true
+  | Xany32, (Vint _ | Vsingle _) => True
+  | Xany32, Vptr _ _ => Archi.ptr64 = false
+  | Xany64, _ => True
   | _, Vundef => True
   | _, _ => False
   end.
 
-Lemma has_proj_rettype: forall v r,
-  has_rettype v r -> has_type v (proj_rettype r).
+Lemma has_proj_xtype: forall v t,
+  has_rettype v t -> has_type v (proj_xtype t).
 Proof.
-  intros. destruct r as [[] | | | | | | ], v; simpl in *; auto; contradiction.
+  intros. destruct t, v; simpl in *; auto; try contradiction.
+- unfold Tptr; rewrite H; auto.
+- unfold Tptr; rewrite H; auto.
+- unfold Tptr; destruct Archi.ptr64; auto.
+Qed.
+
+Lemma has_inj_type: forall v t,
+  has_type v t -> has_rettype v (inj_type t).
+Proof.
+  intros. destruct v, t; simpl in *; auto.
 Qed.
 
 (** Truth values.  Non-zero integers are treated as [True].
@@ -1062,8 +1088,8 @@ Proof.
   destruct (eq v Vtrue); auto. destruct (eq v Vfalse); auto.
 Qed.
 
-Lemma load_result_rettype:
-  forall chunk v, has_rettype (load_result chunk v) (rettype_of_chunk chunk).
+Lemma load_result_xtype:
+  forall chunk v, has_rettype (load_result chunk v) (xtype_of_chunk chunk).
 Proof.
   intros. unfold has_rettype; destruct chunk; destruct v; simpl; auto.
 - destruct (norm_bool_cases (Vint (Int.zero_ext 8 i))) as [A | [A | A]]; rewrite A; simpl; auto.
@@ -1079,8 +1105,8 @@ Qed.
 Lemma load_result_type:
   forall chunk v, has_type (load_result chunk v) (type_of_chunk chunk).
 Proof.
-  intros. rewrite <- proj_rettype_of_chunk. apply has_proj_rettype.
-  apply load_result_rettype.
+  intros. rewrite <-proj_xtype_of_chunk. apply has_proj_xtype.
+  apply load_result_xtype.
 Qed.
 
 Lemma load_result_same:
@@ -2261,7 +2287,7 @@ Qed.
 Lemma has_argtype_lessdef: forall v r v',
   has_argtype v r -> lessdef v v' -> has_argtype v' r.
 Proof.
-  intros. inv H0; auto. destruct r as [[] | | | | | | ]; exact I || elim H.
+  intros. inv H0; auto. destruct r; elim H || exact I.
 Qed.
 
 Lemma has_argtype_list_lessdef: forall vl rl vl',
@@ -2591,7 +2617,7 @@ Qed.
 Lemma has_argtype_inject: forall v r v',
   has_argtype v r -> inject f v v' -> has_argtype v' r.
 Proof.
-  intros. inv H0; destruct r as [[] | | | | | | ]; try contradiction; auto.
+  intros. inv H0; destruct r; try contradiction; auto.
 Qed.
 
 Lemma has_argtype_list_inject: forall vl rl vl',

@@ -600,7 +600,7 @@ Fixpoint transl_arglist (ce: composite_env) (al: list Clight.expr) (tyl: list ty
 (** Compute the argument signature that corresponds to a function application. *)
 
 Fixpoint typlist_of_arglist (al: list Clight.expr) (tyl: list type)
-                            {struct al}: list AST.rettype :=
+                            {struct al}: list xtype :=
   match al, tyl with
   | nil, _ => nil
   | a1 :: a2, ty1 :: ty2 =>

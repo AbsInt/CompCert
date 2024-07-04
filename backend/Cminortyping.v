@@ -130,7 +130,7 @@ Definition opt_set (e: S.typenv) (optid: option ident) (ty: typ) : res S.typenv 
   | Some id => S.set e id ty
   end.
 
-Fixpoint type_stmt (tret: rettype) (e: S.typenv) (s: stmt) : res S.typenv :=
+Fixpoint type_stmt (tret: xtype) (e: S.typenv) (s: stmt) : res S.typenv :=
   match s with
   | Sskip => OK e
   | Sassign id a => type_assign e id a
@@ -141,7 +141,7 @@ Fixpoint type_stmt (tret: rettype) (e: S.typenv) (s: stmt) : res S.typenv :=
       do e2 <- type_exprlist e1 args (proj_sig_args sg);
       opt_set e2 optid (proj_sig_res sg)
   | Stailcall sg fn args =>
-      assertion (rettype_eq sg.(sig_res) tret);
+      assertion (xtype_eq sg.(sig_res) tret);
       do e1 <- type_expr e fn Tptr;
       type_exprlist e1 args (proj_sig_args sg)
   | Sbuiltin optid ef args =>
@@ -165,11 +165,11 @@ Fixpoint type_stmt (tret: rettype) (e: S.typenv) (s: stmt) : res S.typenv :=
   | Sreturn opta =>
       match opta with
       | None => OK e
-      | Some a => type_expr e a (proj_rettype tret)
+      | Some a => type_expr e a (proj_xtype tret)
 (*
-          if rettype_eq tret Tvoid
+          if xtype_eq tret Tvoid
           then Error (msg "inconsistent return")
-          else type_expr e a (proj_rettype tret)
+          else type_expr e a (proj_xtype tret)
 *)
       end
   | Slabel lbl s1 =>
@@ -190,7 +190,7 @@ Definition type_function (f: function) : res typenv :=
 Section SPEC.
 
 Variable env: ident -> typ.
-Variable tret: rettype.
+Variable tret: xtype.
 
 Inductive wt_expr: expr -> typ -> Prop :=
   | wt_Evar: forall id,
@@ -209,9 +209,9 @@ Inductive wt_expr: expr -> typ -> Prop :=
       wt_expr a1 Tptr ->
       wt_expr (Eload chunk a1) (type_of_chunk chunk).
 
-Definition wt_opt_assign (optid: option ident) (ty: rettype) : Prop :=
+Definition wt_opt_assign (optid: option ident) (ty: xtype) : Prop :=
   match optid with
-  | Some id => proj_rettype ty = env id
+  | Some id => proj_xtype ty = env id
   | _ => True
   end.
 
@@ -256,7 +256,7 @@ Inductive wt_stmt: stmt -> Prop :=
   | wt_Sreturn_none:
       wt_stmt (Sreturn None)
   | wt_Sreturn_some: forall a,
-      wt_expr a (proj_rettype tret) ->
+      wt_expr a (proj_xtype tret) ->
       wt_stmt (Sreturn (Some a))
   | wt_Slabel: forall lbl s1,
       wt_stmt s1 ->
@@ -418,9 +418,9 @@ Definition wt_env (env: typenv) (e: Cminor.env) : Prop :=
 Definition def_env (f: function) (e: Cminor.env) : Prop :=
   forall id, In id f.(fn_params) \/ In id f.(fn_vars) -> exists v, e!id = Some v.
 
-Inductive wt_cont_call: cont -> rettype -> Prop :=
+Inductive wt_cont_call: cont -> xtype -> Prop :=
   | wt_cont_Kstop:
-      wt_cont_call Kstop Tint
+      wt_cont_call Kstop Xint
   | wt_cont_Kcall: forall optid f sp e k tret env
         (WT_FN: wt_function env f)
         (WT_CONT: wt_cont env f.(fn_sig).(sig_res) k)
@@ -429,7 +429,7 @@ Inductive wt_cont_call: cont -> rettype -> Prop :=
         (WT_DEST: wt_opt_assign env optid tret),
       wt_cont_call (Kcall optid f sp e k) tret
 
-with wt_cont: typenv -> rettype -> cont -> Prop :=
+with wt_cont: typenv -> xtype -> cont -> Prop :=
   | wt_cont_Kseq: forall env tret s k,
       wt_stmt env tret s ->
       wt_cont env tret k ->
@@ -455,7 +455,7 @@ Inductive wt_state: state -> Prop :=
         (WT_CONT: wt_cont_call k (funsig f).(sig_res)),
       wt_state (Callstate f args k m)
   | wt_return_state: forall v k m tret
-        (WT_RES: Val.has_type v (proj_rettype tret))
+        (WT_RES: Val.has_type v (proj_xtype tret))
         (WT_CONT: wt_cont_call k tret),
       wt_state (Returnstate v k m).
 

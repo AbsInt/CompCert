@@ -1892,7 +1892,7 @@ Qed.
 
 Inductive match_stackframes: list RTL.stackframe -> list LTL.stackframe -> signature -> Prop :=
   | match_stackframes_nil: forall sg,
-      sg.(sig_res) = Tint ->
+      sg.(sig_res) = Xint ->
       match_stackframes nil nil sg
   | match_stackframes_cons:
       forall res f sp pc rs s tf bb ls ts sg an e env

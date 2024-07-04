@@ -158,7 +158,7 @@ Lemma transf_instr_charact:
 Proof.
   intros. unfold transf_instr. destruct instr; try constructor.
   destruct (is_return niter f n r && tailcall_is_possible s &&
-            rettype_eq (sig_res s) (sig_res (fn_sig f))) eqn:B.
+            xtype_eq (sig_res s) (sig_res (fn_sig f))) eqn:B.
 - InvBooleans. eapply transf_instr_tailcall; eauto. eapply is_return_charact; eauto.
 - constructor.
 Qed.

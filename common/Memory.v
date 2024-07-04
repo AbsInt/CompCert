@@ -674,13 +674,13 @@ Proof.
   apply decode_val_type.
 Qed.
 
-Theorem load_rettype:
+Theorem load_xtype:
   forall m chunk b ofs v,
   load chunk m b ofs = Some v ->
-  Val.has_rettype v (rettype_of_chunk chunk).
+  Val.has_rettype v (xtype_of_chunk chunk).
 Proof.
   intros. exploit load_result; eauto; intros. rewrite H0.
-  apply decode_val_rettype.
+  apply decode_val_xtype.
 Qed.
 
 Theorem load_cast:

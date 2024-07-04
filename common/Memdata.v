@@ -551,25 +551,24 @@ Proof.
   destruct v1; auto.
 Qed.
 
-Lemma decode_val_rettype:
+Lemma decode_val_xtype:
   forall chunk cl,
-  Val.has_rettype (decode_val chunk cl) (rettype_of_chunk chunk).
+  Val.has_rettype (decode_val chunk cl) (xtype_of_chunk chunk).
 Proof.
   intros. unfold decode_val.
   destruct (proj_bytes cl).
 - destruct chunk; simpl; rewrite ? Int.sign_ext_idem, ? Int.zero_ext_idem by lia; auto.
   destruct (Val.norm_bool_cases (Vint (Int.zero_ext 8 (Int.repr (decode_int l))))) as [A | [A | A]]; rewrite A; simpl; auto.
 - Local Opaque Val.load_result.
-  destruct chunk; simpl;
-  (exact I || apply Val.load_result_type || destruct Archi.ptr64; (exact I || apply Val.load_result_type)).
+  destruct chunk, Archi.ptr64; (apply Val.load_result_xtype || exact I).
 Qed.
 
 Lemma decode_val_type:
   forall chunk cl,
   Val.has_type (decode_val chunk cl) (type_of_chunk chunk).
 Proof.
-  intros. rewrite <- proj_rettype_of_chunk.
-  apply Val.has_proj_rettype. apply decode_val_rettype.
+  intros. rewrite <- proj_xtype_of_chunk.
+  apply Val.has_proj_xtype. apply decode_val_xtype.
 Qed.
 
 Lemma encode_val_int8_signed_unsigned:

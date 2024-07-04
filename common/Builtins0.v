@@ -28,7 +28,7 @@ Local Open Scope asttyp_scope.
   appropriate for the target.
 *)
 
-Definition val_opt_has_rettype (ov: option val) (t: rettype) : Prop :=
+Definition val_opt_has_rettype (ov: option val) (t: xtype) : Prop :=
   match ov with Some v => Val.has_rettype v t | None => True end.
 
 Definition val_opt_inject (j: meminj) (ov ov': option val) : Prop :=
@@ -44,7 +44,7 @@ Definition val_opt_inject (j: meminj) (ov ov': option val) : Prop :=
   and be compatible with value injections.
 *)
 
-Record builtin_sem (tret: rettype) : Type := mkbuiltin {
+Record builtin_sem (tret: xtype) : Type := mkbuiltin {
   bs_sem :> list val -> option val;
   bs_well_typed: forall vl, 
     val_opt_has_rettype (bs_sem vl) tret;
@@ -62,7 +62,7 @@ Record builtin_sem (tret: rettype) : Type := mkbuiltin {
 Local Unset Program Cases.
 
 Program Definition mkbuiltin_v1t 
-     (tret: rettype) (f: val -> val)
+     (tret: xtype) (f: val -> val)
      (WT: forall v1, Val.has_rettype (f v1) tret)
      (INJ: forall j v1 v1', Val.inject j v1 v1' -> Val.inject j (f v1) (f v1')) :=
   mkbuiltin tret (fun vl => match vl with v1 :: nil => Some (f v1) | _ => None end) _ _.
@@ -74,7 +74,7 @@ Next Obligation.
 Qed.
 
 Program Definition mkbuiltin_v2t 
-     (tret: rettype) (f: val -> val -> val)
+     (tret: xtype) (f: val -> val -> val)
      (WT: forall v1 v2, Val.has_rettype (f v1 v2) tret)
      (INJ: forall j v1 v1' v2 v2',
            Val.inject j v1 v1' -> Val.inject j v2 v2' ->
@@ -88,7 +88,7 @@ Next Obligation.
 Qed.
 
 Program Definition mkbuiltin_v3t 
-     (tret: rettype) (f: val -> val -> val -> val)
+     (tret: xtype) (f: val -> val -> val -> val)
      (WT: forall v1 v2 v3, Val.has_rettype (f v1 v2 v3) tret)
      (INJ: forall j v1 v1' v2 v2' v3 v3',
            Val.inject j v1 v1' -> Val.inject j v2 v2' -> Val.inject j v3 v3' ->
@@ -102,7 +102,7 @@ Next Obligation.
 Qed.
 
 Program Definition mkbuiltin_v1p
-     (tret: rettype) (f: val -> option val)
+     (tret: xtype) (f: val -> option val)
      (WT: forall v1, val_opt_has_rettype (f v1) tret)
      (INJ: forall j v1 v1',
         Val.inject j v1 v1' -> val_opt_inject j (f v1) (f v1')) :=
@@ -115,7 +115,7 @@ Next Obligation.
 Qed.
 
 Program Definition mkbuiltin_v2p
-     (tret: rettype) (f: val -> val -> option val)
+     (tret: xtype) (f: val -> val -> option val)
      (WT: forall v1 v2, val_opt_has_rettype (f v1 v2) tret)
      (INJ: forall j v1 v1' v2 v2',
         Val.inject j v1 v1' -> Val.inject j v2 v2' ->
@@ -132,7 +132,7 @@ Qed.
   but no pointer values, we can automate the proofs of well-typedness and
   of compatibility with injections. *)
 
-(** First we define a mapping from syntactic Cminor types ([Tint], [Tfloat], etc) to semantic Coq types. *)
+(** First we define a mapping from syntactic types ([Tint], [Tfloat], etc) to semantic Coq types. *)
 
 Definition valty (t: typ) : Type :=
   match t with
@@ -143,28 +143,32 @@ Definition valty (t: typ) : Type :=
   | Tany32 | Tany64 => Empty_set (**r no clear semantic meaning *)
   end.
 
-Definition valretty (t: rettype) : Type :=
+Definition valxty (t: xtype) : Type :=
   match t with
-  | Tret t => valty t
-  | Tbool => { n: int | n = Int.zero \/ n = Int.one }
-  | Tint8signed => { n: int | n = Int.sign_ext 8 n }
-  | Tint8unsigned => { n: int | n = Int.zero_ext 8 n }
-  | Tint16signed => { n: int | n = Int.sign_ext 16 n }
-  | Tint16unsigned => { n: int | n = Int.zero_ext 16 n }
-  | Tvoid => unit
+  | Xbool => { n: int | n = Int.zero \/ n = Int.one }
+  | Xint8signed => { n: int | n = Int.sign_ext 8 n }
+  | Xint8unsigned => { n: int | n = Int.zero_ext 8 n }
+  | Xint16signed => { n: int | n = Int.sign_ext 16 n }
+  | Xint16unsigned => { n: int | n = Int.zero_ext 16 n }
+  | Xint => int
+  | Xlong => int64
+  | Xfloat => float
+  | Xsingle => float32
+  | Xptr => Empty_set            (**r not a number *)
+  | Xany32 | Xany64 => Empty_set (**r not a number *)
+  | Xvoid => unit
   end.
 
-(** We can inject from the numerical type [valretty t] to the value type [val]. *)
+(** We can inject from the numerical type [valxty t] to the value type [val]. *)
 
-Definition inj_num (t: rettype) : valretty t -> val :=
+Definition inj_num (t: xtype) : valxty t -> val :=
   match t with
-  | Tret Tint => Vint
-  | Tret Tlong => Vlong
-  | Tret Tfloat => Vfloat
-  | Tret Tsingle => Vsingle
-  | Tret (Tany32 | Tany64) => fun _ => Vundef
-  | Tbool | Tint8signed | Tint8unsigned | Tint16signed | Tint16unsigned => fun n => Vint (proj1_sig n)
-  | Tvoid => fun _ => Vundef
+  | Xbool | Xint8signed | Xint8unsigned | Xint16signed | Xint16unsigned => fun n => Vint (proj1_sig n)
+  | Xint => Vint
+  | Xlong => Vlong
+  | Xfloat => Vfloat
+  | Xsingle => Vsingle
+  | _ => fun _ => Vundef
   end.
 
 (** Conversely, we can project a value to the numerical type [valty t]. *)
@@ -180,13 +184,12 @@ Definition proj_num {A: Type} (t: typ) (k0: A) (v: val): (valty t -> A) -> A :=
 
 Lemma inj_num_wt: forall t x, Val.has_rettype (inj_num t x) t.
 Proof.
-  destruct t; intros; simpl; auto; try (apply proj2_sig).
-  destruct t; exact I.
+  destruct t; intros; simpl; auto; apply proj2_sig.
 Qed.
 
 Lemma inj_num_inject: forall j t x, Val.inject j (inj_num t x) (inj_num t x).
 Proof.
-  destruct t; intros; try constructor. destruct t; constructor.
+  destruct t; intros; constructor.
 Qed.
 
 Lemma inj_num_opt_wt: forall t x, val_opt_has_rettype (option_map (inj_num t) x) t.
@@ -249,8 +252,8 @@ Qed.
  *)
 
 Program Definition mkbuiltin_n1t 
-    (targ1: typ) (tres: rettype)
-    (f: valty targ1 -> valretty tres) :=
+    (targ1: typ) (tres: xtype)
+    (f: valty targ1 -> valxty tres) :=
   mkbuiltin_v1t tres
     (fun v1 => proj_num targ1 Vundef v1 (fun x => inj_num tres (f x)))
     _ _.
@@ -262,8 +265,8 @@ Next Obligation.
 Qed.
 
 Program Definition mkbuiltin_n2t 
-    (targ1 targ2: typ) (tres: rettype)
-    (f: valty targ1 -> valty targ2 -> valretty tres) :=
+    (targ1 targ2: typ) (tres: xtype)
+    (f: valty targ1 -> valty targ2 -> valxty tres) :=
   mkbuiltin_v2t tres
     (fun v1 v2 =>
        proj_num targ1 Vundef v1 (fun x1 =>
@@ -277,8 +280,8 @@ Next Obligation.
 Qed.
 
 Program Definition mkbuiltin_n3t 
-    (targ1 targ2 targ3: typ) (tres: rettype)
-    (f: valty targ1 -> valty targ2 -> valty targ3 -> valretty tres) :=
+    (targ1 targ2 targ3: typ) (tres: xtype)
+    (f: valty targ1 -> valty targ2 -> valty targ3 -> valxty tres) :=
   mkbuiltin_v3t tres
     (fun v1 v2 v3 =>
        proj_num targ1 Vundef v1 (fun x1 =>
@@ -293,8 +296,8 @@ Next Obligation.
 Qed.
 
 Program Definition mkbuiltin_n1p
-    (targ1: typ) (tres: rettype)
-    (f: valty targ1 -> option (valretty tres)) :=
+    (targ1: typ) (tres: xtype)
+    (f: valty targ1 -> option (valxty tres)) :=
   mkbuiltin_v1p tres
     (fun v1 => proj_num targ1 None v1 (fun x => option_map (inj_num tres) (f x)))
     _ _.
@@ -306,8 +309,8 @@ Next Obligation.
 Qed.
 
 Program Definition mkbuiltin_n2p
-    (targ1 targ2: typ) (tres: rettype)
-    (f: valty targ1 -> valty targ2 -> option (valretty tres)) :=
+    (targ1 targ2: typ) (tres: xtype)
+    (f: valty targ1 -> valty targ2 -> option (valxty tres)) :=
   mkbuiltin_v2p tres
     (fun v1 v2 =>
       proj_num targ1 None v1 (fun x1 =>
@@ -420,81 +423,81 @@ Definition standard_builtin_table : list (string * standard_builtin) :=
 Definition standard_builtin_sig (b: standard_builtin) : signature :=
   match b with
   | BI_select t =>
-      [Tint; t; t ---> t]
+      let t := inj_type t in [Xint; t; t ---> t]
   | BI_fabs | BI_fsqrt =>
-      [Tfloat ---> Tfloat]
+      [Xfloat ---> Xfloat]
   | BI_fabsf =>
-      [Tsingle ---> Tsingle]
+      [Xsingle ---> Xsingle]
   | BI_negl =>
-      [Tlong ---> Tlong]
+      [Xlong ---> Xlong]
   | BI_addl | BI_subl | BI_i64_umulh| BI_i64_smulh 
   | BI_i64_sdiv | BI_i64_udiv | BI_i64_smod | BI_i64_umod =>
-      [Tlong; Tlong ---> Tlong]
+      [Xlong; Xlong ---> Xlong]
   | BI_mull =>
-      [Tint; Tint ---> Tlong]
+      [Xint; Xint ---> Xlong]
   | BI_i32_bswap =>
-      [Tint ---> Tint]
+      [Xint ---> Xint]
   | BI_i64_bswap =>
-      [Tlong ---> Tlong]
+      [Xlong ---> Xlong]
   | BI_i16_bswap =>
-      [Tint ---> Tint]
+      [Xint ---> Xint]
   | BI_unreachable =>
-      mksignature nil Tvoid cc_default
+      mksignature nil Xvoid cc_default
   | BI_i64_shl  | BI_i64_shr | BI_i64_sar =>
-      [Tlong; Tint ---> Tlong]
+      [Xlong; Xint ---> Xlong]
   | BI_i64_dtos | BI_i64_dtou =>
-      [Tfloat ---> Tlong]
+      [Xfloat ---> Xlong]
   | BI_i64_stod | BI_i64_utod =>
-      [Tlong ---> Tfloat]
+      [Xlong ---> Xfloat]
   | BI_i64_stof | BI_i64_utof =>
-      [Tlong ---> Tsingle]
+      [Xlong ---> Xsingle]
   end.
 
 Program Definition standard_builtin_sem (b: standard_builtin) : builtin_sem (sig_res (standard_builtin_sig b)) :=
   match b with
   | BI_select t =>
-      mkbuiltin t 
+      mkbuiltin (inj_type t) 
        (fun vargs => match vargs with
           | Vint n :: v1 :: v2 :: nil => Some (Val.normalize (if Int.eq n Int.zero then v2 else v1) t)
           | _ => None
         end) _ _
-  | BI_fabs => mkbuiltin_n1t Tfloat Tfloat Float.abs
-  | BI_fabsf => mkbuiltin_n1t Tsingle Tsingle Float32.abs
-  | BI_fsqrt => mkbuiltin_n1t Tfloat Tfloat Float.sqrt
-  | BI_negl => mkbuiltin_n1t Tlong Tlong Int64.neg
-  | BI_addl => mkbuiltin_v2t Tlong Val.addl _ _ 
-  | BI_subl => mkbuiltin_v2t Tlong Val.subl _ _
-  | BI_mull => mkbuiltin_v2t Tlong Val.mull' _ _
+  | BI_fabs => mkbuiltin_n1t Tfloat Xfloat Float.abs
+  | BI_fabsf => mkbuiltin_n1t Tsingle Xsingle Float32.abs
+  | BI_fsqrt => mkbuiltin_n1t Tfloat Xfloat Float.sqrt
+  | BI_negl => mkbuiltin_n1t Tlong Xlong Int64.neg
+  | BI_addl => mkbuiltin_v2t Xlong Val.addl _ _ 
+  | BI_subl => mkbuiltin_v2t Xlong Val.subl _ _
+  | BI_mull => mkbuiltin_v2t Xlong Val.mull' _ _
   | BI_i16_bswap =>
-    mkbuiltin_n1t Tint Tint
+    mkbuiltin_n1t Tint Xint
                   (fun n => Int.repr (decode_int (List.rev (encode_int 2%nat (Int.unsigned n)))))
   | BI_i32_bswap =>
-    mkbuiltin_n1t Tint Tint
+    mkbuiltin_n1t Tint Xint
                   (fun n => Int.repr (decode_int (List.rev (encode_int 4%nat (Int.unsigned n)))))
   | BI_i64_bswap =>
-    mkbuiltin_n1t Tlong Tlong
+    mkbuiltin_n1t Tlong Xlong
                   (fun n => Int64.repr (decode_int (List.rev (encode_int 8%nat (Int64.unsigned n)))))
-  | BI_unreachable => mkbuiltin Tvoid (fun vargs => None) _ _
-  | BI_i64_umulh => mkbuiltin_n2t Tlong Tlong Tlong Int64.mulhu
-  | BI_i64_smulh => mkbuiltin_n2t Tlong Tlong Tlong Int64.mulhs
-  | BI_i64_sdiv => mkbuiltin_v2p Tlong Val.divls _ _
-  | BI_i64_udiv => mkbuiltin_v2p Tlong Val.divlu _ _
-  | BI_i64_smod => mkbuiltin_v2p Tlong Val.modls _ _
-  | BI_i64_umod => mkbuiltin_v2p Tlong Val.modlu _ _
-  | BI_i64_shl => mkbuiltin_v2t Tlong Val.shll _ _
-  | BI_i64_shr => mkbuiltin_v2t Tlong Val.shrlu _ _
-  | BI_i64_sar => mkbuiltin_v2t Tlong Val.shrl _ _
-  | BI_i64_dtos => mkbuiltin_n1p Tfloat Tlong Float.to_long
-  | BI_i64_dtou => mkbuiltin_n1p Tfloat Tlong Float.to_longu
-  | BI_i64_stod => mkbuiltin_n1t Tlong Tfloat Float.of_long
-  | BI_i64_utod => mkbuiltin_n1t Tlong Tfloat Float.of_longu
-  | BI_i64_stof => mkbuiltin_n1t Tlong Tsingle Float32.of_long
-  | BI_i64_utof => mkbuiltin_n1t Tlong Tsingle Float32.of_longu
+  | BI_unreachable => mkbuiltin Xvoid (fun vargs => None) _ _
+  | BI_i64_umulh => mkbuiltin_n2t Tlong Tlong Xlong Int64.mulhu
+  | BI_i64_smulh => mkbuiltin_n2t Tlong Tlong Xlong Int64.mulhs
+  | BI_i64_sdiv => mkbuiltin_v2p Xlong Val.divls _ _
+  | BI_i64_udiv => mkbuiltin_v2p Xlong Val.divlu _ _
+  | BI_i64_smod => mkbuiltin_v2p Xlong Val.modls _ _
+  | BI_i64_umod => mkbuiltin_v2p Xlong Val.modlu _ _
+  | BI_i64_shl => mkbuiltin_v2t Xlong Val.shll _ _
+  | BI_i64_shr => mkbuiltin_v2t Xlong Val.shrlu _ _
+  | BI_i64_sar => mkbuiltin_v2t Xlong Val.shrl _ _
+  | BI_i64_dtos => mkbuiltin_n1p Tfloat Xlong Float.to_long
+  | BI_i64_dtou => mkbuiltin_n1p Tfloat Xlong Float.to_longu
+  | BI_i64_stod => mkbuiltin_n1t Tlong Xfloat Float.of_long
+  | BI_i64_utod => mkbuiltin_n1t Tlong Xfloat Float.of_longu
+  | BI_i64_stof => mkbuiltin_n1t Tlong Xsingle Float32.of_long
+  | BI_i64_utof => mkbuiltin_n1t Tlong Xsingle Float32.of_longu
   end.
 Next Obligation. 
   red. destruct vl; auto. destruct v; auto. 
   destruct vl; auto. destruct vl; auto. destruct vl; auto.
-  apply Val.normalize_type.
+  apply Val.has_inj_type. apply Val.normalize_type.
 Qed.
 Next Obligation.
   red. inv H; auto. inv H0; auto. inv H1; auto. inv H0; auto. inv H2; auto.

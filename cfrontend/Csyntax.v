@@ -106,8 +106,8 @@ Definition Epreincr (id: incr_or_decr) (l: expr) (ty: type) :=
   It is expressed as an invocation of a builtin function. *)
 
 Definition Eselection (r1 r2 r3: expr) (ty: type) :=
-  let t := typ_of_type ty in
-  let sg := [AST.Tint; t; t ---> t]%asttyp in
+  let t := inj_type (typ_of_type ty) in
+  let sg := [Xint; t; t ---> t]%asttyp in
   Ebuiltin (EF_builtin "__builtin_sel"%string sg)
            (type_bool :: ty :: ty :: nil)
            (Econs r1 (Econs r2 (Econs r3 Enil)))

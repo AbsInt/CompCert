@@ -28,14 +28,20 @@ let name_of_type = function
   | Tany32 -> "any32"
   | Tany64 -> "any64"
 
-let name_of_rettype = function
-  | Tret t -> name_of_type t
-  | Tvoid -> "void"
-  | Tbool -> "bool"
-  | Tint8signed -> "int8s"
-  | Tint8unsigned -> "int8u"
-  | Tint16signed -> "int16s"
-  | Tint16unsigned -> "int16u"
+let name_of_xtype = function
+  | Xbool -> "bool"
+  | Xint8signed -> "int8s"
+  | Xint8unsigned -> "int8u"
+  | Xint16signed -> "int16s"
+  | Xint16unsigned -> "int16u"
+  | Xint -> "int"
+  | Xfloat -> "float"
+  | Xlong -> "long"
+  | Xsingle -> "single"
+  | Xany32 -> "any32"
+  | Xany64 -> "any64"
+  | Xptr -> "ptr"
+  | Xvoid -> "void"
 
 let name_of_chunk = function
   | Mbool -> "bool"

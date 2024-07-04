@@ -459,9 +459,10 @@ Lemma red_selection:
 Proof.
   intros. unfold Eselection.
   set (t := typ_of_type ty).
-  set (sg := [AST.Tint; t; t ---> t]%asttyp).
+  set (x := inj_type t).
+  set (sg := [Xint; x; x ---> x]%asttyp).
   assert (LK: lookup_builtin_function "__builtin_sel"%string sg = Some (BI_standard (BI_select t))).
-  { unfold sg, t; destruct ty as   [ | ? ? ? | ? | [] ? | ? ? | ? ? ? | ? ? ? | ? ? | ? ? ];
+  { unfold sg, x, t; destruct ty as [ | ? ? ? | ? | [] ? | ? ? | ? ? ? | ? ? ? | ? ? | ? ? ];
     simpl; unfold Tptr; destruct Archi.ptr64; reflexivity. }
   set (v' := if b then v2' else v3').
   assert (C: val_casted v' ty).

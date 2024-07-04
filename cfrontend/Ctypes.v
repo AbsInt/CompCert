@@ -1061,39 +1061,39 @@ Definition typ_of_type (t: type) : AST.typ :=
   | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tptr
   end.
 
-Definition argtype_of_type (t: type) : AST.rettype :=
+Definition argtype_of_type (t: type) : xtype :=
   match t with
-  | Tvoid => AST.Tvoid
-  | Tint I32 _ _ => AST.Tint
-  | Tint I8 Signed _ => AST.Tint8signed
-  | Tint I8 Unsigned _ => AST.Tint8unsigned
-  | Tint I16 Signed _ => AST.Tint16signed
-  | Tint I16 Unsigned _ => AST.Tint16unsigned
-  | Tint IBool _ _ => AST.Tbool
-  | Tlong _ _ => AST.Tlong
-  | Tfloat F32 _ => AST.Tsingle
-  | Tfloat F64 _ => AST.Tfloat
-  | Tpointer _ _ => AST.Tptr
-  | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tptr
+  | Tvoid => Xvoid
+  | Tint I32 _ _ => Xint
+  | Tint I8 Signed _ => Xint8signed
+  | Tint I8 Unsigned _ => Xint8unsigned
+  | Tint I16 Signed _ => Xint16signed
+  | Tint I16 Unsigned _ => Xint16unsigned
+  | Tint IBool _ _ => Xbool
+  | Tlong _ _ => Xlong
+  | Tfloat F32 _ => Xsingle
+  | Tfloat F64 _ => Xfloat
+  | Tpointer _ _ => Xptr
+  | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => Xptr
   end.
 
 (** In CompCert C, array, function, struct and union types cannot
     appear as function return types. *)
 
-Definition rettype_of_type (t: type) : AST.rettype :=
+Definition rettype_of_type (t: type) : xtype :=
   match t with
-  | Tvoid => AST.Tvoid
-  | Tint I32 _ _ => AST.Tint
-  | Tint I8 Signed _ => AST.Tint8signed
-  | Tint I8 Unsigned _ => AST.Tint8unsigned
-  | Tint I16 Signed _ => AST.Tint16signed
-  | Tint I16 Unsigned _ => AST.Tint16unsigned
-  | Tint IBool _ _ => AST.Tbool
-  | Tlong _ _ => AST.Tlong
-  | Tfloat F32 _ => AST.Tsingle
-  | Tfloat F64 _ => AST.Tfloat
-  | Tpointer _ _ => AST.Tptr
-  | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tvoid
+  | Tvoid => AST.Xvoid
+  | Tint I32 _ _ => AST.Xint
+  | Tint I8 Signed _ => AST.Xint8signed
+  | Tint I8 Unsigned _ => AST.Xint8unsigned
+  | Tint I16 Signed _ => AST.Xint16signed
+  | Tint I16 Unsigned _ => AST.Xint16unsigned
+  | Tint IBool _ _ => AST.Xbool
+  | Tlong _ _ => AST.Xlong
+  | Tfloat F32 _ => AST.Xsingle
+  | Tfloat F64 _ => AST.Xfloat
+  | Tpointer _ _ => AST.Xptr
+  | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Xvoid
   end.
 
 Definition signature_of_type (args: list type) (res: type) (cc: calling_convention): signature :=

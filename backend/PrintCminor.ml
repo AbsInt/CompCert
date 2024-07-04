@@ -224,9 +224,9 @@ let name_of_type = function
 
 let print_sig p sg =
   List.iter
-    (fun t -> fprintf p "%s ->@ " (name_of_rettype t))
+    (fun t -> fprintf p "%s ->@ " (name_of_xtype t))
     sg.sig_args;
-  fprintf p "%s" (name_of_rettype sg.sig_res)
+  fprintf p "%s" (name_of_xtype sg.sig_res)
 
 let rec just_skips s =
   match s with

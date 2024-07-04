@@ -3143,22 +3143,22 @@ Qed.
 
 (** Lifting an extended type to a value approximation. *)
 
-Definition of_xtype (r: rettype) (p: aptr) : aval :=
-  match r with
-  | Tbool => Uns p 1
-  | Tint8signed => Sgn p 8
-  | Tint8unsigned => Uns p 8
-  | Tint16signed => Sgn p 16
-  | Tint16unsigned => Uns p 16
+Definition of_xtype (x: xtype) (p: aptr) : aval :=
+  match x with
+  | Xbool => Uns p 1
+  | Xint8signed => Sgn p 8
+  | Xint8unsigned => Uns p 8
+  | Xint16signed => Sgn p 16
+  | Xint16unsigned => Uns p 16
   | _ => Ifptr p
   end.
 
-Lemma of_xtype_arg_sound: forall v r p,
-  Val.has_argtype v r ->
+Lemma of_xtype_arg_sound: forall v x p,
+  Val.has_argtype v x ->
   vmatch v (Ifptr p) ->
-  vmatch v (of_xtype r p).
+  vmatch v (of_xtype x p).
 Proof.
-  intros. destruct r, v; simpl in *; try contradiction; auto with va.
+  intros. destruct x, v; simpl in *; try contradiction; auto with va.
 - constructor. lia. apply is_uns_zero_ext. destruct H; subst i; auto.
 - constructor. lia. apply is_sgn_sign_ext. lia. auto.
 - constructor. lia. apply is_uns_zero_ext. auto.
@@ -4614,7 +4614,7 @@ Proof.
   unfold AVal.eq; red; intros. subst av. inv H0.
 Qed.
 
-Fixpoint einit_regs (rl: list reg) (tl: list rettype) : aenv :=
+Fixpoint einit_regs (rl: list reg) (tl: list xtype) : aenv :=
   match rl, tl with
   | nil, _ => AE.top
   | r1 :: rs, t1 :: ts =>

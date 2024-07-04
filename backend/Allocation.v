@@ -1086,7 +1086,7 @@ Definition transfer_aux (f: RTL.function) (env: regenv)
   | BStailcall sg ros args mv1 ros' =>
       let args' := loc_arguments sg in
       assertion (tailcall_is_possible sg);
-      assertion (rettype_eq sg.(sig_res) f.(RTL.fn_sig).(sig_res));
+      assertion (xtype_eq sg.(sig_res) f.(RTL.fn_sig).(sig_res));
       assertion (ros_compatible_tailcall ros');
       do e1 <- add_equation_ros ros ros' empty_eqs;
       do e2 <- add_equations_args args (proj_sig_args sg) args' e1;

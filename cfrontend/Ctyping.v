@@ -397,10 +397,11 @@ Inductive wt_rvalue : expr -> Prop :=
       wt_arguments rargs tyargs ->
       (* This typing rule is specialized to the builtin invocations generated
          by C2C, which are either __builtin_sel or builtins returning void. *)
-         (ty = Tvoid /\ sig_res (ef_sig ef) = AST.Tvoid)
+         (ty = Tvoid /\ sig_res (ef_sig ef) = Xvoid)
       \/ (tyargs = type_bool :: ty :: ty :: nil
           /\ let t := typ_of_type ty in
-             let sg := [AST.Tint; t; t ---> t]%asttyp in
+             let x := inj_type t in
+             let sg := [Xint; x; x ---> x]%asttyp in
              ef = EF_builtin "__builtin_sel"%string sg) ->
       wt_rvalue (Ebuiltin ef tyargs rargs ty)
   | wt_Eparen: forall r tycast ty,
@@ -754,7 +755,7 @@ Definition ebuiltin (ef: external_function) (tyargs: list type) (args: exprlist)
   do x1 <- check_rvals args;
   do x2 <- check_arguments args tyargs;
   if type_eq tyres Tvoid
-  && AST.rettype_eq (sig_res (ef_sig ef)) AST.Tvoid
+  && xtype_eq (sig_res (ef_sig ef)) Xvoid
   then OK (Ebuiltin ef tyargs args tyres)
   else Error (msg "builtin: wrong type decoration").
 
@@ -925,7 +926,7 @@ Definition retype_fundef (ce: composite_env) (e: typenv) (fd: fundef) : res fund
   match fd with
   | Internal f => do f' <- retype_function ce e f; OK (Internal f')
   | External ef args res cc =>
-      assertion (rettype_eq (ef_sig ef).(sig_res) (rettype_of_type res)); OK fd
+      assertion (xtype_eq (ef_sig ef).(sig_res) (rettype_of_type res)); OK fd
   end.
 
 Definition typecheck_program (p: program) : res program :=
@@ -1252,7 +1253,7 @@ Lemma ebuiltin_sound:
 Proof.
   intros. monadInv H.
   destruct (type_eq tyres Tvoid); simpl in EQ2; try discriminate.
-  destruct (rettype_eq (sig_res (ef_sig ef)) AST.Tvoid); inv EQ2.
+  destruct (xtype_eq (sig_res (ef_sig ef)) Xvoid); inv EQ2.
   econstructor; eauto. eapply check_arguments_sound; eauto.
 Qed.
 
@@ -1776,16 +1777,13 @@ Lemma has_rettype_wt_val:
   forall v ty,
   Val.has_rettype v (rettype_of_type ty) -> wt_val v ty.
 Proof.
-  unfold rettype_of_type, Val.has_rettype, Val.has_type; destruct ty; intros.
+  unfold rettype_of_type, Val.has_rettype; destruct ty; intros.
 - destruct v; contradiction || constructor.
-- destruct i.
-  + destruct s; destruct v; try contradiction; constructor; red; auto.
-  + destruct s; destruct v; try contradiction; constructor; red; auto.
-  + destruct v; try contradiction; constructor; auto.
-  + destruct v; try contradiction; constructor; red; auto.
+- destruct i; [destruct s | destruct s | | ]; destruct v; try contradiction;
+  constructor; unfold wt_int; auto.
 - destruct v; try contradiction; constructor; auto.
 - destruct f; destruct v; try contradiction; constructor.
-- unfold Tptr in *; destruct v; destruct Archi.ptr64 eqn:P64; try contradiction; constructor; auto.
+- destruct v; destruct Archi.ptr64 eqn:P64; try contradiction; constructor; auto.
 - destruct v; contradiction || constructor.
 - destruct v; contradiction || constructor.
 - destruct v; contradiction || constructor.
@@ -1830,10 +1828,10 @@ Proof.
 - (* paren *) inv H3. constructor. apply H5. eapply pres_sem_cast; eauto.
 - (* builtin *) subst. destruct H7 as [(A & B) | (A & B)].
 + subst ty. auto with ty.
-+ simpl in B. set (T := typ_of_type ty) in *. 
-  set (sg := [AST.Tint; T; T ---> T]%asttyp) in *.
++ simpl in B. set (T := typ_of_type ty) in *. set (X := inj_type T) in *.
+  set (sg := [Xint; X; X ---> X]%asttyp) in *.
   assert (LK: lookup_builtin_function "__builtin_sel"%string sg = Some (BI_standard (BI_select T))).
-  { unfold sg, T; destruct ty as   [ | ? ? ? | ? | [] ? | ? ? | ? ? ? | ? ? ? | ? ? | ? ? ];
+  { unfold sg, X, T; destruct ty as   [ | ? ? ? | ? | [] ? | ? ? | ? ? ? | ? ? ? | ? ? | ? ? ];
     simpl; unfold Tptr; destruct Archi.ptr64; reflexivity. }
   subst ef. red in H0. red in H0. rewrite LK in H0. inv H0. 
   inv H. inv H8. inv H9. inv H10. simpl in H1.
