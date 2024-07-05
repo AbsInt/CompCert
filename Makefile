@@ -265,16 +265,16 @@ documentation: $(FILES)
 
 tools/ndfun: tools/ndfun.ml
 ifeq ($(OCAML_NATIVE_COMP),true)
-	ocamlopt -o tools/ndfun str.cmxa tools/ndfun.ml
+	ocamlopt -o tools/ndfun -I +str str.cmxa tools/ndfun.ml
 else
-	ocamlc -o tools/ndfun str.cma tools/ndfun.ml
+	ocamlc -o tools/ndfun -I +str str.cma tools/ndfun.ml
 endif
 
 tools/modorder: tools/modorder.ml
 ifeq ($(OCAML_NATIVE_COMP),true)
-	ocamlopt -o tools/modorder str.cmxa tools/modorder.ml
+	ocamlopt -o tools/modorder -I +str str.cmxa tools/modorder.ml
 else
-	ocamlc -o tools/modorder str.cma tools/modorder.ml
+	ocamlc -o tools/modorder -I +str str.cma tools/modorder.ml
 endif
 
 latexdoc:
