@@ -1,0 +1,64 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - 'master'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [aarch64, arm, ppc, riscv, x86_32, x86_64]
+    env:
+      target: ${{ matrix.target }}
+      os: linux
+      jobs: 4
+      opamroot: /home/coq/.opam
+    container:
+      image: coqorg/coq:8.17.1
+      options: --user root
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: OS dependencies
+        run: tools/runner.sh system_install
+      - name: OPAM dependencies
+        run: tools/runner.sh opam_install menhir
+      - name: Configure
+        run: tools/runner.sh configure
+      - name: Build
+        run: tools/runner.sh build
+      - name: Test default configuration
+        run: tools/runner.sh test1
+      - name: Test alternate configuration
+        run: tools/runner.sh test2
+      - name: Test alternate configuration 2
+        run: tools/runner.sh test3
+  macos:
+    runs-on: macos-latest
+    env:
+      target: aarch64
+      os: macos
+      jobs: 3
+      configopts: -ignore-coq-version -ignore-ocaml-version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: OS dependencies
+        run: brew install coq menhir ocaml
+      - name: Configure
+        run: tools/runner.sh configure
+      - name: Build
+        run: tools/runner.sh build
+      - name: Test default configuration
+        run: tools/runner.sh test1
+      - name: Test alternate configuration
+        run: tools/runner.sh test2
