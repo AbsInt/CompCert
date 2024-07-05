@@ -2256,3 +2256,36 @@ Proof.
 Qed.
 
 End PRESERVATION.
+
+(** * Additional type-related results *)
+
+(** Casting a value to a type that it already has does not change the value.
+    (The cast may be undefined if the value does not belong to the source type.) *)
+
+Lemma sem_cast_already_typed: forall v t1 t2 m,
+  wt_val v t2 ->
+  sem_cast v t1 t2 m = Some v \/ sem_cast v t1 t2 m = None.
+Proof.
+  assert (INT: forall n sz sg, wt_int n sz sg -> cast_int_int sz sg n = n).
+  { unfold wt_int; intros.
+    destruct sz; [destruct sg | destruct sg | | ];
+    simpl; auto. destruct H; subst n; auto. }
+  assert (BOOL: forall n sg, wt_int n IBool sg -> (if Int.eq n Int.zero then Int.zero else Int.one) = n).
+  { intros. destruct H; subst n; auto. }
+  Ltac DestructCast :=
+    auto;
+    match goal with
+    | [ |- match match ?x with _ => _ end with _ => _ end = _ \/ _] => destruct x; DestructCast
+    | [ |- match ?x with _ => _ end = _ \/ _ ] => destruct x; DestructCast
+    | _ => idtac
+    end.
+  intros. unfold sem_cast, classify_cast; inv H; DestructCast;
+  try discriminate;
+  erewrite ? INT, ? BOOL; eauto.
+Qed.
+
+Corollary sem_cast_already_typed_idem: forall v t1 t2 m v',
+  sem_cast v t1 t2 m = Some v' -> wt_val v t2 -> v' = v.
+Proof.
+  intros. destruct (sem_cast_already_typed v t1 t2 m H0); congruence.
+Qed.
