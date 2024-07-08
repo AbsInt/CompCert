@@ -389,7 +389,12 @@ distclean:
 	rm -f Makefile.config
 
 check-admitted: $(FILES)
-	@grep -w 'admit\|Admitted\|ADMITTED' $^ || echo "Nothing admitted."
+	@if grep -w 'admit\|Admitted\|ADMITTED' $^; \
+         then exit 2; else echo "Nothing admitted."; fi
+
+check-leftovers: $(FILES)
+	@if grep -w '^Check\|^Print\|^Search' $^; \
+         then exit 2; else echo "No leftover interactive commands."; fi
 
 check-proof: $(FILES)
 	$(COQCHK) compcert.driver.Complements

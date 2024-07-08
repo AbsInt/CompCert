@@ -210,6 +210,12 @@ case "$target,$os" in
 esac
 }
 
+# Check for things that should not be in the Coq sources (admits, etc)
+
+Hygiene () {
+  make check-admitted && make check-leftovers
+}
+
 case "$1" in
   system_install) System_install;;
   opam_install) shift; OPAM_install "$@";;
@@ -220,6 +226,7 @@ case "$1" in
   test3) Run_test_round 3;;
   build_ccomp) Build_ccomp;;
   check_proof) Check_proof;;
+  hygiene) Hygiene;;
   *) Fatal "Unknown CI instruction: $1"; exit 1;;
 esac
 

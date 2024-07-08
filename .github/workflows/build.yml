@@ -34,6 +34,8 @@ jobs:
         run: tools/runner.sh configure
       - name: Build
         run: tools/runner.sh build
+      - name: Hygiene
+        run: tools/runner.sh hygiene
       - name: Test default configuration
         run: tools/runner.sh test1
       - name: Test alternate configuration
