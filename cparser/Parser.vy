@@ -16,6 +16,7 @@
 
 %{
 
+Require Extraction.
 Require Import List.
 Require Cabs.
 
