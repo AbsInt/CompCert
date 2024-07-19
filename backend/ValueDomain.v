@@ -2876,7 +2876,8 @@ Proof.
   intros. inv H; simpl in H0; congruence.
 Qed.
 
-(** Select either returns one of its arguments, or Vundef. *)
+(** Add the possibility that the result may be [Vundef].
+    Used for the [select] operation when the condition may be undefined. *)
 
 Definition add_undef (x: aval) :=
   match x with
@@ -2905,32 +2906,52 @@ Proof.
   destruct (Int.lt n Int.zero); auto with va.
 Qed.
 
-Lemma add_undef_normalize:
-  forall v x ty, vmatch v x -> vmatch (Val.normalize v ty) (add_undef x).
+(** Normalization by the select operation. *)
+
+Definition vnormalize_type (ty: typ) (x: aval) : aval :=
+  match x, ty with
+  | Vbot, _ => Vbot
+  | I _, Tint => x
+  | L _, Tlong => x
+  | F _, Tfloat => x
+  | FS _, Tsingle => x
+  | (I _ | FS _), Tany32 => x
+  | (I _ | L _ | F _ | FS _), Tany64 => x
+  | _, _ => add_undef x
+  end.
+
+Lemma vnormalize_type_sound: forall v x ty,
+  vmatch v x -> vmatch (Val.normalize v ty) (vnormalize_type ty x).
 Proof.
-  intros. destruct (Val.lessdef_normalize v ty);
-  auto using add_undef_sound, add_undef_undef.
+Local Opaque add_undef.
+  intros.
+  assert (vmatch v (add_undef x)) by auto using add_undef_sound.
+  destruct H; simpl; auto; destruct ty; auto using add_undef_undef with va.
 Qed.
 
-Definition select (ab: abool) (x y: aval) :=
+(** Select either returns one of its arguments, or Vundef. *)
+
+Definition select (ab: abool) (x y: aval) (ty: typ) :=
   match ab with
   | Bnone => ntop
-  | Just b | Maybe b => add_undef (if b then x else y)
-  | Btop => add_undef (vlub x y)
+  | Just b => vnormalize_type ty (if b then x else y)
+  | Maybe b => add_undef (vnormalize_type ty (if b then x else y))
+  | Btop => add_undef (vnormalize_type ty (vlub x y))
   end.
 
 Lemma select_sound:
   forall ob v w ab x y ty,
   cmatch ob ab -> vmatch v x -> vmatch w y ->
-  vmatch (Val.select ob v w ty) (select ab x y).
+  vmatch (Val.select ob v w ty) (select ab x y ty).
 Proof.
   unfold Val.select, select; intros. inv H.
 - auto with va.
-- apply add_undef_normalize; destruct b; auto.
+- apply vnormalize_type_sound; destruct b; auto.
 - apply add_undef_undef.
-- apply add_undef_normalize; destruct b; auto.
+- apply add_undef_sound; apply vnormalize_type_sound; destruct b; auto.
 - destruct ob as [b|]. 
-+ apply add_undef_normalize. destruct b; [apply vmatch_lub_l|apply vmatch_lub_r]; auto.
++ apply add_undef_sound; apply vnormalize_type_sound.
+  destruct b; [apply vmatch_lub_l|apply vmatch_lub_r]; auto.
 + apply add_undef_undef.
 Qed.
 
@@ -2972,7 +2993,6 @@ Definition vnormalize (chunk: memory_chunk) (v: aval) :=
   | Many32, _ => Num (provenance v)
   | Many64, _ => v
   end.
-
 
 Lemma vnormalize_sound:
   forall chunk v x, vmatch v x -> vmatch (Val.load_result chunk v) (vnormalize chunk x).

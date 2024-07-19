@@ -209,7 +209,7 @@ Definition eval_static_operation (op: operation) (vl: list aval): aval :=
   | Osingleoflongu, v1::nil => singleoflongu v1
 
   | Ocmp c, _ => of_optbool (eval_static_condition c vl)
-  | Osel c ty, v1::v2::vl => select (eval_static_condition c vl) v1 v2
+  | Osel c ty, v1::v2::vl => select (eval_static_condition c vl) v1 v2 ty
 
   | _, _ => Vbot
   end.
