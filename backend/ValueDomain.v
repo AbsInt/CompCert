@@ -605,7 +605,7 @@ Proof.
   intros. apply vmatch_ifptr. intros. subst v. inv H; eapply pmatch_top'; eauto.
 Qed.
 
-(** Some properties about [is_uns] and [is_sgn]. *)
+(** Some properties of [is_uns] and [is_sgn]. *)
 
 Lemma is_uns_mon: forall n1 n2 i, is_uns n1 i -> n1 <= n2 -> is_uns n2 i.
 Proof.
@@ -625,6 +625,17 @@ Qed.
 Definition usize := Int.size.
 
 Definition ssize (i: int) := Int.size (if Int.lt i Int.zero then Int.not i else i) + 1.
+
+Lemma usize_pos: forall n, 0 <= usize n.
+Proof.
+  unfold usize; intros. generalize (Int.size_range n); lia.
+Qed.
+
+Lemma ssize_pos: forall n, 0 < ssize n.
+Proof.
+  unfold ssize; intros.
+  generalize (Int.size_range (if Int.lt n Int.zero then Int.not n else n)); lia.
+Qed.
 
 Lemma is_uns_usize:
   forall i, is_uns (usize i) i.
@@ -709,7 +720,18 @@ Proof.
   apply Int.sign_ext_widen; lia.
 Qed.
 
-Hint Resolve is_uns_mon is_sgn_mon is_uns_sgn is_uns_usize is_sgn_ssize : va.
+Lemma is_uns_wordsize: forall i, is_uns Int.zwordsize i.
+Proof.
+  intros; red; intros. lia.
+Qed.
+
+Lemma is_sgn_wordsize: forall i, is_sgn Int.zwordsize i.
+Proof.
+  intros; red; intros. f_equal. lia.
+Qed.
+
+Hint Resolve is_uns_mon is_sgn_mon is_uns_sgn is_uns_usize is_sgn_ssize
+             is_uns_wordsize is_sgn_wordsize usize_pos ssize_pos : va.
 
 Lemma is_uns_1:
   forall n, is_uns 1 n -> n = Int.zero \/ n = Int.one.
@@ -717,6 +739,57 @@ Proof.
   intros. destruct (Int.testbit n 0) eqn:B0; [right|left]; apply Int.same_bits_eq; intros.
   rewrite Int.bits_one. destruct (zeq i 0). subst i; auto. apply H; lia.
   rewrite Int.bits_zero. destruct (zeq i 0). subst i; auto. apply H; lia.
+Qed.
+
+Lemma is_uns_range: forall z n,
+  0 <= n -> 0 <= z < two_p n -> is_uns n (Int.repr z).
+Proof.
+  intros; red; intros. rewrite Int.testbit_repr by auto.
+  replace z with (z mod two_p n) by auto using Zmod_small.
+  rewrite Ztestbit_mod_two_p by lia. rewrite zlt_false by lia. auto.
+Qed.
+
+Lemma range_is_uns: forall i n,
+  0 <= n -> is_uns n i -> 0 <= Int.unsigned i < two_p n.
+Proof.
+  intros. destruct (zlt n Int.zwordsize).
+- apply is_uns_zero_ext in H0; auto.
+  rewrite <- H0. rewrite Int.zero_ext_mod by lia.
+  auto using Z_mod_lt, two_p_gt_ZERO.
+- assert (Int.modulus <= two_p n).
+  { rewrite Int.modulus_power. apply two_p_monotone. generalize Int.wordsize_pos; lia. }
+  generalize (Int.unsigned_range i). lia.
+Qed.
+
+Lemma is_sgn_range: forall z n,
+  0 < n -> -(two_p (n - 1)) <= z < two_p (n - 1) -> is_sgn n (Int.repr z).
+Proof.
+  intros. destruct (zlt n Int.zwordsize); [destruct (zlt z 0) | ].
+- red; intros.
+  set (z' := Z.pred (Z.opp z)).
+  assert (A: Int.repr z' = Int.not (Int.repr z)).
+  { rewrite Int.not_neg. apply Int.eqm_samerepr.
+    unfold z'. replace (Z.pred (-z)) with ((-z) + (-1)) by lia.
+    apply Int.eqm_add. apply Int.eqm_unsigned_repr_r. apply eqmod_neg. apply Int.eqm_unsigned_repr.
+    apply Int.eqm_unsigned_repr. }
+  assert (U: is_uns (n - 1) (Int.repr z')).
+  { apply is_uns_range; lia. }
+  assert (V: forall m, 0 <= m < Int.zwordsize -> m >= n - 1 ->
+             Int.testbit (Int.repr z) m = true).
+  { intros. apply negb_false_iff. rewrite <- Int.bits_not by auto. rewrite <- A. apply U; auto. }
+  rewrite ! V by lia. auto.
+- apply is_uns_sgn with (n - 1). apply is_uns_range; lia. lia.
+- eauto with va.
+Qed.
+
+Lemma range_is_sgn: forall i n,
+  0 < n -> is_sgn n i -> -(two_p (n - 1)) <= Int.signed i < two_p (n - 1).
+Proof.
+  intros. destruct (zlt n Int.zwordsize).
+- apply is_sgn_sign_ext in H0; auto. rewrite <- H0. apply Int.sign_ext_range; lia.
+- assert (Int.half_modulus <= two_p (n - 1)).
+  { rewrite Int.half_modulus_power. apply two_p_monotone. generalize Int.wordsize_pos; lia. }
+  generalize (Int.signed_range i). unfold Int.min_signed, Int.max_signed. lia.
 Qed.
 
 (** Tracking leakage of pointers through arithmetic operations.
@@ -983,17 +1056,6 @@ Proof.
 Qed.
 
 Hint Resolve vge_uns_uns' vge_uns_i' vge_sgn_sgn' vge_sgn_i' : va.
-
-Lemma usize_pos: forall n, 0 <= usize n.
-Proof.
-  unfold usize; intros. generalize (Int.size_range n); lia.
-Qed.
-
-Lemma ssize_pos: forall n, 0 < ssize n.
-Proof.
-  unfold ssize; intros.
-  generalize (Int.size_range (if Int.lt n Int.zero then Int.not n else n)); lia.
-Qed.
 
 Lemma vge_lub_l:
   forall x y, vge (vlub x y) x.
@@ -1567,15 +1629,35 @@ Qed.
 
 (** Integer arithmetic operations *)
 
-Definition neg := unop_int Int.neg.
+Definition neg (x: aval) :=
+  match x with
+  | I i => I (Int.neg i)
+  | Sgn p n => sgn p (n + 1)
+  | _ => ntop1 x
+  end.
 
 Lemma neg_sound:
   forall v x, vmatch v x -> vmatch (Val.neg v) (neg x).
-Proof (unop_int_sound Int.neg).
+Proof.
+  destruct 1; simpl; eauto with va.
+  assert (A: Int.neg i = Int.repr (- Int.signed i)).
+  { intros. apply Int.eqm_samerepr. apply eqmod_neg. apply Int.eqm_sym. apply Int.eqm_signed_unsigned. }
+  rewrite A.
+  exploit range_is_sgn; eauto. intros B.
+  apply vmatch_sgn. apply is_sgn_range. lia.
+  assert (two_p (n + 1 - 1) = two_p (n - 1) * 2).
+  { replace (n + 1 - 1) with ((n - 1) + 1) by lia. apply two_p_is_exp; lia. }
+  lia.
+Qed.
 
 Definition add (x y: aval) :=
   match x, y with
   | I i, I j => I (Int.add i j)
+  | I i, Uns p n | Uns p n, I i => uns p (Z.max n (usize i) + 1)
+  | I i, Sgn p n | Sgn p n, I i => sgn p (Z.max n (ssize i) + 1)
+  | Uns p1 n1, Uns p2 n2 => uns (plub p1 p2) (Z.max n1 n2 + 1)
+  | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max n1 n2 + 1)
+  | Uns p1 n1, Sgn p2 n2 | Sgn p2 n2, Uns p1 n1 => sgn (plub p1 p2) (Z.max (n1 + 1) n2 + 1)
   | Ptr p, I i | I i, Ptr p => Ptr (if Archi.ptr64 then poffset p else padd p (Ptrofs.of_int i))
   | Ptr p, _   | _, Ptr p   => Ptr (poffset p)
   | Ifptr p, I i | I i, Ifptr p => Ifptr (if Archi.ptr64 then poffset p else padd p (Ptrofs.of_int i))
@@ -1587,9 +1669,33 @@ Definition add (x y: aval) :=
 Lemma add_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.add v w) (add x y).
 Proof.
+  assert (UNS: forall n i m j,
+               0 <= n -> 0 <= m -> is_uns n i -> is_uns m j ->
+               is_uns (Z.max n m + 1) (Int.add i j)).
+  { intros. apply range_is_uns in H1; auto. apply range_is_uns in H2; auto.
+    apply is_uns_range. lia.
+    assert (two_p n <= two_p (Z.max n m)) by (apply two_p_monotone; lia).
+    assert (two_p m <= two_p (Z.max n m)) by (apply two_p_monotone; lia).
+    assert (two_p (Z.max n m + 1) = two_p (Z.max n m) * 2) by (apply two_p_is_exp; lia).
+    lia. }
+  assert (SGN: forall n i m j,
+               0 < n -> 0 < m -> is_sgn n i -> is_sgn m j ->
+               is_sgn (Z.max n m + 1) (Int.add i j)).
+  { intros. apply range_is_sgn in H1; auto. apply range_is_sgn in H2; auto.
+    rewrite Int.add_signed. apply is_sgn_range. lia.
+    set (p := Z.max n m - 1).
+    assert (two_p (n-1) <= two_p p) by (apply two_p_monotone; lia).
+    assert (two_p (m-1) <= two_p p) by (apply two_p_monotone; lia).
+    assert (two_p (Z.max n m + 1 - 1) = two_p p * 2).
+    { replace (Z.max n m + 1 - 1) with (p + 1) by lia. apply two_p_is_exp; lia. }
+    lia. }
+  assert (SGN2: forall n i m j,
+               0 < n -> 0 < m -> is_sgn n i -> is_sgn m j ->
+               is_sgn (Z.max n m + 1) (Int.add j i)).
+  { intros. rewrite Z.max_comm; eauto. }
   intros. unfold Val.add, add. destruct Archi.ptr64.
-- inv H; inv H0; constructor.
-- inv H; inv H0; constructor;
+- inv H; inv H0; eauto with va.
+- inv H; inv H0; eauto with va; constructor;
   ((apply padd_sound; assumption) || (eapply poffset_sound; eassumption) || idtac).
   apply pmatch_lub_r. eapply poffset_sound; eauto.
   apply pmatch_lub_l. eapply poffset_sound; eauto.
@@ -1598,6 +1704,11 @@ Qed.
 Definition sub (v w: aval) :=
   match v, w with
   | I i1, I i2 => I (Int.sub i1 i2)
+  | I i, Uns p n | Uns p n, I i => sgn p (Z.max (n + 1) (ssize i) + 1)
+  | I i, Sgn p n | Sgn p n, I i => sgn p (Z.max n (ssize i) + 1)
+  | Uns p1 n1, Uns p2 n2 => sgn (plub p1 p2) (Z.max n1 n2 + 1)
+  | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (Z.max n1 n2 + 1)
+  | Uns p1 n1, Sgn p2 n2 | Sgn p2 n2, Uns p1 n1 => sgn (plub p1 p2) (Z.max (n1 + 1) n2 + 1)
   | Ptr p, I i => if Archi.ptr64 then Ifptr (poffset p) else Ptr (psub p (Ptrofs.of_int i))
   | Ptr p, _   => Ifptr (poffset p)
   | Ifptr p, I i => if Archi.ptr64 then Ifptr (plub (poffset p) (provenance w)) else Ifptr (psub p (Ptrofs.of_int i))
@@ -1608,6 +1719,30 @@ Definition sub (v w: aval) :=
 Lemma sub_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.sub v w) (sub x y).
 Proof.
+  assert (UNS: forall n i m j,
+               0 <= n -> 0 <= m -> is_uns n i -> is_uns m j ->
+               is_sgn (Z.max n m + 1) (Int.sub i j)).
+  { intros. apply range_is_uns in H1; auto. apply range_is_uns in H2; auto.
+    apply is_sgn_range. lia.
+    assert (two_p n <= two_p (Z.max n m)) by (apply two_p_monotone; lia).
+    assert (two_p m <= two_p (Z.max n m)) by (apply two_p_monotone; lia).
+    replace (Z.max n m + 1 - 1) with (Z.max n m) by lia.
+    lia. }
+  assert (SGN: forall n i m j,
+               0 < n -> 0 < m -> is_sgn n i -> is_sgn m j ->
+               is_sgn (Z.max n m + 1) (Int.sub i j)).
+  { intros. apply range_is_sgn in H1; auto. apply range_is_sgn in H2; auto.
+    rewrite Int.sub_signed. apply is_sgn_range. lia.
+    set (p := Z.max n m - 1).
+    assert (two_p (n-1) <= two_p p) by (apply two_p_monotone; lia).
+    assert (two_p (m-1) <= two_p p) by (apply two_p_monotone; lia).
+    assert (two_p (Z.max n m + 1 - 1) = two_p p * 2).
+    { replace (Z.max n m + 1 - 1) with (p + 1) by lia. apply two_p_is_exp; lia. }
+    lia. }
+  assert (SGN2: forall n i m j,
+               0 < n -> 0 < m -> is_sgn n i -> is_sgn m j ->
+               is_sgn (Z.max n m + 1) (Int.sub j i)).
+  { intros. rewrite Z.max_comm. eauto. }
   intros. unfold Val.sub, sub. destruct Archi.ptr64.
 - inv H; inv H0; eauto with va.
 - inv H; inv H0; try (destruct (eq_block b b0)); eauto using psub_sound, poffset_sound, pmatch_lub_l with va.
