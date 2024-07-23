@@ -3058,10 +3058,14 @@ Definition vnormalize_type (ty: typ) (x: aval) : aval :=
 Lemma vnormalize_type_sound: forall v x ty,
   vmatch v x -> vmatch (Val.normalize v ty) (vnormalize_type ty x).
 Proof.
-Local Opaque add_undef.
   intros.
-  assert (vmatch v (add_undef x)) by auto using add_undef_sound.
-  destruct H; simpl; auto; destruct ty; auto using add_undef_undef with va.
+  assert (A: Val.has_type v ty /\ vnormalize_type ty x = x
+          \/ vnormalize_type ty x = add_undef x).
+  { unfold vnormalize_type, Val.has_type; inv H; destruct ty; auto. }
+  destruct A as [[A B] | A].
+- rewrite B, Val.normalize_idem by auto. auto.
+- rewrite A. destruct (Val.lessdef_normalize v ty);
+  auto using add_undef_sound, add_undef_undef. 
 Qed.
 
 (** Select either returns one of its arguments, or Vundef. *)
