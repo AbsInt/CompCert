@@ -391,15 +391,7 @@ Qed.
 Definition pcmp (c: comparison) (p1 p2: aptr) : abool :=
   match p1, p2 with
   | Pbot, _ | _, Pbot => Bnone
-  | Gl id1 ofs1, Gl id2 ofs2 =>
-      if peq id1 id2 then Maybe (Ptrofs.cmpu c ofs1 ofs2)
-      else cmp_different_blocks c
-  | Gl id1 ofs1, Glo id2 =>
-      if peq id1 id2 then Btop else cmp_different_blocks c
-  | Glo id1, Gl id2 ofs2 =>
-      if peq id1 id2 then Btop else cmp_different_blocks c
-  | Glo id1, Glo id2 =>
-      if peq id1 id2 then Btop else cmp_different_blocks c
+  | Gl id1 ofs1, Gl id2 ofs2 => if peq id1 id2 then Maybe (Ptrofs.cmpu c ofs1 ofs2) else Btop
   | Stk ofs1, Stk ofs2 => Maybe (Ptrofs.cmpu c ofs1 ofs2)
   | (Gl _ _ | Glo _ | Glob | Nonstack), (Stk _ | Stack) => cmp_different_blocks c
   | (Stk _ | Stack), (Gl _ _ | Glo _ | Glob | Nonstack) => cmp_different_blocks c
@@ -438,9 +430,6 @@ Proof.
   unfold pcmp; inv H; inv H0; (apply cmatch_top || (apply DIFF; congruence) || idtac).
   - destruct (peq id id0). subst id0. apply SAME. eapply bc_glob; eauto.
     auto with va.
-  - destruct (peq id id0); auto with va.
-  - destruct (peq id id0); auto with va.
-  - destruct (peq id id0); auto with va.
   - apply SAME. eapply bc_stack; eauto.
 Qed.
 
@@ -476,9 +465,6 @@ Proof.
   unfold pcmp; inv H; inv H0; (apply cmatch_top || (apply DIFF; congruence) || idtac).
   - destruct (peq id id0). subst id0. apply SAME. eapply bc_glob; eauto.
     auto with va.
-  - destruct (peq id id0); auto with va.
-  - destruct (peq id id0); auto with va.
-  - destruct (peq id id0); auto with va.
   - apply SAME. eapply bc_stack; eauto.
 Qed.
 
