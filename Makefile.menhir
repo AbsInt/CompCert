@@ -42,11 +42,7 @@ MENHIR_FLAGS = -v --no-stdlib -la 1
 # Using Menhir in --table mode requires MenhirLib.
 
 ifeq ($(MENHIR_TABLE),true)
-  ifeq ($(wildcard $(MENHIR_DIR)/menhirLib.cmxa),)
-    MENHIR_LIBS = menhirLib.cmx
-  else
-    MENHIR_LIBS = menhirLib.cmxa
-  endif
+  MENHIR_LIBS = menhirLib.cmxa
 else
   MENHIR_LIBS =
 endif
