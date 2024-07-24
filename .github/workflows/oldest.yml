@@ -27,7 +27,7 @@ jobs:
         with:
           submodules: true
       - name: OPAM dependencies
-        run: tools/runner.sh opam_install menhir
+        run: tools/runner.sh opam_install menhir=20200624
       - name: Configure
         run: tools/runner.sh configure
       - name: Build
