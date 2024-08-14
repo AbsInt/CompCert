@@ -695,6 +695,13 @@ Proof.
   rewrite Int.bits_zero. destruct (zeq i 0). subst i; auto. apply H; lia.
 Qed.
 
+Lemma is_uns_0:
+  forall n, is_uns 0 n -> n = Int.zero.
+Proof.
+  intros.  apply Int.same_bits_eq. intros.
+  rewrite Int.bits_zero. apply H; lia.
+Qed.
+
 Lemma is_uns_range: forall z n,
   0 <= n -> 0 <= z < two_p n -> is_uns n (Int.repr z).
 Proof.
@@ -876,6 +883,13 @@ Lemma vmatch_Uns_1:
 Proof.
   intros. inv H; auto. right. exploit is_uns_1; eauto. intuition congruence.
 Qed.
+
+Lemma vmatch_Uns_0:
+  forall p v, vmatch v (Uns p 0) -> v = Vundef \/ v = Vint Int.zero.
+Proof.
+  intros. inv H; auto. right. exploit is_uns_0; eauto. intuition congruence.
+Qed.
+
 
 (** Ordering *)
 
@@ -1757,11 +1771,59 @@ Proof.
 - inv H; inv H0; try (destruct (eq_block b b0)); eauto using psub_sound, poffset_sound, pmatch_lub_l with va.
 Qed.
 
-Definition mul := binop_int Int.mul.
+Definition mul_base (v w: aval) :=
+  match v, w with
+  | Uns p n1, (I n2 | IU n2) | (I n2 | IU n2), Uns p n1 => uns p (n1 + usize n2)
+  | Uns p1 n1, Uns p2 n2 => uns (plub p1 p2) (n1 + n2)
+  | _, _ => ntop2 v w
+  end.
+
+Lemma mul_base_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mul v w) (mul_base x y).
+Proof.
+  intros.
+  assert (forall i1 i2 n1 n2 p,
+             0 <= n1 -> is_uns n1 i1 ->
+             0 <= n2 -> is_uns n2 i2 ->
+             vmatch (Val.mul (Vint i1) (Vint i2)) (uns p (n1 + n2))).
+  { intros. apply range_is_uns in H2; auto. apply range_is_uns in H4; auto.
+    apply vmatch_uns. apply is_uns_range. lia.
+    rewrite two_p_is_exp by auto.  split.
+    change 0 with (0 * 0). apply Z.mul_le_mono_nonneg; lia. 
+    apply Z.mul_lt_mono_nonneg; lia. }
+  unfold mul_base.
+  inv H; inv H0; auto with va; rewrite Z.add_comm; auto with va.
+Qed.
+
+Definition mul (v w: aval) :=
+  match v, w with
+  | I i1, I i2 => I (Int.mul i1 i2)
+  | IU i1, I i2 | I i1, IU i2 | IU i1, IU i2 => IU (Int.mul i1 i2)
+  | _, _ =>
+      if vincl v (Uns Ptop 0) || vincl w (Uns Ptop 0)
+      then IU Int.zero
+      else mul_base v w
+  end.
 
 Lemma mul_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mul v w) (mul x y).
-Proof (binop_int_sound Int.mul).
+Proof.
+  intros.
+  assert (vmatch (Val.mul v w)
+            (if vincl x (Uns Ptop 0) || vincl y (Uns Ptop 0)
+             then IU Int.zero
+             else mul_base x y)).
+  { destruct orb eqn:INCL; auto using mul_base_sound.
+    rewrite orb_true_iff in INCL; destruct INCL;
+    exploit vmatch_Uns_0; eauto using vmatch_ge, vincl_ge;
+    intros [E|E]; subst; simpl.
+    - auto with va.
+    - destruct w; auto with va.
+    - destruct v; auto with va.
+    - destruct v; simpl; rewrite ? Int.mul_zero; auto with va.
+  }
+  inv H; inv H0; auto with va.
+Qed.
 
 Definition mulhs := binop_int Int.mulhs.
 
