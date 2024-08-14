@@ -1839,11 +1839,61 @@ Lemma mulhs_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulhs v w) (mulhs x y).
 Proof (binop_int_sound Int.mulhs).
 
-Definition mulhu := binop_int Int.mulhu.
+Definition mulhu_base (v w: aval) :=
+  match v, w with
+  | Uns p n1, (I n2 | IU n2) | (I n2 | IU n2), Uns p n1 =>
+      uns p (n1 + (usize n2) - Int.zwordsize)
+  | Uns p1 n1, Uns p2 n2 =>
+      uns (plub p1 p2) (n1 + n2 - Int.zwordsize)
+  | _, _ =>
+      ntop2 v w
+  end.
+
+Lemma mulhu_base_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulhu v w) (mulhu_base x y).
+Proof.
+  intros.
+  assert (forall n1 n2 i1 i2 p,
+          0 <= n1 -> is_uns n1 i1 ->
+          0 <= n2 -> is_uns n2 i2 ->
+          vmatch (Vint (Int.mulhu i1 i2)) (uns p (n1 + n2 - Int.zwordsize))).
+  { intros. apply range_is_uns in H2; auto. apply range_is_uns in H4; auto.
+    unfold Int.mulhu. set (x1 := Int.unsigned i1) in *. set (x2 := Int.unsigned i2) in *.
+    exploit (Zmult_unsigned_range n1 x1 n2 x2); auto. intros P.
+    rewrite Int.modulus_power. change Int.zwordsize with 32. rewrite <- Zshiftr_div_two_p by lia.
+    apply vmatch_uns. red; intros. rewrite Int.testbit_repr by auto. rewrite Z.shiftr_spec by lia.
+    apply (Zbits_unsigned_range (n1 + n2)); lia.
+  }
+  unfold mulhu_base. inv H; inv H0; eauto with va; rewrite Z.add_comm; eauto with va.
+Qed.
+
+Definition mulhu (v w: aval):=
+  match v, w with
+  | I i1, I i2 => I (Int.mulhu i1 i2)
+  | I i1, IU i2 | IU i1, I i2 | IU i1, IU i2  => IU (Int.mulhu i1 i2)
+  | _, _ =>
+      if vincl v (Uns Ptop 1) || vincl w (Uns Ptop 1) then
+        IU Int.zero
+      else
+        mulhu_base v w
+  end.
 
 Lemma mulhu_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulhu v w) (mulhu x y).
-Proof (binop_int_sound Int.mulhu).
+Proof.
+  intros.
+  destruct (vincl x (Uns Ptop 1) || vincl y (Uns Ptop 1)) eqn:?; try eapply mulhu_base_sound; eauto; unfold mulhu; rewrite Heqb.
+  - rewrite orb_true_iff in Heqb. destruct Heqb.
+    exploit (vmatch_Uns_1 Ptop v). eapply vmatch_ge; eauto. eapply vincl_ge; eauto.
+    intros. destruct H2; inv H2. simpl. inv H; destruct y; auto with va.
+    simpl. inv H; destruct y; inv H0; auto with va. simpl.
+    inv H; destruct y; inv H0; try rewrite Int.mulhu_commut; try rewrite Int.mulhu_one; auto with va.
+    exploit (vmatch_Uns_1 Ptop w). eapply vmatch_ge; eauto. eapply vincl_ge; eauto.
+    intros. destruct H2; inv H2. inv H; inv H0; simpl; auto with va.
+    inv H0; inv H; simpl; auto with va; rewrite Int.mulhu_zero; auto with va.
+    inv H0; inv H; simpl; auto with va; rewrite Int.mulhu_one; auto with va.
+  - inv H; inv H0; try eapply mulhu_base_sound; eauto with va.
+Qed.
 
 Definition divs (v w: aval) :=
   match w, v with
