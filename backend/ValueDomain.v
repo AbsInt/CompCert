@@ -1859,7 +1859,7 @@ Proof (binop_int_sound Int.mulhu).
 
 Definition divs (v w: aval) :=
   match w, v with
-  | I i2, I i1 =>
+  | (I i2 | IU i2), (I i1 | IU i1) =>
       if Int.eq i2 Int.zero
       || Int.eq i1 (Int.repr Int.min_signed) && Int.eq i2 Int.mone
       then if va_strict tt then Vbot else ntop
@@ -1871,16 +1871,15 @@ Lemma divs_sound:
   forall v w u x y, vmatch v x -> vmatch w y -> Val.divs v w = Some u -> vmatch u (divs x y).
 Proof.
   intros. destruct v; destruct w; try discriminate; simpl in H1.
-  destruct (Int.eq i0 Int.zero
-         || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone) eqn:E; inv H1.
-  inv H; inv H0; auto with va. simpl. rewrite E. constructor.
+  destruct orb eqn:E; inv H1.
+  inv H; inv H0; auto with va; simpl; rewrite E; constructor.
 Qed.
 
 Definition divu (v w: aval) :=
   match w, v with
-  | I i2, I i1 =>
+  | (I i2 | IU i2), (I i1 | IU i1) =>
       if Int.eq i2 Int.zero
-       then if va_strict tt then Vbot else ntop
+      then if va_strict tt then Vbot else ntop
       else I (Int.divu i1 i2)
   | _, _ => ntop2 v w
   end.
@@ -1890,12 +1889,12 @@ Lemma divu_sound:
 Proof.
   intros. destruct v; destruct w; try discriminate; simpl in H1.
   destruct (Int.eq i0 Int.zero) eqn:E; inv H1.
-  inv H; inv H0; auto with va. simpl. rewrite E. constructor.
+  inv H; inv H0; auto with va; simpl; rewrite E; constructor.
 Qed.
 
 Definition mods (v w: aval) :=
   match w, v with
-  | I i2, I i1 =>
+  | (I i2 | IU i2), (I i1 | IU i1) =>
       if Int.eq i2 Int.zero
       || Int.eq i1 (Int.repr Int.min_signed) && Int.eq i2 Int.mone
       then if va_strict tt then Vbot else ntop
@@ -1907,18 +1906,17 @@ Lemma mods_sound:
   forall v w u x y, vmatch v x -> vmatch w y -> Val.mods v w = Some u -> vmatch u (mods x y).
 Proof.
   intros. destruct v; destruct w; try discriminate; simpl in H1.
-  destruct (Int.eq i0 Int.zero
-         || Int.eq i (Int.repr Int.min_signed) && Int.eq i0 Int.mone) eqn:E; inv H1.
-  inv H; inv H0; auto with va. simpl. rewrite E. constructor.
+  destruct orb eqn:E; inv H1.
+  inv H; inv H0; auto with va; simpl; rewrite E; constructor.
 Qed.
 
 Definition modu (v w: aval) :=
   match w, v with
-  | I i2, I i1 =>
+  | (I i2 | IU i2), (I i1| IU i1) =>
       if Int.eq i2 Int.zero
       then if va_strict tt then Vbot else ntop
       else I (Int.modu i1 i2)
-  | I i2, _ => uns (provenance v) (usize i2)
+  | (I i2 | IU i2), _ => uns (provenance v) (usize i2)
   | _, _ => ntop2 v w
   end.
 
@@ -1938,7 +1936,7 @@ Proof.
   intros. destruct v; destruct w; try discriminate; simpl in H1.
   destruct (Int.eq i0 Int.zero) eqn:Z; inv H1.
   assert (i0 <> Int.zero) by (generalize (Int.eq_spec i0 Int.zero); rewrite Z; auto).
-  unfold modu. inv H; inv H0; auto with va. rewrite Z. constructor.
+  unfold modu. inv H; inv H0; auto with va; rewrite Z; constructor.
 Qed.
 
 Definition shrx (v w: aval) :=
