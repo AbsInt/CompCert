@@ -1833,11 +1833,29 @@ Proof.
   inv H; inv H0; auto with va.
 Qed.
 
-Definition mulhs := binop_int Int.mulhs.
+Definition mulhs (v w: aval) :=
+  match v, w with
+  | I i1, I i2 => I (Int.mulhs i1 i2)
+  | IU i1, I i2 | I i1, IU i2 | IU i1, IU i2 => IU (Int.mulhs i1 i2)
+  | _, _ =>
+      if vincl v (Uns Ptop 0) || vincl w (Uns Ptop 0) then
+        IU Int.zero
+      else
+        ntop2 v w
+  end.
 
 Lemma mulhs_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulhs v w) (mulhs x y).
-Proof (binop_int_sound Int.mulhs).
+Proof.
+  intros. unfold Val.mulhs, mulhs.
+  destruct (vincl x (Uns Ptop 0) || vincl y (Uns Ptop 0)) eqn:?; auto with va.
+  - rewrite orb_true_iff in Heqb;  destruct Heqb.
+    exploit vmatch_Uns_0. eapply vmatch_ge. eapply vincl_ge; eauto. eexact H.
+    intros. destruct H2; inv H2; inv H; inv H0; auto with va.
+    exploit vmatch_Uns_0. eapply vmatch_ge. eapply vincl_ge; eauto. eexact H0.
+    intros. destruct H2; inv H2; inv H; inv H0; simpl; try rewrite Int.mulhs_zero; auto with va.
+  - inv H; inv H0; auto with va.
+Qed.
 
 Definition mulhu_base (v w: aval) :=
   match v, w with
