@@ -2518,6 +2518,44 @@ Proof.
   unfold lt in H. rewrite signed_zero in H. destruct (zlt (signed y) 0). congruence. auto.
 Qed.
 
+(** ** Properties of [mulhu] (upper bits of unsigned multiplication) *)
+
+Lemma mulhu_zero:
+  forall x, mulhu x zero = zero.
+Proof.
+  intros. unfold mulhu. rewrite unsigned_zero. rewrite Z.mul_0_r.
+  reflexivity.
+Qed.
+
+Lemma mulhu_one:
+  forall x, mulhu x one = zero.
+Proof.
+  intros. unfold mulhu. rewrite unsigned_one. rewrite Z.mul_1_r.
+  rewrite Zdiv_small. reflexivity. apply unsigned_range.
+Qed.
+
+Lemma mulhu_commut:
+  forall x y, mulhu x y = mulhu y x.
+Proof.
+  intros. unfold mulhu. rewrite Z.mul_comm. reflexivity.
+Qed.
+
+(** ** Properties of [mulhs] (upper bits of signed multiplication) *)
+
+Lemma mulhs_zero:
+  forall x, mulhs x zero = zero.
+Proof.
+  intros. unfold mulhs. rewrite signed_zero. rewrite Z.mul_0_r.
+  reflexivity.
+Qed.
+
+Lemma mulhs_commut:
+  forall x y, mulhs x y = mulhs y x.
+Proof.
+  intros. unfold mulhs. rewrite Z.mul_comm. reflexivity.
+Qed.
+
+
 (** ** Properties of integer zero extension and sign extension. *)
 
 Lemma bits_zero_ext:

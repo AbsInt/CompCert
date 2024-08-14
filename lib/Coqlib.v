@@ -368,6 +368,16 @@ Proof.
   rewrite <- two_p_S. decEq. lia. lia.
 Qed.
 
+Lemma two_p_is_exp_2:
+  forall x y, 0 <= x <= y -> two_p (y - x) = two_p y / two_p x.
+Proof.
+  intros. replace y with (y - x + x) by lia.
+  rewrite two_p_is_exp by lia.
+  rewrite Z_div_mult_full.
+  replace (y - x + x) with y by lia. reflexivity.
+  exploit (two_p_gt_ZERO x); lia.
+Qed.
+
 (** Properties of [Zmin] and [Zmax] *)
 
 Lemma Zmin_spec:
