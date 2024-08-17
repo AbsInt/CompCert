@@ -968,8 +968,8 @@ Proof.
 Qed.
 
 Lemma if_conversion_base_correct:
-  forall f env cond id ifso ifnot s e ty vb b sp m tf tk e' m',
-  if_conversion_base (known_id f) env cond id ifso ifnot = Some s ->
+  forall f env cond id ifso ifnot kont s e ty vb b sp m tf tk e' m',
+  if_conversion_base (known_id f) env cond id ifso ifnot kont = Some s ->
   def_env f e -> wt_env env e ->
   env id = ty ->
   wt_expr env ifso ty ->
@@ -984,10 +984,7 @@ Lemma if_conversion_base_correct:
            E0 (State tf Sskip tk sp (PTree.set id v' e') m').
 Proof.
   unfold if_conversion_base; intros. rewrite H2 in H. clear H2.
-  destruct (is_known (known_id f) id &&
-            safe_expr (known_id f) ifso &&
-            safe_expr (known_id f) ifnot &&
-            if_conversion_heuristic cond ifso ifnot ty) eqn:C; try discriminate.
+  destruct andb eqn:C; try discriminate.
   destruct (sel_select_opt ty cond ifso ifnot) as [a'|] eqn:SSO; simpl in H; inv H.
   InvBooleans.
   destruct (eval_safe_expr ge f sp e m ifso) as (v1 & EV1); auto.
@@ -1001,8 +998,8 @@ Proof.
 Qed.
 
 Lemma if_conversion_correct:
-  forall f env tyret cond ifso ifnot s vb b k f' k' sp e m e' m',
-  if_conversion (known_id f) env cond ifso ifnot = Some s ->
+  forall f env tyret cond ifso ifnot kont s vb b k f' k' sp e m e' m',
+  if_conversion (known_id f) env cond ifso ifnot kont = Some s ->
   def_env f e -> wt_env env e ->
   wt_stmt env tyret ifso ->
   wt_stmt env tyret ifnot ->
@@ -1050,8 +1047,8 @@ End EXPRESSIONS.
 (** Semantic preservation for functions and statements. *)
 
 Inductive match_cont: Cminor.program -> helper_functions -> known_idents -> typenv -> Cminor.cont -> CminorSel.cont -> Prop :=
-  | match_cont_seq: forall cunit hf ki env s s' k k',
-      sel_stmt (prog_defmap cunit) ki env s = OK s' ->
+  | match_cont_seq: forall cunit hf ki env s kont s' k k',
+      sel_stmt (prog_defmap cunit) ki env s kont = OK s' ->
       match_cont cunit hf ki env k k' ->
       match_cont cunit hf ki env (Cminor.Kseq s k) (Kseq s' k')
   | match_cont_block: forall cunit hf ki env k k',
@@ -1074,12 +1071,12 @@ with match_call_cont: Cminor.cont -> CminorSel.cont -> Prop :=
       match_call_cont (Cminor.Kcall id f sp e k) (Kcall id f' sp e' k').
 
 Inductive match_states: Cminor.state -> CminorSel.state -> Prop :=
-  | match_state: forall cunit hf f f' s k s' k' sp e m e' m' env
+  | match_state: forall cunit hf f f' s kont k s' k' sp e m e' m' env
         (LINK: linkorder cunit prog)
         (HF: helper_functions_declared cunit hf)
         (TF: sel_function (prog_defmap cunit) hf f = OK f')
         (TYF: type_function f = OK env)
-        (TS: sel_stmt (prog_defmap cunit) (known_id f) env s = OK s')
+        (TS: sel_stmt (prog_defmap cunit) (known_id f) env s kont = OK s')
         (MC: match_cont cunit hf (known_id f) env k k')
         (LD: env_lessdef e e')
         (ME: Mem.extends m m'),
@@ -1127,6 +1124,19 @@ Inductive match_states: Cminor.state -> CminorSel.state -> Prop :=
         (Cminor.Returnstate v (Cminor.Kcall optid f sp e k) m)
         (State f' Sskip k' sp e' m').
 
+Remark match_states_skip: forall cunit hf f f' k k' sp e m e' m' env
+        (LINK: linkorder cunit prog)
+        (HF: helper_functions_declared cunit hf)
+        (TF: sel_function (prog_defmap cunit) hf f = OK f')
+        (TYF: type_function f = OK env)
+        (MC: match_cont cunit hf (known_id f) env k k')
+        (LD: env_lessdef e e')
+        (ME: Mem.extends m m'),
+  match_states (Cminor.State f Cminor.Sskip k sp e m) (State f' Sskip k' sp e' m').
+Proof.
+  intros. eapply match_state with (kont := Sskip); eauto.
+Qed.
+
 Remark call_cont_commut:
   forall cunit hf ki env k k',
   match_cont cunit hf ki env k k' -> match_call_cont (Cminor.call_cont k) (call_cont k').
@@ -1161,19 +1171,18 @@ Proof.
   red; intros; simpl. rewrite CL1; apply CL2.
 Qed.
 
-Lemma if_conversion_base_nolabel: forall (hf: helper_functions) ki env a id a1 a2 s,
-  if_conversion_base ki env a id a1 a2 = Some s ->
+Lemma if_conversion_base_nolabel: forall (hf: helper_functions) ki env a id a1 a2 kont s,
+  if_conversion_base ki env a id a1 a2 kont = Some s ->
   nolabel' s.
 Proof.
   unfold if_conversion_base; intros.
-  destruct (is_known ki id && safe_expr ki a1 && safe_expr ki a2 &&
-            if_conversion_heuristic a a1 a2 (env id)); try discriminate.
+  destruct andb; try discriminate.
   destruct (sel_select_opt (env id) a a1 a2); inv H. 
   red; auto.
 Qed.
 
-Lemma if_conversion_nolabel: forall (hf: helper_functions) ki env a s1 s2 s,
-  if_conversion ki env a s1 s2 = Some s ->
+Lemma if_conversion_nolabel: forall (hf: helper_functions) ki env a s1 s2 kont s,
+  if_conversion ki env a s1 s2 kont = Some s ->
   nolabel s1 /\ nolabel s2 /\ nolabel' s.
 Proof.
   unfold if_conversion; intros.
@@ -1197,53 +1206,55 @@ Proof.
 Qed. 
 
 Remark find_label_commut:
-  forall cunit hf ki env lbl s k s' k',
+  forall cunit hf ki env lbl s kont k s' k',
   match_cont cunit hf ki env k k' ->
-  sel_stmt (prog_defmap cunit) ki env s = OK s' ->
+  sel_stmt (prog_defmap cunit) ki env s kont = OK s' ->
   match Cminor.find_label lbl s k, find_label lbl s' k' with
   | None, None => True
-  | Some(s1, k1), Some(s1', k1') => sel_stmt (prog_defmap cunit) ki env s1 = OK s1' /\ match_cont cunit hf ki env k1 k1'
+  | Some(s1, k1), Some(s1', k1') => exists kont1, sel_stmt (prog_defmap cunit) ki env s1 kont1 = OK s1' /\ match_cont cunit hf ki env k1 k1'
   | _, _ => False
   end.
 Proof.
   induction s; intros until k'; simpl; intros MC SE; try (monadInv SE); simpl; auto.
-(* store *)
+- (* store *)
   unfold store. destruct (addressing m (sel_expr e)); simpl; auto.
-(* call *)
+- (* call *)
   destruct (classify_call (prog_defmap cunit) e); simpl; auto.
   rewrite sel_builtin_nolabel; auto.
-(* tailcall *)
+- (* tailcall *)
   destruct (classify_call (prog_defmap cunit) e); simpl; auto.
-(* builtin *)
+- (* builtin *)
   rewrite sel_builtin_nolabel; auto.
-(* seq *)
-  exploit (IHs1 (Cminor.Kseq s2 k)). constructor; eauto. eauto.
+- (* seq *)
+  exploit (IHs1 x (Cminor.Kseq s2 k)). econstructor; eauto. eauto.
   destruct (Cminor.find_label lbl s1 (Cminor.Kseq s2 k)) as [[sx kx] | ];
-  destruct (find_label lbl x (Kseq x0 k')) as [[sy ky] | ];
-  intuition. apply IHs2; auto.
-(* ifthenelse *)
-  destruct (if_conversion ki env e s1 s2) as [s|] eqn:IFC.
+  destruct (find_label lbl x0 (Kseq x k')) as [[sy ky] | ];
+  intuition. apply (IHs2 kont); eauto.
+- (* ifthenelse *)
+  destruct if_conversion as [s|] eqn:IFC.
   inv SE. exploit if_conversion_nolabel; eauto. intros (A & B & C).
   rewrite A, B, C. auto.
   monadInv SE; simpl.
-  exploit (IHs1 k); eauto.
+  exploit (IHs1 kont k); eauto.
   destruct (Cminor.find_label lbl s1 k) as [[sx kx] | ];
   destruct (find_label lbl x k') as [[sy ky] | ];
-  intuition. apply IHs2; auto.
-(* loop *)
-  apply IHs. constructor; auto. simpl; rewrite EQ; auto. auto.
-(* block *)
-  apply IHs. constructor; auto. auto.
-(* switch *)
+  intuition. apply (IHs2 kont); eauto.
+- (* loop *) 
+  apply (IHs Sskip). apply match_cont_seq with (kont := Sskip); auto. simpl; rewrite EQ; auto. auto.
+- (* block *)
+  apply (IHs kont). constructor; auto. auto.
+- (* switch *)
   destruct b.
   destruct (validate_switch Int64.modulus n l (compile_switch Int64.modulus n l)); inv SE.
   simpl; auto.
   destruct (validate_switch Int.modulus n l (compile_switch Int.modulus n l)); inv SE.
   simpl; auto.
-(* return *)
+- (* return *)
   destruct o; inv SE; simpl; auto.
-(* label *)
-  destruct (ident_eq lbl l). auto. apply IHs; auto.
+- (* label *)
+  destruct (ident_eq lbl l).
+  + eauto.
+  + apply (IHs kont); eauto.
 Qed.
 
 (** The simulation diagram *)
@@ -1267,7 +1278,7 @@ Proof.
   inv MC. left; econstructor; split. apply plus_one; econstructor. econstructor; eauto.
   inv H.
 - (* skip block *)
-  inv MC. left; econstructor; split. apply plus_one; econstructor. econstructor; eauto.
+  inv MC. left; econstructor; split. apply plus_one; econstructor. eauto using match_states_skip.
   inv H.
 - (* skip call *)
   exploit Mem.free_parallel_extends; eauto. intros [m2' [A B]].
@@ -1279,14 +1290,14 @@ Proof.
   exploit sel_expr_correct; eauto. intros [v' [A B]].
   left; econstructor; split.
   apply plus_one; econstructor; eauto.
-  econstructor; eauto. apply set_var_lessdef; auto.
+  eapply match_states_skip; eauto. apply set_var_lessdef; auto.
 - (* store *)
   exploit sel_expr_correct. try apply LINK. try apply HF. eexact H. eauto. eauto. intros [vaddr' [A B]].
   exploit sel_expr_correct. try apply LINK. try apply HF. eexact H0. eauto. eauto. intros [v' [C D]].
   exploit Mem.storev_extends; eauto. intros [m2' [P Q]].
   left; econstructor; split.
   apply plus_one; eapply eval_store; eauto.
-  econstructor; eauto.
+  eauto using match_states_skip.
 - (* Scall *)
   exploit classify_call_correct; eauto.
   destruct (classify_call (prog_defmap cunit) a) as [ | id | ef].
@@ -1330,37 +1341,39 @@ Proof.
   eapply call_cont_commut; eauto.
 - (* Sbuiltin *)
   exploit sel_builtin_correct; eauto. intros (e2' & m2' & P & Q & R).
-  left; econstructor; split. eexact P. econstructor; eauto.
+  left; econstructor; split. eexact P. eauto using match_states_skip.
 - (* Seq *)
   left; econstructor; split.
   apply plus_one; constructor.
-  econstructor; eauto. constructor; auto.
+  econstructor; eauto. econstructor; eauto.
 - (* Sifthenelse *)
-  simpl in TS. destruct (if_conversion (known_id f) env a s1 s2) as [s|] eqn:IFC; monadInv TS.
+  simpl in TS. destruct if_conversion as [s|] eqn:IFC; monadInv TS.
 + inv WTS. inv WT_FN. assert (env0 = env) by congruence. subst env0. inv WT_STMT.
   exploit if_conversion_correct; eauto.
   set (s0 := if b then s1 else s2). intros (n & e1 & e1' & A & B & C).
   right; right. econstructor; exists n.
   split. eexact A. eapply eventually_implies. eexact B.
-  intros S3 EQ; subst S3. econstructor; eauto.
+  intros S3 EQ; subst S3. eauto using match_states_skip.
 + exploit sel_expr_correct; eauto. intros [v' [A B]].
   assert (Val.bool_of_val v' b). inv B. auto. inv H0.
   left; exists (State f' (if b then x else x0) k' sp e' m'); split.
   apply plus_one; econstructor; eauto. eapply eval_condexpr_of_expr; eauto.
-  econstructor; eauto. destruct b; auto.
+  econstructor; eauto. destruct b; eauto.
 - (* Sloop *)
   left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
-  constructor; auto. simpl; rewrite EQ; auto.
+  apply match_cont_seq with Sskip; auto. simpl; rewrite EQ; auto.
 - (* Sblock *)
   left; econstructor; split. apply plus_one; constructor. econstructor; eauto. constructor; auto.
 - (* Sexit seq *)
-  inv MC. left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
+  inv MC. left; econstructor; split. apply plus_one; constructor.
+  eapply match_state with (kont := Sskip); eauto.
   inv H.
 - (* Sexit0 block *)
-  inv MC. left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
+  inv MC. left; econstructor; split. apply plus_one; constructor. eauto using match_states_skip.
   inv H.
 - (* SexitS block *)
-  inv MC. left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
+  inv MC. left; econstructor; split. apply plus_one; constructor.
+  eapply match_state with (kont := Sskip); eauto.
   inv H.
 - (* Sswitch *)
   inv H0; simpl in TS.
@@ -1369,13 +1382,13 @@ Proof.
   exploit sel_expr_correct; eauto. intros [v' [A B]]. inv B.
   left; econstructor; split.
   apply plus_one; econstructor. eapply sel_switch_int_correct; eauto.
-  econstructor; eauto.
+  eapply match_state with (kont := Sskip); eauto.
 + set (ct := compile_switch Int64.modulus default cases) in *.
   destruct (validate_switch Int64.modulus default cases ct) eqn:VALID; inv TS.
   exploit sel_expr_correct; eauto. intros [v' [A B]]. inv B.
   left; econstructor; split.
   apply plus_one; econstructor. eapply sel_switch_long_correct; eauto.
-  econstructor; eauto.
+  eapply match_state with (kont := Sskip); eauto.
 - (* Sreturn None *)
   exploit Mem.free_parallel_extends; eauto. intros [m2' [P Q]].
   erewrite <- stackspace_function_translated in P by eauto.
@@ -1392,14 +1405,14 @@ Proof.
 - (* Slabel *)
   left; econstructor; split. apply plus_one; constructor. econstructor; eauto.
 - (* Sgoto *)
-  assert (sel_stmt (prog_defmap cunit) (known_id f) env (Cminor.fn_body f) = OK (fn_body f')).
+  assert (sel_stmt (prog_defmap cunit) (known_id f) env (Cminor.fn_body f) Sskip = OK (fn_body f')).
   { monadInv TF; simpl. congruence. }
-  exploit (find_label_commut cunit hf (known_id f) env lbl (Cminor.fn_body f) (Cminor.call_cont k)).
+  exploit (find_label_commut cunit hf (known_id f) env lbl (Cminor.fn_body f) Sskip (Cminor.call_cont k)).
     apply match_cont_other. eapply call_cont_commut; eauto. eauto.
   rewrite H.
   destruct (find_label lbl (fn_body f') (call_cont k'0))
   as [[s'' k'']|] eqn:?; intros; try contradiction.
-  destruct H1.
+  destruct H1 as (cont1 & P & Q).
   left; econstructor; split.
   apply plus_one; econstructor; eauto.
   econstructor; eauto.
@@ -1428,9 +1441,9 @@ Proof.
   inv MC.
   left; econstructor; split.
   apply plus_one; econstructor.
-  econstructor; eauto. destruct optid; simpl; auto. apply set_var_lessdef; auto.
+  eapply match_states_skip; eauto. destruct optid; simpl; auto. apply set_var_lessdef; auto.
 - (* return of an external call turned into a Sbuiltin *)
-  right; left; split. simpl; lia. split. auto. econstructor; eauto.
+  right; left; split. simpl; lia. split. auto. eauto using match_states_skip.
 Qed.
 
 Lemma sel_initial_states:

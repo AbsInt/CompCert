@@ -106,7 +106,7 @@ to execute instructions from the other branch in parallel with
 instructions from the first branch.
 *)
 
-let if_conversion_heuristic cond ifso ifnot ty =
+let if_conversion_heuristic cond ifso ifnot ty kont =
   if not !Clflags.option_fifconversion then false else
   if !Clflags.option_Obranchless then true else
   if not (fast_cmove ty) then false else
