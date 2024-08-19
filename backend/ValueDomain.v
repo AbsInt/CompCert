@@ -4520,7 +4520,7 @@ Proof.
            id1 <> id2 -> b1 <> b2).
   { intros until id2; intros GE1 GE2 EQ1 EQ2 DIFF.
     apply GE1 in EQ1; apply GE2 in EQ2.
-    apply Genv.find_invert_symbol in EQ1, EQ2.
+    apply Genv.find_invert_symbol in EQ1; apply Genv.find_invert_symbol in EQ2.
     congruence. }
   assert (GLOB_STACK: forall (bc1 bc2: block_classification) ge sp b1 b2 id,
            genv_match bc1 ge -> bc1 sp = BCstack -> bc2 sp = BCstack ->
