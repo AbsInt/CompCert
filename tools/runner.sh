@@ -184,12 +184,14 @@ case "$target,$os" in
       2) Run_test "" "-Os";;
     esac;;
   arm,linux)
-    case "$1" in
-      1) Run_test "$simu_armhf" "-marm";;
-      2) Run_test "$simu_armhf" "-mthumb";;
-      3) Rebuild_runtime -toolprefix arm-linux-gnueabi- arm-eabi
-         Run_test "$simu_armsf" "-marm";;
-    esac;;
+    # TEMPORARY: skip ARM testing because of QEMU problem on the test VM
+    # case "$1" in
+    #   1) Run_test "$simu_armhf" "-marm";;
+    #   2) Run_test "$simu_armhf" "-mthumb";;
+    #   3) Rebuild_runtime -toolprefix arm-linux-gnueabi- arm-eabi
+    #      Run_test "$simu_armsf" "-marm";;
+    # esac;;
+    echo "Skipping ARM tests";;
   ppc,linux)
     # TEMPORARY: skip PPC testing because of QEMU problem on the test VM
     # case "$1" in
