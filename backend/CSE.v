@@ -77,7 +77,7 @@ Fixpoint find_valnum_rhs (r: rhs) (eqs: list equation)
   match eqs with
   | nil => None
   | Eq v str r' :: eqs1 =>
-      if str && eq_rhs r r' then Some v else find_valnum_rhs r eqs1
+      if str && compat_rhs r r' then Some v else find_valnum_rhs r eqs1
   end.
 
 (** [find_valnum_rhs' rhs eqs] is similar, but also accepts equations
@@ -88,7 +88,7 @@ Fixpoint find_valnum_rhs' (r: rhs) (eqs: list equation)
   match eqs with
   | nil => None
   | Eq v str r' :: eqs1 =>
-      if eq_rhs r r' then Some v else find_valnum_rhs' r eqs1
+      if compat_rhs r r' then Some v else find_valnum_rhs' r eqs1
   end.
 
 (** [find_valnum_num vn eqs] searches the list of equations [eqs]
@@ -203,9 +203,9 @@ Definition add_op (n: numbering) (rd: reg) (op: operation) (rs: list reg) :=
 
 Definition add_load (n: numbering) (rd: reg)
                     (chunk: memory_chunk) (addr: addressing)
-                    (rs: list reg) :=
+                    (rs: list reg) (p: aptr) :=
   let (n1, vs) := valnum_regs n rs in
-  add_rhs n1 rd (Load chunk addr vs).
+  add_rhs n1 rd (Load chunk addr vs p).
 
 (** [set_unknown n rd] returns a numbering where [rd] is mapped to
   no value number, and no equations are added.  This is useful
@@ -246,7 +246,7 @@ Definition kill_equations (pred: rhs -> bool) (n: numbering) : numbering :=
 Definition filter_loads (r: rhs) : bool :=
   match r with
   | Op op _ => op_depends_on_memory op
-  | Load _ _ _ => true
+  | Load _ _ _ _ => true
   end.
 
 Definition kill_all_loads (n: numbering) : numbering :=
@@ -258,23 +258,19 @@ Definition kill_all_loads (n: numbering) : numbering :=
   from this store are preserved.  Equations involving memory-dependent
   operators are also removed. *)
 
-Definition filter_after_store (app: VA.t) (n: numbering) (p: aptr) (sz: Z) (r: rhs) :=
+Definition filter_after_store (n: numbering) (p: aptr) (sz: Z) (r: rhs) :=
   match r with
   | Op op vl =>
       op_depends_on_memory op
-  | Load chunk addr vl =>
-      match regs_valnums n vl with
-      | None => true
-      | Some rl =>
-          negb (pdisjoint (aaddressing app addr rl) (size_chunk chunk) p sz)
-      end
+  | Load chunk addr vl q =>
+      negb (pdisjoint q (size_chunk chunk) p sz)
   end.
 
 Definition kill_loads_after_store
              (app: VA.t) (n: numbering)
              (chunk: memory_chunk) (addr: addressing) (args: list reg) :=
   let p := aaddressing app addr args in
-  kill_equations (filter_after_store app n p (size_chunk chunk)) n.
+  kill_equations (filter_after_store n p (size_chunk chunk)) n.
 
 (** [add_store_result n chunk addr rargs rsrc] updates the numbering [n]
   to reflect the knowledge gained after executing an instruction
@@ -298,7 +294,7 @@ Definition add_store_result (app: VA.t) (n: numbering) (chunk: memory_chunk) (ad
     let (n1, vsrc) := valnum_reg n rsrc in
     let (n2, vargs) := valnum_regs n1 rargs in
     {| num_next := n2.(num_next);
-       num_eqs  := Eq vsrc false (Load chunk addr vargs) :: n2.(num_eqs);
+       num_eqs  := Eq vsrc false (Load chunk addr vargs (aaddressing app addr rargs)) :: n2.(num_eqs);
        num_reg  := n2.(num_reg);
        num_val  := n2.(num_val) |}
   else n.
@@ -310,8 +306,8 @@ Definition add_store_result (app: VA.t) (n: numbering) (chunk: memory_chunk) (ad
   operators are also removed. *)
 
 Definition kill_loads_after_storebytes
-             (app: VA.t) (n: numbering) (dst: aptr) (sz: Z) :=
-  kill_equations (filter_after_store app n dst sz) n.
+             (n: numbering) (dst: aptr) (sz: Z) :=
+  kill_equations (filter_after_store n dst sz) n.
 
 (** [add_memcpy app n1 n2 rsrc rdst sz] adds equations to [n2] that
   represent the effect of a [memcpy] block copy operation of [sz] bytes
@@ -327,7 +323,7 @@ Definition kill_loads_after_storebytes
 
 Definition shift_memcpy_eq (src sz delta: Z) (e: equation) :=
   match e with
-  | Eq l strict (Load chunk (Ainstack i) _) =>
+  | Eq l strict (Load chunk (Ainstack i) _ _) =>
       let i := Ptrofs.unsigned i in
       let j := i + delta in
       if zle src i
@@ -335,7 +331,7 @@ Definition shift_memcpy_eq (src sz delta: Z) (e: equation) :=
       && zeq (Z.modulo delta (align_chunk chunk)) 0
       && zle 0 j
       && zle j Ptrofs.max_unsigned
-      then Some(Eq l strict (Load chunk (Ainstack (Ptrofs.repr j)) nil))
+      then Some(Eq l strict (Load chunk (Ainstack (Ptrofs.repr j)) nil (Stk (Ptrofs.repr j))))
       else None
   | _ => None
   end.
@@ -461,7 +457,7 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
       | Iop op args res s =>
           add_op before res op args
       | Iload chunk addr args dst s =>
-          add_load before dst chunk addr args
+          add_load before dst chunk addr args (aaddressing approx!!pc addr args)
       | Istore chunk addr args src s =>
           let app := approx!!pc in
           let n := kill_loads_after_store app before chunk addr args in
@@ -487,7 +483,7 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
                   let app := approx!!pc in
                   let adst := aaddr_arg app dst in
                   let asrc := aaddr_arg app src in
-                  let n := kill_loads_after_storebytes app before adst sz in
+                  let n := kill_loads_after_storebytes before adst sz in
                   set_res_unknown (add_memcpy before n asrc adst sz) res
               | _ =>
                   empty_numbering
@@ -537,7 +533,7 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
         end
   | Iload chunk addr args dst s =>
       let (n1, vl) := valnum_regs n args in
-      match find_rhs n1 (Load chunk addr vl) with
+      match find_rhs n1 (Load chunk addr vl Ptop) with
       | Some r =>
           Iop Omove (r :: nil) dst s
       | None =>

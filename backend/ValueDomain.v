@@ -476,41 +476,6 @@ Proof.
   try (destruct (peq id id0));  try constructor; try (apply cmp_different_blocks_none).
 Qed.
 
-Definition pdisjoint (p1: aptr) (sz1: Z) (p2: aptr) (sz2: Z) : bool :=
-  match p1, p2 with
-  | Pbot, _ => true
-  | _, Pbot => true
-  | Gl id1 ofs1, Gl id2 ofs2 =>
-      if peq id1 id2
-      then zle (Ptrofs.unsigned ofs1 + sz1) (Ptrofs.unsigned ofs2)
-           || zle (Ptrofs.unsigned ofs2 + sz2) (Ptrofs.unsigned ofs1)
-      else true
-  | Gl id1 ofs1, Glo id2 => negb(peq id1 id2)
-  | Glo id1, Gl id2 ofs2 => negb(peq id1 id2)
-  | Glo id1, Glo id2 => negb(peq id1 id2)
-  | Stk ofs1, Stk ofs2 =>
-      zle (Ptrofs.unsigned ofs1 + sz1) (Ptrofs.unsigned ofs2)
-      || zle (Ptrofs.unsigned ofs2 + sz2) (Ptrofs.unsigned ofs1)
-  | (Gl _ _ | Glo _ | Glob | Nonstack), (Stk _ | Stack) => true
-  | (Stk _ | Stack), (Gl _ _ | Glo _ | Glob | Nonstack) => true
-  | _, _ => false
-  end.
-
-Lemma pdisjoint_sound:
-  forall sz1 b1 ofs1 p1 sz2 b2 ofs2 p2,
-  pdisjoint p1 sz1 p2 sz2 = true ->
-  pmatch b1 ofs1 p1 -> pmatch b2 ofs2 p2 ->
-  b1 <> b2 \/ Ptrofs.unsigned ofs1 + sz1 <= Ptrofs.unsigned ofs2 \/ Ptrofs.unsigned ofs2 + sz2 <= Ptrofs.unsigned ofs1.
-Proof.
-  intros. inv H0; inv H1; simpl in H; try discriminate; try (left; congruence).
-- destruct (peq id id0). subst id0. destruct (orb_true_elim _ _ H); InvBooleans; auto.
-  left; congruence.
-- destruct (peq id id0); try discriminate. left; congruence.
-- destruct (peq id id0); try discriminate. left; congruence.
-- destruct (peq id id0); try discriminate. left; congruence.
-- destruct (orb_true_elim _ _ H); InvBooleans; auto.
-Qed.
-
 (** * Abstracting values *)
 
 Inductive aval : Type :=
@@ -4495,6 +4460,94 @@ Proof.
 Qed.
 
 End MATCH.
+
+(** * Nonaliasing tests. *)
+
+(** [pdisjoint p1 sz1 p2 sz2] returns [true] if there can be no overlap
+    between a block of size [sz1] in the region characterized by [p1]
+    and a block of size [sz2] in the region characterized by [p2]. *)
+
+Definition pdisjoint (p1: aptr) (sz1: Z) (p2: aptr) (sz2: Z) : bool :=
+  match p1, p2 with
+  | Pbot, _ => true
+  | _, Pbot => true
+  | Gl id1 ofs1, Gl id2 ofs2 =>
+      if peq id1 id2
+      then zle (Ptrofs.unsigned ofs1 + sz1) (Ptrofs.unsigned ofs2)
+           || zle (Ptrofs.unsigned ofs2 + sz2) (Ptrofs.unsigned ofs1)
+      else true
+  | Gl id1 ofs1, Glo id2 => negb(peq id1 id2)
+  | Glo id1, Gl id2 ofs2 => negb(peq id1 id2)
+  | Glo id1, Glo id2 => negb(peq id1 id2)
+  | Stk ofs1, Stk ofs2 =>
+      zle (Ptrofs.unsigned ofs1 + sz1) (Ptrofs.unsigned ofs2)
+      || zle (Ptrofs.unsigned ofs2 + sz2) (Ptrofs.unsigned ofs1)
+  | (Gl _ _ | Glo _ | Glob | Nonstack), (Stk _ | Stack) => true
+  | (Stk _ | Stack), (Gl _ _ | Glo _ | Glob | Nonstack) => true
+  | _, _ => false
+  end.
+
+Lemma pdisjoint_sound:
+  forall (bc: block_classification) sz1 b1 ofs1 p1 sz2 b2 ofs2 p2,
+  pdisjoint p1 sz1 p2 sz2 = true ->
+  pmatch bc b1 ofs1 p1 -> pmatch bc b2 ofs2 p2 ->
+  b1 <> b2 \/ Ptrofs.unsigned ofs1 + sz1 <= Ptrofs.unsigned ofs2 \/ Ptrofs.unsigned ofs2 + sz2 <= Ptrofs.unsigned ofs1.
+Proof.
+  intros. inv H0; inv H1; simpl in H; try discriminate; try (left; congruence).
+- destruct (peq id id0). subst id0. destruct (orb_true_elim _ _ H); InvBooleans; auto.
+  left; congruence.
+- destruct (peq id id0); try discriminate. left; congruence.
+- destruct (peq id id0); try discriminate. left; congruence.
+- destruct (peq id id0); try discriminate. left; congruence.
+- destruct (orb_true_elim _ _ H); InvBooleans; auto.
+Qed.
+
+(** This is a stronger property of [pdisjoint], guaranteeing nonaliasing
+    even if the two pointers are considered in different, but compatible
+    block classifications. *)
+
+Lemma pdisjoint_sound_strong:
+  forall sz1 b1 ofs1 bc1 p1 sz2 b2 ofs2 bc2 p2 ge sp,
+  pdisjoint p1 sz1 p2 sz2 = true ->
+  pmatch bc1 b1 ofs1 p1 -> pmatch bc2 b2 ofs2 p2 ->
+  genv_match bc1 ge -> bc1 sp = BCstack ->
+  genv_match bc2 ge -> bc2 sp = BCstack ->
+  b1 <> b2 \/ Ptrofs.unsigned ofs1 + sz1 <= Ptrofs.unsigned ofs2 \/ Ptrofs.unsigned ofs2 + sz2 <= Ptrofs.unsigned ofs1.
+Proof.
+  assert (GLOB_GLOB: forall (bc1 bc2: block_classification) ge b1 b2 id1 id2,
+           genv_match bc1 ge -> genv_match bc2 ge ->
+           bc1 b1 = BCglob id1 -> bc2 b2 = BCglob id2 ->
+           id1 <> id2 -> b1 <> b2).
+  { intros until id2; intros GE1 GE2 EQ1 EQ2 DIFF.
+    apply GE1 in EQ1; apply GE2 in EQ2.
+    apply Genv.find_invert_symbol in EQ1, EQ2.
+    congruence. }
+  assert (GLOB_STACK: forall (bc1 bc2: block_classification) ge sp b1 b2 id,
+           genv_match bc1 ge -> bc1 sp = BCstack -> bc2 sp = BCstack ->
+           bc1 b1 = BCglob id -> bc2 b2 = BCstack ->
+           b1 <> b2).
+  { intros until id; intros GE1 SP1 SP2 EQ1 EQ2.
+    apply GE1 in EQ1.
+    assert (bc1 b1 <> BCstack) by (apply GE1; eapply (Senv.find_symbol_below ge); eauto).
+    assert (b2 = sp) by (eapply bc2.(bc_stack); eauto).
+    congruence. }
+  assert (STACK_OTHER: forall (bc1 bc2: block_classification) sp b1 b2,
+           bc1 sp = BCstack -> bc2 sp = BCstack ->
+           bc1 b1 = BCstack -> bc2 b2 <> BCstack ->
+           b1 <> b2).
+  { intros until b2; intros SP1 SP2 EQ1 EQ2.
+    assert (b1 = sp) by (eapply bc1.(bc_stack); eauto).
+    congruence. }
+  intros until sp; intros DISJ PM1 PM2 GE1 SP1 GE2 SP2.
+  inv PM1; inv PM2; simpl in DISJ; try discriminate; eauto using not_eq_sym.
+  - destruct (peq id id0).
+    + subst id0. destruct (orb_true_elim _ _ DISJ); InvBooleans; auto.
+    + eauto.
+  - destruct (peq id id0); discriminate || eauto.
+  - destruct (peq id id0); discriminate || eauto.
+  - destruct (peq id id0); discriminate || eauto.
+  - destruct (orb_true_elim _ _ DISJ); InvBooleans; auto.
+Qed.
 
 (** * Monotonicity properties when the block classification changes. *)
 
