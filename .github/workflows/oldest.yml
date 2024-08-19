@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  latest:
+  oldest:
     runs-on: ubuntu-latest
     strategy:
       matrix:
