@@ -191,10 +191,12 @@ case "$target,$os" in
          Run_test "$simu_armsf" "-marm";;
     esac;;
   ppc,linux)
-    case "$1" in
-      1) Run_test "$simu_ppc32" "";;
-      2) Run_test "$simu_ppc32" "-Os";;
-    esac;;
+    # TEMPORARY: skip PPC testing because of QEMU problem on the test VM
+    # case "$1" in
+    #   1) Run_test "$simu_ppc32" "";;
+    #   2) Run_test "$simu_ppc32" "-Os";;
+    # esac;;
+    echo "Skipping PPC tests";;
   riscv,linux)
     case "$1" in
       1) Run_test "$simu_rv64" "";;
