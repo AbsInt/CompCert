@@ -50,16 +50,23 @@ $(LIB): $(OBJS)
 	rm -f $(LIB)
 	$(ARCHIVER) $(LIB) $(OBJS)
 
-%.o: %.s
-	$(CASMRUNTIME) -o $@ $^
+ifeq ($(strip $(SYSTEM)),diab)
+
+%.o: %.S
+	sed -e '/#include/d' -e 's|//|#|' $^ > $*.s
+	$(CASMRUNTIME) -o $@ $*.s && rm $*.s
+
+else
 
 %.o: %.S
 	$(CASMRUNTIME) -DMODEL_$(MODEL) -DABI_$(ABI) -DENDIANNESS_$(ENDIANNESS) -DSYS_$(SYSTEM) -o $@ $^
 
+endif
+
 # If no asm implementation available, compile the portable C implementation
-# with CompCert.  Since CompCert rejects the "__compcert_i64_" identifiers, the C
-# implementation uses "i64_" identifiers, and we rename them in the
-# generated assembly
+# with CompCert.  Since CompCert rejects the "__compcert_i64_"
+# identifiers, the C implementation uses "i64_" identifiers, and we
+# rename them in the generated assembly
 
 %.o: c/%.c c/i64.h ../ccomp
 	../ccomp -O2 -S -o $*.s -I./c c/$*.c
