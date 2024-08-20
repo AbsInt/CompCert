@@ -33,25 +33,30 @@ if test -n "$opamroot"; then
   eval `opam env --safe`
 fi
 
+# Install QEMU and other packages using apt-get
+
+Apt_install() {
+  sudo sh -c 'echo "deb http://deb.debian.org/debian bookworm-backports main" > /etc/apt/sources.list.d/backports.list'
+  sudo apt-get update
+  sudo apt-get -y -t bookworm-backports install qemu-user
+  sudo apt-get -y install "$@"
+}
+
 # Install additional system packages
 
 System_install() {
   case "$target,$os" in
     aarch64,linux)
-      sudo apt-get update
-      sudo apt-get -y install qemu-user gcc-aarch64-linux-gnu
+      Apt_install gcc-aarch64-linux-gnu
       ;;
     arm,linux)
-      sudo apt-get update
-      sudo apt-get -y install qemu-user gcc-arm-linux-gnueabi gcc-arm-linux-gnueabihf
+      Apt_install gcc-arm-linux-gnueabi gcc-arm-linux-gnueabihf
       ;;
     ppc,linux)
-      sudo apt-get update
-      sudo apt-get -y install qemu-user gcc-powerpc-linux-gnu
+      Apt_install gcc-powerpc-linux-gnu
       ;;
     riscv,linux)
-      sudo apt-get update
-      sudo apt-get -y install qemu-user gcc-riscv64-linux-gnu
+      Apt_install gcc-riscv64-linux-gnu
       ;;
     x86_32,linux)
       sudo apt-get update
@@ -184,21 +189,17 @@ case "$target,$os" in
       2) Run_test "" "-Os";;
     esac;;
   arm,linux)
-    # TEMPORARY: skip ARM testing because of QEMU problem on the test VM
-    # case "$1" in
-    #   1) Run_test "$simu_armhf" "-marm";;
-    #   2) Run_test "$simu_armhf" "-mthumb";;
-    #   3) Rebuild_runtime -toolprefix arm-linux-gnueabi- arm-eabi
-    #      Run_test "$simu_armsf" "-marm";;
-    # esac;;
-    echo "Skipping ARM tests";;
+    case "$1" in
+      1) Run_test "$simu_armhf" "-marm";;
+      2) Run_test "$simu_armhf" "-mthumb";;
+      3) Rebuild_runtime -toolprefix arm-linux-gnueabi- arm-eabi
+         Run_test "$simu_armsf" "-marm";;
+    esac;;
   ppc,linux)
-    # TEMPORARY: skip PPC testing because of QEMU problem on the test VM
-    # case "$1" in
-    #   1) Run_test "$simu_ppc32" "";;
-    #   2) Run_test "$simu_ppc32" "-Os";;
-    # esac;;
-    echo "Skipping PPC tests";;
+    case "$1" in
+      1) Run_test "$simu_ppc32" "";;
+      2) Run_test "$simu_ppc32" "-Os";;
+    esac;;
   riscv,linux)
     case "$1" in
       1) Run_test "$simu_rv64" "";;
