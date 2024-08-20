@@ -210,6 +210,7 @@ let print_program oc p =
   List.iter (Printer.print_globdef oc) p.prog_defs;
   Target.print_epilogue oc;
   Printer.print_ais_annot oc;
+  print_nonexec_stack_note oc;
   if !Clflags.option_g then
     begin
       let atom_to_s s =

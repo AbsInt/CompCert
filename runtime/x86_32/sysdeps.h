@@ -36,6 +36,8 @@
 
 #if defined(SYS_linux) || defined(SYS_bsd)
 
+	.section .note.GNU-stack,"",%progbits
+
 #define GLOB(x) x
 #define FUNCTION(f) \
 	.text; \
