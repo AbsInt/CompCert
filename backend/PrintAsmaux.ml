@@ -355,3 +355,12 @@ let macos_mergeable_string_section sz =
   | 0 | 2 | 4 -> ".const"
   | 1 -> ".cstring"
   | _ -> assert false
+
+(** Marking the stack as non executable *)
+
+let print_nonexec_stack_note oc =
+  match Configuration.system with
+  | "linux" | "bsd" ->
+      output_string oc "\n\t.section .note.GNU-stack,\"\",%progbits\n"
+  | _ ->
+      ()

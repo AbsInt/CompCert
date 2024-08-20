@@ -138,3 +138,7 @@ f:
 #define Reg3HI r7
 #define Reg3LO r6
 #endif
+
+#if defined(SYS_linux) || defined(SYS_bsd)
+	.section .note.GNU-stack,"",%progbits
+#endif

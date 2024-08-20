@@ -61,3 +61,6 @@ f:
 
 #endif
 
+#if defined(SYS_linux) || defined(SYS_bsd)
+	.section .note.GNU-stack,"",%progbits
+#endif
