@@ -92,6 +92,8 @@ Proof.
   unfold const_for_result; intros; destruct a; inv H; SimplVM.
 - (* integer *)
   exists (Vint n); auto.
+- (* integer or undef *)
+  exists (Vint n); split; auto. inv H0; auto.
 - (* long *)
   exists (Vlong n); auto.
 - (* float *)

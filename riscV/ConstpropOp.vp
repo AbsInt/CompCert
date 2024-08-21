@@ -23,7 +23,7 @@ Require Import ValueDomain.
 
 Definition const_for_result (a: aval) : option operation :=
   match a with
-  | I n => Some(Ointconst n)
+  | I n | IU n => Some(Ointconst n)
   | L n => if Archi.ptr64 then Some(Olongconst n) else None
   | F n => if Compopts.generate_float_constants tt then Some(Ofloatconst n) else None
   | FS n => if Compopts.generate_float_constants tt then Some(Osingleconst n) else None
