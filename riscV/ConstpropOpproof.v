@@ -91,6 +91,8 @@ Proof.
   destruct a; inv H; SimplVM.
 - (* integer *)
   exists (Vint n); auto.
+- (* integer or undef *)
+  exists (Vint n); split; auto. inv H0; auto.
 - (* long *)
   destruct ptr64; inv H2. exists (Vlong n); auto.
 - (* float *)
