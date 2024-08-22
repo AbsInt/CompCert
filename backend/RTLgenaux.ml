@@ -67,7 +67,19 @@ let size_eos = function
   | Coq_inl e -> size_expr e
   | Coq_inr id -> 0
 
-let rec size_stmt = function
+(* [more_likely] is called once for every if-then-else conditional in
+   the current function.  Therefore, [size_stmt] is called once for
+   every "then" or "else" branch of a conditional.  This can result in
+   time quadratic in the size of the function.  To avoid this,
+   we bound the recursion depth of [size_stmt] w.r.t. if-then-else
+   conditionals. With a maximal depth of [D], each statement of the current
+   function is visited at most [D + 1] times.  *)
+
+let max_depth = 4
+let max_size = 100
+
+let rec size_stmt depth s =
+  match s with
   | Sskip -> 0
   | Sassign(id, a) -> size_expr a
   | Sstore(chunk, addr, args, src) -> 1 + size_exprs args + size_expr src
@@ -77,17 +89,23 @@ let rec size_stmt = function
       3 + size_eos eos + size_exprs args + length_exprs args
   | Sbuiltin(_, (EF_annot _ | EF_debug _), _) -> 0
   | Sbuiltin(optid, ef, args) -> 1 + size_builtin_args args
-  | Sseq(s1, s2) -> size_stmt s1 + size_stmt s2
+  | Sseq(s1, s2) -> size_stmt depth s1 + size_stmt depth s2
   | Sifthenelse(ce, s1, s2) ->
-      size_condexpr ce + max (size_stmt s1) (size_stmt s2)
-  | Sloop s -> 1 + 4 * size_stmt s
-  | Sblock s -> size_stmt s
+      if depth <= 0
+      then max_size
+      else size_condexpr ce
+           + max (size_stmt (depth - 1) s1) (size_stmt (depth - 1) s2)
+  | Sloop s -> 1 + 4 * size_stmt depth s
+  | Sblock s -> size_stmt depth s
   | Sexit n -> 1
   | Sswitch xe -> size_exitexpr xe
   | Sreturn None -> 2
   | Sreturn (Some arg) -> 2 + size_expr arg
-  | Slabel(lbl, s) -> size_stmt s
+  | Slabel(lbl, s) -> size_stmt depth s
   | Sgoto lbl -> 1
+
+let size_stmt s =
+  min (size_stmt max_depth s) max_size
 
 let more_likely (c: condexpr) (ifso: stmt) (ifnot: stmt) =
   size_stmt ifso > size_stmt ifnot
