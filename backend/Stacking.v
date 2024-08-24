@@ -130,7 +130,7 @@ Fixpoint transl_builtin_arg (fe: frame_env) (a: builtin_arg loc) : builtin_arg m
 (** Translation of a Linear instruction.  Prepends the corresponding
   Mach instructions to the given list of instructions.
   [Lgetstack] and [Lsetstack] moves between registers and stack slots
-  are turned into [Mgetstack], [Mgetparent] or [Msetstack] instructions
+  are turned into [Mgetstack], [Mgetparam] or [Msetstack] instructions
   at offsets determined by the frame environment.
   Instructions and addressing modes are modified as described previously.
   Code to restore the values of callee-save registers is inserted
