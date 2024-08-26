@@ -48,6 +48,9 @@ Proof.
   (* of cmp *)
   UseGetSound. rewrite <- H.
   destruct (eval_condition cond (map valu args) m); simpl; auto. destruct b; auto.
+  (* of xorimm *)
+  UseGetSound. rewrite <- H.
+  destruct v; simpl; auto. rewrite Int.xor_is_zero; auto.
 Qed.
 
 Lemma combine_compimm_eq_0_sound:
@@ -61,6 +64,9 @@ Proof.
   UseGetSound. rewrite <- H.
   rewrite eval_negate_condition.
   destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
+  (* of xorimm *)
+  UseGetSound. rewrite <- H.
+  destruct v; simpl; auto. rewrite Int.xor_is_zero; auto.
 Qed.
 
 Lemma combine_compimm_eq_1_sound:

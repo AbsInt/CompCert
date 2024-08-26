@@ -25,12 +25,16 @@ Variable get: valnum -> option rhs.
 Function combine_compimm_ne_0 (x: valnum) : option(condition * list valnum) :=
   match get x with
   | Some(Op (Ocmp c) ys) => Some (c, ys)
+  | Some(Op (Oxorimm n) ys) =>
+      if Int.eq n (Int.zero_ext 12 n) then Some (Ccompimm Cne n, ys) else None
   | _ => None
   end.
 
 Function combine_compimm_eq_0 (x: valnum) : option(condition * list valnum) :=
   match get x with
   | Some(Op (Ocmp c) ys) => Some (negate_condition c, ys)
+  | Some(Op (Oxorimm n) ys) =>
+      if Int.eq n (Int.zero_ext 12 n) then Some (Ccompimm Ceq n, ys) else None
   | _ => None
   end.
 

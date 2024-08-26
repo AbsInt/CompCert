@@ -59,6 +59,9 @@ Proof.
   (* of and *)
   UseGetSound. rewrite <- H.
   destruct v; simpl; auto.
+  (* of xorimm *)
+  UseGetSound. rewrite <- H.
+  destruct v; simpl; auto. rewrite Int.xor_is_zero; auto.
 Qed.
 
 Lemma combine_compimm_eq_0_sound:
@@ -74,6 +77,9 @@ Proof.
   destruct (eval_condition c (map valu args) m); simpl; auto. destruct b; auto.
   (* of and *)
   UseGetSound. rewrite <- H. destruct v; auto.
+  (* of xorimm *)
+  UseGetSound. rewrite <- H.
+  destruct v; simpl; auto. rewrite Int.xor_is_zero; auto.
 Qed.
 
 Lemma combine_compimm_eq_1_sound:

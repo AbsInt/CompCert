@@ -27,6 +27,7 @@ Function combine_compimm_ne_0 (x: valnum) : option(condition * list valnum) :=
   match get x with
   | Some(Op (Ocmp c) ys) => Some (c, ys)
   | Some(Op (Oandimm n) ys) => Some (Cmasknotzero n, ys)
+  | Some(Op (Oxorimm n) ys) => Some (Ccompimm Cne n, ys)
   | _ => None
   end.
 
@@ -34,6 +35,7 @@ Function combine_compimm_eq_0 (x: valnum) : option(condition * list valnum) :=
   match get x with
   | Some(Op (Ocmp c) ys) => Some (negate_condition c, ys)
   | Some(Op (Oandimm n) ys) => Some (Cmaskzero n, ys)
+  | Some(Op (Oxorimm n) ys) => Some (Ccompimm Ceq n, ys)
   | _ => None
   end.
 
