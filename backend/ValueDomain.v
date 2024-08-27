@@ -687,19 +687,19 @@ Qed.
 Hint Resolve is_uns_mon is_sgn_mon is_uns_sgn is_uns_usize is_sgn_ssize
              is_uns_wordsize is_sgn_wordsize usize_pos ssize_pos : va.
 
+Lemma is_uns_0:
+  forall n, is_uns 0 n -> n = Int.zero.
+Proof.
+  intros. apply Int.same_bits_eq; intros.
+  rewrite Int.bits_zero. apply H; lia.
+Qed.
+
 Lemma is_uns_1:
   forall n, is_uns 1 n -> n = Int.zero \/ n = Int.one.
 Proof.
   intros. destruct (Int.testbit n 0) eqn:B0; [right|left]; apply Int.same_bits_eq; intros.
   rewrite Int.bits_one. destruct (zeq i 0). subst i; auto. apply H; lia.
   rewrite Int.bits_zero. destruct (zeq i 0). subst i; auto. apply H; lia.
-Qed.
-
-Lemma is_uns_0:
-  forall n, is_uns 0 n -> n = Int.zero.
-Proof.
-  intros.  apply Int.same_bits_eq. intros.
-  rewrite Int.bits_zero. apply H; lia.
 Qed.
 
 Lemma is_uns_range: forall z n,
@@ -821,7 +821,8 @@ Definition long_provenance (i: int64) : aptr :=
 (** Smart constructors for [Uns] and [Sgn]. *)
 
 Definition uns (p: aptr) (n: Z) : aval :=
-  if zle n 1 then Uns p 1
+  if zle n 0 then IU Int.zero
+  else if zle n 1 then Uns p 1
   else if zle n 7 then Uns p 7
   else if zle n 8 then Uns p 8
   else if zle n 15 then Uns p 15
@@ -837,6 +838,9 @@ Proof.
   intros.
   assert (A: forall n', n' >= 0 -> n' >= n -> is_uns n' i) by (eauto with va).
   unfold uns. repeat destruct zle; auto with va.
+  replace (Z.max 0 n) with 0 in H by lia.
+  apply is_uns_0 in H.
+  subst i; constructor.
 Qed.
 
 Lemma vmatch_uns:
@@ -954,13 +958,24 @@ Proof.
   induction 1; intros V; inv V; eauto using pmatch_ge with va.
 Qed.
 
+(** A variant of the [uns] smart constructor that does not produce
+    [IU Int.zero], for use in [vlub] below. *)
+
+Definition uns1 (p: aptr) (n: Z) : aval :=
+  if zle n 1 then Uns p 1
+  else if zle n 7 then Uns p 7
+  else if zle n 8 then Uns p 8
+  else if zle n 15 then Uns p 15
+  else if zle n 16 then Uns p 16
+  else Num p.
+
 (** Least upper bound *)
 
 Definition vlub_int (cstr: int -> aval) (i1 i2: int) : aval :=
   if Int.eq i1 i2 then cstr i1 else
   if Int.lt i1 Int.zero || Int.lt i2 Int.zero
   then sgn Pbot (Z.max (ssize i1) (ssize i2))
-  else uns Pbot (Z.max (usize i1) (usize i2)).
+  else uns1 Pbot (Z.max (usize i1) (usize i2)).
 
 Definition vlub (v w: aval) : aval :=
   match v, w with
@@ -971,7 +986,7 @@ Definition vlub (v w: aval) : aval :=
   | (I i | IU i), Uns p n | Uns p n, (I i | IU i) =>
       if Int.lt i Int.zero
       then sgn p (Z.max (ssize i) (n + 1))
-      else uns p (Z.max (usize i) n)
+      else uns1 p (Z.max (usize i) n)
   | (I i | IU i), Sgn p n | Sgn p n, (I i | IU i) =>
       sgn p (Z.max (ssize i) n)
   | (I i | IU i), Num p | Num p, (I i | IU i) => Num p
@@ -1014,17 +1029,17 @@ Proof.
 - rewrite dec_eq_sym. destruct (Float32.eq_dec f0 f); congruence.
 Qed.
 
-Lemma vge_uns_uns': forall p n, vge (uns p n) (Uns p n).
+Lemma vge_uns_uns': forall p n, vge (uns1 p n) (Uns p n).
 Proof.
-  unfold uns; intros. repeat (destruct zle); eauto with va.
+  unfold uns1; intros. repeat (destruct zle); eauto with va.
 Qed.
 
-Lemma vge_uns_i': forall p n i, 0 <= n -> is_uns n i -> vge (uns p n) (I i).
+Lemma vge_uns_i': forall p n i, 0 <= n -> is_uns n i -> vge (uns1 p n) (I i).
 Proof.
   intros. apply vge_trans with (Uns p n). apply vge_uns_uns'. auto with va.
 Qed.
 
-Lemma vge_uns_iu': forall p n i, 0 <= n -> is_uns n i -> vge (uns p n) (IU i).
+Lemma vge_uns_iu': forall p n i, 0 <= n -> is_uns n i -> vge (uns1 p n) (IU i).
 Proof.
   intros. apply vge_trans with (Uns p n). apply vge_uns_uns'. auto with va.
 Qed.
