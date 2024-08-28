@@ -55,6 +55,27 @@ let parse_string name text =
             Timeout_pr means that we ran for 2^50 steps. *)
       Diagnostics.fatal_error Diagnostics.no_loc "internal error while parsing"
 
+(* Quick checks that the preprocessed file already underwent
+   translation phases 1 and 2 (from ISO C99, 5.1.1.2), in particular
+   the removal of backslash-newline sequences.  This can be assumed of
+   the output of a C preprocessor, but must be enforced for
+   hand-written .i files, since leftover backslash-newline sequences
+   can result in incorrect parsing.
+   Note that a backslash can also be written with a trigraph [??/]. *)
+
+let re_backslash_newline = Str.regexp_string "\\\n"
+let re_trigraph_backslash_newline = Str.regexp_string "??/\n"
+
+let contains_regexp re text =
+  try ignore (Str.search_forward re text 0); true with Not_found -> false
+
+let check_preprocessed filename text =
+  if contains_regexp re_backslash_newline text then
+    Diagnostics.(error (file_loc filename) "illegal backslash-newline sequence in preprocessed source");
+  if contains_regexp re_trigraph_backslash_newline text then
+    Diagnostics.(error (file_loc filename) "illegal ??/-newline sequence in preprocessed source");
+  text
+
 let preprocessed_file ?(unblock = false)
                       ?(switch_norm = `Off)
                       ?(struct_passing = false)
@@ -70,6 +91,8 @@ let preprocessed_file ?(unblock = false)
      speed increase: "make -C test" speeds up by 3 seconds out of 40
      on my machine. *)
   read_file sourcefile
+  |> check_preprocessed name
+  |> check_errors
   |> Timing.time2 "Parsing" parse_string name
   |> Timing.time "Elaboration" Elab.elab_file
   |> check_errors
