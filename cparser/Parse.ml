@@ -57,13 +57,12 @@ let parse_string name text =
 
 (* Quick checks that the preprocessed file already underwent
    translation phases 1 and 2 (from ISO C99, 5.1.1.2), in particular
-   the removal of backslash-newline sequences and the translation of
-   trigraphs.  This can be assumed of the output of a C preprocessor,
-   but must be enforced for hand-written .i files, since leftover
-   backslash-newline sequences can result in incorrect parsing. *)
+   the removal of backslash-newline sequences.  This can be assumed of
+   the output of a C preprocessor, but must be enforced for
+   hand-written .i files, since leftover backslash-newline sequences
+   can result in incorrect parsing. *)
 
 let re_backslash_newline = Str.regexp "\\\\\n"
-let re_trigraph = Str.regexp "\\?\\?[=(/)'<!>-]"
 
 let contains_regexp re text =
   try ignore (Str.search_forward re text 0); true with Not_found -> false
@@ -71,8 +70,6 @@ let contains_regexp re text =
 let check_preprocessed filename text =
   if contains_regexp re_backslash_newline text then
     Diagnostics.(error (file_loc filename) "illegal backslash-newline sequence in preprocessed source");
-  if contains_regexp re_trigraph text then
-    Diagnostics.(error (file_loc filename) "trigraphs are not supported in preprocessed source");
   text
 
 let preprocessed_file ?(unblock = false)
