@@ -1775,6 +1775,10 @@ Definition mul_base (v w: aval) :=
   match v, w with
   | Uns p n1, (I n2 | IU n2) | (I n2 | IU n2), Uns p n1 => uns p (n1 + usize n2)
   | Uns p1 n1, Uns p2 n2 => uns (plub p1 p2) (n1 + n2)
+  | Sgn p n1, (I n2 | IU n2) | (I n2 | IU n2), Sgn p n1 => sgn p (n1 + ssize n2)
+  | Sgn p1 n1, Sgn p2 n2 => sgn (plub p1 p2) (n1 + n2)
+  | Uns p1 n1, Sgn p2 n2 => sgn (plub p1 p2) ((n1 + 1) + n2)
+  | Sgn p1 n1, Uns p2 n2 => sgn (plub p1 p2) (n1 + (n2 + 1))
   | _, _ => ntop2 v w
   end.
 
@@ -1782,7 +1786,7 @@ Lemma mul_base_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mul v w) (mul_base x y).
 Proof.
   intros.
-  assert (forall i1 i2 n1 n2 p,
+  assert (UNS: forall i1 i2 n1 n2 p,
              0 <= n1 -> is_uns n1 i1 ->
              0 <= n2 -> is_uns n2 i2 ->
              vmatch (Val.mul (Vint i1) (Vint i2)) (uns p (n1 + n2))).
@@ -1791,8 +1795,24 @@ Proof.
     rewrite two_p_is_exp by auto.  split.
     change 0 with (0 * 0). apply Z.mul_le_mono_nonneg; lia. 
     apply Z.mul_lt_mono_nonneg; lia. }
+  assert (SGN: forall i1 i2 n1 n2 p,
+             0 < n1 -> is_sgn n1 i1 ->
+             0 < n2 -> is_sgn n2 i2 ->
+             vmatch (Val.mul (Vint i1) (Vint i2)) (sgn p (n1 + n2))).
+  { intros. apply range_is_sgn in H2; auto. apply range_is_sgn in H4; auto.
+    set (p1 := two_p (n1 - 1)) in *. set (p2 := two_p (n2 - 1)) in *.
+    assert (- (p1 * p2) <= Int.signed i1 * Int.signed i2 <= p1 * p2).
+    { apply Z.abs_le. rewrite Z.abs_mul.
+      apply Z.mul_le_mono_nonneg; auto using Z.abs_nonneg; apply Z.abs_le; lia. }
+    assert (0 < p1 * p2 < two_p (n1 + n2 - 1)).
+    { unfold p1, p2. rewrite <- two_p_is_exp by lia.
+      replace (n1 - 1 + (n2 - 1)) with (n1 + n2 - 2) by lia. split.
+      apply Z.gt_lt. apply two_p_gt_ZERO. lia.
+      apply two_p_monotone_strict. lia. }
+    apply vmatch_sgn. rewrite Int.mul_signed. apply is_sgn_range; lia.
+  }
   unfold mul_base.
-  inv H; inv H0; auto with va; rewrite Z.add_comm; auto with va.
+  inv H; inv H0; eauto with va; rewrite Z.add_comm; eauto with va.
 Qed.
 
 Definition mul (v w: aval) :=
