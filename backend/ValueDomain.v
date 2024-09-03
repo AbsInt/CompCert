@@ -1954,6 +1954,10 @@ Definition divs (v w: aval) :=
       || Int.eq i1 (Int.repr Int.min_signed) && Int.eq i2 Int.mone
       then if va_strict tt then Vbot else ntop
       else I (Int.divs i1 i2)
+  | (I i2 | IU i2), _ =>
+      if Int.eq i2 Int.zero
+      then if va_strict tt then Vbot else ntop
+      else sgn (provenance v) (srange v + 1 - Z.log2 (Z.abs (Int.signed i2)))
   | _, _ => ntop2 v w
   end.
 
@@ -1962,24 +1966,47 @@ Lemma divs_sound:
 Proof.
   intros. destruct v; destruct w; try discriminate; simpl in H1.
   destruct orb eqn:E; inv H1.
-  inv H; inv H0; auto with va; simpl; rewrite E; constructor.
+  rename i0 into j.
+  assert (E': Int.eq j Int.zero = false). { apply orb_false_elim in E. tauto. }
+  assert (Int.signed j <> 0).
+  { red; intros. rewrite <- (Int.repr_signed j) in E. rewrite H1 in E. discriminate. }
+  set (q := srange x + 1 - Z.log2 (Z.abs (Int.signed j))).
+  set (q1 := Z.max 0 ((srange x - 1) + 1 - Z.log2 (Z.abs (Int.signed j)))).
+  assert (Z.max 1 q - 1 = q1) by lia.
+  assert (vmatch (Vint (Int.divs i j)) (sgn (provenance x) q)).
+  { apply srange_sound in H. destruct H as [A B]. apply range_is_sgn in B; auto.
+    apply vmatch_sgn'. apply is_sgn_range. lia.
+    rewrite ! H2. apply Zdiv_signed_range; auto. lia. }
+  unfold divs; inv H; inv H0; auto with va; rewrite ? E, ? E'; auto with va.
 Qed.
 
 Definition divu (v w: aval) :=
-  match w, v with
-  | (I i2 | IU i2), (I i1 | IU i1) =>
-      if Int.eq i2 Int.zero
-      then if va_strict tt then Vbot else ntop
-      else I (Int.divu i1 i2)
-  | _, _ => ntop2 v w
+  match w with
+  | I i2 | IU i2 =>
+      if Int.eq i2 Int.zero then
+        if va_strict tt then Vbot else ntop
+      else
+        match v with
+        | I i1 | IU i1 => I (Int.divu i1 i2)
+        | _ => uns (provenance v) (urange v - Z.log2 (Int.unsigned i2))
+        end
+  | _ => ntop2 v w
   end.
 
 Lemma divu_sound:
   forall v w u x y, vmatch v x -> vmatch w y -> Val.divu v w = Some u -> vmatch u (divu x y).
 Proof.
   intros. destruct v; destruct w; try discriminate; simpl in H1.
-  destruct (Int.eq i0 Int.zero) eqn:E; inv H1.
-  inv H; inv H0; auto with va; simpl; rewrite E; constructor.
+  rename i0 into j. destruct (Int.eq j Int.zero) eqn:E; inv H1.
+  assert (Int.unsigned j <> 0).
+  { red; intros. rewrite <- (Int.repr_unsigned j) in E. rewrite H1 in E. discriminate. }
+  assert (0 < Int.unsigned j).
+  { pose proof (Int.unsigned_range j). lia. } 
+  assert (vmatch (Vint (Int.divu i j)) (uns (provenance x) (urange x - Z.log2 (Int.unsigned j)))).
+  { apply urange_sound in H. destruct H as [A B]. apply range_is_uns in B; auto.
+    apply vmatch_uns'. apply is_uns_range. lia.
+    apply Zdiv_unsigned_range; auto. }
+  unfold divu; inv H; inv H0; auto with va; rewrite E; auto with va.
 Qed.
 
 Definition mods (v w: aval) :=

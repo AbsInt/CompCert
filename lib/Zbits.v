@@ -1147,3 +1147,41 @@ Proof.
     apply two_p_monotone_strict. lia. }
   lia.
 Qed.
+
+Lemma Zdiv_unsigned_range: forall n x y,
+  0 <= n -> 0 <= x < two_p n -> 0 < y ->
+  0 <= x / y < two_p (Z.max 0 (n - Z.log2 y)).
+Proof.
+  intros. set (m := Z.log2 y).
+  assert (two_p m <= y).
+  { rewrite two_p_correct. apply Z.log2_spec; auto. }
+  assert (0 <= m) by (apply Z.log2_nonneg).
+  rewrite Zmax_spec. destruct zlt.
+  - simpl. rewrite Zdiv_small. lia.
+    assert (two_p n <= two_p m) by (apply two_p_monotone; lia).
+    lia.
+  - split.
+    apply Z.div_pos; lia.
+    apply Z.div_lt_upper_bound; auto.
+    apply Z.lt_le_trans with (two_p m * two_p (n - m)).
+    rewrite <- two_p_is_exp by lia. replace (m + (n - m)) with n by lia. lia.
+    apply Z.mul_le_mono_nonneg_r; auto.
+    assert (two_p (n - m) > 0) by (apply two_p_gt_ZERO; lia). lia.
+Qed.
+
+Lemma Zdiv_signed_range: forall n x y,
+  0 <= n -> - two_p n <= x < two_p n -> y <> 0 ->
+  let q := Z.max 0 (n + 1 - Z.log2 (Z.abs y)) in
+  - two_p q <= Z.quot x y < two_p q.
+Proof.
+  intros.
+  assert (Z.abs x / Z.abs y < two_p q).
+  { apply Zdiv_unsigned_range; auto. lia.
+    assert (two_p n < two_p (n + 1)) by (apply two_p_monotone_strict; lia).
+    lia.
+    lia. }
+  assert (Z.abs (Z.quot x y) < two_p q).
+  { rewrite <- Z.quot_abs by lia.
+    rewrite Z.quot_div_nonneg by lia. lia. }
+  lia.
+Qed.
