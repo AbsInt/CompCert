@@ -738,6 +738,33 @@ Proof.
   generalize (Int.signed_range i). unfold Int.min_signed, Int.max_signed. lia.
 Qed.
 
+Definition urange (a: aval) : Z :=
+  match a with
+  | I n | IU n => usize n
+  | Uns p n => n
+  | _ => Int.zwordsize
+  end.
+
+Definition srange (a: aval) : Z :=
+  match a with
+  | I n | IU n => ssize n
+  | Uns p n => n + 1
+  | Sgn p n => n
+  | _ => Int.zwordsize
+  end.
+
+Lemma urange_sound: forall i a,
+  vmatch (Vint i) a -> 0 <= urange a /\ is_uns (urange a) i.
+Proof.
+  intros. pose proof Int.wordsize_pos. inv H; simpl; auto with va.
+Qed.
+
+Lemma srange_sound: forall i a,
+  vmatch (Vint i) a -> 0 < srange a /\ is_sgn (srange a) i.
+Proof.
+  intros. pose proof Int.wordsize_pos. inv H; simpl; eauto with va.
+Qed.
+
 (** Tracking leakage of pointers through arithmetic operations.
 
 In the CompCert semantics, arithmetic operations (e.g. "xor") applied
@@ -1858,31 +1885,26 @@ Proof.
 Qed.
 
 Definition mulhu_base (v w: aval) :=
-  match v, w with
-  | Uns p n1, (I n2 | IU n2) | (I n2 | IU n2), Uns p n1 =>
-      uns p (n1 + (usize n2) - Int.zwordsize)
-  | Uns p1 n1, Uns p2 n2 =>
-      uns (plub p1 p2) (n1 + n2 - Int.zwordsize)
-  | _, _ =>
-      ntop2 v w
-  end.
+  uns (plub (provenance v) (provenance w)) (urange v + urange w - Int.zwordsize).
 
 Lemma mulhu_base_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulhu v w) (mulhu_base x y).
 Proof.
   intros.
-  assert (forall n1 n2 i1 i2 p,
-          0 <= n1 -> is_uns n1 i1 ->
-          0 <= n2 -> is_uns n2 i2 ->
-          vmatch (Vint (Int.mulhu i1 i2)) (uns p (n1 + n2 - Int.zwordsize))).
-  { intros. apply range_is_uns in H2; auto. apply range_is_uns in H4; auto.
+  assert (forall i1 i2 p,
+          vmatch (Vint i1) x -> vmatch (Vint i2) y ->
+          vmatch (Vint (Int.mulhu i1 i2)) (uns p (urange x + urange y - Int.zwordsize))).
+  { intros.
+    apply urange_sound in H1. destruct H1 as [A1 B1]. apply range_is_uns in B1; auto.
+    apply urange_sound in H2. destruct H2 as [A2 B2]. apply range_is_uns in B2; auto.
+    set (n1 := urange x) in *. set (n2 := urange y) in *.
     unfold Int.mulhu. set (x1 := Int.unsigned i1) in *. set (x2 := Int.unsigned i2) in *.
     exploit (Zmult_unsigned_range n1 x1 n2 x2); auto. intros P.
     rewrite Int.modulus_power. change Int.zwordsize with 32. rewrite <- Zshiftr_div_two_p by lia.
     apply vmatch_uns. red; intros. rewrite Int.testbit_repr by auto. rewrite Z.shiftr_spec by lia.
     apply (Zbits_unsigned_range (n1 + n2)); lia.
   }
-  unfold mulhu_base. inv H; inv H0; eauto with va; rewrite Z.add_comm; eauto with va.
+  unfold mulhu_base. destruct v, w; eauto with va. 
 Qed.
 
 Definition mulhu (v w: aval):=
@@ -1890,17 +1912,15 @@ Definition mulhu (v w: aval):=
   | I i1, I i2 => I (Int.mulhu i1 i2)
   | I i1, IU i2 | IU i1, I i2 | IU i1, IU i2  => IU (Int.mulhu i1 i2)
   | _, _ =>
-      if vincl v (Uns Ptop 1) || vincl w (Uns Ptop 1) then
-        IU Int.zero
-      else
-        mulhu_base v w
+      if vincl v (Uns Ptop 1) || vincl w (Uns Ptop 1)
+      then IU Int.zero
+      else mulhu_base v w
   end.
 
 Lemma mulhu_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulhu v w) (mulhu x y).
 Proof.
-  intros.
-  destruct (vincl x (Uns Ptop 1) || vincl y (Uns Ptop 1)) eqn:?; try eapply mulhu_base_sound; eauto; unfold mulhu; rewrite Heqb.
+  intros. destruct (vincl x (Uns Ptop 1) || vincl y (Uns Ptop 1)) eqn:?; try eapply mulhu_base_sound; eauto; unfold mulhu; rewrite Heqb.
   - rewrite orb_true_iff in Heqb. destruct Heqb.
     exploit (vmatch_Uns_1 Ptop v). eapply vmatch_ge; eauto. eapply vincl_ge; eauto.
     intros. destruct H2; inv H2. simpl. inv H; destruct y; auto with va.
@@ -1910,7 +1930,7 @@ Proof.
     intros. destruct H2; inv H2. inv H; inv H0; simpl; auto with va.
     inv H0; inv H; simpl; auto with va; rewrite Int.mulhu_zero; auto with va.
     inv H0; inv H; simpl; auto with va; rewrite Int.mulhu_one; auto with va.
-  - inv H; inv H0; try eapply mulhu_base_sound; eauto with va.
+  - inversion H; inversion H0; subst; eauto using mulhu_base_sound with va.
 Qed.
 
 Definition divs (v w: aval) :=
