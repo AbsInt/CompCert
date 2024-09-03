@@ -1860,6 +1860,26 @@ Proof.
   inv H; inv H0; auto with va.
 Qed.
 
+Definition mulhs_base (v w: aval) :=
+  sgn (plub (provenance v) (provenance w)) (srange v + srange w - Int.zwordsize).
+
+Lemma mulhs_base_sound:
+  forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulhs v w) (mulhs_base x y).
+Proof.
+  intros. unfold Val.mulhs, mulhs_base; destruct v, w; auto with va.
+  rename i0 into j.
+  apply srange_sound in H. destruct H as [A1 B1]. apply range_is_sgn in B1; auto.
+  apply srange_sound in H0. destruct H0 as [A2 B2]. apply range_is_sgn in B2; auto.
+  set (n := srange x) in *. set (m := srange y) in *.
+  unfold Int.mulhs. set (a := Int.signed i) in *. set (b := Int.signed j) in *.
+  exploit (Zmult_signed_range (n-1) a (m-1) b); auto with va.
+  replace (n - 1 + (m - 1) + 1) with (n + m - 1) by lia.
+  intros P.
+  rewrite Int.modulus_power. change Int.zwordsize with 32. rewrite <- Zshiftr_div_two_p by lia.
+  apply vmatch_sgn. red; intros. rewrite ! Int.testbit_repr by lia. rewrite ! Z.shiftr_spec by lia.
+  apply (Zbits_signed_range (n + m - 1)); lia.
+Qed.
+
 Definition mulhs (v w: aval) :=
   match v, w with
   | I i1, I i2 => I (Int.mulhs i1 i2)
@@ -1868,20 +1888,20 @@ Definition mulhs (v w: aval) :=
       if vincl v (Uns Ptop 0) || vincl w (Uns Ptop 0) then
         IU Int.zero
       else
-        ntop2 v w
+        mulhs_base v w
   end.
 
 Lemma mulhs_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulhs v w) (mulhs x y).
 Proof.
-  intros. unfold Val.mulhs, mulhs.
+  intros. unfold mulhs.
   destruct (vincl x (Uns Ptop 0) || vincl y (Uns Ptop 0)) eqn:?; auto with va.
   - rewrite orb_true_iff in Heqb;  destruct Heqb.
     exploit vmatch_Uns_0. eapply vmatch_ge. eapply vincl_ge; eauto. eexact H.
     intros. destruct H2; inv H2; inv H; inv H0; auto with va.
     exploit vmatch_Uns_0. eapply vmatch_ge. eapply vincl_ge; eauto. eexact H0.
     intros. destruct H2; inv H2; inv H; inv H0; simpl; try rewrite Int.mulhs_zero; auto with va.
-  - inv H; inv H0; auto with va.
+  - inversion H; inversion H0; subst; eauto using mulhs_base_sound with va.
 Qed.
 
 Definition mulhu_base (v w: aval) :=
@@ -1890,21 +1910,15 @@ Definition mulhu_base (v w: aval) :=
 Lemma mulhu_base_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulhu v w) (mulhu_base x y).
 Proof.
-  intros.
-  assert (forall i1 i2 p,
-          vmatch (Vint i1) x -> vmatch (Vint i2) y ->
-          vmatch (Vint (Int.mulhu i1 i2)) (uns p (urange x + urange y - Int.zwordsize))).
-  { intros.
-    apply urange_sound in H1. destruct H1 as [A1 B1]. apply range_is_uns in B1; auto.
-    apply urange_sound in H2. destruct H2 as [A2 B2]. apply range_is_uns in B2; auto.
-    set (n1 := urange x) in *. set (n2 := urange y) in *.
-    unfold Int.mulhu. set (x1 := Int.unsigned i1) in *. set (x2 := Int.unsigned i2) in *.
-    exploit (Zmult_unsigned_range n1 x1 n2 x2); auto. intros P.
-    rewrite Int.modulus_power. change Int.zwordsize with 32. rewrite <- Zshiftr_div_two_p by lia.
-    apply vmatch_uns. red; intros. rewrite Int.testbit_repr by auto. rewrite Z.shiftr_spec by lia.
-    apply (Zbits_unsigned_range (n1 + n2)); lia.
-  }
-  unfold mulhu_base. destruct v, w; eauto with va. 
+  intros. unfold Val.mulhu, mulhu_base; destruct v, w; auto with va.
+  apply urange_sound in H. destruct H as [A1 B1]. apply range_is_uns in B1; auto.
+  apply urange_sound in H0. destruct H0 as [A2 B2]. apply range_is_uns in B2; auto.
+  set (n1 := urange x) in *. set (n2 := urange y) in *.
+  unfold Int.mulhu. set (x1 := Int.unsigned i) in *. set (x2 := Int.unsigned i0) in *.
+  exploit (Zmult_unsigned_range n1 x1 n2 x2); auto. intros P.
+  rewrite Int.modulus_power. change Int.zwordsize with 32. rewrite <- Zshiftr_div_two_p by lia.
+  apply vmatch_uns. red; intros. rewrite Int.testbit_repr by auto. rewrite Z.shiftr_spec by lia.
+  apply (Zbits_unsigned_range (n1 + n2)); lia.
 Qed.
 
 Definition mulhu (v w: aval):=
