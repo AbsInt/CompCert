@@ -1098,3 +1098,52 @@ Proof.
 + rewrite zlt_false by lia; auto.
 - rewrite ! Z.shiftl_spec_low by lia. simpl. apply andb_true_r.
 Qed.
+
+(** ** Power-of-two intervals *)
+
+Lemma Zbits_unsigned_range: forall n z,
+  0 <= n -> 0 <= z < two_p n ->
+  forall m, m >= n -> Z.testbit z m = false.
+Proof.
+  intros. replace z with (z mod two_p n) by auto using Zmod_small.
+  rewrite Ztestbit_mod_two_p by lia. rewrite zlt_false by lia. auto.
+Qed.
+
+Lemma Zbits_signed_range: forall n z,
+  0 <= n -> - two_p n <= z < two_p n ->
+  forall m1 m2,  m1 >= n -> m2 >= n -> Z.testbit z m1 = Z.testbit z m2.
+Proof.
+  intros. destruct (zlt z 0).
+- set (x := -z - 1).
+  assert (0 <= x < two_p n) by lia.
+  replace z with (-x - 1) by lia.
+  rewrite ! Z_one_complement by lia.
+  rewrite ! (Zbits_unsigned_range n) by lia.
+  auto.
+- rewrite ! (Zbits_unsigned_range n) by lia.
+  auto.
+Qed.
+
+Lemma Zmult_unsigned_range: forall n x m y,
+  0 <= n -> 0 <= x < two_p n -> 0 <= m -> 0 <= y < two_p m ->
+  0 <= x * y < two_p (n + m).
+Proof.
+  intros. rewrite two_p_is_exp by auto. split.
+- change 0 with (0 * 0). apply Z.mul_le_mono_nonneg; lia.
+- apply Z.mul_lt_mono_nonneg; lia.
+Qed.
+  
+Lemma Zmult_signed_range: forall n x m y,
+  0 <= n -> - two_p n <= x < two_p n -> 0 <= m -> - two_p m <= y < two_p m ->
+  - two_p (n + m + 1) <= x * y < two_p (n + m + 1).
+Proof.
+  intros.
+  set (pn := two_p n) in *; set (pm := two_p m) in *.
+  assert (- (pn * pm) <= x * y <= pn * pm).
+  { apply Z.abs_le. rewrite Z.abs_mul.
+    apply Z.mul_le_mono_nonneg; auto using Z.abs_nonneg; apply Z.abs_le; lia. }
+  assert (pn * pm < two_p (n + m + 1)).
+  { unfold pn, pm; rewrite <- two_p_is_exp by lia.
+    apply two_p_monotone_strict. lia. }
+  lia.
+Qed.

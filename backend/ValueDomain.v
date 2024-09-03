@@ -706,8 +706,7 @@ Lemma is_uns_range: forall z n,
   0 <= n -> 0 <= z < two_p n -> is_uns n (Int.repr z).
 Proof.
   intros; red; intros. rewrite Int.testbit_repr by auto.
-  replace z with (z mod two_p n) by auto using Zmod_small.
-  rewrite Ztestbit_mod_two_p by lia. rewrite zlt_false by lia. auto.
+  apply (Zbits_unsigned_range n); auto.
 Qed.
 
 Lemma range_is_uns: forall i n,
@@ -725,22 +724,8 @@ Qed.
 Lemma is_sgn_range: forall z n,
   0 < n -> -(two_p (n - 1)) <= z < two_p (n - 1) -> is_sgn n (Int.repr z).
 Proof.
-  intros. destruct (zlt n Int.zwordsize); [destruct (zlt z 0) | ].
-- red; intros.
-  set (z' := Z.pred (Z.opp z)).
-  assert (A: Int.repr z' = Int.not (Int.repr z)).
-  { rewrite Int.not_neg. apply Int.eqm_samerepr.
-    unfold z'. replace (Z.pred (-z)) with ((-z) + (-1)) by lia.
-    apply Int.eqm_add. apply Int.eqm_unsigned_repr_r. apply eqmod_neg. apply Int.eqm_unsigned_repr.
-    apply Int.eqm_unsigned_repr. }
-  assert (U: is_uns (n - 1) (Int.repr z')).
-  { apply is_uns_range; lia. }
-  assert (V: forall m, 0 <= m < Int.zwordsize -> m >= n - 1 ->
-             Int.testbit (Int.repr z) m = true).
-  { intros. apply negb_false_iff. rewrite <- Int.bits_not by auto. rewrite <- A. apply U; auto. }
-  rewrite ! V by lia. auto.
-- apply is_uns_sgn with (n - 1). apply is_uns_range; lia. lia.
-- eauto with va.
+  intros; red; intros. rewrite ! Int.testbit_repr by lia.
+  apply (Zbits_signed_range (n - 1)); lia.
 Qed.
 
 Lemma range_is_sgn: forall i n,
@@ -1805,27 +1790,15 @@ Proof.
              0 <= n1 -> is_uns n1 i1 ->
              0 <= n2 -> is_uns n2 i2 ->
              vmatch (Val.mul (Vint i1) (Vint i2)) (uns p (n1 + n2))).
-  { intros. apply range_is_uns in H2; auto. apply range_is_uns in H4; auto.
-    apply vmatch_uns. apply is_uns_range. lia.
-    rewrite two_p_is_exp by auto.  split.
-    change 0 with (0 * 0). apply Z.mul_le_mono_nonneg; lia. 
-    apply Z.mul_lt_mono_nonneg; lia. }
+  { intros. apply vmatch_uns. apply is_uns_range. lia.
+    apply Zmult_unsigned_range; auto using range_is_uns. }
   assert (SGN: forall i1 i2 n1 n2 p,
              0 < n1 -> is_sgn n1 i1 ->
              0 < n2 -> is_sgn n2 i2 ->
              vmatch (Val.mul (Vint i1) (Vint i2)) (sgn p (n1 + n2))).
-  { intros. apply range_is_sgn in H2; auto. apply range_is_sgn in H4; auto.
-    set (p1 := two_p (n1 - 1)) in *. set (p2 := two_p (n2 - 1)) in *.
-    assert (- (p1 * p2) <= Int.signed i1 * Int.signed i2 <= p1 * p2).
-    { apply Z.abs_le. rewrite Z.abs_mul.
-      apply Z.mul_le_mono_nonneg; auto using Z.abs_nonneg; apply Z.abs_le; lia. }
-    assert (0 < p1 * p2 < two_p (n1 + n2 - 1)).
-    { unfold p1, p2. rewrite <- two_p_is_exp by lia.
-      replace (n1 - 1 + (n2 - 1)) with (n1 + n2 - 2) by lia. split.
-      apply Z.gt_lt. apply two_p_gt_ZERO. lia.
-      apply two_p_monotone_strict. lia. }
-    apply vmatch_sgn. rewrite Int.mul_signed. apply is_sgn_range; lia.
-  }
+  { intros. apply vmatch_sgn. rewrite Int.mul_signed. apply is_sgn_range. lia.
+    replace (n1 + n2 - 1) with ((n1 - 1) + (n2 - 1) + 1) by lia.
+    apply Zmult_signed_range; auto using range_is_sgn; lia. }
   unfold mul_base.
   inv H; inv H0; eauto with va; rewrite Z.add_comm; eauto with va.
 Qed.
