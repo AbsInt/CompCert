@@ -373,19 +373,19 @@ Definition cmp_different_blocks (c: comparison) : abool :=
   match c with
   | Ceq => Maybe false
   | Cne => Maybe true
-  | _   => Bnone
+  | _   => if va_strict tt then Bnone else Btop
   end.
 
 Lemma cmp_different_blocks_none:
   forall c, cmatch None (cmp_different_blocks c).
 Proof.
-  intros; destruct c; constructor.
+  unfold cmp_different_blocks. destruct c, (va_strict tt); constructor.
 Qed.
 
 Lemma cmp_different_blocks_sound:
   forall c, cmatch (Val.cmp_different_blocks c) (cmp_different_blocks c).
 Proof.
-  intros; destruct c; constructor.
+  unfold cmp_different_blocks. destruct c, (va_strict tt); constructor.
 Qed.
 
 Definition pcmp (c: comparison) (p1 p2: aptr) : abool :=
