@@ -2016,15 +2016,27 @@ Definition mods (v w: aval) :=
       || Int.eq i1 (Int.repr Int.min_signed) && Int.eq i2 Int.mone
       then if va_strict tt then Vbot else ntop
       else I (Int.mods i1 i2)
+  | (I i2 | IU i2), _ => sgn (provenance v) (ssize i2)
   | _, _ => ntop2 v w
   end.
 
 Lemma mods_sound:
   forall v w u x y, vmatch v x -> vmatch w y -> Val.mods v w = Some u -> vmatch u (mods x y).
 Proof.
+  assert (SGN: forall i j, Int.eq j Int.zero = false -> is_sgn (ssize j) (Int.mods i j)).
+  {
+    intros. unfold Int.mods.
+    pose proof (is_sgn_ssize j). apply range_is_sgn in H0; auto with va.
+    set (x := Int.signed i) in *. set (y := Int.signed j) in *.
+    assert (y <> 0).
+    { unfold y; red; intros. rewrite <- (Int.repr_signed j), H1 in H. discriminate. }
+    assert (Z.abs (Z.rem x y) < Z.abs y) by (apply Z.rem_bound_abs; auto).
+    apply is_sgn_range. auto with va. lia.
+  }
   intros. destruct v; destruct w; try discriminate; simpl in H1.
   destruct orb eqn:E; inv H1.
-  inv H; inv H0; auto with va; simpl; rewrite E; constructor.
+  assert (E': Int.eq i0 Int.zero = false).  { apply orb_false_elim in E. tauto. }
+  unfold mods; inv H; inv H0; auto with va; rewrite ? E; auto with va.
 Qed.
 
 Definition modu (v w: aval) :=
