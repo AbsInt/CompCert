@@ -1,6 +1,7 @@
 include ../Makefile.config
 
 CFLAGS=-O1 -g -Wall
+ASFLAGS=
 
 ifeq ($(ARCH),x86)
 ifeq ($(MODEL),64)
@@ -15,6 +16,13 @@ ifeq ($(MODEL),ppc64)
 ARCH=powerpc64
 else ifeq ($(MODEL),e5500)
 ARCH=powerpc64
+endif
+ifeq ($(SYSTEM),linux)
+ASFLAGS+=-Ignu
+else ifeq ($(SYSTEM),bsd)
+ASFLAGS+=-Ignu
+else
+ASFLAGS+=-Inon-gnu
 endif
 endif
 
@@ -51,7 +59,7 @@ $(LIB): $(OBJS)
 	$(ARCHIVER) $(LIB) $(OBJS)
 
 %.o: %.s
-	$(CASMRUNTIME) -o $@ $^
+	$(CASMRUNTIME) $(ASFLAGS) -o $@ $^
 
 %.o: %.S
 	$(CASMRUNTIME) -DMODEL_$(MODEL) -DABI_$(ABI) -DENDIANNESS_$(ENDIANNESS) -DSYS_$(SYSTEM) -o $@ $^

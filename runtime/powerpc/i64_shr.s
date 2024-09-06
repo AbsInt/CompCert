@@ -62,4 +62,4 @@ __compcert_i64_shr:
         .type __compcert_i64_shr, @function
         .size __compcert_i64_shr, .-__compcert_i64_shr
 	
-        
+        .include "stackannot.s"

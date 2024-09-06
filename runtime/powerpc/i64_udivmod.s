@@ -232,3 +232,5 @@ __compcert_i64_udiv6432:
 
 	.type	__compcert_i64_udiv6432, @function
 	.size	__compcert_i64_udiv6432,.-__compcert_i64_udiv6432
+
+        .include "stackannot.s"

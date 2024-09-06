@@ -97,4 +97,5 @@ __compcert_i64_dtos:
         blr
         .type __compcert_i64_dtos, @function
         .size __compcert_i64_dtos, .-__compcert_i64_dtos
-        
+
+        .include "stackannot.s"

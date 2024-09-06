@@ -67,4 +67,4 @@ __compcert_i64_smod:
         .type __compcert_i64_smod, @function
         .size __compcert_i64_smod, .-__compcert_i64_smod
 
-        
+        .include "stackannot.s"

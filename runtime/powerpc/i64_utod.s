@@ -64,3 +64,4 @@ __compcert_i64_utod:
         .type __compcert_i64_utod, @function
         .size __compcert_i64_utod, .-__compcert_i64_utod
 	
+        .include "stackannot.s"

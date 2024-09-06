@@ -76,4 +76,5 @@ __compcert_i64_utod:
 #       fadd f1, f1, f1        # multiply result by 2
 #       addi r1, r1, 16
 #       blr
-        
+
+        .include "stackannot.s"

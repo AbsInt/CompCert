@@ -66,3 +66,4 @@ __compcert_i64_stof:
         .type __compcert_i64_stof, @function
         .size __compcert_i64_stof, .-__compcert_i64_stof
 	
+        .include "stackannot.s"

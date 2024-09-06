@@ -52,3 +52,4 @@ __compcert_i64_udiv:
         .type __compcert_i64_udiv, @function
         .size __compcert_i64_udiv, .-__compcert_i64_udiv
 
+        .include "stackannot.s"

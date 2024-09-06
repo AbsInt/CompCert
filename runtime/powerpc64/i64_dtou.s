@@ -63,4 +63,4 @@ __compcert_i64_dtou:
         .type __compcert_i64_dtou, @function
         .size __compcert_i64_dtou, .-__compcert_i64_dtou
 
-        
+        .include "stackannot.s"

@@ -161,3 +161,5 @@ __compcert_va_saveregs:
 1:      blr
         .type   __compcert_va_saveregs, @function
         .size   __compcert_va_saveregs, .-__compcert_va_saveregs
+
+        .include "stackannot.s"
