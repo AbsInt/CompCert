@@ -361,7 +361,7 @@ Variable e: env.
 Variable le: temp_env.
 Variable m: mem.
 
-(** [eval_expr ge e m a v] defines the evaluation of expression [a]
+(** [eval_expr ge e le m a v] defines the evaluation of expression [a]
   in r-value position.  [v] is the value of the expression.
   [e] is the current environment and [m] is the current memory state. *)
 
