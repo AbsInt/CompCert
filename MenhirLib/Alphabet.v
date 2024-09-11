@@ -14,7 +14,7 @@ Import ListNotations.
 
 Local Obligation Tactic := intros.
 
-(** A comparable type is equiped with a [compare] function, that define an order
+(** A comparable type is equipped with a [compare] function, that define an order
    relation. **)
 Class Comparable (A:Type) := {
   compare : A -> A -> comparison;
@@ -148,7 +148,7 @@ destruct H2, H0.
 reflexivity.
 Qed.
 
-(** An [Finite] type is a type with the list of all elements. **)
+(** A [Finite] type is a type with a list of all elements. **)
 Class Finite (A:Type) := {
   all_list : list A;
   all_list_forall : forall x:A, In x all_list
@@ -156,12 +156,15 @@ Class Finite (A:Type) := {
 
 (** An alphabet is both [ComparableLeibnizEq] and [Finite]. **)
 Class Alphabet (A:Type) := {
-  AlphabetComparable :> Comparable A;
-  AlphabetComparableLeibnizEq :> ComparableLeibnizEq AlphabetComparable;
-  AlphabetFinite :> Finite A
+  AlphabetComparable : Comparable A;
+  AlphabetComparableLeibnizEq : ComparableLeibnizEq AlphabetComparable;
+  AlphabetFinite : Finite A
 }.
+#[global] Existing Instance AlphabetComparable.
+#[global] Existing Instance AlphabetComparableLeibnizEq.
+#[global] Existing Instance AlphabetFinite.
 
-(** The [Numbered] class provides a conveniant way to build [Alphabet] instances,
+(** The [Numbered] class provides a convenient way to build [Alphabet] instances,
    with a good computationnal complexity. It is mainly a injection from it to
    [positive] **)
 Class Numbered (A:Type) := {
