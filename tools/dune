@@ -1,0 +1,7 @@
+(executable
+ (name ndfun)
+ (flags :standard -w -27)
+ (modules ndfun)
+ (libraries str))
+
+(include_subdirs no)
