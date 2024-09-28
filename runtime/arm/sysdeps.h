@@ -35,9 +35,10 @@
 // System dependencies
 
 #if defined(MODEL_armv7m)
-// Thumb2-only
+// Thumb-2 only
 #define THUMB
-#else
+#elsif defined(MODEL_armv6) || defined(MODEL_armv6t2)
+// ARM-A32 only
 #undef THUMB
 #endif
 
