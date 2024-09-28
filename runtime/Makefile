@@ -58,8 +58,8 @@ ifeq ($(strip $(SYSTEM)),diab)
 
 else
 
-%.o: %.S
-	$(CASMRUNTIME) -DMODEL_$(MODEL) -DABI_$(ABI) -DENDIANNESS_$(ENDIANNESS) -DSYS_$(SYSTEM) -o $@ $^
+%.o: %.S $(ARCH)/sysdeps.h
+	$(CASMRUNTIME) -DMODEL_$(MODEL) -DABI_$(ABI) -DENDIANNESS_$(ENDIANNESS) -DSYS_$(SYSTEM) -o $@ $<
 
 endif
 
