@@ -38,34 +38,8 @@
 
 @@@ Shift left
 
-@ Note on ARM shifts: the shift amount is taken modulo 256.
-@ If shift amount mod 256 >= 32, the shift produces 0.
-
-@ Algorithm:
-@    RH = (XH << N) | (XL >> (32-N) | (XL << (N-32))
-@    RL = XL << N
-@ If N = 0:
-@    RH = XH | 0 | 0
-@    RL = XL
-@ If 1 <= N <= 31:  1 <= 32-N <= 31  and  2s5 <= N-32 mod 256 <= 255
-@    RH = (XH << N) | (XL >> (32-N) | 0
-@    RL = XL << N
-@ If N = 32:
-@    RH = 0 | XL | 0
-@    RL = 0
-@ If 33 <= N <= 63: 225 <= 32-N mod 256 <= 255 and 1 <= N-32 <= 31
-@    RH = 0 | 0 | (XL << (N-32))
-@    RL = 0
-
 FUNCTION(__compcert_i64_shl)
         AND r2, r2, #63         @ normalize amount to 0...63
-        RSB r3, r2, #32         @ r3 = 32 - amount
-        LSL Reg0HI, Reg0HI, r2
-        LSR r3, Reg0LO, r3
-        ORR Reg0HI, Reg0HI, r3
-        SUB r3, r2, #32         @ r3 = amount - 32
-        LSL r3, Reg0LO, r3
-        ORR Reg0HI, Reg0HI, r3
-        LSL Reg0LO, Reg0LO, r2
+        LSHL(Reg0, Reg0, r2, r3)
         bx lr
 ENDFUNCTION(__compcert_i64_shl)

@@ -139,6 +139,94 @@ f:
 #define Reg3LO r6
 #endif
 
+#define HI(r) r##HI
+#define LO(r) r##LO
+
+// Useful operations over register pairs
+
+// Move
+#define LMOV(r,x) \
+  MOV LO(r), LO(x); MOV HI(r), HI(x)
+
+// Left shift by 1
+#define LSHL1(r,x) \
+  adds LO(r), LO(x), LO(x); adc HI(r), HI(x), HI(x)
+
+// Right shift (logical) by 1
+#define LSHR1(r,x) \
+  lsrs HI(r), HI(x), #1; rrx LO(r), LO(x)
+
+// Subtract and set carry flag
+#define LSUBS(r,x,y) \
+  subs LO(r), LO(x), LO(y); sbcs HI(r), HI(x), HI(y)
+
+// Conditional change sign
+// Set r = x if sgn = 0 and r = -x if sgn = -1
+#define LCONDOPP(r,x,sgn) \
+  EOR LO(r), LO(x), sgn;  EOR HI(r), HI(x), sgn; \
+  subs LO(r), LO(r), sgn; sbc HI(r), HI(r), sgn
+
+// Note on ARM shifts: the shift amount is taken modulo 256.
+// If shift amount mod 256 >= 32, the shift produces 0.
+
+// General left shift by N bits
+// Branchless algorithm:
+//    rh = (xh << n) | (xl >> (32-n)) | (xl << (n-32))
+//    rl = xl << n
+// What happens:
+//    n                 0   1  ...  31      32   33  ... 63
+//    (32-n) mod 255    32  31      1       0    255     224
+//    (n-32) mod 255    224 225     255     0    1       31
+//    xl << n           xl  xl<<1   xl<<31  0    0       0
+//    xh << n           xh  xh<<1   xh<<31  0    0       0
+//    xl >> (32-n)      0   xl>>31  xl>>1   xl   0       0
+//    xl << (n-32)      0   0       0       xl   xl<<1   xl<<31
+
+#define LSHL(r,x,n,t) \
+  RSB t, n, #32; \
+  LSL HI(r), HI(x), n; \
+  LSR t, LO(x), t; \
+  ORR HI(r), HI(r), t; \
+  SUB t, n, #32; \
+  LSL t, LO(x), t; \
+  ORR HI(r), HI(r), t; \
+  LSL LO(r), LO(x), n
+
+// Special case of LSHL when the shift amount n is between 0 and 32
+// No need to compute the (xl << (n-32)) term.
+
+#define LSHL_small(r,x,n,t) \
+  RSB t, n, #32; \
+  LSL HI(r), HI(x), n; \
+  LSR t, LO(x), t; \
+  ORR HI(r), HI(r), t; \
+  LSL LO(r), LO(x), n
+
+// General right shift by N bits
+// Branchless algorithm:
+//    rl = (xl >> n) | (xh << (32-n)) | (xh >> (n-32))
+//    rh = xh >> n
+// What happens:
+//    n                 0   1  ...  31      32   33  ... 63
+//    (32-n) mod 255    32  31      1       0    255     224
+//    (n-32) mod 255    224 225     255     0    1       31
+//    xh >> n           xh  xh>>1   xh>>31  0    0       0
+//    xl >> n           xl  xl>>1   xl>>31  0    0       0
+//    xh << (32-n)      0   xh<<31  xh<<1   xh   0       0
+//    xh >> (n-32)      0   0       0       xh   xh>>1   xh>>31
+
+#define LSHR(r,x,n,t) \
+  RSB t, n, #32; \
+  LSR LO(r), LO(x), n; \
+  LSL t, HI(x), t; \
+  ORR LO(r), LO(r), t; \
+  SUB t, n, #32; \
+  LSR t, HI(x), t; \
+  ORR LO(r), LO(r), t; \
+  LSR HI(r), HI(x), n
+
+// Stack is not executable
+
 #if defined(SYS_linux) || defined(SYS_bsd)
 	.section .note.GNU-stack,"",%progbits
 #endif

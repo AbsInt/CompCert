@@ -41,8 +41,7 @@
 FUNCTION(__compcert_i64_udiv)
         push {r4, r5, r6, r7, r8, lr}
         bl __compcert_i64_udivmod
-        MOV Reg0LO, Reg2LO
-        MOV Reg0HI, Reg2HI
+        LMOV(Reg0, Reg2)
         pop {r4, r5, r6, r7, r8, lr}
         bx lr
 ENDFUNCTION(__compcert_i64_udiv)

@@ -40,22 +40,13 @@
 
 FUNCTION(__compcert_i64_sdiv)
         push {r4, r5, r6, r7, r8, r10, lr}
-        ASR r4, Reg0HI, #31      @ r4 = sign of N
-        ASR r5, Reg1HI, #31      @ r5 = sign of D
-        EOR r10, r4, r5          @ r10 = sign of result
-        EOR Reg0LO, Reg0LO, r4   @ take absolute value of N
-        EOR Reg0HI, Reg0HI, r4   @ N = (N ^ (N >>s 31)) - (N >>s 31)
-        subs Reg0LO, Reg0LO, r4
-        sbc Reg0HI, Reg0HI, r4
-        EOR Reg1LO, Reg1LO, r5   @ take absolute value of D
-        EOR Reg1HI, Reg1HI, r5
-        subs Reg1LO, Reg1LO, r5
-        sbc Reg1HI, Reg1HI, r5
-        bl __compcert_i64_udivmod         @ do unsigned division
-        EOR Reg0LO, Reg2LO, r10  @ apply expected sign
-        EOR Reg0HI, Reg2HI, r10
-        subs Reg0LO, Reg0LO, r10
-        sbc Reg0HI, Reg0HI, r10
+        ASR r4, Reg0HI, #31       @ r4 = sign of N
+        ASR r5, Reg1HI, #31       @ r5 = sign of D
+        EOR r10, r4, r5           @ r10 = sign of result
+        LCONDOPP(Reg0, Reg0, r4)  @ take absolute value of N
+        LCONDOPP(Reg1, Reg1, r5)  @ take absolute value of D
+        bl __compcert_i64_udivmod @ do unsigned division
+        LCONDOPP(Reg0, Reg2, r10) @ apply expected sign
         pop {r4, r5, r6, r7, r8, r10, lr}
         bx lr
 ENDFUNCTION(__compcert_i64_sdiv)

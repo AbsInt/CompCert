@@ -38,38 +38,33 @@
 
 @@@ Auxiliary function for division and modulus. Don't call from C
 
-@ On entry:  N = (r0, r1) numerator    D = (r2, r3) divisor
-@ On exit:   Q = (r4, r5) quotient     R = (r0, r1) remainder
-@ Locals:    COUNT = r6   round counter
-@            TMP = r7, r8 temporary
+@ On entry:  N = Reg0 (r0, r1) numerator    D = Reg1 (r2, r3) divisor
+@ On exit:   Q = Reg2 (r4, r5) quotient     R = Reg0 (r0, r1) remainder
+@ Locals:    TMP = Reg3 (r6, r7) temporary
+@            COUNT = r8   round counter
 
 FUNCTION(__compcert_i64_udivmod)
-        orrs r7, Reg1LO, Reg1HI         @ is D == 0?
+        orrs r6, Reg1LO, Reg1HI         @ is D == 0?
         it eq
         bxeq lr                         @ if so, return with unspecified results
         MOV Reg2LO, #0                  @ Q = 0
         MOV Reg2HI, #0
-        MOV r6, #1                      @ round = 1
+        MOV r8, #1                      @ round = 1
 1:      cmp Reg1HI, #0                  @ while ((signed) D >= 0)
         blt 3f
-        adds Reg1LO, Reg1LO, Reg1LO     @ D = D << 1
-        adc Reg1HI, Reg1HI, Reg1HI
-        subs r7, Reg0LO, Reg1LO         @ if N < D
-        sbcs r8, Reg0HI, Reg1HI
+        LSHL1(Reg1, Reg1)               @ D = D << 1
+        LSUBS(Reg3, Reg0, Reg1)         @ if N < D
         blo 2f                          @ break and restore D to previous value
-        ADD r6, r6, #1                  @ increment count
+        ADD r8, r8, #1                  @ increment count
         b 1b
-2:      lsrs Reg1HI, Reg1HI, #1         @ D = D >> 1
-        rrx Reg1LO, Reg1LO
-3:      adds Reg2LO, Reg2LO, Reg2LO     @ Q = Q << 1
-        adc Reg2HI, Reg2HI, Reg2HI
-        subs r7, Reg0LO, Reg1LO         @ TMP = N - D
-        sbcs r8, Reg0HI, Reg1HI
+2:      LSHR1(Reg1, Reg1)               @ D = D >> 1
+3:      LSHL1(Reg2, Reg2)               @ Q = Q << 1
+        LSUBS(Reg3, Reg0, Reg1)         @ TMP = N - D
         blo 4f                          @ if N < D, leave N and Q unchanged
-	MOV Reg0LO, r7                  @ N = N - D
-        MOV Reg0HI, r8
-        orr Reg2LO, Reg2LO, #1          @ Q = Q | 1
-4:      subs r6, r6, #1                 @ decrement count
-        bne 2b                          @ repeat until count = 0
+	LMOV(Reg0, Reg3)                @ N = N - D
+        ORR Reg2LO, Reg2LO, #1          @ Q = Q | 1
+4:      LSHR1(Reg1, Reg1)               @ D = D >> 1
+	subs r8, r8, #1                 @ decrement count
+        bne 3b                          @ repeat until count = 0
         bx lr
 ENDFUNCTION(__compcert_i64_udivmod)

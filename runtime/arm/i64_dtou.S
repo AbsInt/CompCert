@@ -64,22 +64,11 @@ FUNCTION(__compcert_i64_dtou)
         cmp r2, #0
         blt 3f
   @ EXP >= 0: shift left by EXP.  Note that EXP < 12
-        rsb r3, r2, #32         @ r3 = 32 - amount
-        LSL Reg0HI, Reg0HI, r2
-        LSR r3, Reg0LO, r3
-        ORR Reg0HI, Reg0HI, r3
-        LSL Reg0LO, Reg0LO, r2
+        LSHL_small(Reg0, Reg0, r2, r3)
 	bx lr
   @ EXP < 0: shift right by -EXP.  Note that -EXP <= 52 but can be >= 32
 3:      RSB r2, r2, #0          @ r2 = -EXP = shift amount
-        RSB r3, r2, #32         @ r3 = 32 - amount
-        LSR Reg0LO, Reg0LO, r2
-        LSL r3, Reg0HI, r3
-        ORR Reg0LO, Reg0LO, r3
-        SUB r3, r2, #32         @ r3 = amount - 32  (see i64_shr.s)
-        LSR r3, Reg0HI, r3
-        ORR Reg0LO, Reg0LO, r3
-        LSR Reg0HI, Reg0HI, r2
+        LSHR(Reg0, Reg0, r2, r3)
         bx lr
   @ special cases
 1:      MOV Reg0LO, #0          @ result is 0
