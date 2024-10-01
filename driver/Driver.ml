@@ -152,7 +152,10 @@ let target_help =
 {|Target processor options:
   -mthumb        Use Thumb2 instruction encoding
   -marm          Use classic ARM instruction encoding
-|}
+|} ^
+(if Configuration.model <> "armv6t2" then
+{|  -midiv         Enable integer division extension
+|} else "")
 else
   ""
 
@@ -329,7 +332,10 @@ let cmdline_actions =
       [ Exact "-marm", Ignore ] (* Thumb needs ARMv6T2 or ARMv7 *)
     else
       [ Exact "-mthumb", Set option_mthumb;
-        Exact "-marm", Unset option_mthumb; ]
+        Exact "-marm", Unset option_mthumb;] @
+      (if Configuration.model <> "armv6t2" then
+        [Exact "-midiv", Set option_midiv;]
+       else [])
    else []) @
 (* Toolchain options *)
     (if not Configuration.gnu_toolchain then

@@ -584,6 +584,15 @@ struct
       (match Configuration.abi with
        | "hardfloat" -> 1
        | _ -> 0);
+    (* We must print that we use the idiv arch extension if we are either:
+       * armv7a and the midiv option is set
+       * armv7r and the midiv option is set but we are not in thumb mode *)
+    (match Configuration.model with
+     | "armv7a" -> if !Clflags.option_midiv then
+       fprintf oc "	.arch_extension idiv\n"
+     | "armv7r" -> if (!Clflags.option_midiv && (not !Clflags.option_mthumb)) then
+       fprintf oc "	.arch_extension idiv\n"
+     | _ -> ());
     fprintf oc "	.%s\n"
       (if !Clflags.option_mthumb then "thumb" else "arm");
     if !Clflags.option_g then begin

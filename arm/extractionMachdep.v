@@ -37,9 +37,14 @@ Extract Constant Archi.big_endian =>
 Extract Constant Archi.thumb2_support =>
   "(Configuration.model = ""armv6t2"" || Configuration.model >= ""armv7"")".
 
-(* Whether the model has hardware supports sdiv and udiv *)
+(* Whether the model has hardware supports sdiv and udiv.
+   For armv7r and armv7m this means that we either are in Thumb mode or
+   the option -midiv is set. For armv7a we only support it if the option midiv
+   is set, since support for sdiv/udiv is still only optional in armv7a with
+   Thumb. *)
 Extract Constant Archi.hardware_idiv =>
   "fun () -> begin match  Configuration.model with
-   | ""armv7r"" | ""armv7m"" -> !Clflags.option_mthumb
+   | ""armv7r"" | ""armv7m"" -> !Clflags.option_midiv || !Clflags.option_mthumb
+   | ""armv7a"" -> !Clflags.option_midiv
    | _ -> false
    end".
