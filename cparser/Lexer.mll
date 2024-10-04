@@ -37,6 +37,7 @@ let () =
       ("_Bool", fun loc -> UNDERSCORE_BOOL loc);
       ("_Generic", fun loc -> GENERIC loc);
       ("_Complex", fun loc -> reserved_keyword loc "_Complex");
+      ("_Float16", fun loc -> FLOAT16 loc);
       ("_Imaginary", fun loc -> reserved_keyword loc "_Imaginary");
       ("_Static_assert", fun loc -> STATIC_ASSERT loc);
       ("__alignof", fun loc -> ALIGNOF loc);
@@ -638,6 +639,7 @@ and singleline_comment = parse
       | Pre_parser.EQEQ loc -> loop (Parser.EQEQ loc)
       | Pre_parser.EXTERN loc -> loop (Parser.EXTERN loc)
       | Pre_parser.FLOAT loc -> loop (Parser.FLOAT loc)
+      | Pre_parser.FLOAT16 loc -> loop (Parser.FLOAT16 loc)
       | Pre_parser.FOR loc -> loop (Parser.FOR loc)
       | Pre_parser.GENERIC loc -> loop (Parser.GENERIC loc)
       | Pre_parser.GEQ loc -> loop (Parser.GEQ loc)

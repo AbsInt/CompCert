@@ -48,6 +48,7 @@ Inductive typeSpecifier := (* Merge all specifiers into one type *)
   | Tint
   | Tlong
   | Tfloat
+  | Tfloat16
   | Tdouble
   | Tsigned
   | Tunsigned

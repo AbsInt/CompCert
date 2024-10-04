@@ -421,6 +421,9 @@ let convertIkind k a : coq_type =
 
 let convertFkind k a : coq_type =
   match k with
+  | C.FFloat16 ->
+      unsupported "'_Float16' type";
+      Tfloat (F32, a)
   | C.FFloat -> Tfloat (F32, a)
   | C.FDouble -> Tfloat (F64, a)
   | C.FLongDouble ->
@@ -695,6 +698,9 @@ let convertFloat f kind =
   match mant with
     | Z.Z0 ->
       begin match kind with
+      | FFloat16 ->
+          unsupported "'_Float16' type";
+	  Ctyping.econst_single (Float.to_single Float.zero)
       | FFloat ->
 	  Ctyping.econst_single (Float.to_single Float.zero)
       | FDouble | FLongDouble ->
@@ -712,6 +718,9 @@ let convertFloat f kind =
       let base = P.of_int (if f.C.hex then 2 else 10) in
 
       begin match kind with
+      | FFloat16 ->
+          unsupported "'_Float16' type";
+	  Ctyping.econst_single (Float.to_single Float.zero)
       | FFloat ->
 	  let f = Float32.from_parsed base mant exp in
           checkFloatOverflow f "float";
