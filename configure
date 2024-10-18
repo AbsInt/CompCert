@@ -30,6 +30,7 @@ clightgen=false
 install_coqdev=false
 ignore_coq_version=false
 ignore_ocaml_version=false
+allow_unreleased_menhir=false
 library_Flocq=local
 library_MenhirLib=local
 
@@ -101,6 +102,7 @@ Options:
   -install-coqdev      Also install the Coq development (implied by -clightgen)
   -ignore-coq-version  Accept to use experimental or unsupported versions of Coq
   -ignore-ocaml-version Accept to use experimental or unsupported versions of OCaml
+  -allow-unreleased-menhir Accept to use experimental / unreleased versions of Menhir
 '
 
 #
@@ -140,6 +142,8 @@ while : ; do
         ignore_coq_version=true;;
     -ignore-ocaml-version|--ignore-ocaml-version)
         ignore_ocaml_version=true;;
+    -allow-unreleased-menhir|--allow-unreleased-menhir)
+        allow_unreleased_menhir=true;;
     -install-coqdev|--install-coqdev|-install-coq-dev|--install-coq-dev)
         install_coqdev=true;;
     -use-external-Flocq|--use-external-Flocq)
@@ -560,7 +564,7 @@ fi
 
 MENHIR_REQUIRED=20200624
 echo "Testing Menhir... " | tr -d '\n'
-menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
+menhir_ver=$(menhir --version 2>/dev/null | sed -n -E -e 's/^.*version (unreleased|[0-9]*).*$/\1/p')
 case "$menhir_ver" in
   20[0-9][0-9][0-9][0-9][0-9][0-9])
       if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
@@ -580,10 +584,29 @@ case "$menhir_ver" in
           echo "Error: CompCert requires a version greater or equal to $MENHIR_REQUIRED."
           missingtools=true
       fi;;
+  unreleased)
+      echo "version $menhir_ver -- UNSUPPORTED"
+      echo "Warning: this version of Menhir is unsupported, proceed at your own risks."
+      menhir_dir=$(ocamlfind query menhirLib 2>/dev/null) || \
+      menhir_dir=$(menhir --suggest-menhirLib) || \
+      menhir_dir=""
+      menhir_dir=$(echo "$menhir_dir" | tr -d '\r' | tr '\\' '/')
+      if test ! -d "$menhir_dir"; then
+          echo "Error: cannot determine the location of the Menhir API library."
+          echo "This can be due to an incorrect Menhir package."
+          echo "Consider using the OPAM package for Menhir."
+          missingtools=true
+      fi;;
   *)
-        echo "NOT FOUND"
-        echo "Error: make sure Menhir version $MENHIR_REQUIRED or later is installed."
-        missingtools=true;;
+      if test -z "$menhir_ver"; then
+          echo "NOT FOUND"
+          echo "Error: make sure Menhir version $MENHIR_REQUIRED or later is installed."
+          missingtools=true
+      else
+          echo "version $menhir_ver -- UNSUPPORTED"
+          echo "Error: CompCert requires a version greater or equal to $MENHIR_REQUIRED."
+          missingtools=true
+      fi;;
 esac
 
 echo "Testing GNU make... " | tr -d '\n'
