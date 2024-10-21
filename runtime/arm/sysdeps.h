@@ -37,7 +37,7 @@
 #if defined(MODEL_armv7m)
 // Thumb-2 only
 #define THUMB
-#elsif defined(MODEL_armv6) || defined(MODEL_armv6t2)
+#elif defined(MODEL_armv6) || defined(MODEL_armv6t2)
 // ARM-A32 only
 #undef THUMB
 #endif
