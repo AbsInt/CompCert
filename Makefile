@@ -260,7 +260,8 @@ FORCE:
 documentation: $(FILES)
 	mkdir -p doc/html
 	rm -f doc/html/*.html
-	coq2html -d doc/html/ -base compcert -short-names doc/*.glob \
+	coq2html -d doc/html/ -base compcert -short-names \
+	  $(patsubst %, %/*.glob, $(DIRS)) \
           $(filter-out doc/coq2html cparser/Parser.v, $^)
 
 tools/ndfun: tools/ndfun.ml
@@ -283,7 +284,7 @@ latexdoc:
 %.vo: %.v
 	@rm -f doc/$(*F).glob
 	@echo "COQC $*.v"
-	@$(COQC) -dump-glob doc/$(*F).glob $*.v
+	@$(COQC) $*.v
 	@$(PROFILE_ZIP)
 
 %.v: %.vp tools/ndfun
@@ -358,8 +359,7 @@ ifeq ($(INSTALL_COQDEV),true)
 	for d in $(DIRS); do \
           set -e; \
           install -d $(DESTDIR)$(COQDEVDIR)/$$d; \
-          install -m 0644 $$d/*.vo $(DESTDIR)$(COQDEVDIR)/$$d/; \
-          install -m 0644 $$d/*.v $(DESTDIR)$(COQDEVDIR)/$$d/; \
+          install -m 0644 $$d/*.v $$d/*.vo $$d/*.glob $(DESTDIR)$(COQDEVDIR)/$$d/; \
           if test -d $$d/.coq-native; then \
             install -d $(DESTDIR)$(COQDEVDIR)/$$d/.coq-native; \
             install -m 0644 $$d/.coq-native/* $(DESTDIR)$(COQDEVDIR)/$$d/.coq-native/; \
@@ -375,7 +375,8 @@ clean:
 	rm -f $(patsubst %, %/*.vo*, $(DIRS))
 	rm -f $(patsubst %, %/.*.aux, $(DIRS))
 	rm -rf $(patsubst %, %/.coq-native, $(DIRS))
-	rm -rf doc/html doc/*.glob
+	rm -f $(patsubst %, %/*.glob, $(DIRS))
+	rm -rf doc/html
 	rm -f driver/Version.ml
 	rm -f compcert.ini compcert.config
 	rm -f extraction/STAMP extraction/*.ml extraction/*.mli .depend.extr
