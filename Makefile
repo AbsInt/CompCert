@@ -359,6 +359,7 @@ ifeq ($(INSTALL_COQDEV),true)
           set -e; \
           install -d $(DESTDIR)$(COQDEVDIR)/$$d; \
           install -m 0644 $$d/*.vo $(DESTDIR)$(COQDEVDIR)/$$d/; \
+          install -m 0644 $$d/*.v $(DESTDIR)$(COQDEVDIR)/$$d/; \
           if test -d $$d/.coq-native; then \
             install -d $(DESTDIR)$(COQDEVDIR)/$$d/.coq-native; \
             install -m 0644 $$d/.coq-native/* $(DESTDIR)$(COQDEVDIR)/$$d/.coq-native/; \
