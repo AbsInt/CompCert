@@ -815,6 +815,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
     | [Cabs.Tunsigned; Cabs.Tlong; Cabs.Tlong; Cabs.Tint] -> simple (TInt(IULongLong, []))
 
     | [Cabs.Tfloat] -> simple (TFloat(FFloat, []))
+    | [Cabs.Tfloat16] -> simple (TFloat(FFloat16, [])) 
     | [Cabs.Tdouble] -> simple (TFloat(FDouble, []))
 
     | [Cabs.Tlong; Cabs.Tdouble] -> simple (TFloat(FLongDouble, []))
