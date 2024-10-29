@@ -364,7 +364,7 @@ Proof.
   specialize (eval_condition_of_expr _ _ _ _ H H2). 
   destruct (condition_of_expr a1) as [cond args]; simpl fst; simpl snd. intros (vl & A & B).
   destruct (select ty cond args a2 a3) as [a|] eqn:SEL.
-- eapply eval_select; eauto. 
+- exploit eval_select; eauto. rewrite B. auto.
 - exists (if b then v2 else v3); split.
   econstructor; eauto. eapply eval_condexpr_of_expr; eauto. destruct b; auto.
   apply Val.lessdef_normalize.
