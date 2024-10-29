@@ -261,7 +261,7 @@ documentation: $(FILES)
 	mkdir -p doc/html
 	rm -f doc/html/*.html
 	coq2html -d doc/html/ -base compcert -short-names \
-	  $(patsubst %, %/*.glob, $(DIRS)) \
+	  $(wildcard $(patsubst %, %/*.glob, $(DIRS))) \
           $(filter-out doc/coq2html cparser/Parser.v, $^)
 
 tools/ndfun: tools/ndfun.ml
