@@ -266,7 +266,7 @@ documentation: $(FILES)
 	rm -f doc/html/*.html
 	coq2html -d doc/html/ -base compcert -short-names \
 	  $(patsubst %, %/*.glob, $(DIRS)) \
-          $(filter-out doc/coq2html cparser/Parser.v, $^)
+          $(filter-out cparser/Parser.v, $^)
 
 tools/ndfun: tools/ndfun.ml
 ifeq ($(OCAML_NATIVE_COMP),true)
