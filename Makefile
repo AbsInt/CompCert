@@ -28,7 +28,11 @@ else
 ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
 endif
 
-DIRS := lib common $(ARCHDIRS) backend cfrontend driver export cparser
+DIRS := lib common $(ARCHDIRS) backend cfrontend driver cparser
+
+ifeq ($(CLIGHTGEN),true)
+DIRS += export
+endif
 
 COQINCLUDES := $(foreach d, $(DIRS), -R $(d) compcert.$(d))
 
@@ -339,7 +343,7 @@ cparser/Parser.v: cparser/Parser.vy
 
 depend: $(GENERATED) depend1
 
-depend1: $(FILES) export/Clightdefs.v
+depend1: $(FILES)
 	@echo "Analyzing Coq dependencies"
 	@$(COQDEP) $^ > .depend
 
