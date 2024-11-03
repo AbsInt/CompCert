@@ -992,8 +992,6 @@ Remark bounded_Bexact_inverse:
   emin <= e <= emax - prec <-> bounded prec emax Bexact_inverse_mantissa e = true.
 Proof.
   intros. unfold bounded, canonical_mantissa. rewrite andb_true_iff.
-  rewrite ?Z.eqb_compare.
-  fold (Zeq_bool (fexp (Z.pos (digits2_pos Bexact_inverse_mantissa) + e)) e).
   rewrite <- Zeq_is_eq_bool. rewrite <- Zle_is_le_bool.
   rewrite Bexact_inverse_mantissa_digits2_pos.
   unfold fexp, FLT_exp, emin. lia.
