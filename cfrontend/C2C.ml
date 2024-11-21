@@ -57,6 +57,7 @@ let atom_is_external a =
   match Hashtbl.find decl_atom a with
   | { a_defined = true } -> false
   | { a_storage = C.Storage_static } -> false
+  | { a_storage = C.Storage_default; a_size = Some _ } -> !Clflags.option_fcommon
   | _ -> true
   | exception Not_found -> true
 
