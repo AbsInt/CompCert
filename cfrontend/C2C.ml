@@ -34,6 +34,7 @@ type inline_status =
 
 type atom_info =
   { a_storage: C.storage;              (* storage class *)
+    a_defined: bool;                   (* defined in the current comp. unit? *)
     a_size: int64 option;              (* size in bytes *)
     a_alignment: int option;           (* alignment *)
     a_sections: Sections.section_name list; (* in which section to put it *)
@@ -51,11 +52,14 @@ let atom_is_static a =
   with Not_found ->
     false
 
-let atom_is_extern a =
-  try
-    (Hashtbl.find decl_atom a).a_storage = C.Storage_extern
-  with Not_found ->
-    false
+(* Is it possible for symbol [a] to be defined in a DLL? *)
+let atom_is_external a =
+  match Hashtbl.find decl_atom a with
+  | { a_defined = true } -> false
+  | { a_storage = C.Storage_static } -> false
+  | { a_storage = C.Storage_default; a_size = Some _ } -> !Clflags.option_fcommon
+  | _ -> true
+  | exception Not_found -> true
 
 let atom_alignof a =
   try
@@ -588,6 +592,7 @@ let name_for_string_literal s =
     let mergeable = if is_C_string s then 1 else 0 in
     Hashtbl.add decl_atom id
       { a_storage = C.Storage_static;
+        a_defined = true;
         a_alignment = Some 1;
         a_size = Some (Int64.of_int (String.length s + 1));
         a_sections = [Sections.for_stringlit mergeable];
@@ -623,6 +628,7 @@ let name_for_wide_string_literal s ik =
     let mergeable = if is_C_wide_string s then wchar_size else 0 in
     Hashtbl.add decl_atom id
       { a_storage = C.Storage_static;
+        a_defined = true;
         a_alignment = Some wchar_size;
         a_size = Some (Int64.(mul (of_int (List.length s + 1))
                                   (of_int wchar_size)));
@@ -1156,6 +1162,7 @@ let convertFundef loc env fd =
   Debug.atom_global fd.fd_name id';
   Hashtbl.add decl_atom id'
     { a_storage = fd.fd_storage;
+      a_defined = true;
       a_alignment = None;
       a_size = None;
       a_sections = Sections.for_function env loc id' fd.fd_attrib;
@@ -1247,6 +1254,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
     error "'%s' has incomplete type" id.name;
   Hashtbl.add decl_atom id'
     { a_storage = sto;
+      a_defined = optinit <> None;
       a_alignment = Some (Z.to_int al);
       a_size = Some (Z.to_int64 sz);
       a_sections = [section];
