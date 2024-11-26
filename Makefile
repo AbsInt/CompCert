@@ -51,6 +51,9 @@ endif
 # unused-pattern-matching-variable:
 #    warning introduced in 8.13
 #    the code rewrite that avoids the warning is not desirable
+# undeclared-scope:
+#    warning introduced in 8.12, addressed in the main CompCert files
+#    triggered by MenhirLib, to be solved upstream
 # deprecated-instance-without-locality:
 #    warning introduced in 8.14
 #    triggered by Menhir-generated files, to be solved upstream in Menhir
@@ -63,6 +66,7 @@ COQCOPTS ?= \
 
 cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality
 flocq/IEEE754/Bits.vo: COQCOPTS += -w -opaque-let
+MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
 
 ifneq ($(INSTALL_COQDEV),true)
 # Disable costly generation of .cmx files, which are not used locally
