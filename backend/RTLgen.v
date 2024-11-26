@@ -133,9 +133,9 @@ Definition bind2 {A B C: Type} (f: mon (A * B)) (g: A -> B -> mon C) : mon C :=
   bind f (fun xy => g (fst xy) (snd xy)).
 
 Notation "'do' X <- A ; B" := (bind A (fun X => B))
-   (at level 200, X ident, A at level 100, B at level 200).
+   (at level 200, X name, A at level 100, B at level 200).
 Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
-   (at level 200, X ident, Y ident, A at level 100, B at level 200).
+   (at level 200, X name, Y name, A at level 100, B at level 200).
 
 Definition handle_error {A: Type} (f g: mon A) : mon A :=
   fun (s: state) =>

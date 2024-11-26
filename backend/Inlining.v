@@ -100,7 +100,7 @@ Definition bind {A B: Type} (x: mon A) (f: A -> mon B): mon B :=
             end.
 
 Notation "'do' X <- A ; B" := (bind A (fun X => B))
-   (at level 200, X ident, A at level 100, B at level 200).
+   (at level 200, X name, A at level 100, B at level 200).
 
 Definition initstate :=
   mkstate 1%positive 1%positive (PTree.empty instruction) 0.

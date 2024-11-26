@@ -51,9 +51,6 @@ endif
 # unused-pattern-matching-variable:
 #    warning introduced in 8.13
 #    the code rewrite that avoids the warning is not desirable
-# deprecated-ident-entry:
-#    warning introduced in 8.13
-#    suggested change (use `name` instead of `ident`) supported since 8.13
 # deprecated-instance-without-locality:
 #    warning introduced in 8.14
 #    triggered by Menhir-generated files, to be solved upstream in Menhir
@@ -62,8 +59,7 @@ endif
 #    still triggered by Flocq, to be solved upstream
 
 COQCOPTS ?= \
-  -w -unused-pattern-matching-variable \
-  -w -deprecated-ident-entry
+  -w -unused-pattern-matching-variable
 
 cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality
 flocq/IEEE754/Bits.vo: COQCOPTS += -w -opaque-let

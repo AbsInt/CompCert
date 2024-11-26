@@ -57,10 +57,10 @@ Definition bind2 {A B C: Type} (x: mon (A * B)) (f: A -> B -> mon C) : mon C :=
 
 Declare Scope gensym_monad_scope.
 Notation "'do' X <- A ; B" := (bind A (fun X => B))
-   (at level 200, X ident, A at level 100, B at level 200)
+   (at level 200, X name, A at level 100, B at level 200)
    : gensym_monad_scope.
 Notation "'do' ( X , Y ) <- A ; B" := (bind2 A (fun X Y => B))
-   (at level 200, X ident, Y ident, A at level 100, B at level 200)
+   (at level 200, X name, Y name, A at level 100, B at level 200)
    : gensym_monad_scope.
 
 Parameter first_unused_ident: unit -> ident.
