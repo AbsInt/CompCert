@@ -57,15 +57,11 @@ endif
 # deprecated-instance-without-locality:
 #    warning introduced in 8.14
 #    triggered by Menhir-generated files, to be solved upstream in Menhir
-# opaque-let:
-#    warning introduced in 8.18, addressed in the main CompCert files,
-#    still triggered by Flocq, to be solved upstream
 
 COQCOPTS ?= \
   -w -unused-pattern-matching-variable
 
 cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality
-flocq/IEEE754/Bits.vo: COQCOPTS += -w -opaque-let
 MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
 
 ifneq ($(INSTALL_COQDEV),true)
