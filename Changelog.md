@@ -1,3 +1,38 @@
+# Release 3.15
+
+C language support:
+- Minimal syntactic support for `_Float16` type (half-precision FP numbers).  Function declarations using `_Float16` are correctly parsed, but any actual use of `_Float16` is rejected later during compilation. (#525)
+
+Code generation and optimization:
+- Better support for `_Bool` type in the back-end and in the memory model.
+  This avoids redundant normalizations to `_Bool`.
+- Take types of function parameters into account during value analysis.
+  This avoids redundant normalizations on parameters of small integer types.
+- More conservative static analysis of pointer comparisons. (#516)
+- Refined heuristic for if-conversion. Turn if-conversion off in some cases where it would prevent later optimization of conditional branches in the continuation of the `if`.
+- CSE: remember pointer alias information in `Load` equations, making it possible to remove more redundant memory loads. (#518)
+- More precise value analysis of integer multiplication, division, modulus.
+- Constant propagation: optimize "known integer or undefined" results.  For example, `&x == &x`, which is either 1 or undefined, is now replaced by 1.
+- Optimize `(x ^ cst) != 0` into `x != cst`.
+- Avoid quadratic compile-time behavior on deeply-nested `if` statements. (#519)
+
+Bug fixes:
+- More robust determination of symbols that may be defined in a shared object. (#538)
+
+Usability:
+- Mark stack as non-executable in binaries produced by `ccomp`.
+- Check that preprocessed sources (`.i` files) do not contain backslash-newline sequences.
+
+Supporting libraries:
+- ARM library for 64-bit integer arithmetic: faster division, cleaned-up code.
+
+Coq development:
+- Support Coq 8.20.
+- Install `.glob` and `.v` files along `.vo` files.
+- Build: support TIMING and PROFILING like `coq_makefile`. (#512)
+- Make dependency on `Extraction` explicit. (#515)
+
+
 # Release 3.14, 2024-05-02
 
 ISO C conformance:
