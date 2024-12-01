@@ -105,7 +105,18 @@ struct
 
   let symbol = elf_symbol
 
-  let symbol_offset = elf_symbol_offset
+  let symbol_paren oc symb =
+    let s = extern_atom symb in
+    if String.length s > 0 && s.[0] = '$'
+    then fprintf oc "(%s)" s
+    else fprintf oc "%s" s
+
+  let symbol_offset oc (symb, ofs) =
+    let ofs = camlint64_of_ptrofs ofs in
+    if ofs = 0L then
+      symbol_paren oc symb
+    else
+      fprintf oc "(%a + %Ld)" symbol symb ofs
 
   let ireg oc r = output_string oc (int_reg_name r)
   let freg oc r = output_string oc (float_reg_name r)
@@ -227,11 +238,11 @@ struct
     | Pbne lbl ->
       fprintf oc "	bne	%a\n" print_label lbl
     | Pbsymb(id, sg) ->
-      fprintf oc "	b	%a\n" symbol id
+      fprintf oc "	b	%a\n" symbol_paren id
     | Pbreg(r, sg) ->
       fprintf oc "	bx	%a\n" ireg r
     | Pblsymb(id, sg) ->
-      fprintf oc "	bl	%a\n" symbol id
+      fprintf oc "	bl	%a\n" symbol_paren id
     | Pblreg(r, sg) ->
       fprintf oc "	blx	%a\n" ireg r
     | Pbic(r1, r2, so) ->
