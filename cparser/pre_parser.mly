@@ -696,6 +696,18 @@ direct_declarator:
     { match snd x with
       | Decl_ident -> (fst x, Decl_other)
       | _ -> x }
+| x = direct_declarator LBRACK STATIC type_qualifier_list? assignment_expression RBRACK
+    { match snd x with
+      | Decl_ident -> (fst x, Decl_other)
+      | _ -> x }
+| x = direct_declarator LBRACK type_qualifier_list STATIC assignment_expression RBRACK
+    { match snd x with
+      | Decl_ident -> (fst x, Decl_other)
+      | _ -> x }
+| x = direct_declarator LBRACK type_qualifier_list? STAR RBRACK
+    { match snd x with
+      | Decl_ident -> (fst x, Decl_other)
+      | _ -> x }
 | x = direct_declarator LPAREN ctx = context_parameter_type_list RPAREN
     { match snd x with
       | Decl_ident -> (fst x, Decl_fun ctx)
@@ -766,6 +778,9 @@ abstract_declarator(phantom):
 direct_abstract_declarator:
 | LPAREN save_context abstract_declarator(type_name) RPAREN
 | direct_abstract_declarator? LBRACK type_qualifier_list? optional(assignment_expression, RBRACK)
+| direct_abstract_declarator? LBRACK STATIC type_qualifier_list? assignment_expression RBRACK
+| direct_abstract_declarator? LBRACK type_qualifier_list STATIC assignment_expression RBRACK
+| direct_abstract_declarator? LBRACK type_qualifier_list? STAR RBRACK
 | ioption(direct_abstract_declarator) LPAREN context_parameter_type_list? RPAREN
     {}
 
