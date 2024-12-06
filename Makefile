@@ -76,6 +76,15 @@ MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
 flocq/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition
 MenhirLib/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition
 
+# For the extraction phase, we silence other warnings:
+# change-dir-deprecated:
+#    warning introduced in 8.20, no alternative before 8.20
+# extraction-default-directory:
+#    warning introduced in 8.20, no alternative before 8.20
+COQEXTRACTOPTS ?= \
+  -w -change-dir-deprecated \
+  -w -extraction-default-directory
+
 ifneq ($(INSTALL_COQDEV),true)
 # Disable costly generation of .cmx files, which are not used locally
   COQCOPTS += -w -deprecated-native-compiler-option -native-compiler no
@@ -101,7 +110,7 @@ PROFILE_ZIP ?= true
 COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
 COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
 COQDOC="$(COQBIN)coqdoc"
-COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) -batch -load-vernac-source
+COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) $(COQEXTRACTOPTS) -batch -load-vernac-source
 COQCHK="$(COQBIN)coqchk" $(COQINCLUDES)
 MENHIR=menhir
 CP=cp
