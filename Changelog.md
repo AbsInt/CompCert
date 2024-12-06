@@ -2,6 +2,7 @@
 
 C language support:
 - Minimal syntactic support for `_Float16` type (half-precision FP numbers).  Function declarations using `_Float16` are correctly parsed, but any actual use of `_Float16` is rejected later during compilation. (#525)
+- Support C99 array declarator syntax involving `static` and `*`. These annotations are correctly parsed, but ignored during typing and compilation. (#539)
 
 Code generation and optimization:
 - Better support for `_Bool` type in the back-end and in the memory model.
@@ -18,6 +19,7 @@ Code generation and optimization:
 
 Bug fixes:
 - More robust determination of symbols that may be defined in a shared object. (#538)
+- Escape `$NNN` identifiers in generated x86 and ARM assembly code (#541).
 
 Usability:
 - Mark stack as non-executable in binaries produced by `ccomp`.
