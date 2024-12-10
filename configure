@@ -44,13 +44,11 @@ Supported targets:
   ppc-eabi-diab        (PowerPC, EABI with Diab tools)
   ppc-linux            (PowerPC, Linux)
   arm-eabi             (ARM, EABI, little endian)
-  arm-linux            (ARM, EABI, little endian)
   arm-eabihf           (ARM, EABI using hardware FP registers, little endian)
-  arm-hardfloat        (ARM, EABI using hardware FP registers, little endian)
+  arm-linux            (ARM, EABI using hardware FP registers, little endian)
   armeb-eabi           (ARM, EABI, big endian)
-  armeb-linux          (ARM, EABI, big endian)
   armeb-eabihf         (ARM, EABI using hardware FP registers, big endian)
-  armeb-hardfloat      (ARM, EABI using hardware FP registers, big endian)
+  armeb-linux          (ARM, EABI using hardware FP registers, big endian)
   x86_32-linux         (x86 32 bits, Linux)
   x86_32-bsd           (x86 32 bits, BSD)
   x86_64-linux         (x86 64 bits, Linux)
@@ -243,10 +241,10 @@ responsefile="gnu"
 if test "$arch" = "arm"; then
 
   case "$target" in
-    eabi|linux)
+    eabi)
         abi="eabi"
         ;;
-    eabihf|hf|hardfloat)
+    eabihf|linux|hf|hardfloat)
         abi="hardfloat"
         ;;
     *)

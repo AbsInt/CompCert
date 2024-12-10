@@ -96,7 +96,7 @@ Configure() {
       ./configure $configopts -toolprefix aarch64-linux-gnu- aarch64-linux
       ;;
     arm,linux)
-      ./configure $configopts -toolprefix arm-linux-gnueabihf- arm-eabihf
+      ./configure $configopts -toolprefix arm-linux-gnueabihf- arm-linux
       ;;
     ppc,linux)
       ./configure $configopts -toolprefix powerpc-linux-gnu- ppc-linux
