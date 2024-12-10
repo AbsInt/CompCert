@@ -24,15 +24,16 @@ Bug fixes:
 Usability:
 - Mark stack as non-executable in binaries produced by `ccomp`.
 - Check that preprocessed sources (`.i` files) do not contain backslash-newline sequences.
+- `./configure arm-linux` now selects the hard-FP ABI, since Linux distributions no longer use the soft-FP ABI.
 
 Supporting libraries:
 - ARM library for 64-bit integer arithmetic: faster division, cleaned-up code.
 
 Coq development:
 - Support Coq 8.20.
-- Install `.glob` and `.v` files along `.vo` files.
 - Build: support TIMING and PROFILING like `coq_makefile`. (#512)
 - Make dependency on `Extraction` explicit. (#515)
+- Install `.glob` and `.v` files along `.vo` files. (#527)
 
 
 # Release 3.14, 2024-05-02
