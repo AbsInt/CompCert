@@ -924,28 +924,34 @@ and elab_type_declarator ?(fundef = false) loc env ty = function
       elab_return_type loc env ty;
       let (ty, a) = get_nontype_attrs env ty in
       let (params', env') = elab_parameters loc env params in
-      (* For a function declaration (fundef = false), the scope introduced
-         to treat parameters ends here, so we discard the extended
-         environment env' returned by elab_parameters.
-         For a function definition (fundef = true) we return the
-         extended environment env' so that it can serve as the basis
-         to elaborating the function body. *)
-      let env'' = if fundef then env' else env in
-      elab_type_declarator ~fundef loc env'' (TFun(ty, Some params', vararg, a)) d
+      let funty = TFun(ty, Some params', vararg, a) in
+      (* For a function declaration (fundef = false or d <> JUSTBASE),
+         the scope introduced to treat parameters ends here, so we
+         discard the extended environment env' returned by
+         elab_parameters.
+         For a function definition (fundef = true and d = JUSTBASE),
+         we return the extended environment env' so that it can serve
+         as the basis to elaborating the function body. *)
+      if fundef && d = Cabs.JUSTBASE then
+        ((funty, None), env')
+      else
+        elab_type_declarator ~fundef loc env funty d
   | Cabs.PROTO_OLD(d, params) ->
       elab_return_type loc env ty;
       let (ty, a) = get_nontype_attrs env ty in
+      let funty = TFun(ty, None, false, a) in
       (* For consistency with the PROTO case above, for a function definition
-         (fundef = true) we open a new scope, even though we do not
-         add any bindings for the parameters. *)
-      let env'' = if fundef then Env.new_scope env else env in
-      match params with
-      | [] ->
-        elab_type_declarator ~fundef loc env'' (TFun(ty, None, false, a)) d
-      | _ ->
-        if not fundef || d <> Cabs.JUSTBASE then
+         (fundef = true and d = JUSTBASE) we open a new scope, even
+         though we do not add any bindings for the parameters. *)
+      if fundef && d = Cabs.JUSTBASE then begin
+        let env' = Env.new_scope env in
+        let opt_params = if params = [] then None else Some params in
+        ((funty, opt_params), env')
+      end else begin
+        if params <> [] then
           fatal_error loc "illegal old-style K&R function definition";
-        ((TFun(ty, None, false, a), Some params), env'')
+        elab_type_declarator ~fundef loc env funty d
+      end
 
 (* Elaboration of parameters in a prototype *)
 

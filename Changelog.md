@@ -20,6 +20,7 @@ Code generation and optimization:
 Bug fixes:
 - More robust determination of symbols that may be defined in a shared object. (#538)
 - Escape `$NNN` identifiers in generated x86 and ARM assembly code (#541).
+- Wrong parameter scoping in function definitions such as `int (*f(int y))(int x) { ... }` (a function returning a pointer to a prototyped function).
 
 Usability:
 - Mark stack as non-executable in binaries produced by `ccomp`.
