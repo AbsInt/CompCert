@@ -1,4 +1,4 @@
-# Release 3.15
+# Release 3.15, 2024-12-13
 
 C language support:
 - Minimal syntactic support for `_Float16` type (half-precision FP numbers).  Function declarations using `_Float16` are correctly parsed, but any actual use of `_Float16` is rejected later during compilation. (#525)
