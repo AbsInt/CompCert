@@ -419,9 +419,37 @@ Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).
 
 (** ** Selection *)
 
-Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr)
-   : option expr
-   := None.
+Definition select_supported (ty: typ) : bool :=
+  match ty with
+  | Tint => true
+  | Tlong => Archi.ptr64
+  | _ => false
+  end.
+
+(* "<=" and ">=" integer comparisons involve an extra xor-immediate instruction.
+   To avoid this instruction, we turn these comparisons into their negations
+    ">" and "<", and swap the two arguments of the selection operator. *)
+
+Definition select_swap (cond: condition) : bool :=
+  match cond with
+  | Ccomp (Cge | Cle) => true
+  | Ccompu (Cge | Cle) => true
+  | Ccompimm (Cge | Cle) _ => true
+  | Ccompuimm (Cge | Cle) _ => true
+  | Ccompl (Cge | Cle) => true
+  | Ccomplu (Cge | Cle) => true
+  | Ccomplimm (Cge | Cle) _ => true
+  | Ccompluimm (Cge | Cle) _ => true
+  | _ => false
+  end.
+
+Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
+  if select_supported ty then
+    if select_swap cond
+    then Some (Eop (Osel (negate_condition cond) ty) (e2 ::: e1 ::: args))
+    else Some (Eop (Osel cond ty) (e1 ::: e2 ::: args))
+  else
+    None.
  
 (** ** Recognition of addressing modes for load and store operations *)
 

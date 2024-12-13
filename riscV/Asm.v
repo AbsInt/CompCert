@@ -141,6 +141,7 @@ Definition label := positive.
 
 Inductive instruction : Type :=
   | Pmv     (rd: ireg) (rs: ireg)                    (**r integer move *)
+  | Pcsel   (rd: ireg) (rcond rs1 rs2: ireg)         (**r conditional move *)
 
 (** 32-bit integer register-immediate instructions *)
   | Paddiw  (rd: ireg) (rs: ireg0) (imm: int)        (**r add immediate *)
@@ -174,7 +175,6 @@ Inductive instruction : Type :=
   | Psllw   (rd: ireg) (rs1 rs2: ireg0)              (**r shift-left-logical *)
   | Psrlw   (rd: ireg) (rs1 rs2: ireg0)              (**r shift-right-logical *)
   | Psraw   (rd: ireg) (rs1 rs2: ireg0)              (**r shift-right-arith *)
-
 (** 64-bit integer register-immediate instructions *)
   | Paddil  (rd: ireg) (rs: ireg0) (imm: int64)      (**r add immediate *)
   | Psltil  (rd: ireg) (rs: ireg0) (imm: int64)      (**r set-less-than immediate *)
@@ -207,7 +207,6 @@ Inductive instruction : Type :=
   | Pslll   (rd: ireg) (rs1 rs2: ireg0)              (**r shift-left-logical *)
   | Psrll   (rd: ireg) (rs1 rs2: ireg0)              (**r shift-right-logical *)
   | Psral   (rd: ireg) (rs1 rs2: ireg0)              (**r shift-right-arith *)
-
   | Pcvtl2w (rd: ireg) (rs: ireg0)                   (**r int64->int32 (pseudo) *)
   | Pcvtw2l (r: ireg)                                (**r int32 signed -> int64 (pseudo) *)
 
@@ -621,6 +620,11 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   match i with
   | Pmv d s =>
       Next (nextinstr (rs#d <- (rs#s))) m
+  | Pcsel d c s1 s2 =>
+      let v :=
+        if Val.eq rs#c Vone then rs#s1 else
+        if Val.eq rs#c Vzero then rs#s2 else Vundef in
+      Next (nextinstr (rs#d <- v #X31 <- Vundef)) m
 
 (** 32-bit integer register-immediate instructions *)
   | Paddiw d s i =>
@@ -745,7 +749,6 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (nextinstr (rs#d <- (Val.shrlu rs###s1 rs###s2))) m
   | Psral d s1 s2 =>
       Next (nextinstr (rs#d <- (Val.shrl rs###s1 rs###s2))) m
-
   | Pcvtl2w d s =>
       Next (nextinstr (rs#d <- (Val.loword rs##s))) m
   | Pcvtw2l r =>

@@ -88,6 +88,7 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Ointofsingle | Ointuofsingle | Osingleofint | Osingleofintu => op1 (default nv)
   | Olongofsingle | Olonguofsingle | Osingleoflong | Osingleoflongu => op1 (default nv)
   | Ocmp c => needs_of_condition c
+  | Osel c ty => nv :: nv :: needs_of_condition c
   end.
 
 Definition operation_is_redundant (op: operation) (nv: nval): bool :=
@@ -175,6 +176,10 @@ Proof.
 - apply shllimm_sound; auto.
 - apply shrlimm_sound; auto.
 - apply shrluimm_sound; auto.
+- destruct (eval_condition cond args m) as [b|] eqn:EC.
+  erewrite needs_of_condition_sound by eauto.
+  apply select_sound; auto.
+  simpl; auto with na.
 Qed.
 
 Lemma operation_is_redundant_sound:
