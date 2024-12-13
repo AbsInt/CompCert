@@ -557,6 +557,25 @@ let expand_ctz ~sixtyfour ~splitlong =
                      else Psrliw(X6, X X6, coqint_of_camlint 31l));
   emit (Psubw(X7, X X7, X X6))
 
+(* Full register width "and" and "or" *)
+
+let _Pand (r, a1, a2) =
+  if Archi.ptr64 then Pandl(r, a1, a2) else Pandw(r, a1, a2)
+let _Por (r, a1, a2) =
+  if Archi.ptr64 then Porl(r, a1, a2) else Porw(r, a1, a2)
+
+(* Conditional move *)
+(* res <- if cond then arg1 else arg2
+   cond must be 0 or 1. *)
+
+let expand_csel res cond arg1 arg2 =
+  emit (Psubw(X31, X0, cond)); (* X31 = -1 if cond = 1, 0 if cond = 0 *)
+  emit (Paddiw(X1, cond, Int.mone));
+                               (* X1 = 0 if cond = 1, -1 if cond = 0 *)
+  emit (_Pand(X31, arg1, X X31));
+  emit (_Pand(X1, arg2, X X1));
+  emit (_Por(res, X X31, X X1))
+
 (* Handling of compiler-inlined builtins *)
 
 let expand_builtin_inline name args res =
@@ -697,6 +716,8 @@ let expand_instruction instr =
       end else 0 in
      expand_addptrofs X2 X2 (Ptrofs.repr (Z.add sz (Z.of_uint extra_sz)))
 
+  | Pcsel(rd, rcond, rs1, rs2) ->
+      expand_csel rd (X rcond) (X rs1) (X rs2)
   | Pseqw(rd, rs1, rs2) ->
       (* emulate based on the fact that x == 0 iff x <u 1 (unsigned cmp) *)
       if rs2 = X0 then begin

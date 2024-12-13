@@ -486,7 +486,7 @@ module Target : TARGET =
          assert false
       | Pfreeframe(sz, ofs) ->
          assert false
-      | Pseqw _ | Psnew _ | Pseql _ | Psnel _ | Pcvtl2w _ | Pcvtw2l _ ->
+      | Pcsel _ | Pseqw _ | Psnew _ | Pseql _ | Psnel _ | Pcvtl2w _ | Pcvtw2l _ ->
          assert false
 
       (* Pseudo-instructions that remain *)

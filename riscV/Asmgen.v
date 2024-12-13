@@ -696,7 +696,12 @@ Definition transl_op
   | Ocmp cmp, _ =>
       do rd <- ireg_of res;
       transl_cond_op cmp rd args k
-
+  | Osel cmp ty, a1 :: a2 :: args =>
+      do rd <- ireg_of res; do rs1 <- ireg_of a1; do rs2 <- ireg_of a2;
+      if ireg_eq rs1 rs2 then
+        OK (Pmv rd rs1 :: k)
+      else
+        transl_cond_op cmp X31 args (Pcsel rd X31 rs1 rs2 :: k)
   | _, _ =>
       Error(msg "Asmgen.transl_op")
   end.

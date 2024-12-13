@@ -292,6 +292,7 @@ Opaque Int.eq.
 - apply opimm64_label; intros; exact I.
 - destruct (Int.eq n Int.zero); TailNoLabel.
 - eapply transl_cond_op_label; eauto.
+- eapply tail_nolabel_trans; eauto using transl_cond_op_label; TailNoLabel.
 Qed.
 
 Remark indexed_memory_access_label:
