@@ -523,16 +523,14 @@ Definition floatofsingle (e: expr) := Eop Ofloatofsingle (e ::: Enil).
 
 (** ** Selection *)
 
+Definition select_supported (ty: typ) :=
+  match ty with
+  | Tint | Tlong | Tfloat | Tsingle => true
+  | _ => false
+  end.
+
 Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
-  if match ty with
-     | Tint => true
-     | Tlong => true
-     | Tfloat => true
-     | Tsingle => true
-     | _ => false
-     end
-  then Some (Eop (Osel cond ty) (e1 ::: e2 ::: args))
-  else None.
+  Eop (Osel cond ty) (e1 ::: e2 ::: args).
 
 (** ** Recognition of addressing modes for load and store operations *)
 

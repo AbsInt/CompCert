@@ -444,12 +444,9 @@ Definition select_swap (cond: condition) : bool :=
   end.
 
 Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
-  if select_supported ty then
-    if select_swap cond
-    then Some (Eop (Osel (negate_condition cond) ty) (e2 ::: e1 ::: args))
-    else Some (Eop (Osel cond ty) (e1 ::: e2 ::: args))
-  else
-    None.
+  if select_swap cond
+  then Eop (Osel (negate_condition cond) ty) (e2 ::: e1 ::: args)
+  else Eop (Osel cond ty) (e1 ::: e2 ::: args).
  
 (** ** Recognition of addressing modes for load and store operations *)
 

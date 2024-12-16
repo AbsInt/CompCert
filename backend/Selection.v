@@ -164,10 +164,9 @@ Definition sel_binop (op: Cminor.binary_operation) (arg1 arg2: expr) : expr :=
 
 Definition sel_select (ty: typ) (cnd ifso ifnot: expr) : expr :=
    let (cond, args) := condition_of_expr cnd in
-   match SelectOp.select ty cond args ifso ifnot with
-   | Some a => a
-   | None => Econdition (condexpr_of_expr cnd) ifso ifnot
-   end.
+   if SelectOp.select_supported ty
+   then SelectOp.select ty cond args ifso ifnot
+   else Econdition (condexpr_of_expr cnd) ifso ifnot.
 
 (** Conversion from Cminor expression to Cminorsel expressions *)
 
@@ -186,7 +185,7 @@ Fixpoint sel_exprlist (al: list Cminor.expr) : exprlist :=
   | a :: bl => Econs (sel_expr a) (sel_exprlist bl)
   end.
 
-Definition sel_select_opt (ty: typ) (arg1 arg2 arg3: Cminor.expr) : option expr :=
+Definition sel_select_expr (ty: typ) (arg1 arg2 arg3: Cminor.expr) : expr :=
   let (cond, args) := condition_of_expr (sel_expr arg1) in
   SelectOp.select ty cond args (sel_expr arg2) (sel_expr arg3).
 
@@ -375,12 +374,11 @@ Definition if_conversion_base
       (cond: Cminor.expr) (id: ident) (ifso ifnot:  Cminor.expr)
       (kont: stmt) : option stmt :=
   let ty := env id in
-  if is_known ki id
+  if SelectOp.select_supported ty
+  && is_known ki id
   && safe_expr ki ifso && safe_expr ki ifnot
   && if_conversion_heuristic id cond ifso ifnot ty kont
-  then option_map
-         (fun sel => Sassign id sel)
-         (sel_select_opt ty cond ifso ifnot)
+  then Some (Sassign id (sel_select_expr ty cond ifso ifnot))
   else None.
 
 Definition if_conversion

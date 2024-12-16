@@ -1000,19 +1000,16 @@ Proof.
 Qed.
 
 Theorem eval_select:
-  forall le ty cond al vl a1 v1 a2 v2 a,
-  select ty cond al a1 a2 = Some a ->
+  forall le ty cond al vl a1 v1 a2 v2,
+  select_supported ty = true ->
   eval_exprlist ge sp e m le al vl ->
   eval_expr ge sp e m le a1 v1 ->
   eval_expr ge sp e m le a2 v2 ->
   exists v,
-     eval_expr ge sp e m le a v
+     eval_expr ge sp e m le (select ty cond al a1 a2) v
   /\ Val.lessdef (Val.select (eval_condition cond vl m) v1 v2 ty) v.
 Proof.
-  unfold select; intros.
-  destruct (match ty with Tint => true | Tfloat => true | Tsingle => true | Tlong => Archi.ppc64 | _ => false end); inv H.
-  exists (Val.select (eval_condition cond vl m) v1 v2 ty); split; auto.
-  EvalOp.
+  unfold select; intros. TrivialExists.
 Qed.
 
 Theorem eval_addressing:

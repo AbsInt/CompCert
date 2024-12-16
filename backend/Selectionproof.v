@@ -361,10 +361,10 @@ Lemma eval_sel_select:
         /\  Val.lessdef (Val.select (Some b) v2 v3 ty) v.
 Proof.
   unfold sel_select; intros.
-  specialize (eval_condition_of_expr _ _ _ _ H H2). 
+  specialize (eval_condition_of_expr _ _ _ _ H H2).
   destruct (condition_of_expr a1) as [cond args]; simpl fst; simpl snd. intros (vl & A & B).
-  destruct (select ty cond args a2 a3) as [a|] eqn:SEL.
-- exploit eval_select; eauto. rewrite B. auto.
+  destruct (select_supported ty) eqn:SUP.
+- rewrite <- B. eapply eval_select; eauto. 
 - exists (if b then v2 else v3); split.
   econstructor; eauto. eapply eval_condexpr_of_expr; eauto. destruct b; auto.
   apply Val.lessdef_normalize.
@@ -776,27 +776,29 @@ Proof.
   exists (v1' :: vl'); split; auto. constructor; eauto.
 Qed.
 
-Lemma sel_select_opt_correct:
-  forall ty cond a1 a2 a sp e m vcond v1 v2 b e' m' le,
-  sel_select_opt ty cond a1 a2 = Some a ->
+Lemma sel_select_expr_correct:
+  forall ty cond a1 a2 sp e m vcond v1 v2 b e' m' le,
+  SelectOp.select_supported ty = true ->
   Cminor.eval_expr ge sp e m cond vcond ->
   Cminor.eval_expr ge sp e m a1 v1 ->
   Cminor.eval_expr ge sp e m a2 v2 ->
   Val.bool_of_val vcond b ->
   env_lessdef e e' -> Mem.extends m m' ->
-  exists v', eval_expr tge sp e' m' le a v' /\ Val.lessdef (Val.select (Some b) v1 v2 ty) v'.
+  exists v', eval_expr tge sp e' m' le (sel_select_expr ty cond a1 a2) v'
+          /\ Val.lessdef (Val.select (Some b) v1 v2 ty) v'.
 Proof.
-  unfold sel_select_opt; intros. 
+  unfold sel_select_expr; intros. 
   destruct (condition_of_expr (sel_expr cond)) as [cnd args] eqn:C.
   exploit sel_expr_correct. eexact H0. eauto. eauto. intros (vcond' & EVC & LDC).
   exploit sel_expr_correct. eexact H1. eauto. eauto. intros (v1' & EV1 & LD1).
   exploit sel_expr_correct. eexact H2. eauto. eauto. intros (v2' & EV2 & LD2).
   assert (Val.bool_of_val vcond' b) by (inv H3; inv LDC; constructor).
   exploit eval_condition_of_expr. eexact EVC. eauto. rewrite C. intros (vargs' & EVARGS & EVCOND).
-  exploit eval_select; eauto. intros (v' & X & Y). 
+  exploit (eval_select tge sp e' m' le ty cnd args vargs' (sel_expr a1) v1' (sel_expr a2) v2'); eauto.
+  simpl in EVCOND; rewrite EVCOND. intros (v' & X & Y). 
   exists v'; split; eauto. 
   eapply Val.lessdef_trans; [|eexact Y].
-  apply Val.select_lessdef; auto.
+  apply Val.normalize_lessdef. destruct b; auto.
 Qed.
 
 Lemma sel_builtin_arg_correct:
@@ -984,17 +986,15 @@ Lemma if_conversion_base_correct:
            E0 (State tf Sskip tk sp (PTree.set id v' e') m').
 Proof.
   unfold if_conversion_base; intros. rewrite H2 in H. clear H2.
-  destruct andb eqn:C; try discriminate.
-  destruct (sel_select_opt ty cond ifso ifnot) as [a'|] eqn:SSO; simpl in H; inv H.
-  InvBooleans.
+  destruct andb eqn:C; inv H. InvBooleans.
   destruct (eval_safe_expr ge f sp e m ifso) as (v1 & EV1); auto.
   destruct (eval_safe_expr ge f sp e m ifnot) as (v2 & EV2); auto.
   assert (TY1: Val.has_type v1 ty) by (eapply wt_eval_expr; eauto).
   assert (TY2: Val.has_type v2 ty) by (eapply wt_eval_expr; eauto).
-  exploit sel_select_opt_correct; eauto. intros (v' & EV' & LD).
+  exploit (sel_select_expr_correct ty cond ifso ifnot); eauto. intros (v' & EV & LD).
   simpl in LD. rewrite Val.normalize_idem in LD by (destruct b; auto).
   exists v1, v2, v'; intuition auto.
-  constructor. eexact EV'.
+  constructor. exact EV.
 Qed.
 
 Lemma if_conversion_correct:
@@ -1176,8 +1176,7 @@ Lemma if_conversion_base_nolabel: forall (hf: helper_functions) ki env a id a1 a
   nolabel' s.
 Proof.
   unfold if_conversion_base; intros.
-  destruct andb; try discriminate.
-  destruct (sel_select_opt (env id) a a1 a2); inv H. 
+  destruct andb; inv H. 
   red; auto.
 Qed.
 
