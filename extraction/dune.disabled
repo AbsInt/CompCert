@@ -1,0 +1,198 @@
+(coq.extraction
+ (prelude extraction)
+ (extracted_modules
+   Allocation
+   Alphabet
+   Archi
+   Ascii
+   Asmgen
+   Asm
+   AST
+   Automaton
+   Binary
+   BinInt
+   BinNat
+   BinNums
+   BinPosDef
+   BinPos
+   Bits
+   BoolEqual
+   Bool
+   Bounds
+   Bracket
+   Builtins0
+   Builtins1
+   Builtins
+   Cabs
+   Cexec
+   CleanupLabels
+   Clight
+   Cminorgen
+   Cminor
+   CminorSel
+   Cminortyping
+   CombineOp
+   Compare_dec
+   Compiler
+   Compopts
+   Constprop
+   ConstpropOp
+   Conventions1
+   Conventions
+   Cop
+   Coqlib
+   CSEdomain
+   CSE
+   Csem
+   Csharpminor
+   Cshmgen
+   Csyntax
+   Ctypes
+   Ctyping
+   Datatypes
+   Deadcode
+   Debugvar
+   DecidableClass
+   Decidableplus
+   DecidableType
+   Determinism
+   Digits
+   Equalities
+   EquivDec
+   Errors
+   Events
+   Floats
+   FLT
+   FMapAVL
+   FMapList
+   FSetAVL
+   FSetAVLplus
+   FSetInterface
+   Globalenvs
+   Grammar
+   Heaps
+   IEEE754_extra
+   Initializers
+   Inlining
+   Int0
+   Integers
+   Interpreter_complete
+   Interpreter_correct
+   Interpreter
+   IntvSets
+   Iteration
+   Kildall
+   Lattice
+   Linearize
+   Linear
+   Lineartyping
+   List0
+   Liveness
+   Locations
+   LTL
+   Mach
+   Machregs
+   Main
+   Maps
+   Memdata
+   Memory
+   Memtype
+   Mergesort
+   MSetAVL
+   MSetInterface
+   Nat
+   NeedDomain
+   NeedOp
+   Op
+   Ordered
+   OrderedType
+   OrdersAlt
+   OrdersFacts
+   Orders
+   OrdersTac
+   Parser
+   PeanoNat
+   Postorder
+   Registers
+   Renumber
+   Ring
+   Round
+   RTLgen
+   RTL
+   RTLtyping
+   SelectDiv
+   Selection
+   SelectLong
+   SelectOp
+   SimplExpr
+   SimplLocals
+   Specif
+   SplitLong
+   Stacking
+   Stacklayout
+   String0
+   Switch
+   Tailcall
+   Tunneling
+   UnionFind
+   Unityping
+   Unusedglob
+   Validator_complete
+   Validator_safe
+   ValueAnalysis
+   ValueAOp
+   ValueDomain
+   Values
+   ZArith_dec
+   Zaux
+   Zbits
+   Zbool
+   Znumtheory
+   Zpower)
+ (theories compcert))
+
+(include_subdirs no)
+
+(library
+ (name compcert)
+ (wrapped false)
+ (modules_without_implementation C debugTypes dwarfTypes)
+ (modules :standard \ Driver GCC)
+ (flags -w -32)
+ (libraries menhirLib))
+
+(copy_files %{project_root}/backend/*.{ml,mli})
+(copy_files %{project_root}/common/*.{ml,mli})
+(copy_files %{project_root}/lib/*.{ml,mli,mll})
+(copy_files %{project_root}/driver/*.{ml,mli})
+(copy_files %{project_root}/cfrontend/*.{ml,mli})
+(copy_files %{project_root}/cparser/*.{ml,mli})
+(copy_files %{project_root}/cparser/pre_parser.mly)
+(copy_files %{project_root}/cparser/handcrafted.messages)
+(copy_files %{project_root}/cparser/Lexer.mll)
+(copy_files %{project_root}/debug/*.{ml,mli})
+(copy_files %{project_root}/x86/*.{ml,mli})
+
+(ocamllex Lexer Tokenize Readconfig Responsefile)
+(menhir
+ (modules pre_parser)
+ (flags --table -v --no-stdlib -la 1))
+
+(executable
+ (name Driver)
+ (public_name ccomp)
+ (modules Driver)
+ (libraries str unix compcert))
+
+(rule
+ (targets pre_parser_messages.ml)
+ (action
+  (with-stdout-to %{targets}
+   (run menhir --table pre_parser.mly -v --no-stdlib -la 1 -v -la 2 --compile-errors %{dep:handcrafted.messages}))))
+
+(rule
+ (targets version.ml)
+ (action
+   (with-stdout-to %{targets}
+    (bash "cat ../VERSION | sed -e 's|\\(.*\\)=\\(.*\\)|let \\1 = \\\"\\2\\\"|g'"))))
+
