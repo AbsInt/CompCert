@@ -29,6 +29,11 @@ let reserved_keyword loc id =
   Diagnostics.fatal_error (loc.Cabs.filename, loc.Cabs.lineno)
     "illegal use of reserved keyword `%s'" id
 
+let single_dollar_ident loc =
+  Diagnostics.error (loc.Cabs.filename, loc.Cabs.lineno)
+    "not supported: identifier consisting of a single '$' sign";
+  PRE_NAME "$"
+
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
     [ 
@@ -94,7 +99,8 @@ let () =
       ("unsigned", fun loc -> UNSIGNED loc);
       ("void", fun loc -> VOID loc);
       ("volatile", fun loc -> VOLATILE loc);
-      ("while", fun loc -> WHILE loc)];
+      ("while", fun loc -> WHILE loc);
+      ("$", single_dollar_ident)];
   if Configuration.system <> "diab" then
     (* We can ignore the __extension__ GCC keyword. *)
     ignored_keywords := SSet.add "__extension__" !ignored_keywords
