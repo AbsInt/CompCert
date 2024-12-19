@@ -105,6 +105,7 @@ type warning_type =
   | Reduced_alignment
   | Non_linear_cond_expr
   | Invalid_UTF8
+  | Dollar_in_identifier
 
 (* List of all warnings with default status.
    "true" means the warning is active by default.
@@ -142,6 +143,7 @@ let all_warnings =
     (Reduced_alignment, false);
     (Non_linear_cond_expr, false);
     (Invalid_UTF8, true);
+    (Dollar_in_identifier, false)
   ]
 
 (* List of active warnings *)
@@ -185,6 +187,7 @@ let string_of_warning = function
   | Reduced_alignment -> "reduced-alignment"
   | Non_linear_cond_expr -> "non-linear-cond-expr"
   | Invalid_UTF8 -> "invalid-utf8"
+  | Dollar_in_identifier -> "dollar-in-identifier-extension"
 
 (* Activate the given warning *)
 let activate_warning w () =
