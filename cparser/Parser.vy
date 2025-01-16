@@ -660,12 +660,6 @@ direct_declarator:
   expr = assignment_expression RBRACK
     { let 'Cabs.Name name typ attr loc := decl in
       Cabs.Name name (Cabs.ARRAY typ (rev' quallst) (Some (fst expr))) attr loc }
-| decl = direct_declarator LBRACK quallst = type_qualifier_list STAR RBRACK
-    { let 'Cabs.Name name typ attr loc := decl in
-      Cabs.Name name (Cabs.ARRAY typ (rev' quallst) None) attr loc }
-| decl = direct_declarator LBRACK STAR RBRACK
-    { let 'Cabs.Name name typ attr loc := decl in
-      Cabs.Name name (Cabs.ARRAY typ [] None) attr loc }
 | decl = direct_declarator LPAREN params = parameter_type_list RPAREN
     { let 'Cabs.Name name typ attr loc := decl in
       Cabs.Name name (Cabs.PROTO typ params) attr loc }
@@ -768,14 +762,6 @@ direct_abstract_declarator:
     { Cabs.ARRAY typ cvspec (Some (fst expr)) }
 | LBRACK cvspec = type_qualifier_list STATIC expr = assignment_expression RBRACK
     { Cabs.ARRAY Cabs.JUSTBASE cvspec (Some (fst expr)) }
-| typ = direct_abstract_declarator LBRACK cvspec = type_qualifier_list STAR RBRACK
-    { Cabs.ARRAY typ cvspec None }
-| typ = direct_abstract_declarator LBRACK STAR RBRACK
-    { Cabs.ARRAY typ [] None }
-| LBRACK cvspec = type_qualifier_list STAR RBRACK
-    { Cabs.ARRAY Cabs.JUSTBASE cvspec None }
-| LBRACK STAR RBRACK
-    { Cabs.ARRAY Cabs.JUSTBASE [] None }
 | typ = direct_abstract_declarator LPAREN params = parameter_type_list RPAREN
     { Cabs.PROTO typ params }
 | LPAREN params = parameter_type_list RPAREN

@@ -402,16 +402,6 @@ translation_unit_file: ALIGNAS LPAREN INT LBRACK RPAREN
 ## The known suffix of the stack is as follows:
 ## option(direct_abstract_declarator) LBRACK
 ##
-translation_unit_file: ALIGNAS LPAREN VOID LBRACK STAR XOR_ASSIGN
-##
-## Ends in an error in state: 261.
-##
-## direct_abstract_declarator -> option(direct_abstract_declarator) LBRACK option(type_qualifier_list) STAR . RBRACK [ RPAREN LPAREN LBRACK COMMA COLON ]
-## unary_operator -> STAR . [ TILDE STRING_LITERAL STAR SIZEOF PRE_NAME PLUS MINUS LPAREN INC GENERIC DEC CONSTANT BUILTIN_VA_ARG BUILTIN_OFFSETOF BANG AND ALIGNOF ]
-##
-## The known suffix of the stack is as follows:
-## option(direct_abstract_declarator) LBRACK option(type_qualifier_list) STAR
-##
 translation_unit_file: ALIGNAS LPAREN VOID LBRACK STATIC STRING_LITERAL WHILE
 ##
 ## Ends in an error in state: 254.
@@ -605,17 +595,6 @@ translation_unit_file: CHAR PRE_NAME TYPEDEF_NAME LBRACK CONST STATIC STRING_LIT
 ## In state 118, spurious reduction of production logical_or_expression -> logical_and_expression
 ## In state 116, spurious reduction of production conditional_expression -> logical_or_expression
 ## In state 137, spurious reduction of production assignment_expression -> conditional_expression
-##
-# Variant of the above
-translation_unit_file: CHAR PRE_NAME TYPEDEF_NAME LBRACK STAR XOR_ASSIGN
-##
-## Ends in an error in state: 288.
-##
-## direct_declarator -> direct_declarator LBRACK option(type_qualifier_list) STAR . RBRACK [ VOLATILE VOID UNSIGNED UNION UNDERSCORE_BOOL STRUCT STATIC SIGNED SHORT SEMICOLON RPAREN RESTRICT REGISTER PRE_NAME PACKED NORETURN LPAREN LONG LBRACK LBRACE INT INLINE FLOAT16 FLOAT EXTERN EQ ENUM DOUBLE CONST COMMA COLON CHAR AUTO ATTRIBUTE ALIGNAS ]
-## unary_operator -> STAR . [ TILDE STRING_LITERAL STAR SIZEOF PRE_NAME PLUS MINUS LPAREN INC GENERIC DEC CONSTANT BUILTIN_VA_ARG BUILTIN_OFFSETOF BANG AND ALIGNOF ]
-##
-## The known suffix of the stack is as follows:
-## direct_declarator LBRACK option(type_qualifier_list) STAR
 ##
 
 # We are trying to recognize an array declarator.
