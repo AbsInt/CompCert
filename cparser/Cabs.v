@@ -89,7 +89,8 @@ with spec_elem :=
  * declared type) *)
 with decl_type :=
  | JUSTBASE
- | ARRAY : decl_type -> list cvspec -> option expression -> decl_type
+(* The bool is true for 'static' array declarators *)
+ | ARRAY : decl_type -> list cvspec -> bool -> option expression -> decl_type
  | PTR : list cvspec -> decl_type -> decl_type
 (* The bool is true for variable length parameters. *)
  | PROTO : decl_type -> list parameter * bool -> decl_type

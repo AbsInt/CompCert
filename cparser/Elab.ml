@@ -890,7 +890,7 @@ and elab_return_type loc env ty =
 and elab_type_declarator ?(fundef = false) loc env ty = function
   | Cabs.JUSTBASE ->
       ((ty, None), env)
-  | Cabs.ARRAY(d, cv_specs, sz) ->
+  | Cabs.ARRAY(d, cv_specs, static, sz) ->
       let (ty, a) = get_nontype_attrs env ty in
       let a = add_attributes a (elab_cvspecs env cv_specs) in
       if wrap incomplete_type loc env ty then
