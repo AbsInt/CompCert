@@ -34,11 +34,12 @@ Require Import RTL.
 Inductive nval : Type :=
   | Nothing              (**r value is entirely unused *)
   | I (m: int)           (**r only need the bits that are 1 in [m] *)
+  | L (m: int64)         (**r only need the bits that are 1 in [m] for 64 bit ints *)
   | All.                 (**r every bit of the value is used *)
 
 Definition eq_nval (x y: nval) : {x=y} + {x<>y}.
 Proof.
-  decide equality. apply Int.eq_dec.
+  decide equality. apply Int.eq_dec. apply Int64.eq_dec.
 Defined.
 
 (** ** Agreement between two values relative to a need. *)
@@ -46,6 +47,10 @@ Defined.
 Definition iagree (p q mask: int) : Prop :=
   forall i, 0 <= i < Int.zwordsize -> Int.testbit mask i = true ->
             Int.testbit p i = Int.testbit q i.
+
+Definition lagree (p q mask: int64) : Prop :=
+  forall i, 0 <= i < Int64.zwordsize -> Int64.testbit mask i = true ->
+       Int64.testbit p i = Int64.testbit q i.
 
 Definition vagree (v w: val) (x: nval) : Prop :=
   match x with
@@ -56,12 +61,18 @@ Definition vagree (v w: val) (x: nval) : Prop :=
       | Vint p, _ => False
       | _, _ => True
       end
+  | L m =>
+      match v, w with
+      | Vlong p, Vlong q => lagree p q m
+      | Vlong p, _ => False
+      | _, _ => True
+      end
   | All => Val.lessdef v w
   end.
 
 Lemma vagree_same: forall v x, vagree v v x.
 Proof.
-  intros. destruct x; simpl; auto; destruct v; auto. red; auto.
+  intros. destruct x; simpl; auto; destruct v; auto; red; auto.
 Qed.
 
 Lemma vagree_lessdef: forall v w x, Val.lessdef v w -> vagree v w x.
@@ -109,7 +120,10 @@ Inductive nge: nval -> nval -> Prop :=
   | nge_all: forall x, nge x Nothing
   | nge_int: forall m1 m2,
       (forall i, 0 <= i < Int.zwordsize -> Int.testbit m2 i = true -> Int.testbit m1 i = true) ->
-      nge (I m1) (I m2).
+      nge (I m1) (I m2)
+  | nge_long: forall m1 m2,
+      (forall i, 0 <= i < Int64.zwordsize -> Int64.testbit m2 i = true -> Int64.testbit m1 i = true) ->
+      nge (L m1) (L m2).
 
 Lemma nge_refl: forall x, nge x x.
 Proof.
@@ -130,6 +144,7 @@ Proof.
   induction 1; simpl; auto.
 - destruct v; auto with na.
 - destruct v, w; intuition. red; auto.
+- destruct v, w; intuition. red; auto.
 Qed.
 
 Definition nlub (x y: nval) : nval :=
@@ -137,6 +152,7 @@ Definition nlub (x y: nval) : nval :=
   | Nothing, _ => y
   | _, Nothing => x
   | I m1, I m2 => I (Int.or m1 m2)
+  | L m1, L m2 => L (Int64.or m1 m2)
   | _, _ => All
   end.
 
@@ -145,12 +161,14 @@ Lemma nge_lub_l:
 Proof.
   unfold nlub; destruct x, y; auto with na.
   constructor. intros. autorewrite with ints; auto. rewrite H0; auto.
+  constructor. intros. autorewrite with ints; auto. rewrite H0; auto.
 Qed.
 
 Lemma nge_lub_r:
   forall x y, nge (nlub x y) y.
 Proof.
   unfold nlub; destruct x, y; auto with na.
+  constructor. intros. autorewrite with ints; auto. rewrite H0. apply orb_true_r; auto.
   constructor. intros. autorewrite with ints; auto. rewrite H0. apply orb_true_r; auto.
 Qed.
 
@@ -371,6 +389,248 @@ Proof.
   intros. rewrite Int.bits_zero_ext by lia. apply zlt_false; lia.
 Qed.
 
+(** ** Properties of agreement between 64 bit integers *)
+
+Lemma lagree_refl:
+  forall p m, lagree p p m.
+Proof.
+  intros; red; auto.
+Qed.
+
+Remark eq_same_bits64:
+  forall i x y, x = y -> Int64.testbit x i = Int64.testbit y i.
+Proof.
+  intros; congruence.
+Qed.
+
+Lemma lagree_and_eq:
+  forall x y mask,
+  lagree x y mask <-> Int64.and x mask = Int64.and y mask.
+Proof.
+  intros; split; intros.
+- Int64.bit_solve. specialize (H i H0).
+  destruct (Int64.testbit mask i).
+  rewrite ! andb_true_r; auto.
+  rewrite ! andb_false_r; auto.
+- red; intros. exploit (eq_same_bits64 i); eauto; autorewrite with ints; auto.
+  rewrite H1. rewrite ! andb_true_r; auto.
+Qed.
+
+Lemma lagree_mone:
+  forall p q, lagree p q Int64.mone -> p = q.
+Proof.
+  intros. rewrite lagree_and_eq in H. rewrite ! Int64.and_mone in H. auto.
+Qed.
+
+Lemma lagree_zero:
+  forall p q, lagree p q Int64.zero.
+Proof.
+  intros. rewrite lagree_and_eq. rewrite ! Int64.and_zero; auto.
+Qed.
+
+Lemma lagree_and:
+  forall x y n m,
+  lagree x y (Int64.and m n) -> lagree (Int64.and x n) (Int64.and y n) m.
+Proof.
+  intros. rewrite lagree_and_eq in *. rewrite ! Int64.and_assoc.
+  rewrite (Int64.and_commut n). auto.
+Qed.
+
+Lemma lagree_not:
+  forall x y m, lagree x y m -> lagree (Int64.not x) (Int64.not y) m.
+Proof.
+  intros; red; intros; autorewrite with ints; auto. f_equal; auto.
+Qed.
+
+Lemma lagree_not':
+  forall x y m, lagree (Int64.not x) (Int64.not y) m -> lagree x y m.
+Proof.
+  intros. rewrite <- (Int64.not_involutive x). rewrite <- (Int64.not_involutive y).
+  apply lagree_not; auto.
+Qed.
+
+Lemma lagree_or:
+  forall x y n m,
+  lagree x y (Int64.and m (Int64.not n)) -> lagree (Int64.or x n) (Int64.or y n) m.
+Proof.
+  intros. apply lagree_not'. rewrite ! Int64.not_or_and_not. apply lagree_and.
+  apply lagree_not; auto.
+Qed.
+
+Lemma lagree_bitwise_binop:
+  forall sem f,
+  (forall x y i, 0 <= i < Int64.zwordsize ->
+       Int64.testbit (f x y) i = sem (Int64.testbit x i) (Int64.testbit y i)) ->
+  forall x1 x2 y1 y2 m,
+  lagree x1 y1 m -> lagree x2 y2 m -> lagree (f x1 x2) (f y1 y2) m.
+Proof.
+  intros; red; intros. rewrite ! H by auto. f_equal; auto.
+Qed.
+
+Lemma lagree_shl:
+  forall x y m n,
+  lagree x y (Int64.shru' m n) -> lagree (Int64.shl' x n) (Int64.shl' y n) m.
+Proof.
+  intros; red; intros. rewrite ! Int64.bits_shl'; auto.
+  destruct (zlt i (Int.unsigned n)).
+- auto.
+- generalize (Int.unsigned_range n); intros.
+  apply H. lia. rewrite Int64.bits_shru' by lia.
+  replace (i - Int.unsigned n + Int.unsigned n) with i by lia.
+  rewrite zlt_true by lia. auto.
+Qed.
+
+Lemma lagree_shru:
+  forall x y m n,
+  lagree x y (Int64.shl' m n) -> lagree (Int64.shru' x n) (Int64.shru' y n) m.
+Proof.
+  intros; red; intros. rewrite ! Int64.bits_shru'; auto.
+  destruct (zlt (i + Int.unsigned n) Int64.zwordsize).
+- generalize (Int.unsigned_range n); intros.
+  apply H. lia. rewrite Int64.bits_shl' by lia.
+  replace (i + Int.unsigned n - Int.unsigned n) with i by lia.
+  rewrite zlt_false by lia. auto.
+- auto.
+Qed.
+
+Lemma lagree_shr_1:
+  forall x y m n,
+  Int64.shru' (Int64.shl' m n) n = m ->
+  lagree x y (Int64.shl' m n) -> lagree (Int64.shr' x n) (Int64.shr' y n) m.
+Proof.
+  intros; red; intros. rewrite <- H in H2. rewrite Int64.bits_shru' in H2 by auto.
+  rewrite ! Int64.bits_shr' by auto.
+  destruct (zlt (i + Int.unsigned n) Int64.zwordsize).
+- apply H0; auto. generalize (Int.unsigned_range n); lia.
+- discriminate.
+Qed.
+
+Lemma lagree_shr:
+  forall x y m n,
+  lagree x y (Int64.or (Int64.shl' m n) (Int64.repr Int64.min_signed)) ->
+  lagree (Int64.shr' x n) (Int64.shr' y n) m.
+Proof.
+  intros; red; intros. rewrite ! Int64.bits_shr' by auto.
+  generalize (Int.unsigned_range n); intros.
+  set (j := if zlt (i + Int.unsigned n) Int64.zwordsize
+            then i + Int.unsigned n
+            else Int64.zwordsize - 1).
+  assert (0 <= j < Int64.zwordsize).
+  { unfold j; destruct (zlt (i + Int.unsigned n) Int64.zwordsize); lia. }
+  apply H; auto. autorewrite with ints; auto. rewrite ! Int64.bits_shl'; auto. apply orb_true_intro.
+  unfold j; destruct (zlt (i + Int.unsigned n) Int64.zwordsize).
+- left. rewrite zlt_false by lia.
+  replace (i + Int.unsigned n - Int.unsigned n) with i by lia.
+  auto.
+- right. reflexivity.
+Qed.
+
+Lemma lagree_rol':
+  forall p q m amount,
+  lagree p q (Int64.ror m (Int64.repr (Int.unsigned amount))) ->
+  lagree (Int64.rol' p amount) (Int64.rol' q amount) m.
+Proof.
+  intros. assert (Int64.zwordsize > 0) by (compute; auto).
+  red; intros. rewrite ! Int64.bits_rol' by auto. apply H.
+  apply Z_mod_lt; auto.
+  rewrite Int64.bits_ror. rewrite Int64.int_unsigned_repr.
+  replace (((i - Int.unsigned amount) mod Int64.zwordsize + Int.unsigned amount)
+   mod Int64.zwordsize) with i. auto.
+  apply eqmod_small_eq with Int64.zwordsize; auto.
+  apply eqmod_trans with ((i - Int.unsigned amount) + Int.unsigned amount).
+  apply eqmod_refl2; lia.
+  eapply eqmod_trans. 2: apply eqmod_mod; auto.
+  apply eqmod_add.
+  apply eqmod_mod; auto.
+  apply eqmod_refl.
+  apply Z_mod_lt; auto.
+  apply Z_mod_lt; auto.
+Qed.
+
+Lemma lagree_rol:
+  forall p q m amount,
+  lagree p q (Int64.ror m amount) ->
+  lagree (Int64.rol p amount) (Int64.rol q amount) m.
+Proof.
+  intros. assert (Int64.zwordsize > 0) by (compute; auto).
+  red; intros. rewrite ! Int64.bits_rol by auto. apply H.
+  apply Z_mod_lt; auto.
+  rewrite Int64.bits_ror.
+  replace (((i - Int64.unsigned amount) mod Int64.zwordsize + Int64.unsigned amount)
+   mod Int64.zwordsize) with i. auto.
+  apply eqmod_small_eq with Int64.zwordsize; auto.
+  apply eqmod_trans with ((i - Int64.unsigned amount) + Int64.unsigned amount).
+  apply eqmod_refl2; lia.
+  eapply eqmod_trans. 2: apply eqmod_mod; auto.
+  apply eqmod_add.
+  apply eqmod_mod; auto.
+  apply eqmod_refl.
+  apply Z_mod_lt; auto.
+  apply Z_mod_lt; auto.
+Qed.
+
+Lemma lagree_ror:
+  forall p q m amount,
+  lagree p q (Int64.rol' m amount) ->
+  lagree (Int64.ror' p amount) (Int64.ror' q amount) m.
+Proof.
+  intros.
+  assert (Z.divide (Z.of_nat Int64.wordsize) Int64.modulus) by (exists (two_p (64-6)); reflexivity).
+  unfold Int64.ror'.
+  rewrite ! Int64.ror_rol_neg by auto.
+  apply lagree_rol.
+  rewrite Int64.ror_rol_neg by auto.
+  rewrite Int64.neg_involutive; auto.
+Qed.
+
+Lemma eqmod_lagree:
+  forall m x y,
+  eqmod (two_p (Int64.size m)) x y ->
+  lagree (Int64.repr x) (Int64.repr y) m.
+Proof.
+  intros. set (p := Z.to_nat (Int64.size m)).
+  generalize (Int64.size_range m); intros RANGE.
+  assert (EQ: Int64.size m = Z.of_nat p). { symmetry; apply Z2Nat.id. lia. }
+  rewrite EQ in H; rewrite <- two_power_nat_two_p in H.
+  red; intros. rewrite ! Int64.testbit_repr by auto.
+  destruct (zlt i (Int64.size m)).
+  eapply same_bits_eqmod; eauto. lia.
+  assert (Int64.testbit m i = false) by (eapply Int64.bits_size_2; lia).
+  congruence.
+Qed.
+
+Definition complete_mask64 (m: int64) := Int64.zero_ext (Int64.size m) Int64.mone.
+
+Lemma lagree_eqmod:
+  forall x y m,
+  lagree x y (complete_mask64 m) ->
+  eqmod (two_p (Int64.size m)) (Int64.unsigned x) (Int64.unsigned y).
+Proof.
+  intros. set (p := Z.to_nat (Int64.size m)).
+  generalize (Int64.size_range m); intros RANGE.
+  assert (EQ: Int64.size m = Z.of_nat p). { symmetry; apply Z2Nat.id. lia. }
+  rewrite EQ; rewrite <- two_power_nat_two_p.
+  apply eqmod_same_bits. intros. apply H. lia.
+  unfold complete_mask64. rewrite Int64.bits_zero_ext by lia.
+  rewrite zlt_true by lia. rewrite Int64.bits_mone by lia. auto.
+Qed.
+
+Lemma complete_mask64_idem:
+  forall m, complete_mask64 (complete_mask64 m) = complete_mask64 m.
+Proof.
+  unfold complete_mask64; intros. destruct (Int64.eq_dec m Int64.zero).
++ subst m; reflexivity.
++ assert (Int64.unsigned m <> 0).
+  { red; intros; elim n. rewrite <- (Int64.repr_unsigned m). rewrite H; auto. }
+  assert (0 < Int64.size m).
+  { apply Zsize_pos'. generalize (Int64.unsigned_range m); lia. }
+  generalize (Int64.size_range m); intros.
+  f_equal. apply Int64.bits_size_4. tauto.
+  rewrite Int64.bits_zero_ext by lia. rewrite zlt_true by lia.
+  apply Int64.bits_mone; lia.
+  intros. rewrite Int64.bits_zero_ext by lia. apply zlt_false; lia.
+Qed.
+
 (** ** Abstract operations over value needs. *)
 
 Ltac InvAgree :=
@@ -389,6 +649,7 @@ Definition andimm (x: nval) (n: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.and m n)
+  | L m => I n
   | All => I n
   end.
 
@@ -400,6 +661,7 @@ Proof.
   unfold andimm; intros; destruct x; simpl in *; unfold Val.and.
 - auto.
 - InvAgree. apply iagree_and; auto.
+- InvAgree.
 - InvAgree. rewrite iagree_and_eq in H. rewrite H; auto.
 Qed.
 
@@ -418,8 +680,51 @@ Proof.
   unfold orimm; intros; destruct x; simpl in *.
 - auto.
 - unfold Val.or; InvAgree. apply iagree_or; auto.
+- InvAgree.
 - InvAgree. simpl. apply Val.lessdef_same. f_equal. apply iagree_mone.
   apply iagree_or. rewrite Int.and_commut. rewrite Int.and_mone. auto.
+Qed.
+
+(** 64 bit and immediate, or immediate *)
+
+Definition andlimm (x: nval) (n: int64) :=
+  match x with
+  | Nothing => Nothing
+  | I m =>  L n
+  | L m => L (Int64.and m n)
+  | All => L n
+  end.
+
+Lemma andlimm_sound:
+  forall v w x n,
+  vagree v w (andlimm x n) ->
+  vagree (Val.andl v (Vlong n)) (Val.andl w (Vlong n)) x.
+Proof.
+  unfold andlimm; intros; destruct x; simpl in *; unfold Val.andl.
+- auto.
+- InvAgree.
+- InvAgree. apply lagree_and; auto.
+- InvAgree. rewrite lagree_and_eq in H. rewrite H; auto.
+Qed.
+
+Definition orlimm (x: nval) (n: int64) :=
+  match x with
+  | Nothing => Nothing
+  | L m => L (Int64.and m (Int64.not n))
+  | _ => L (Int64.not n)
+  end.
+
+Lemma orlimm_sound:
+  forall v w x n,
+  vagree v w (orlimm x n) ->
+  vagree (Val.orl v (Vlong n)) (Val.orl w (Vlong n)) x.
+Proof.
+  unfold orlimm; intros; destruct x; simpl in *.
+- auto.
+- InvAgree.
+- InvAgree. unfold Val.orl; InvAgree. apply lagree_or; auto.
+- InvAgree. simpl. apply Val.lessdef_same. f_equal. apply lagree_mone.
+  apply lagree_or. rewrite Int64.and_commut. rewrite Int64.and_mone. auto.
 Qed.
 
 (** Bitwise operations: and, or, xor, not *)
@@ -441,6 +746,7 @@ Lemma vagree_bitwise_binop:
 Proof.
   unfold bitwise; intros. destruct x; simpl in *.
 - auto.
+- InvAgree.
 - InvAgree.
 - inv H0; auto. inv H1; auto. destruct w1; auto.
 Qed.
@@ -470,12 +776,57 @@ Proof.
   intros. rewrite ! Val.not_xor. apply xor_sound; auto with na.
 Qed.
 
+(** Bitwise operations: andl, orl, xorl, notl *)
+
+Lemma vagree_bitwise64_binop:
+  forall f,
+  (forall p1 p2 q1 q2 m,
+     lagree p1 q1 m -> lagree p2 q2 m -> lagree (f p1 p2) (f q1 q2) m) ->
+  forall v1 w1 v2 w2 x,
+  vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
+  vagree (match v1, v2 with Vlong i1, Vlong i2 => Vlong(f i1 i2) | _, _ => Vundef end)
+         (match w1, w2 with Vlong i1, Vlong i2 => Vlong(f i1 i2) | _, _ => Vundef end)
+         x.
+Proof.
+  unfold bitwise; intros. destruct x; simpl in *.
+- auto.
+- InvAgree.
+- InvAgree.
+- inv H0; auto. inv H1; auto. destruct w1; auto.
+Qed.
+
+Lemma andl_sound:
+  forall v1 w1 v2 w2 x,
+  vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
+  vagree (Val.andl v1 v2) (Val.andl w1 w2) x.
+Proof (vagree_bitwise64_binop Int64.and (lagree_bitwise_binop andb Int64.and Int64.bits_and)).
+
+Lemma orl_sound:
+  forall v1 w1 v2 w2 x,
+  vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
+  vagree (Val.orl v1 v2) (Val.orl w1 w2) x.
+Proof (vagree_bitwise64_binop Int64.or (lagree_bitwise_binop orb Int64.or Int64.bits_or)).
+
+Lemma xorl_sound:
+  forall v1 w1 v2 w2 x,
+  vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
+  vagree (Val.xorl v1 v2) (Val.xorl w1 w2) x.
+Proof (vagree_bitwise64_binop Int64.xor (lagree_bitwise_binop xorb Int64.xor Int64.bits_xor)).
+
+Lemma notl_sound:
+  forall v w x,
+  vagree v w (bitwise x) -> vagree (Val.notl v) (Val.notl w) x.
+Proof.
+  intros. rewrite ! Val.notl_xorl. apply xorl_sound; auto with na.
+Qed.
+
 (** Shifts and rotates *)
 
 Definition shlimm (x: nval) (n: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.shru m n)
+  | L m => I (Int.shru Int.mone n)
   | All => I (Int.shru Int.mone n)
   end.
 
@@ -489,6 +840,7 @@ Proof.
   destruct x; simpl in *.
 - auto.
 - InvAgree. apply iagree_shl; auto.
+- InvAgree.
 - InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone. apply iagree_shl; auto.
 - destruct v; auto with na.
 Qed.
@@ -497,6 +849,7 @@ Definition shruimm (x: nval) (n: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.shl m n)
+  | L m => I (Int.shl Int.mone n)
   | All => I (Int.shl Int.mone n)
   end.
 
@@ -510,6 +863,7 @@ Proof.
   destruct x; simpl in *.
 - auto.
 - InvAgree. apply iagree_shru; auto.
+- InvAgree.
 - InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone. apply iagree_shru; auto.
 - destruct v; auto with na.
 Qed.
@@ -521,6 +875,7 @@ Definition shrimm (x: nval) (n: int) :=
               if Int.eq_dec (Int.shru m' n) m
               then m'
               else Int.or m' (Int.repr Int.min_signed))
+  | L m => I (Int.or (Int.shl Int.mone n) (Int.repr Int.min_signed))
   | All => I (Int.or (Int.shl Int.mone n) (Int.repr Int.min_signed))
   end.
 
@@ -537,6 +892,7 @@ Proof.
   destruct (Int.eq_dec (Int.shru (Int.shl m n) n) m).
   apply iagree_shr_1; auto.
   apply iagree_shr; auto.
+- destruct v; auto with na.
 - InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone. apply iagree_shr. auto.
 - destruct v; auto with na.
 Qed.
@@ -545,6 +901,7 @@ Definition rol (x: nval) (amount: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.ror m amount)
+  | L m => All
   | All => All
   end.
 
@@ -557,6 +914,7 @@ Proof.
   destruct x; simpl in *.
 - auto.
 - InvAgree. apply iagree_rol; auto.
+- destruct v; auto.
 - inv H; auto.
 Qed.
 
@@ -564,6 +922,7 @@ Definition ror (x: nval) (amount: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.rol m amount)
+  | L m => All
   | All => All
   end.
 
@@ -576,6 +935,7 @@ Proof.
   destruct x; simpl in *.
 - auto.
 - InvAgree. apply iagree_ror; auto.
+- destruct v; auto.
 - inv H; auto.
 Qed.
 
@@ -593,6 +953,140 @@ Proof.
   apply andimm_sound. apply rol_sound. auto.
 Qed.
 
+
+(** 64 bit shifts and rotates *)
+
+Definition shllimm (x: nval) (n: int) :=
+  match x with
+  | Nothing => Nothing
+  | L m => L (Int64.shru' m n)
+  | I m => L (Int64.shru' Int64.mone n)
+  | All => L (Int64.shru' Int64.mone n)
+  end.
+
+Lemma shllimm_sound:
+  forall v w x n,
+  vagree v w (shllimm x n) ->
+  vagree (Val.shll v (Vint n)) (Val.shll w (Vint n)) x.
+Proof.
+  unfold shllimm; intros. unfold Val.shll.
+  destruct (Int.ltu n Int64.iwordsize').
+  destruct x; simpl in *.
+- auto.
+- InvAgree.
+- InvAgree. apply lagree_shl; auto.
+- InvAgree. apply Val.lessdef_same. f_equal. apply lagree_mone. apply lagree_shl; auto.
+- destruct v; auto with na.
+Qed.
+
+Definition shrluimm (x: nval) (n: int) :=
+  match x with
+  | Nothing => Nothing
+  | L m => L (Int64.shl' m n)
+  | I m => L (Int64.shl' Int64.mone n)
+  | All => L (Int64.shl' Int64.mone n)
+  end.
+
+Lemma shrluimm_sound:
+  forall v w x n,
+  vagree v w (shrluimm x n) ->
+  vagree (Val.shrlu v (Vint n)) (Val.shrlu w (Vint n)) x.
+Proof.
+  unfold shrluimm; intros. unfold Val.shrlu.
+  destruct (Int.ltu n Int64.iwordsize').
+  destruct x; simpl in *.
+- auto.
+- InvAgree.
+- InvAgree. apply lagree_shru; auto.
+- InvAgree. apply Val.lessdef_same. f_equal. apply lagree_mone. apply lagree_shru; auto.
+- destruct v; auto with na.
+Qed.
+
+Definition shrlimm (x: nval) (n: int) :=
+  match x with
+  | Nothing => Nothing
+  | L m => L (let m' := Int64.shl' m n in
+              if Int64.eq_dec (Int64.shru' m' n) m
+              then m'
+              else Int64.or m' (Int64.repr Int64.min_signed))
+  | I m => L (Int64.or (Int64.shl' Int64.mone n) (Int64.repr Int64.min_signed))
+  | All => L (Int64.or (Int64.shl' Int64.mone n) (Int64.repr Int64.min_signed))
+  end.
+
+Lemma shrlimm_sound:
+  forall v w x n,
+  vagree v w (shrlimm x n) ->
+  vagree (Val.shrl v (Vint n)) (Val.shrl w (Vint n)) x.
+Proof.
+  unfold shrlimm; intros. unfold Val.shrl.
+  destruct (Int.ltu n Int64.iwordsize').
+  destruct x; simpl in *.
+- auto.
+- InvAgree.
+- InvAgree. destruct (Int64.eq_dec (Int64.shru' (Int64.shl' m n) n) m).
+  apply lagree_shr_1; auto.
+  apply lagree_shr; auto.
+- InvAgree. apply Val.lessdef_same. f_equal. apply lagree_mone. apply lagree_shr. auto.
+- destruct v; auto with na.
+Qed.
+
+Definition roll (x: nval) (amount: int) :=
+  match x with
+  | Nothing => Nothing
+  | L m => L (Int64.ror m (Int64.repr (Int.unsigned amount)))
+  | I m => All
+  | All => All
+  end.
+
+Lemma roll_sound:
+  forall v w x n,
+  vagree v w (roll x n) ->
+  vagree (Val.roll v (Vint n)) (Val.roll w (Vint n)) x.
+Proof.
+  unfold roll, Val.roll; intros.
+  destruct x; simpl in *.
+- auto.
+- destruct v; auto.
+- InvAgree. apply lagree_rol'; auto.
+- inv H; auto.
+Qed.
+
+Definition rorl (x: nval) (amount: int) :=
+  match x with
+  | Nothing => Nothing
+  | I m => All
+  | L m => L (Int64.rol' m amount)
+  | All => All
+  end.
+
+Lemma rorl_sound:
+  forall v w x n,
+  vagree v w (rorl x n) ->
+  vagree (Val.rorl v (Vint n)) (Val.rorl w (Vint n)) x.
+Proof.
+  unfold ror, Val.ror; intros.
+  destruct x; simpl in *.
+- auto.
+- destruct v; simpl; auto.
+- InvAgree. apply lagree_ror; auto.
+- inv H; auto.
+Qed.
+
+Definition rolml (x: nval) (amount : int) (mask: int64) := roll (andlimm x mask) amount.
+
+Lemma rolml_sound:
+  forall v w x amount mask,
+  vagree v w (rolml x amount mask) ->
+  vagree (Val.rolml v amount mask) (Val.rolml w amount mask) x.
+Proof.
+  unfold rolml; intros.
+  assert (X: forall u, Val.rolml u amount mask = Val.andl (Val.roll u (Vint amount)) (Vlong mask)).
+  { destruct u; auto. }
+  rewrite ! X.
+  apply andlimm_sound. apply roll_sound. auto.
+Qed.
+
+
 (** Modular arithmetic operations: add, mul, opposite.
     Also subtraction, but only on 64-bit targets, otherwise
     the pointer - pointer case does not fit. *)
@@ -601,6 +1095,7 @@ Definition modarith (x: nval) :=
   match x with
   | Nothing => Nothing
   | I m => I (complete_mask m)
+  | L m => L (complete_mask64 m)
   | All => All
   end.
 
@@ -613,6 +1108,7 @@ Proof.
 - auto.
 - unfold Val.add; InvAgree.
   apply eqmod_iagree. apply eqmod_add; apply iagree_eqmod; auto.
+- destruct Archi.ptr64 eqn:?; unfold Val.add; rewrite Heqb; InvAgree.
 - inv H; auto. inv H0; auto. destruct w1; auto.
 Qed.
 
@@ -626,12 +1122,13 @@ Proof.
 - auto.
 - unfold Val.sub; rewrite H1; InvAgree.
   apply eqmod_iagree. apply eqmod_sub; apply iagree_eqmod; auto.
+- unfold Val.sub. rewrite H1. destruct v1, v2; simpl; auto.
 - inv H; auto. inv H0; auto. destruct w1; auto.
 Qed.
 
 Remark modarith_idem: forall nv, modarith (modarith nv) = modarith nv.
 Proof.
-  destruct nv; simpl; auto. f_equal; apply complete_mask_idem.
+  destruct nv; simpl; auto. f_equal; apply complete_mask_idem. f_equal; apply complete_mask64_idem.
 Qed.
 
 Lemma mul_sound:
@@ -642,6 +1139,7 @@ Proof.
   unfold mul, add; intros. destruct x; simpl in *.
 - auto.
 - unfold Val.mul; InvAgree. apply eqmod_iagree. apply eqmod_mult; apply iagree_eqmod; auto.
+- InvAgree.
 - inv H; auto. inv H0; auto. destruct w1; auto.
 Qed.
 
@@ -654,6 +1152,59 @@ Proof.
 - auto.
 - unfold Val.neg; InvAgree.
   apply eqmod_iagree. apply eqmod_neg. apply iagree_eqmod; auto.
+- InvAgree.
+- inv H; simpl; auto.
+Qed.
+
+Lemma addl_sound:
+  forall v1 w1 v2 w2 x,
+  vagree v1 w1 (modarith x) -> vagree v2 w2 (modarith x) ->
+  vagree (Val.addl v1 v2) (Val.addl w1 w2) x.
+Proof.
+  unfold modarith; intros. destruct x; simpl in *.
+- auto.
+- destruct Archi.ptr64 eqn:?; unfold Val.addl; rewrite Heqb; InvAgree.
+- unfold Val.addl; InvAgree.
+  apply eqmod_lagree. apply eqmod_add; apply lagree_eqmod; auto.
+- inv H; auto. inv H0; auto. destruct w1; auto.
+Qed.
+
+Lemma subl_sound:
+  forall v1 w1 v2 w2 x,
+  vagree v1 w1 (modarith x) -> vagree v2 w2 (modarith x) ->
+  Archi.ptr64 = false ->
+  vagree (Val.subl v1 v2) (Val.subl w1 w2) x.
+Proof.
+  unfold modarith; intros. destruct x; simpl in *.
+- auto.
+- InvAgree; simpl; rewrite H1; auto.
+- unfold Val.subl; rewrite H1; InvAgree.
+  apply eqmod_lagree. apply eqmod_sub; apply lagree_eqmod; auto.
+- inv H; auto. inv H0; auto. destruct w1; auto.
+Qed.
+
+Lemma mull_sound:
+  forall v1 w1 v2 w2 x,
+  vagree v1 w1 (modarith x) -> vagree v2 w2 (modarith x) ->
+  vagree (Val.mull v1 v2) (Val.mull w1 w2) x.
+Proof.
+  unfold mull; intros. destruct x; simpl in *.
+- auto.
+- InvAgree.
+- unfold Val.mull; InvAgree. apply eqmod_lagree. apply eqmod_mult; apply lagree_eqmod; auto.
+- inv H; auto. inv H0; auto. destruct w1; auto.
+Qed.
+
+Lemma negl_sound:
+  forall v w x,
+  vagree v w (modarith x) ->
+  vagree (Val.negl v) (Val.negl w) x.
+Proof.
+  intros; destruct x; simpl in *.
+- auto.
+- InvAgree.
+- unfold Val.negl; InvAgree.
+  apply eqmod_lagree. apply eqmod_neg. apply lagree_eqmod; auto.
 - inv H; simpl; auto.
 Qed.
 
@@ -663,6 +1214,7 @@ Definition zero_ext (n: Z) (x: nval) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.zero_ext n m)
+  | L m => I (Int.zero_ext n Int.mone)
   | All => I (Int.zero_ext n Int.mone)
   end.
 
@@ -679,6 +1231,7 @@ Proof.
   red; intros. autorewrite with ints; try lia.
   destruct (zlt i1 n); auto. apply H; auto.
   autorewrite with ints; try lia. rewrite zlt_true; auto.
+- InvAgree.
 - unfold Val.zero_ext; InvAgree; auto. apply Val.lessdef_same. f_equal.
   Int.bit_solve; try lia. destruct (zlt i1 n); auto. apply H; auto.
   autorewrite with ints; try lia. apply zlt_true; auto.
@@ -688,6 +1241,7 @@ Definition sign_ext (n: Z) (x: nval) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.or (Int.zero_ext n m) (Int.shl Int.one (Int.repr (n - 1))))
+  | L m => I (Int.zero_ext n Int.mone)
   | All => I (Int.zero_ext n Int.mone)
   end.
 
@@ -711,6 +1265,7 @@ Proof.
   right. rewrite Int.unsigned_repr. rewrite zlt_false by lia.
   replace (n - 1 - (n - 1)) with 0 by lia. reflexivity.
   generalize Int.wordsize_max_unsigned; lia.
+- InvAgree.
 - unfold Val.sign_ext; InvAgree; auto. apply Val.lessdef_same. f_equal.
   Int.bit_solve; try lia.
   set (j := if zlt i1 n then i1 else n - 1).
@@ -818,6 +1373,12 @@ Proof.
   auto.
   destruct w; try contradiction. destruct ty; auto.
   destruct ty; auto.
+  destruct ty; auto.
+  destruct ty; auto.
+  destruct ty; destruct Archi.ptr64; auto.
+- unfold Val.normalize. destruct v; auto.
+  destruct ty; auto.
+  destruct w; try contradiction. destruct ty; auto.
   destruct ty; auto.
   destruct ty; auto.
   destruct ty; destruct Archi.ptr64; auto.
@@ -1000,6 +1561,7 @@ Proof.
   unfold rolm, rol, andimm in *. destruct x; auto.
   rewrite H in H0. auto.
   rewrite H in H0. auto.
+  rewrite H in H0. auto.
 Qed.
 
 Definition zero_ext_redundant (n: Z) (x: nval) :=
@@ -1045,6 +1607,72 @@ Proof.
   destruct (zlt i1 n). apply H0; auto.
   rewrite Int.bits_or; auto. rewrite H3; auto.
   rewrite Int.bits_zero_ext in H3 by lia. rewrite zlt_false in H3 by auto. discriminate.
+Qed.
+
+Definition andlimm_redundant (x: nval) (n: int64) :=
+  match x with
+  | Nothing => true
+  | L m => Int64.eq_dec (Int64.and m (Int64.not n)) Int64.zero
+  | _ => false
+  end.
+
+Lemma andlimm_redundant_sound:
+  forall v w x n,
+  andlimm_redundant x n = true ->
+  vagree v w (andlimm x n) ->
+  vagree (Val.andl v (Vlong n)) w x.
+Proof.
+  unfold andlimm_redundant; intros. destruct x; try discriminate.
+- simpl; auto.
+- InvBooleans. simpl in *; unfold Val.andl; InvAgree.
+  red; intros. exploit (eq_same_bits64 i1); eauto.
+  autorewrite with ints; auto. rewrite H2; simpl; intros.
+  destruct (Int64.testbit n i1) eqn:N; try discriminate.
+  rewrite andb_true_r. apply H0; auto. autorewrite with ints; auto.
+  rewrite H2, N; auto.
+Qed.
+
+Definition orlimm_redundant (x: nval) (n: int64) :=
+  match x with
+  | Nothing => true
+  | L m => Int64.eq_dec (Int64.and m n) Int64.zero
+  | _ => false
+  end.
+
+Lemma orlimm_redundant_sound:
+  forall v w x n,
+  orlimm_redundant x n = true ->
+  vagree v w (orlimm x n) ->
+  vagree (Val.orl v (Vlong n)) w x.
+Proof.
+  unfold orlimm_redundant; intros. destruct x; try discriminate.
+- auto.
+- InvBooleans. simpl in *; unfold Val.orl; InvAgree.
+  apply lagree_not'. rewrite Int64.not_or_and_not.
+  apply (andlimm_redundant_sound (Vlong (Int64.not i)) (Vlong (Int64.not i0)) (L m) (Int64.not n)).
+  simpl. rewrite Int64.not_involutive. apply proj_sumbool_is_true. auto.
+  simpl. apply lagree_not; auto.
+Qed.
+
+Definition rolml_redundant (x: nval) (amount : int) (mask: int64) :=
+  Int.eq_dec amount Int.zero && andlimm_redundant x mask.
+
+Lemma rolml_redundant_sound:
+  forall v w x amount mask,
+  rolml_redundant x amount mask = true ->
+  vagree v w (rolml x amount mask) ->
+  vagree (Val.rolml v amount mask) w x.
+Proof.
+  unfold rolml_redundant; intros; InvBooleans. subst amount. rewrite Val.rolml_zero.
+  apply andlimm_redundant_sound; auto.
+  assert (forall n, Int64.ror n Int64.zero = n).
+  { intros. rewrite Int64.ror_rol_neg by (exists (two_p (64-6)); reflexivity).
+    rewrite Int64.neg_zero. apply Int64.rol_zero.
+  }
+  unfold rolml, roll, andlimm in *. destruct x; auto.
+  rewrite H in H0. auto.
+  rewrite H in H0. auto.
+  rewrite H in H0. auto.
 Qed.
 
 (** * Neededness for register environments *)
