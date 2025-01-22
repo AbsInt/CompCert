@@ -860,6 +860,13 @@ Definition rolml (v: val) (amount: int) (mask: int64): val :=
   | _ => Vundef
   end.
 
+Theorem rolml_zero:
+  forall x m,
+  rolml x Int.zero m = andl x (Vlong m).
+Proof.
+  intros; destruct x; simpl; auto. decEq. apply Int64.rolm_zero.
+Qed.
+
 Definition zero_ext_l (nbits: Z) (v: val) : val :=
   match v with
   | Vlong n => Vlong(Int64.zero_ext nbits n)
