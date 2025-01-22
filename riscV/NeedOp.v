@@ -62,20 +62,20 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Ocast32unsigned => op1 (default nv)
   | Oaddl => op2 (default nv)
   | Oaddlimm n => op1 (default nv)
-  | Onegl => op1 (default nv)
+  | Onegl => op1 (modarith nv)
   | Osubl => op2 (default nv)
-  | Omull => op2 (default nv)
+  | Omull => op2 (modarith nv)
   | Omullhs | Omullhu | Odivl | Odivlu | Omodl | Omodlu => op2 (default nv)
-  | Oandl => op2 (default nv)
-  | Oandlimm n => op1 (default nv)
-  | Oorl => op2 (default nv)
-  | Oorlimm n => op1 (default nv)
-  | Oxorl => op2 (default nv)
-  | Oxorlimm n => op1 (default nv)
+  | Oandl => op2 (bitwise nv)
+  | Oandlimm n => op1 (andlimm nv n)
+  | Oorl => op2 (bitwise nv)
+  | Oorlimm n => op1 (orlimm nv n)
+  | Oxorl => op2 (bitwise nv)
+  | Oxorlimm n => op1 (bitwise nv)
   | Oshll | Oshrl | Oshrlu => op2 (default nv)
-  | Oshllimm n => op1 (default nv)
-  | Oshrlimm n => op1 (default nv)
-  | Oshrluimm n => op1 (default nv)
+  | Oshllimm n => op1 (shllimm nv n)
+  | Oshrlimm n => op1 (shrlimm nv n)
+  | Oshrluimm n => op1 (shrluimm nv n)
   | Oshrxlimm n => op1 (default nv)
   | Onegf | Oabsf => op1 (default nv)
   | Oaddf | Osubf | Omulf | Odivf => op2 (default nv)
@@ -95,6 +95,8 @@ Definition operation_is_redundant (op: operation) (nv: nval): bool :=
   | Ocast16signed => sign_ext_redundant 16 nv
   | Oandimm n => andimm_redundant nv n
   | Oorimm n => orimm_redundant nv n
+  | Oandlimm n => andlimm_redundant nv n
+  | Oorlimm n => orlimm_redundant nv n
   | _ => false
   end.
 
@@ -154,6 +156,17 @@ Proof.
 - apply shlimm_sound; auto.
 - apply shrimm_sound; auto.
 - apply shruimm_sound; auto.
+- apply negl_sound; auto.
+- apply mull_sound; auto.
+- apply andl_sound; auto.
+- apply andlimm_sound; auto.
+- apply orl_sound; auto.
+- apply orlimm_sound; auto.
+- apply xorl_sound; auto.
+- apply xorl_sound; auto with na.
+- apply shllimm_sound; auto.
+- apply shrlimm_sound; auto.
+- apply shrluimm_sound; auto.
 Qed.
 
 Lemma operation_is_redundant_sound:
@@ -168,6 +181,8 @@ Proof.
 - apply sign_ext_redundant_sound; auto. lia.
 - apply andimm_redundant_sound; auto.
 - apply orimm_redundant_sound; auto.
+- apply andlimm_redundant_sound; auto.
+- apply orlimm_redundant_sound; auto.
 Qed.
 
 End SOUNDNESS.
