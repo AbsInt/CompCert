@@ -3609,6 +3609,8 @@ Definition shr' (x: int) (y: Int.int): int :=
   repr (Z.shiftr (signed x) (Int.unsigned y)).
 Definition rol' (x: int) (y: Int.int): int :=
   rol x (repr (Int.unsigned y)).
+Definition ror' (x: int) (y: Int.int) :int :=
+  ror x (repr (Int.unsigned y)).
 Definition shrx' (x: int) (y: Int.int): int :=
   divs x (shl' one y).
 Definition shr_carry' (x: int) (y: Int.int): int :=
@@ -3651,6 +3653,35 @@ Proof.
   rewrite Z.shiftr_spec. apply bits_signed.
   generalize (Int.unsigned_range y); lia.
   lia.
+Qed.
+
+Remark int_unsigned_range:
+  forall x, 0 <= Int.unsigned x <= max_unsigned.
+Proof.
+  intros.
+  unfold max_unsigned. unfold modulus.
+  generalize (Int.unsigned_range x).
+  unfold Int.modulus in *.
+  change (wordsize) with  64%nat in *.
+  change (Int.wordsize) with 32%nat in *.
+  unfold two_power_nat. simpl.
+  lia.
+Qed.
+
+Remark int_unsigned_repr:
+  forall x, unsigned (repr (Int.unsigned x)) = Int.unsigned x.
+Proof.
+  intros. rewrite unsigned_repr. auto.
+  apply int_unsigned_range.
+Qed.
+
+Lemma bits_rol':
+  forall x y i,
+  0 <= i < zwordsize ->
+  testbit (rol' x y) i = testbit x ((i - Int.unsigned y) mod zwordsize).
+Proof.
+  intros. unfold rol'. rewrite bits_rol; auto. rewrite int_unsigned_repr.
+  auto.
 Qed.
 
 Lemma shl'_mul_two_p:
@@ -4655,26 +4686,6 @@ Proof.
 Qed.
 
 (** Utility proofs for mixed 32bit and 64bit arithmetic *)
-
-Remark int_unsigned_range:
-  forall x, 0 <= Int.unsigned x <= max_unsigned.
-Proof.
-  intros.
-  unfold max_unsigned. unfold modulus.
-  generalize (Int.unsigned_range x).
-  unfold Int.modulus in *.
-  change (wordsize) with  64%nat in *.
-  change (Int.wordsize) with 32%nat in *.
-  unfold two_power_nat. simpl.
-  lia.
-Qed.
-
-Remark int_unsigned_repr:
-  forall x, unsigned (repr (Int.unsigned x)) = Int.unsigned x.
-Proof.
-  intros. rewrite unsigned_repr. auto.
-  apply int_unsigned_range.
-Qed.
 
 Lemma int_sub_ltu:
   forall x y,
