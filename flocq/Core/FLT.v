@@ -416,6 +416,23 @@ fold (Req_bool (-x) (bpow (mag beta (-x) - 1))); case Req_bool.
 rewrite ulp_FLT_exact_shift; [ring|lra| |]; rewrite mag_opp; lia.
 Qed.
 
+Lemma pred_FLT_exact_shift :
+  forall x e,
+  (x <> 0)%R ->
+  (emin + prec + 1 <= mag beta x)%Z ->
+  (emin + prec - mag beta x + 1 <= e)%Z ->
+  (pred beta FLT_exp (x * bpow e) = pred beta FLT_exp x * bpow e)%R.
+Proof.
+intros x e Nzx Hmx He.
+unfold pred.
+rewrite Ropp_mult_distr_l.
+rewrite succ_FLT_exact_shift.
+apply Ropp_mult_distr_l.
+lra.
+now rewrite mag_opp.
+now rewrite mag_opp.
+Qed.
+
 Theorem ulp_FLT_pred_pos :
   forall x,
   generic_format beta FLT_exp x ->
