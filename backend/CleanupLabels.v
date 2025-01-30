@@ -20,7 +20,7 @@
   better-looking, the present pass removes labels that cannot be
   branched to. *)
 
-Require Import FSets FSetAVL.
+From Coq Require Import FSets FSetAVL.
 Require Import Coqlib Ordered.
 Require Import Linear.
 

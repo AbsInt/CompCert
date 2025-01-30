@@ -10,13 +10,9 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import String.
-Require Import Coqlib.
-Require Import Decidableplus.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Op.
+From Coq Require Import String.
+Require Import Coqlib Decidableplus Maps.
+Require Import AST Integers Op.
 
 (** ** Machine registers *)
 

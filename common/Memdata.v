@@ -17,13 +17,9 @@
 
 (** In-memory representation of values. *)
 
-Require Import Coqlib.
-Require Import Zbits.
+Require Import Coqlib Zbits Integers Floats.
 Require Archi.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
+Require Import AST Values.
 
 (** * Properties of memory chunks *)
 

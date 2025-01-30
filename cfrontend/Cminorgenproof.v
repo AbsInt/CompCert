@@ -12,8 +12,8 @@
 
 (** Correctness proof for Cminor generation. *)
 
-Require Import Coq.Program.Equality FSets Permutation.
-Require Import FSets FSetAVL Orders Mergesort.
+From Coq Require Import Program.Equality Permutation Mergesort.
+From Coq Require Import Orders FSets FSetAVL.
 Require Import Coqlib Maps Ordered Errors Integers Floats.
 Require Intv.
 Require Import AST Linking.

@@ -17,7 +17,7 @@
 (** This file defines a number of data types and operations used in
   the abstract syntax trees of many of the intermediate languages. *)
 
-Require Import String.
+From Coq Require Import String.
 Require Import Coqlib Maps Errors Integers Floats.
 Require Archi.
 

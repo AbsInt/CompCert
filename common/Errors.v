@@ -16,7 +16,7 @@
 
 (** Error reporting and the error monad. *)
 
-Require Import String.
+From Coq Require Import String.
 Require Import Coqlib.
 
 Close Scope string_scope.

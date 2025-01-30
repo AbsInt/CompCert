@@ -12,7 +12,7 @@
 
 (** Correctness of instruction selection *)
 
-Require Import FunInd.
+From Coq Require Import FunInd.
 Require Import Coqlib Maps.
 Require Import AST Linking Errors Integers.
 Require Import Values Memory Builtins Events Globalenvs Smallstep.

@@ -12,7 +12,7 @@
 
 (** Translation from Csharpminor to Cminor. *)
 
-Require Import FSets FSetAVL Orders Mergesort.
+From Coq Require Import FSets FSetAVL Orders Mergesort.
 Require Import Coqlib Maps Ordered Errors Integers Floats.
 Require Import AST Linking.
 Require Import Csharpminor Cminor.

@@ -14,7 +14,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import BinPos.
+From Coq Require Import BinPos.
 
 (* OCaml's string type. *)
 Parameter string : Type.

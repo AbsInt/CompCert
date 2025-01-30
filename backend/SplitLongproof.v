@@ -12,7 +12,7 @@
 
 (** Correctness of instruction selection for integer division *)
 
-Require Import String.
+From Coq Require Import String.
 Require Import Coqlib Maps.
 Require Import AST Errors Integers Floats.
 Require Import Values Memory Globalenvs Builtins Events Cminor Op CminorSel.

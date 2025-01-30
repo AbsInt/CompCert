@@ -16,8 +16,8 @@
 
 %{
 
-Require Extraction.
-Require Import List.
+From Coq Require Extraction.
+From Coq Require Import List.
 Require Cabs.
 
 %}

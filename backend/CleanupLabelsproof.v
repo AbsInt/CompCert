@@ -12,7 +12,7 @@
 
 (** Correctness proof for clean-up of labels *)
 
-Require Import FSets.
+From Coq Require Import FSets.
 Require Import Coqlib Ordered Integers.
 Require Import AST Linking.
 Require Import Values Memory Events Globalenvs Smallstep.
