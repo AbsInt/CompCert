@@ -12,7 +12,8 @@
 
 (** Compile-time evaluation of initializers for global C variables. *)
 
-Require Import Zwf Coqlib Maps.
+From Coq Require Import Zwf.
+Require Import Coqlib Maps.
 Require Import Errors Integers Floats Values AST Memory Globalenvs Events Smallstep.
 Require Import Ctypes Cop Csyntax Csem.
 Require Import Initializers.

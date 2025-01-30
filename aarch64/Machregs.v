@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import String.
+From Coq Require Import String.
 Require Import Coqlib Decidableplus Maps.
 Require Import AST Op.
 

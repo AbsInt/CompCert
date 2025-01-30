@@ -17,8 +17,8 @@
 
 (** Architecture-dependent parameters for ARM *)
 
+From Coq Require Import ZArith List.
 From Flocq Require Import Binary Bits.
-Require Import ZArith List.
 
 Definition ptr64 := false.
 

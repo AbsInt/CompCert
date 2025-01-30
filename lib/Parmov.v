@@ -2,8 +2,8 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*      Laurence Rideau, INRIA Sophia-Antipolis-M\u00e9diterran\u00e9e           *)
-(*      Bernard Paul Serpette, INRIA Sophia-Antipolis-M\u00e9diterran\u00e9e     *)
+(*      Laurence Rideau, INRIA Sophia-Antipolis-Méditerranée           *)
+(*      Bernard Paul Serpette, INRIA Sophia-Antipolis-Méditerranée     *)
 (*      Xavier Leroy, INRIA Paris-Rocquencourt                         *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
@@ -53,10 +53,8 @@
   #</A>#
 *)
 
-Require Import Relations.
-Require Import Axioms.
-Require Import Coqlib.
-Require Import Recdef.
+From Coq Require Import Relations Recdef.
+Require Import Axioms Coqlib.
 
 Section PARMOV.
 

@@ -16,13 +16,9 @@
 
 (** Whole-program behaviors *)
 
-Require Import Classical.
-Require Import ClassicalEpsilon.
+From Coq Require Import Classical ClassicalEpsilon.
 Require Import Coqlib.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Integers.
-Require Import Smallstep.
+Require Import Events Globalenvs Integers Smallstep.
 
 Set Implicit Arguments.
 Set Asymmetric Patterns.

@@ -16,7 +16,7 @@
 
 (** Typing rules and type-checking for the Compcert C language *)
 
-Require Import String.
+From Coq Require Import String.
 Require Import Coqlib Maps Integers Floats Errors.
 Require Import AST Linking.
 Require Import Values Memory Globalenvs Builtins Events.

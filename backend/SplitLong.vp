@@ -12,7 +12,7 @@
 
 (** Instruction selection for 64-bit integer operations *)
 
-Require String.
+From Coq Require String.
 Require Import Coqlib.
 Require Import AST Integers Floats.
 Require Import Op CminorSel.

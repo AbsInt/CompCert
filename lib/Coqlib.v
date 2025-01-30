@@ -18,12 +18,7 @@
     used throughout the development.  It complements the Coq standard
     library. *)
 
-Require Export String.
-Require Export ZArith.
-Require Export Znumtheory.
-Require Export List.
-Require Export Bool.
-Require Export Lia.
+From Coq Require Export String ZArith Znumtheory List Bool Lia.
 
 (** * Useful tactics *)
 
@@ -1338,7 +1333,7 @@ End DECIDABLE_PREDICATE.
 
 (** * Well-founded orderings *)
 
-Require Import Relations.
+From Coq Require Import Relations.
 
 (** A non-dependent version of lexicographic ordering. *)
 

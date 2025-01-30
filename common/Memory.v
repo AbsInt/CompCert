@@ -27,18 +27,11 @@
 - [free]: invalidate a memory block.
 *)
 
-Require Import Zwf.
-Require Import Axioms.
-Require Import Coqlib.
+From Coq Require Import Zwf.
 Require Intv.
-Require Import Maps.
 Require Archi.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Export Memdata.
-Require Export Memtype.
+Require Import Axioms Coqlib Maps Integers Floats AST Values.
+Require Export Memdata Memtype.
 
 (* To avoid useless definitions of inductors in extracted code. *)
 Local Unset Elimination Schemes.

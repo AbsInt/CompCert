@@ -16,7 +16,8 @@
 
 (** Associating semantics to built-in functions *)
 
-Require Import String Coqlib.
+From Coq Require Import String.
+Require Import Coqlib.
 Require Import AST Integers Floats Values Memdata.
 Local Open Scope asttyp_scope.
 

@@ -12,7 +12,7 @@
 
 (** Linearization of the control-flow graph: translation from LTL to Linear *)
 
-Require Import FSets FSetAVL.
+From Coq Require Import FSets FSetAVL.
 Require Import Coqlib Maps Ordered Errors Lattice Kildall.
 Require Import AST Op Locations LTL Linear.
 

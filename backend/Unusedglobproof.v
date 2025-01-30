@@ -12,7 +12,8 @@
 
 (** Elimination of unreferenced static definitions *)
 
-Require Import FSets Coqlib Maps Ordered Iteration Errors.
+From Coq Require Import FSets.
+Require Import Coqlib Maps Ordered Iteration Errors.
 Require Import AST Linking.
 Require Import Integers Values Memory Globalenvs Events Smallstep.
 Require Import Op Registers RTL.

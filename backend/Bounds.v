@@ -12,7 +12,7 @@
 
 (** Computation of resource bounds for Linear code. *)
 
-Require Import FSets FSetAVL.
+From Coq Require Import FSets FSetAVL.
 Require Import Coqlib Ordered.
 Require Intv.
 Require Import AST.

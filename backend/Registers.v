@@ -17,12 +17,9 @@
   intermediate language.  We also define finite sets and finite maps
   over pseudo-registers. *)
 
-Require Import Coqlib.
-Require Import AST.
-Require Import Maps.
-Require Import Ordered.
-Require FSetAVL.
-Require Import Values.
+From Coq Require FSetAVL.
+Require Import Coqlib Maps Ordered.
+Require Import AST Values.
 
 Definition reg: Type := positive.
 
