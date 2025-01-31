@@ -33,8 +33,8 @@ Require Import RTL.
 
 Inductive nval : Type :=
   | Nothing              (**r value is entirely unused *)
-  | I (m: int)           (**r only need the bits that are 1 in [m] *)
-  | L (m: int64)         (**r only need the bits that are 1 in [m] for 64 bit ints *)
+  | I (m: int)           (**r only need the bits that are 1 in [m] (32-bit ints) *)
+  | L (m: int64)         (**r only need the bits that are 1 in [m] (64 bit ints) *)
   | All.                 (**r every bit of the value is used *)
 
 Definition eq_nval (x y: nval) : {x=y} + {x<>y}.
@@ -160,19 +160,19 @@ Lemma nge_lub_l:
   forall x y, nge (nlub x y) x.
 Proof.
   unfold nlub; destruct x, y; auto with na.
-  constructor. intros. autorewrite with ints; auto. rewrite H0; auto.
-  constructor. intros. autorewrite with ints; auto. rewrite H0; auto.
+all: constructor; intros; autorewrite with ints; auto.
+all: rewrite H0; auto.
 Qed.
 
 Lemma nge_lub_r:
   forall x y, nge (nlub x y) y.
 Proof.
   unfold nlub; destruct x, y; auto with na.
-  constructor. intros. autorewrite with ints; auto. rewrite H0. apply orb_true_r; auto.
-  constructor. intros. autorewrite with ints; auto. rewrite H0. apply orb_true_r; auto.
+all: constructor; intros; autorewrite with ints; auto.
+all: rewrite H0; apply orb_true_r.
 Qed.
 
-(** ** Properties of agreement between integers *)
+(** ** Properties of agreement between 32-bit integers *)
 
 Lemma iagree_refl:
   forall p m, iagree p p m.
@@ -389,7 +389,7 @@ Proof.
   intros. rewrite Int.bits_zero_ext by lia. apply zlt_false; lia.
 Qed.
 
-(** ** Properties of agreement between 64 bit integers *)
+(** ** Properties of agreement between 64-bit integers *)
 
 Lemma lagree_refl:
   forall p m, lagree p p m.
@@ -649,8 +649,7 @@ Definition andimm (x: nval) (n: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.and m n)
-  | L m => I n
-  | All => I n
+  |  _  => I n
   end.
 
 Lemma andimm_sound:
@@ -669,7 +668,7 @@ Definition orimm (x: nval) (n: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.and m (Int.not n))
-  | _ => I (Int.not n)
+  |  _  => I (Int.not n)
   end.
 
 Lemma orimm_sound:
@@ -690,9 +689,8 @@ Qed.
 Definition andlimm (x: nval) (n: int64) :=
   match x with
   | Nothing => Nothing
-  | I m =>  L n
   | L m => L (Int64.and m n)
-  | All => L n
+  |  _  => L n
   end.
 
 Lemma andlimm_sound:
@@ -711,7 +709,7 @@ Definition orlimm (x: nval) (n: int64) :=
   match x with
   | Nothing => Nothing
   | L m => L (Int64.and m (Int64.not n))
-  | _ => L (Int64.not n)
+  |  _  => L (Int64.not n)
   end.
 
 Lemma orlimm_sound:
@@ -826,8 +824,7 @@ Definition shlimm (x: nval) (n: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.shru m n)
-  | L m => I (Int.shru Int.mone n)
-  | All => I (Int.shru Int.mone n)
+  |  _  => I (Int.shru Int.mone n)
   end.
 
 Lemma shlimm_sound:
@@ -849,8 +846,7 @@ Definition shruimm (x: nval) (n: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.shl m n)
-  | L m => I (Int.shl Int.mone n)
-  | All => I (Int.shl Int.mone n)
+  |  _  => I (Int.shl Int.mone n)
   end.
 
 Lemma shruimm_sound:
@@ -875,8 +871,7 @@ Definition shrimm (x: nval) (n: int) :=
               if Int.eq_dec (Int.shru m' n) m
               then m'
               else Int.or m' (Int.repr Int.min_signed))
-  | L m => I (Int.or (Int.shl Int.mone n) (Int.repr Int.min_signed))
-  | All => I (Int.or (Int.shl Int.mone n) (Int.repr Int.min_signed))
+  |  _  => I (Int.or (Int.shl Int.mone n) (Int.repr Int.min_signed))
   end.
 
 Lemma shrimm_sound:
@@ -901,8 +896,7 @@ Definition rol (x: nval) (amount: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.ror m amount)
-  | L m => All
-  | All => All
+  |  _  => All
   end.
 
 Lemma rol_sound:
@@ -922,8 +916,7 @@ Definition ror (x: nval) (amount: int) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.rol m amount)
-  | L m => All
-  | All => All
+  |  _  => All
   end.
 
 Lemma ror_sound:
@@ -960,8 +953,7 @@ Definition shllimm (x: nval) (n: int) :=
   match x with
   | Nothing => Nothing
   | L m => L (Int64.shru' m n)
-  | I m => L (Int64.shru' Int64.mone n)
-  | All => L (Int64.shru' Int64.mone n)
+  |  _  => L (Int64.shru' Int64.mone n)
   end.
 
 Lemma shllimm_sound:
@@ -983,8 +975,7 @@ Definition shrluimm (x: nval) (n: int) :=
   match x with
   | Nothing => Nothing
   | L m => L (Int64.shl' m n)
-  | I m => L (Int64.shl' Int64.mone n)
-  | All => L (Int64.shl' Int64.mone n)
+  |  _  => L (Int64.shl' Int64.mone n)
   end.
 
 Lemma shrluimm_sound:
@@ -1009,8 +1000,7 @@ Definition shrlimm (x: nval) (n: int) :=
               if Int64.eq_dec (Int64.shru' m' n) m
               then m'
               else Int64.or m' (Int64.repr Int64.min_signed))
-  | I m => L (Int64.or (Int64.shl' Int64.mone n) (Int64.repr Int64.min_signed))
-  | All => L (Int64.or (Int64.shl' Int64.mone n) (Int64.repr Int64.min_signed))
+  |  _  => L (Int64.or (Int64.shl' Int64.mone n) (Int64.repr Int64.min_signed))
   end.
 
 Lemma shrlimm_sound:
@@ -1034,8 +1024,7 @@ Definition roll (x: nval) (amount: int) :=
   match x with
   | Nothing => Nothing
   | L m => L (Int64.ror m (Int64.repr (Int.unsigned amount)))
-  | I m => All
-  | All => All
+  |  _  => All
   end.
 
 Lemma roll_sound:
@@ -1054,9 +1043,8 @@ Qed.
 Definition rorl (x: nval) (amount: int) :=
   match x with
   | Nothing => Nothing
-  | I m => All
   | L m => L (Int64.rol' m amount)
-  | All => All
+  |  _  => All
   end.
 
 Lemma rorl_sound:
@@ -1214,8 +1202,7 @@ Definition zero_ext (n: Z) (x: nval) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.zero_ext n m)
-  | L m => I (Int.zero_ext n Int.mone)
-  | All => I (Int.zero_ext n Int.mone)
+  |  _  => I (Int.zero_ext n Int.mone)
   end.
 
 Lemma zero_ext_sound:
@@ -1241,8 +1228,7 @@ Definition sign_ext (n: Z) (x: nval) :=
   match x with
   | Nothing => Nothing
   | I m => I (Int.or (Int.zero_ext n m) (Int.shl Int.one (Int.repr (n - 1))))
-  | L m => I (Int.zero_ext n Int.mone)
-  | All => I (Int.zero_ext n Int.mone)
+  |  _  => I (Int.zero_ext n Int.mone)
   end.
 
 Lemma sign_ext_sound:
@@ -1282,7 +1268,7 @@ Definition store_argument (chunk: memory_chunk) :=
   match chunk with
   | Mbool | Mint8signed | Mint8unsigned => I (Int.repr 255)
   | Mint16signed | Mint16unsigned => I (Int.repr 65535)
-  | _ => All
+  |  _  => All
   end.
 
 Lemma store_argument_sound:
@@ -1400,7 +1386,7 @@ Qed.
 Definition default (x: nval) :=
   match x with
   | Nothing => Nothing
-  | _ => All
+  |  _  => All
   end.
 
 Section DEFAULT.
@@ -1503,7 +1489,7 @@ Definition andimm_redundant (x: nval) (n: int) :=
   match x with
   | Nothing => true
   | I m => Int.eq_dec (Int.and m (Int.not n)) Int.zero
-  | _ => false
+  |  _  => false
   end.
 
 Lemma andimm_redundant_sound:
@@ -1526,7 +1512,7 @@ Definition orimm_redundant (x: nval) (n: int) :=
   match x with
   | Nothing => true
   | I m => Int.eq_dec (Int.and m n) Int.zero
-  | _ => false
+  |  _  => false
   end.
 
 Lemma orimm_redundant_sound:
@@ -1568,7 +1554,7 @@ Definition zero_ext_redundant (n: Z) (x: nval) :=
   match x with
   | Nothing => true
   | I m => Int.eq_dec (Int.zero_ext n m) m
-  | _ => false
+  |  _  => false
   end.
 
 Lemma zero_ext_redundant_sound:
@@ -1590,7 +1576,7 @@ Definition sign_ext_redundant (n: Z) (x: nval) :=
   match x with
   | Nothing => true
   | I m => Int.eq_dec (Int.zero_ext n m) m
-  | _ => false
+  |  _  => false
   end.
 
 Lemma sign_ext_redundant_sound:
@@ -1613,7 +1599,7 @@ Definition andlimm_redundant (x: nval) (n: int64) :=
   match x with
   | Nothing => true
   | L m => Int64.eq_dec (Int64.and m (Int64.not n)) Int64.zero
-  | _ => false
+  |  _  => false
   end.
 
 Lemma andlimm_redundant_sound:
@@ -1636,7 +1622,7 @@ Definition orlimm_redundant (x: nval) (n: int64) :=
   match x with
   | Nothing => true
   | L m => Int64.eq_dec (Int64.and m n) Int64.zero
-  | _ => false
+  |  _  => false
   end.
 
 Lemma orlimm_redundant_sound:
