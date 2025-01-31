@@ -1196,7 +1196,7 @@ Proof.
 - inv H; simpl; auto.
 Qed.
 
-(** Conversions: zero extension, sign extension, single-of-float *)
+(** Conversions: zero extension, sign extension, 32/64 bit conversions *)
 
 Definition zero_ext (n: Z) (x: nval) :=
   match x with
@@ -1260,6 +1260,148 @@ Proof.
   apply H; auto. rewrite Int.bits_zero_ext; try lia.
   rewrite zlt_true. apply Int.bits_mone; auto.
   unfold j. destruct (zlt i1 n); lia.
+Qed.
+
+Definition loword (x: nval) :=
+  match x with
+  | Nothing => Nothing
+  | I m => L (Int64.ofwords Int.zero m)
+  |  _  => L (Int64.ofwords Int.zero Int.mone)
+  end.
+
+Lemma loword_sound: forall v w x,
+  vagree v w (loword x) ->
+  vagree (Val.loword v) (Val.loword w) x.
+Proof.
+  assert (A: Int.zwordsize < Int64.zwordsize) by (compute; auto).
+  assert (B: forall i j m,
+             lagree i j (Int64.ofwords Int.zero m) ->
+             iagree (Int64.loword i) (Int64.loword j) m).
+  { red; intros. rewrite ! Int64.bits_loword by auto.
+    apply H. lia. rewrite Int64.bits_ofwords, zlt_true by lia. assumption. }
+  unfold loword, Val.loword; intros. destruct x; simpl in *.
+- auto.
+- InvAgree.
+- InvAgree.
+- InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone. auto.
+Qed.
+
+Definition hiword (x: nval) :=
+  match x with
+  | Nothing => Nothing
+  | I m => L (Int64.ofwords m Int.zero)
+  |  _  => L (Int64.ofwords Int.mone Int.zero)
+  end.
+
+Lemma hiword_sound: forall v w x,
+  vagree v w (hiword x) ->
+  vagree (Val.hiword v) (Val.hiword w) x.
+Proof.
+  assert (A: Int64.zwordsize = 2 * Int.zwordsize) by auto.
+  assert (B: forall i j m,
+             lagree i j (Int64.ofwords m Int.zero) ->
+             iagree (Int64.hiword i) (Int64.hiword j) m).
+  { red; intros. rewrite ! Int64.bits_hiword by auto.
+    apply H. lia. rewrite Int64.bits_ofwords, zlt_false by lia.
+    replace (i0 + Int.zwordsize - Int.zwordsize) with i0 by lia.
+    assumption. }
+  unfold hiword, Val.hiword; intros. destruct x; simpl in *.
+- auto.
+- InvAgree.
+- InvAgree.
+- InvAgree. apply Val.lessdef_same. f_equal. apply iagree_mone. auto.
+Qed.
+
+Definition makelong_lo (x: nval) :=
+  match x with
+  | Nothing => Nothing
+  | L m => I (Int64.loword m)
+  | _ => All
+  end.
+
+Definition makelong_hi (x: nval) :=
+  match x with
+  | Nothing => Nothing
+  | L m => I (Int64.hiword m)
+  | _ => All
+  end.
+
+Lemma makelong_sound: forall v1 w1 v2 w2 x,
+  vagree v1 w1 (makelong_hi x) ->
+  vagree v2 w2 (makelong_lo x) ->
+  vagree (Val.longofwords v1 v2) (Val.longofwords w1 w2) x.
+Proof.
+  assert (A: Int64.zwordsize = 2 * Int.zwordsize) by auto.
+  assert (B: forall i1 j1 i2 j2 m,
+            iagree i1 j1 (Int64.hiword m) -> iagree i2 j2 (Int64.loword m) ->
+            lagree (Int64.ofwords i1 i2) (Int64.ofwords j1 j2) m).
+  { red; intros. rewrite ! Int64.bits_ofwords by lia.
+    destruct (zlt i Int.zwordsize).
+  - apply H0. lia. rewrite Int64.bits_loword by lia. assumption.
+  - apply H. lia. rewrite Int64.bits_hiword by lia.
+    replace (i - Int.zwordsize + Int.zwordsize) with i by lia.
+    assumption. }
+  unfold makelong_hi, makelong_lo, Val.longofwords; intros. destruct x; simpl in *.
+- auto.
+- inv H; auto; inv H0; auto; destruct w1, w2; auto with na.
+- InvAgree. 
+- apply Val.longofwords_lessdef; auto.
+Qed.
+
+Definition longofintu (x: nval) :=
+  match x with
+  | Nothing => Nothing
+  | L m => I (Int64.loword m)
+  |  _  => All
+  end.
+
+Lemma longofintu_sound: forall v w x,
+  vagree v w (longofintu x) ->
+  vagree (Val.longofintu v) (Val.longofintu w) x.
+Proof.
+  assert (B: forall i j m,
+             iagree i j (Int64.loword m) ->
+             lagree (Int64.repr (Int.unsigned i)) (Int64.repr (Int.unsigned j)) m).
+  { red; intros. rewrite ! Int64.testbit_repr by auto.
+    change (Int.testbit i i0 = Int.testbit j i0).
+    destruct (zlt i0 Int.zwordsize).
+  - apply H. lia. rewrite Int64.bits_loword by lia. auto.
+  - rewrite ! Int.bits_above by auto. auto. }
+  unfold longofintu, Val.longofintu; intros. destruct x; simpl in *.
+- auto.
+- inv H; auto. destruct w; auto with na.
+- InvAgree.
+- inv H; auto.
+Qed.
+
+Definition longofint (x: nval) :=
+  match x with
+  | Nothing => Nothing
+  | L m => I (Int.or (Int64.loword m) (Int.shl Int.one (Int.repr 31)))
+  |  _  => All
+  end.
+
+Lemma longofint_sound: forall v w x,
+  vagree v w (longofint x) ->
+  vagree (Val.longofint v) (Val.longofint w) x.
+Proof.
+  assert (B: forall i j m,
+             iagree i j (Int.or (Int64.loword m) (Int.shl Int.one (Int.repr 31))) ->
+             lagree (Int64.repr (Int.signed i)) (Int64.repr (Int.signed j)) m).
+  { red; intros. rewrite ! Int64.testbit_repr by auto.
+    rewrite ! Int.bits_signed by lia.
+    destruct (zlt i0 Int.zwordsize).
+  - apply H. lia. rewrite Int.bits_or by lia. apply orb_true_intro; left.
+    rewrite Int64.bits_loword by lia. auto.
+  - assert (0 <= Int.zwordsize - 1 < Int.zwordsize) by (change Int.zwordsize with 32; lia).
+    apply H; auto. rewrite Int.bits_or by lia. apply orb_true_intro; right.
+    reflexivity.
+  }
+  unfold longofint, Val.longofint; intros. destruct x; simpl in *.
+- auto.
+- inv H; auto. destruct w; auto with na.
+- InvAgree.
+- inv H; auto.
 Qed.
 
 (** The needs of a memory store concerning the value being stored. *)
