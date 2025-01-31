@@ -56,12 +56,13 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Oshrimm n => op1 (shrimm nv n)
   | Oshruimm n => op1 (shruimm nv n)
   | Oshrximm n => op1 (default nv)
-  | Omakelong => op2 (default nv)
-  | Olowlong | Ohighlong => op1 (default nv)
-  | Ocast32signed => op1 (default nv)
-  | Ocast32unsigned => op1 (default nv)
-  | Oaddl => op2 (default nv)
-  | Oaddlimm n => op1 (default nv)
+  | Omakelong => makelong_hi nv :: makelong_lo nv :: nil
+  | Olowlong => op1 (loword nv)
+  | Ohighlong => op1 (hiword nv)
+  | Ocast32signed => op1 (longofint nv)
+  | Ocast32unsigned => op1 (longofintu nv)
+  | Oaddl => op2 (modarith nv)
+  | Oaddlimm n => op1 (modarith nv)
   | Onegl => op1 (modarith nv)
   | Osubl => op2 (default nv)
   | Omull => op2 (modarith nv)
@@ -156,6 +157,13 @@ Proof.
 - apply shlimm_sound; auto.
 - apply shrimm_sound; auto.
 - apply shruimm_sound; auto.
+- apply makelong_sound; auto.
+- apply loword_sound; auto.
+- apply hiword_sound; auto.
+- apply longofint_sound; auto.
+- apply longofintu_sound; auto.
+- apply addl_sound; auto.
+- apply addl_sound; auto with na.
 - apply negl_sound; auto.
 - apply mull_sound; auto.
 - apply andl_sound; auto.

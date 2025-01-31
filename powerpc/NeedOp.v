@@ -52,9 +52,12 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Orolm amount mask => op1 (rolm nv amount mask)
   | Oroli amount mask => op1 (default nv)
   | Olongconst n => nil
-  | Ocast32signed | Ocast32unsigned | Onegl | Onotl => op1 (default nv)
-  | Oaddl | Osubl| Omullhs | Omullhu | Odivl | Odivlu | Oshll | Oshrl | Oshrlu => op2 (default nv)
-  | Omull => op2 (modarith nv)
+  | Ocast32signed => op1 (longofint nv)
+  | Ocast32unsigned => op1 (longofintu nv)
+  | Onegl => op1 (modarith nv)
+  | Onotl => op1 (bitwise nv)
+  | Oaddl | Osubl| Omull => op2 (modarith nv)
+  | Omullhs | Omullhu | Odivl | Odivlu | Oshll | Oshrl | Oshrlu => op2 (default nv)
   | Oandl | Oorl | Oxorl  => op2 (bitwise nv)
   | Oaddlimm n => op1 (modarith nv)
   | Oandlimm n => op1 (andlimm nv n)
@@ -70,8 +73,10 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Oaddfs | Osubfs | Omulfs | Odivfs => op2 (default nv)
   | Osingleoffloat | Ofloatofsingle => op1 (default nv)
   | Ointoffloat => op1 (default nv)
-  | Ofloatofwords | Omakelong => op2 (default nv)
-  | Olowlong | Ohighlong => op1 (default nv)
+  | Ofloatofwords => op2 (default nv)
+  | Omakelong => makelong_hi nv :: makelong_lo nv :: nil
+  | Olowlong => op1 (loword nv)
+  | Ohighlong => op1 (hiword nv)
   | Ocmp c => needs_of_condition c
   | Osel c ty => nv :: nv :: needs_of_condition c
   end.
@@ -155,7 +160,12 @@ Proof.
 - apply or_sound; auto. apply notint_sound; rewrite bitwise_idem; auto.
 - apply shrimm_sound; auto.
 - apply rolm_sound; auto.
+- apply longofint_sound; auto.
+- apply longofintu_sound; auto.
+- apply addl_sound; auto.
 - apply addl_sound; auto with na.
+- apply subl_sound; auto.
+- apply negl_sound; auto.
 - apply mull_sound; auto.
 - apply andl_sound; auto.
 - apply andlimm_sound; auto.
@@ -163,8 +173,12 @@ Proof.
 - apply orlimm_sound; auto.
 - apply xorl_sound; auto.
 - apply xorl_sound; auto with na.
+- apply notl_sound; auto.
 - apply shrlimm_sound; auto.
 - apply rolml_sound; auto.
+- apply makelong_sound; auto.
+- apply loword_sound; auto.
+- apply hiword_sound; auto.
 - destruct (eval_condition c args m) as [b|] eqn:EC; simpl in H2.
   erewrite needs_of_condition_sound by eauto.
   subst v; simpl. auto with na.

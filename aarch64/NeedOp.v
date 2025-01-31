@@ -34,6 +34,12 @@ Definition needs_of_shiftl (s: shift) (a: amount64) (nv: nval) :=
   | Sror => rorl nv a
   end.
 
+Definition needs_of_extend (x: extension) (a: amount64) (nv: nval) :=
+  match x with
+  | Xuns32 => longofintu (shllimm nv a)
+  | Xsgn32 => longofint (shllimm nv a)
+  end.
+
 Definition zero_ext' (s: Z) (nv: nval) :=
   if zle 0 s then zero_ext s nv else default nv.
 Definition sign_ext' (s: Z) (nv: nval) :=
@@ -49,6 +55,8 @@ Definition op2shift (s: shift) (a: amount32) (nv: nval) :=
   nv :: needs_of_shift s a nv :: nil.
 Definition op2shiftl (s: shift) (a: amount64) (nv: nval) :=
   nv :: needs_of_shiftl s a nv :: nil.
+Definition op2extl (x: extension) (a: amount64) (nv: nval) :=
+  nv :: needs_of_extend x a nv :: nil.
 
 Definition needs_of_condition (cond: condition): list nval := nil.
 
@@ -90,22 +98,29 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Ozextshr a s => op1 (shruimm (zero_ext' s nv) a)
   | Osextshr a s => op1 (shrimm (sign_ext' s nv) a)
 
-  | Oshiftl _ _ | Oextend _ _ => op1 (default nv)
-  | Omakelong  | Olowlong  | Ohighlong => op1 (default nv)
-  | Oaddl | Osubl | Omull => op2 (default nv)
-  | Oaddlshift _ _ | Oaddlext _ _ | Osublshift _ _ | Osublext _ _ => op2 (default nv)
-  | Oaddlimm _ => op1 (default nv)
+  | Oshiftl s a => op1shiftl s a nv
+  | Oextend x a => op1 (needs_of_extend x a nv)
+  | Omakelong => makelong_hi nv :: makelong_lo nv :: nil
+  | Olowlong => op1 (loword nv)
+  | Ohighlong => op1 (hiword nv)
+  | Oaddl | Omull => op2 (modarith nv)
+  | Osubl => op2 (default nv)
+  | Oaddlshift s a => op2shiftl s a (modarith nv)
+  | Oaddlext x a => op2extl x a (modarith nv)
+  | Osublshift _ _ | Osublext _ _ => op2 (default nv)
+  | Oaddlimm _ => op1 (modarith nv)
   | Onegl => op1 (modarith nv)
   | Oneglshift s a => op1shiftl s a (modarith nv)
-  | Omulladd | Omullsub => let n := default nv in n :: n :: n :: nil
-  | Omullhs | Omullhu | Odivl | Odivlu => op2 (default nv)
-  | Oandl | Oorl | Oxorl | Obicl | Oornl | Oeqvl => op2 (default nv)
+  | Omulladd => let n := modarith nv in n :: n :: n :: nil
+  | Omullsub | Omullhs | Omullhu | Odivl | Odivlu => op2 (default nv)
+  | Oandl | Oorl | Oxorl | Obicl | Oornl | Oeqvl => op2 (bitwise nv)
   | Oandlshift s a | Oorlshift s a  | Oxorlshift s a => op2shiftl s a (bitwise nv)
   | Obiclshift s a | Oornlshift s a | Oeqvlshift s a =>
       let n := bitwise nv in n :: needs_of_shiftl s a (bitwise n) :: nil
   | Oandlimm n => op1 (andlimm nv n)
   | Oorlimm n => op1 (orlimm nv n)
-  | Oxorlimm n => op1 (default nv)
+  | Oxorlimm n => op1 (bitwise nv)
+
   | Onotl => op1 (bitwise nv)
   | Onotlshift s a => needs_of_shiftl s a (bitwise nv) :: nil
   | Oshll | Oshrl | Oshrlu => op2 (default nv)
@@ -171,6 +186,15 @@ Proof.
 - apply shrluimm_sound; auto.
 - apply shrlimm_sound; auto.
 - apply rorl_sound; auto.
+Qed.
+
+Lemma extend_sound:
+  forall v w ext a x,
+  vagree v w (needs_of_extend ext a x) ->
+  vagree (eval_extend ext v a) (eval_extend ext w a) x.
+Proof.
+  unfold needs_of_extend, eval_extend; intros.
+  destruct ext; auto using longofint_sound, longofintu_sound, shllimm_sound.
 Qed.
 
 Lemma zero_ext'_sound:
@@ -257,18 +281,36 @@ Proof.
 - apply shlimm_sound; apply sign_ext'_sound; auto.
 - apply zero_ext'_sound; apply shruimm_sound; auto.
 - apply sign_ext'_sound; apply shrimm_sound; auto.
+- apply shiftl_sound; auto.
+- apply extend_sound; auto.
+- apply makelong_sound; auto.
+- apply loword_sound; auto.
+- apply hiword_sound; auto.
+- apply addl_sound; auto.
+- apply addl_sound; auto using shiftl_sound.
+- apply addl_sound; auto using extend_sound.
+- apply addl_sound; auto with na.
 - apply negl_sound; auto.
 - apply negl_sound; auto using shiftl_sound.
+- apply mull_sound; auto.
+- apply addl_sound; auto. apply mull_sound; rewrite modarith_idem; auto.
+- apply andl_sound; auto.
 - apply andl_sound; auto using shiftl_sound.
 - apply andlimm_sound; auto.
+- apply orl_sound; auto.
 - apply orl_sound; auto using shiftl_sound.
 - apply orlimm_sound; auto.
+- apply xorl_sound; auto.
 - apply xorl_sound; auto using shiftl_sound.
+- apply xorl_sound; auto with na.
 - apply notl_sound; auto.
 - apply notl_sound; auto using shiftl_sound.
-- apply andl_sound; auto. apply notl_sound; auto using shiftl_sound.
-- apply orl_sound; auto. apply notl_sound; auto using shiftl_sound.
-- apply xorl_sound; auto. apply notl_sound; auto using shiftl_sound.
+- apply andl_sound; auto using notl_sound.
+- apply andl_sound; auto using notl_sound, shiftl_sound.
+- apply orl_sound; auto using notl_sound.
+- apply orl_sound; auto using notl_sound, shiftl_sound.
+- apply xorl_sound; auto using notl_sound.
+- apply xorl_sound; auto using notl_sound, shiftl_sound.
 - destruct (eval_condition cond args m) as [b|] eqn:EC.
   erewrite needs_of_condition_sound by eauto.
   apply select_sound; auto.

@@ -80,8 +80,9 @@ Definition needs_of_operation (op: operation) (nv: nval): list nval :=
   | Ofloatofsingle | Osingleoffloat => op1 (default nv)
   | Ointoffloat | Ointuoffloat | Ofloatofint | Ofloatofintu => op1 (default nv)
   | Ointofsingle | Ointuofsingle | Osingleofint | Osingleofintu => op1 (default nv)
-  | Omakelong => op2 (default nv)
-  | Olowlong | Ohighlong => op1 (default nv)
+  | Omakelong => makelong_hi nv :: makelong_lo nv :: nil
+  | Olowlong => op1 (loword nv)
+  | Ohighlong => op1 (hiword nv)
   | Ocmp c => needs_of_condition c
   | Osel c ty => nv :: nv :: needs_of_condition c
   end.
@@ -184,6 +185,9 @@ Proof.
 - apply notint_sound; auto.
 - apply notint_sound. apply needs_of_shift_sound; auto.
 - apply needs_of_shift_sound; auto.
+- apply makelong_sound; auto.
+- apply loword_sound; auto.
+- apply hiword_sound; auto.
 - destruct (eval_condition c args m) as [b|] eqn:EC.
   erewrite needs_of_condition_sound by eauto.
   apply select_sound; auto.
