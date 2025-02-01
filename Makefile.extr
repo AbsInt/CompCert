@@ -49,13 +49,16 @@ DIRS=extraction \
 
 INCLUDES=$(patsubst %,-I %, $(DIRS))
 
-# Control of warnings:
-
+# Control of warnings
+# For hand-written code:
 WARNINGS=-w +a-4-9-27-70
-extraction/%.cmx: WARNINGS +=-w -20-27-32..34-39-41-44..45-60-67
-extraction/%.cmo: WARNINGS +=-w -20-27-32..34-39-41-44..45-60-67
+
+# For Menhir-generated code:
 cparser/pre_parser.cmx: WARNINGS += -w -41
 cparser/pre_parser.cmo: WARNINGS += -w -41
+
+# For Coq-generated code:
+EXTRWARNINGS=$(WARNINGS) -w -20-27-32..34-39-41-44..45-56-60-67
 
 # Turn warnings into errors, but not for released tarballs
 ifeq ($(wildcard .git),.git)
@@ -66,7 +69,7 @@ endif
 
 COMPFLAGS+=-g -strict-sequence -safe-string \
   $(INCLUDES) -I "$(MENHIR_DIR)" -I +str -I +unix \
-  $(WARNINGS) $(WARN_ERRORS)
+  $(WARN_ERRORS) 
 
 # Using .opt compilers if available
 
@@ -136,15 +139,25 @@ endif
 
 # End of part that assumes .depend.extr already exists
 
+extraction/%.cmi: extraction/%.mli
+	@echo "OCAMLC   $<"
+	@$(OCAMLC) $(EXTRWARNINGS) -c $<
+extraction/%.cmo: extraction/%.ml
+	@echo "OCAMLC   $<"
+	@$(OCAMLC) $(EXTRWARNINGS) -c $<
+extraction/%.cmx: extraction/%.ml
+	@echo "OCAMLOPT $<"
+	@$(OCAMLOPT) $(EXTRWARNINGS) -c $<
+
 %.cmi: %.mli
 	@echo "OCAMLC   $<"
-	@$(OCAMLC) -c $<
+	@$(OCAMLC) $(WARNINGS) -c $<
 %.cmo: %.ml
 	@echo "OCAMLC   $<"
-	@$(OCAMLC) -c $<
+	@$(OCAMLC) $(WARNINGS) -c $<
 %.cmx: %.ml
 	@echo "OCAMLOPT $<"
-	@$(OCAMLOPT) -c $<
+	@$(OCAMLOPT) $(WARNINGS) -c $<
 
 %.ml: %.mll
 	$(OCAMLLEX) $<
