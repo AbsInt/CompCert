@@ -50,15 +50,30 @@ DIRS=extraction \
 INCLUDES=$(patsubst %,-I %, $(DIRS))
 
 # Control of warnings
+
 # For hand-written code:
-WARNINGS=-w +a-4-9-27-70
+WARNINGS=-w +a \
+  -w -fragile-match \
+  -w -missing-record-field-pattern \
+  -w -unused-var-strict \
+  -w -missing-mli
 
-# For Menhir-generated code:
-cparser/pre_parser.cmx: WARNINGS += -w -41
-cparser/pre_parser.cmo: WARNINGS += -w -41
+# For Menhir-generated code: add
+cparser/pre_parser.cmx: WARNINGS += -w -ambiguous-name
+cparser/pre_parser.cmo: WARNINGS += -w -ambiguous-name
 
-# For Coq-generated code:
-EXTRWARNINGS=$(WARNINGS) -w -20-27-32..34-39-41-44..45-56-60-67
+# For Coq-generated code: add
+EXTRWARNINGS=$(WARNINGS) \
+  -w -ignored-extra-argument \
+  -w -unused-value-declaration \
+  -w -unused-open \
+  -w -unused-type-declaration \
+  -w -unused-rec-flag \
+  -w -ambiguous-name \
+  -w -open-shadow-identifier \
+  -w -open-shadow-label-constructor \
+  -w -unused-module \
+  -w -unused-functor-parameter
 
 # Turn warnings into errors, but not for released tarballs
 ifeq ($(wildcard .git),.git)
