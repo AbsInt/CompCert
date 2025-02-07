@@ -1,0 +1,11 @@
+(rule
+ (targets SplitLong.v)
+ (action
+  (with-stdout-to %{targets}
+   (run ndfun %{dep:SplitLong.vp}))))
+
+(rule
+ (targets SelectDiv.v)
+ (action
+  (with-stdout-to %{targets}
+   (run ndfun %{dep:SelectDiv.vp}))))
