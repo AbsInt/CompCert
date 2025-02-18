@@ -1026,16 +1026,44 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto. constructor.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
++ (* builtin dead *)
+  rewrite e1, e2 in TI.
+  unfold builtin_or_external_sem in H1.
+  rewrite e1 in H1. destruct H1.
+  econstructor; split.
+  eapply exec_Inop; eauto.
+  eapply match_succ_states; eauto. simpl; auto.
+  destruct res; auto. simpl.
+  apply eagree_update_dead; auto with na.
++ (* builtin - non dead *)
+  assert ((fn_code tf)!pc = Some(Ibuiltin (EF_builtin name sg) args0 res pc')).
+  {
+    destruct (Builtins.lookup_builtin_function name sg) eqn:BR; auto. destruct (builtin_res_dead res ne); auto. contradiction.
+  }
+  destruct (transfer_builtin_args (kill_builtin_res res ne, nmem_all) args0) as (ne1, nm1) eqn:TR.
+  InvSoundState.
+  exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
+  exploit external_call_mem_extends; eauto 2 with na. unfold external_call.
+  instantiate (6 := EF_builtin name sg). eauto.
+  eapply magree_extends; eauto. intros. apply nlive_all.
+  intros (v' & tm' & P & Q & R & S).
+  econstructor; split.
+  eapply exec_Ibuiltin; eauto.
+  apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  eapply external_call_symbols_preserved. apply senv_preserved. eauto.
+  eapply match_succ_states; eauto. simpl; auto.
+  apply eagree_set_res; auto.
+  eapply mextends_agree; eauto.
 + (* all other builtins *)
   assert ((fn_code tf)!pc = Some(Ibuiltin _x _x0 res pc')).
   {
-    destruct _x; auto. destruct _x0; auto. destruct _x0; auto. destruct _x0; auto. contradiction.
+    destruct _x; auto. inv y. destruct _x0; auto. destruct _x0; auto. destruct _x0; auto. contradiction.
   }
   clear y TI.
   destruct (transfer_builtin_args (kill_builtin_res res ne, nmem_all) _x0) as (ne1, nm1) eqn:TR.
   InvSoundState.
   exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
-  exploit external_call_mem_extends; eauto 2 with na.
+  exploit external_call_mem_extends; eauto 2 with na. unfold external_call.
   eapply magree_extends; eauto. intros. apply nlive_all.
   intros (v' & tm' & P & Q & R & S).
   econstructor; split.

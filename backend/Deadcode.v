@@ -13,7 +13,7 @@
 (** Elimination of unneeded computations over RTL. *)
 
 Require Import Coqlib Maps Errors Integers Floats Lattice Kildall.
-Require Import AST Linking.
+Require Import AST Linking Builtins.
 Require Import Memory Registers Op RTL.
 Require Import ValueDomain ValueAnalysis NeedDomain NeedOp.
 
@@ -81,6 +81,12 @@ Definition kill_builtin_res (res: builtin_res reg) (ne: NE.t) : NE.t :=
   | _    => ne
   end.
 
+Definition builtin_res_dead (res: builtin_res reg) (ne: NE.t) :=
+  match res with
+  | BR r => is_dead (nreg ne r)
+  | _ => false
+  end.
+
 Function transfer_builtin (app: VA.t) (ef: external_function)
                           (args: list (builtin_arg reg)) (res: builtin_res reg)
                           (ne: NE.t) (nm: nmem) : NA.t :=
@@ -106,6 +112,11 @@ Function transfer_builtin (app: VA.t) (ef: external_function)
       transfer_builtin_args (kill_builtin_res res ne, nm) args
   | EF_debug _ _ _, _ =>
       (kill_builtin_res res ne, nm)
+  | EF_builtin name sg, args =>
+      match lookup_builtin_function name sg, builtin_res_dead res ne with
+      | Some bf, true => (ne, nm)
+      | _, _ => transfer_builtin_args (kill_builtin_res res ne, nmem_all) args
+      end
   | _, _ =>
       transfer_builtin_args (kill_builtin_res res ne, nmem_all) args
   end.
@@ -192,6 +203,11 @@ Definition transf_instr (approx: PMap.t VA.t) (an: PMap.t NA.t)
       if nmem_contains (snd an!!pc) (aaddr_arg approx!!pc dst) sz
       then instr
       else Inop s
+  | Ibuiltin (EF_builtin name sg) args res s =>
+      match lookup_builtin_function name sg, builtin_res_dead res (fst an!!pc) with
+      | Some bf, true => Inop s
+      | _, _ => instr
+      end
   | Icond cond args s1 s2 =>
       if peq s1 s2 then Inop s1 else instr
   | _ =>
