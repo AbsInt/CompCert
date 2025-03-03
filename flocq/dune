@@ -1,0 +1,9 @@
+(coq.theory
+ (name Flocq)
+ (package Flocq)
+ ; can only be addressed upstream
+ (flags 
+  -w -deprecated-syntactic-definition
+  -w -unused-pattern-matching-variable))
+
+(include_subdirs qualified)

@@ -1,0 +1,34 @@
+(subdir compcert (include ../platform/shared.dune))
+
+; define extraction code based on env -> some modules are used only with some platforms
+(subdir compcert (dynamic_include ../platform/dune.inc))
+
+
+; riscV
+(subdir platform (rule
+ (action (copy riscV.dune dune.inc))
+ (enabled_if (= %{env:TARGET_PLATFORM=ppc} riscV))))
+
+
+; arm
+(subdir platform (rule
+ (action (copy arm.dune dune.inc))
+ (enabled_if (= %{env:TARGET_PLATFORM=ppc} arm))))
+
+; aarch64
+(subdir platform (rule
+ (action (copy aarch64.dune dune.inc))
+ (enabled_if (= %{env:TARGET_PLATFORM=ppc} aarch64))))
+
+
+
+; default, ever other case is already specified
+(subdir platform (rule
+ (action (copy default.dune dune.inc))
+ (enabled_if 
+  (not 
+   (or
+     (= %{env:TARGET_PLATFORM=ppc} aarch64)
+     (or 
+      (= %{env:TARGET_PLATFORM=ppc} arm) 
+        (= %{env:TARGET_PLATFORM=ppc} riscV)))))))

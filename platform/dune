@@ -1,0 +1,15 @@
+; Run preprocessing directives on .vp files
+(include dune.preprocess)
+
+; compile theory from all .v files, excluding extraction code that is run directly during compilation
+(coq.theory
+ (name compcert)
+ (theories Flocq MenhirLib)
+ ; temp flag
+ (flags 
+  -w -unused-pattern-matching-variable
+  -w -deprecated-since-8.19
+  -w -deprecated-since-8.20)
+ (modules :standard \ common.Subtyping TargetPlatformCopy.extractionMachdep TargetPlatformCopy.extractionMachdepClight))
+
+(include_subdirs qualified)

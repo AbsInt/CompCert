@@ -1,0 +1,54 @@
+(lang dune 3.16)
+
+; Defines different "contexts" - allows us to build all platform compilers at the same time
+; by overwriting the environment variable TARGET_PLATFORM
+;
+; This environment variable is then used to decide, which platform code directories are used
+; during compilation. 
+; Per default dune assumes TARGET_PLATFORM to be "ppc".
+
+; to specify platforms use `dune build _build/<platform1> _build/<platform2>`
+; to use ENV var TARGET_PLATFORM to specify platform use `dune build _build/default`
+
+(context default)
+(context (default 
+ (name x86_32)
+ (env 
+  (_ 
+   (env-vars 
+    (TARGET_PLATFORM x86_32))))))
+(context (default 
+ (name x86_64)
+ (env 
+  (_ 
+   (env-vars 
+    (TARGET_PLATFORM x86_64))))))
+
+(context (default 
+ (name ppc)
+ (env 
+  (_ 
+   (env-vars 
+    (TARGET_PLATFORM ppc))))))
+
+(context (default 
+ (name arm)
+ (env 
+  (_ 
+   (env-vars 
+    (TARGET_PLATFORM arm))))))
+
+(context (default 
+ (name aarch64)
+ (env 
+  (_ 
+   (env-vars 
+    (TARGET_PLATFORM aarch64))))))
+
+(context (default 
+ (name riscV)
+ (env 
+  (_ 
+   (env-vars 
+    (TARGET_PLATFORM riscV))))))
+

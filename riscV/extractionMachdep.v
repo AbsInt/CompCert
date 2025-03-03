@@ -16,7 +16,7 @@
 
 (* Additional extraction directives specific to the RISC-V port *)
 
-Require Archi Asm.
+From compcert Require Archi Asm.
 
 (* Archi *)
 

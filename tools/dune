@@ -1,0 +1,53 @@
+(executable
+ (name ndfun)
+ ; silence warnings for unused variable (27) 
+ (flags :standard -w -27)
+ (libraries str))
+
+(executable
+ (name modorder)
+ ; silence warnings for unused field (69)
+ (flags :standard -w -69)
+ (libraries str))
+
+; config file format to ml generator
+(executable
+ (name config_to_ml)
+ (libraries str))
+
+; config file generator
+(executable
+ (name ini_creator))
+
+(executable
+ (name config_creator))
+
+; documentation generator
+(executable
+ (name gen_documentation)
+ (libraries str))
+
+(rule 
+ (targets MakefileConfig.ml)
+ (deps %{project_root}/Makefile.config)
+ (action
+  (with-stdout-to %{targets}
+    (chdir %{workspace_root}
+    (run config_to_ml Makefile.config)))))
+
+(rule 
+ (targets Version.ml)
+ (deps %{project_root}/VERSION)
+ (action
+  (with-stdout-to %{targets}
+    (chdir %{workspace_root}
+    (run config_to_ml VERSION)))))
+
+(executable
+ (name configure)
+ ; TODO: with updated configure script remove unused variables
+ (flags :standard -w -32)
+ (libraries str))
+
+
+(include_subdirs no)

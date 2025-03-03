@@ -1,0 +1,4 @@
+
+(copy_files %{project_root}/platform/cfrontend/*.{ml,mli})
+(copy_files %{project_root}/platform/lib/*.{ml,mli,mll})
+(copy_files %{project_root}/platform/cparser/*.{ml,mli,mly,mll,messages}) ; load remaining parser files
