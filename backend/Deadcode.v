@@ -113,9 +113,13 @@ Function transfer_builtin (app: VA.t) (ef: external_function)
   | EF_debug _ _ _, _ =>
       (kill_builtin_res res ne, nm)
   | EF_builtin name sg, args =>
-      match lookup_builtin_function name sg, builtin_res_dead res ne with
-      | Some bf, true => (ne, nm)
-      | _, _ => transfer_builtin_args (kill_builtin_res res ne, nmem_all) args
+      match lookup_builtin_function name sg with
+      | Some bf =>
+           if builtin_res_dead res ne
+           then (ne, nm)
+           else transfer_builtin_args (kill_builtin_res res ne, nm) args
+      | _ =>
+           transfer_builtin_args (kill_builtin_res res ne, nmem_all) args
       end
   | _, _ =>
       transfer_builtin_args (kill_builtin_res res ne, nmem_all) args

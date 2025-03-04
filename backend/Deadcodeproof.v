@@ -713,6 +713,35 @@ Proof.
   intros; red; intros. rewrite PMap.gsspec. destruct (peq r0 r); auto with na.
 Qed.
 
+(** Preservation of external calls *)
+
+Lemma transf_external_call:
+  forall e sp m args vargs ef t vres m' res ne2 nm2 ne1 nm1 bc te tm,
+  eval_builtin_args ge (fun r => e#r) (Vptr sp Ptrofs.zero) m args vargs ->
+  external_call ef ge vargs m t vres m' ->
+  transfer_builtin_args (kill_builtin_res res ne2, nmem_all) args = (ne1, nm1) ->
+  eagree e te ne1 ->
+  magree m tm (nlive ge sp nm1) ->
+  genv_match bc ge ->
+  bc sp = BCstack ->
+  exists tvargs tvres tm',
+     eval_builtin_args tge (fun r => te#r) (Vptr sp Ptrofs.zero) tm args tvargs
+  /\ external_call ef tge tvargs tm t tvres tm'
+  /\ eagree (regmap_setres res vres e) (regmap_setres res tvres te) ne2
+  /\ magree m' tm' (nlive ge sp nm2).
+Proof.
+  intros.
+  exploit transfer_builtin_args_sound; eauto. intros (tvargs & A & B & C & D).
+  exploit external_call_mem_extends; eauto 2 with na.
+  eapply magree_extends; eauto. intros. apply nlive_all.
+  intros (vres' & tm' & P & Q & R & S).
+  do 3 econstructor.
+  split. apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+  split. eapply external_call_symbols_preserved. apply senv_preserved. eauto.
+  split. apply eagree_set_res; auto.
+  eapply mextends_agree; eauto.
+Qed.
+
 (** * The simulation diagram *)
 
 Theorem step_simulation:
@@ -1026,7 +1055,7 @@ Ltac UseTransfer :=
   eapply exec_Ibuiltin; eauto. constructor.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
-+ (* builtin dead *)
++ (* known EF_builtin, dead *)
   rewrite e1, e2 in TI.
   unfold builtin_or_external_sem in H1.
   rewrite e1 in H1. destruct H1.
@@ -1035,25 +1064,33 @@ Ltac UseTransfer :=
   eapply match_succ_states; eauto. simpl; auto.
   destruct res; auto. simpl.
   apply eagree_update_dead; auto with na.
-+ (* builtin - non dead *)
-  assert ((fn_code tf)!pc = Some(Ibuiltin (EF_builtin name sg) args0 res pc')).
-  {
-    destruct (Builtins.lookup_builtin_function name sg) eqn:BR; auto. destruct (builtin_res_dead res ne); auto. contradiction.
-  }
-  destruct (transfer_builtin_args (kill_builtin_res res ne, nmem_all) args0) as (ne1, nm1) eqn:TR.
++ (* known EF_builtin, not dead *)
+  rewrite e1, e2 in TI.
+  destruct (transfer_builtin_args (kill_builtin_res res ne, nm) args0) as (ne1, nm1) eqn:TR.
   InvSoundState.
   exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
-  exploit external_call_mem_extends; eauto 2 with na. unfold external_call.
-  instantiate (6 := EF_builtin name sg). eauto.
-  eapply magree_extends; eauto. intros. apply nlive_all.
-  intros (v' & tm' & P & Q & R & S).
+  unfold builtin_or_external_sem in H1; rewrite e1 in H1.
+  assert (m' = m) by (inv H1; auto). subst m'.
+  exploit known_builtin_sem_lessdef; eauto. intros (vres' & P & Q).
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. apply senv_preserved. eauto.
+  simpl; unfold builtin_or_external_sem; rewrite e1. eauto.
   eapply match_succ_states; eauto. simpl; auto.
   apply eagree_set_res; auto.
-  eapply mextends_agree; eauto.
++ (* other EF_builtin *)
+  assert (external_call (EF_builtin name sg) ge vargs m t vres m') by auto.
+  assert ((fn_code tf)!pc = Some(Ibuiltin (EF_builtin name sg) args0 res pc')).
+  {
+    destruct (Builtins.lookup_builtin_function name sg) eqn:BR; auto. contradiction.
+  }
+  destruct (transfer_builtin_args (kill_builtin_res res ne, nmem_all) args0) as (ne1, nm1) eqn:TR.
+  InvSoundState.
+  exploit transf_external_call; eauto.
+  intros (tvargs & tvres & tm' & A & B & C & D). 
+  econstructor; split.
+  eapply exec_Ibuiltin; eauto.
+  eapply match_succ_states; eauto. simpl; auto.
 + (* all other builtins *)
   assert ((fn_code tf)!pc = Some(Ibuiltin _x _x0 res pc')).
   {
@@ -1062,17 +1099,11 @@ Ltac UseTransfer :=
   clear y TI.
   destruct (transfer_builtin_args (kill_builtin_res res ne, nmem_all) _x0) as (ne1, nm1) eqn:TR.
   InvSoundState.
-  exploit transfer_builtin_args_sound; eauto. intros (tvl & A & B & C & D).
-  exploit external_call_mem_extends; eauto 2 with na. unfold external_call.
-  eapply magree_extends; eauto. intros. apply nlive_all.
-  intros (v' & tm' & P & Q & R & S).
+  exploit transf_external_call; eauto.
+  intros (tvargs & tvres & tm' & A & B & C & D). 
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
-  apply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved. apply senv_preserved. eauto.
   eapply match_succ_states; eauto. simpl; auto.
-  apply eagree_set_res; auto.
-  eapply mextends_agree; eauto.
 
 - (* conditional *)
   TransfInstr; UseTransfer. destruct (peq ifso ifnot).
