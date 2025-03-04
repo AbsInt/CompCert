@@ -1428,6 +1428,28 @@ Inductive known_builtin_sem (bf: builtin_function) (ge: Senv.t):
       builtin_function_sem bf vargs = Some vres ->
       known_builtin_sem bf ge vargs m E0 vres m.
 
+Remark known_builtin_sem_inject: forall bf ge vargs m1 t vres m2 f ge' vargs' m',
+  known_builtin_sem bf ge vargs m1 t vres m2 ->
+  Val.inject_list f vargs vargs' ->
+  exists vres', known_builtin_sem bf ge' vargs' m' t vres' m' /\ Val.inject f vres vres'.
+Proof.
+  intros. inv H. specialize (bs_inject _ (builtin_function_sem bf) _ _ _ H0).
+  unfold val_opt_inject. rewrite H1. intros.
+  destruct (builtin_function_sem bf vargs') as [vres'|] eqn:?; try contradiction.
+  exists vres'; split; auto using known_builtin_sem.
+Qed.
+
+Remark known_builtin_sem_lessdef: forall bf ge vargs m1 t vres m2 ge' vargs' m',
+  known_builtin_sem bf ge vargs m1 t vres m2 ->
+  Val.lessdef_list vargs vargs' ->
+  exists vres', known_builtin_sem bf ge' vargs' m' t vres' m' /\ Val.lessdef vres vres'.
+Proof.
+  intros. apply val_inject_list_lessdef in H0.
+  exploit known_builtin_sem_inject; eauto. intros (vres' & A & B).
+  apply val_inject_lessdef in B.
+  exists vres'; eauto.
+Qed.
+
 Lemma known_builtin_ok: forall bf,
   extcall_properties (known_builtin_sem bf) (builtin_function_sig bf).
 Proof.
@@ -1446,20 +1468,13 @@ Proof.
 (* readonly *)
 - inv H; auto.
 (* mem extends *)
-- inv H. fold bsem in H2. apply val_inject_list_lessdef in H1.
-  specialize (bs_inject _ bsem _ _ _ H1).
-  unfold val_opt_inject; rewrite H2; intros.
-  destruct (bsem vargs') as [vres'|] eqn:?; try contradiction.
-  exists vres', m1'; intuition auto using Mem.extends_refl, Mem.unchanged_on_refl.
-  constructor; auto.
-  apply val_inject_lessdef; auto.
-(* mem injects *)
-- inv H0. fold bsem in H3.
-  specialize (bs_inject _ bsem _ _ _ H2).
-  unfold val_opt_inject; rewrite H3; intros.
-  destruct (bsem vargs') as [vres'|] eqn:?; try contradiction.
-  exists f, vres', m1'; intuition auto using Mem.extends_refl, Mem.unchanged_on_refl.
-  constructor; auto.
+- assert (m2 = m1) by (inv H; auto). subst m2.
+  exploit known_builtin_sem_lessdef; eauto. intros (vres' & A & B).
+  exists vres', m1'; intuition eauto using Mem.unchanged_on_refl.
+(* mem inject *)
+- assert (m2 = m1) by (inv H0; auto). subst m2.
+  exploit known_builtin_sem_inject; eauto. intros (vres' & A & B).
+  exists f, vres', m1'; intuition eauto using Mem.unchanged_on_refl.
   red; intros; congruence.
 (* trace length *)
 - inv H; simpl; lia.
