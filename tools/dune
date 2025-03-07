@@ -33,7 +33,7 @@
  (action
   (with-stdout-to %{targets}
     (chdir %{workspace_root}
-    (run config_to_ml Makefile.config)))))
+    (run config_to_ml %{deps})))))
 
 (rule 
  (targets Version.ml)
@@ -41,7 +41,7 @@
  (action
   (with-stdout-to %{targets}
     (chdir %{workspace_root}
-    (run config_to_ml VERSION)))))
+    (run config_to_ml %{deps})))))
 
 (executable
  (name configure)

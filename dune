@@ -1,46 +1,5 @@
-; allow selectively compiling platform code based on TARGET_PLATFORM environment variable
-; 
-; Copies all relevant code for Compcert compilation into "platform/TargetPlatformCopy" directory
-(dirs :standard \ arm, powerpc, riscV, aarch64, x86_64, x86_32, x86, tricore, powerpc_vl, platform_doc)
-
-; copy all files from currently selected architecture to "platform" directory. 
-; can't copy generated files from platform directories due to dependency cycle -> generate later (see "platform" directory dune files)
-(subdir platform/TargetPlatformCopy 
- (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} ppc)) (files %{project_root}/powerpc/*)))
-
-
-(subdir platform/TargetPlatformCopy
- (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} x86_32)) (files %{project_root}/x86/*.{v,vp,ml,mli})))
-(subdir platform/TargetPlatformCopy 
- (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} x86_32)) (files %{project_root}/x86_32/*.{v,vp,ml,mli})))
-
-(subdir platform/TargetPlatformCopy 
- (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} x86_64)) (files %{project_root}/x86/*.{v,vp,ml,mli})))
-(subdir platform/TargetPlatformCopy 
- (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} x86_64)) (files %{project_root}/x86_64/*.{v,vp,ml,mli})))
-
-
-(subdir platform/TargetPlatformCopy 
- (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} riscV)) (files %{project_root}/riscV/*)))
-
-
-(subdir platform/TargetPlatformCopy 
- (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} arm)) (files %{project_root}/arm/*)))
-
-(subdir platform/TargetPlatformCopy 
- (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} aarch64)) (files %{project_root}/aarch64/*)))
-
-; copy files from all other relevant source directories
-(subdir platform/backend (copy_files %{project_root}/backend/*))
-(subdir platform/cfrontend (copy_files %{project_root}/cfrontend/*))
-(subdir platform/common (copy_files %{project_root}/common/*))
-(subdir platform/cparser (copy_files %{project_root}/cparser/*))
-(subdir platform/debug (copy_files %{project_root}/debug/*))
-(subdir platform/driver (copy_files %{project_root}/driver/*))
-(subdir platform/export (copy_files %{project_root}/export/*))
-(subdir platform/lib (copy_files %{project_root}/lib/*))
-
 ; .ini / .config generation rules 
+; For both the ini_creator and config_creator there is an implicit dependency on the binary itself, so the rule is evaluated again if the tool is changed.
 (rule
  (targets compcert.ini)
  (action (with-stdout-to compcert.ini

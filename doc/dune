@@ -2,7 +2,7 @@
 (rule 
   (package documentation)
   (targets STAMP (dir html))
-   (deps ../extraction/compcert/Driver.exe ccomp.1 index.html style.css)
+   (deps %{project_root}/extraction/compcert/Driver.exe ccomp.1 index.html style.css)
    (action (with-stdout-to STAMP
     (chdir %{workspace_root}
     (run gen_documentation %{env:TARGET_PLATFORM=ppc})))))

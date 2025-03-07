@@ -89,3 +89,4 @@
 # Dune Build Results
 _build/
 *.install
+*.opam

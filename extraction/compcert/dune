@@ -1,3 +1,5 @@
+(include ../shared.dune)
+
 ; copy OCaml files from source files - only those not shared with clightgen already
 ; when trying to move extraction file into platform directory
 (copy_files %{project_root}/platform/backend/*.{ml,mli})
@@ -17,6 +19,7 @@
 (rule
  (deps extraction.v extractionMachdep.v)
  (targets extractionFull.v)
+ (package compcert)
  (action (copy extraction.v extractionFull.v)))
 
 
@@ -30,6 +33,7 @@
  (modules_without_implementation c debugTypes dwarfTypes)
  ; Driver is our runner which uses this library, GCC is unneeded file
  (modules :standard \ Driver GCC)
+ (instrumentation (backend bisect_ppx))
  (flags -w -32)
  (libraries menhirLib str unix))
 
@@ -41,7 +45,7 @@
  (action
   (with-stdout-to %{targets}
     (chdir %{workspace_root}
-    (run config_to_ml VERSION)))))
+    (run config_to_ml %{deps})))))
 
 
 ; generate final compcert executable
@@ -52,6 +56,7 @@
  (modules Driver)
  ; generate both bytecode and exe 
  (modes byte exe)
+ (instrumentation (backend bisect_ppx))
  (libraries compcert))
 
 (include_subdirs no)

@@ -1,5 +1,3 @@
-(subdir compcert (include ../platform/shared.dune))
-
 ; define extraction code based on env -> some modules are used only with some platforms
 (subdir compcert (dynamic_include ../platform/dune.inc))
 
@@ -22,7 +20,7 @@
 
 
 
-; default, ever other case is already specified
+; default, every other case is already specified
 (subdir platform (rule
  (action (copy default.dune dune.inc))
  (enabled_if 

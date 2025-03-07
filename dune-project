@@ -5,6 +5,8 @@
 
 (name compcert)
 
+(generate_opam_files)
+
 (package
  (name compcert)
  (synopsis "Full Compcert Compiler"))
