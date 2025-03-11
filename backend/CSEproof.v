@@ -44,6 +44,12 @@ Qed.
 Definition valu_agree (valu1 valu2: valuation) (upto: valnum) :=
   forall v, Plt v upto -> valu2 v = valu1 v.
 
+Remark valu_agree_refl:
+  forall valu upto, valu_agree valu valu upto.
+Proof.
+  intros; red; auto.
+Qed.
+
 Section EXTEN.
 
 Variable valu1: valuation.
@@ -63,6 +69,26 @@ Proof.
   intros. apply list_map_exten. intros. symmetry. auto.
 Qed.
 
+Lemma builtin_arg_val_exten:
+  forall a v,
+  eval_builtin_arg ge valu1 sp m a v ->
+  (forall vn, In vn (params_of_builtin_arg a) -> Plt vn upto) ->
+  eval_builtin_arg ge valu2 sp m a v.
+Proof.
+  induction 1; simpl params_of_builtin_arg; intros;
+  try (constructor; eauto using in_or_app).
+- rewrite <- AGREE by eauto with coqlib. apply eval_BA.
+Qed.
+
+Lemma builtin_args_val_exten:
+  forall al vl,
+  eval_builtin_args ge valu1 sp m al vl ->
+  (forall vn, In vn (params_of_builtin_args al) -> Plt vn upto) ->
+  eval_builtin_args ge valu2 sp m al vl.
+Proof.
+  unfold eval_builtin_args; induction 1; simpl; intros; constructor; eauto using builtin_arg_val_exten, in_or_app.
+Qed.
+
 Lemma rhs_eval_to_exten:
   forall r v,
   rhs_eval_to valu1 ge sp m r v ->
@@ -72,6 +98,7 @@ Proof.
   intros. inv H; simpl in *.
 - constructor. rewrite valnums_val_exten by assumption. auto.
 - econstructor; eauto. rewrite valnums_val_exten by assumption. auto.
+- econstructor; eauto using builtin_args_val_exten.  
 Qed.
 
 Lemma rhs_valid_exten:
@@ -83,6 +110,7 @@ Proof.
   intros. inv H; simpl in *.
 - constructor.
 - econstructor; eauto. rewrite valnums_val_exten by assumption. auto.
+- constructor.
 Qed.
 
 Lemma equation_holds_exten:
@@ -184,6 +212,78 @@ Proof.
   + simpl; f_equal; auto. rewrite R; auto.
   + red; intros. transitivity (valu2 v); auto. apply R. extlia.
   + simpl; intros. destruct H0; auto. subst v1; extlia.
+  + extlia.
+Qed.
+
+Lemma valnum_builtin_arg_holds:
+  forall (ge: genv) sp rs m a v,
+  eval_builtin_arg ge (fun r => rs#r) sp m a v ->
+  forall valu1 n n' a',
+  numbering_holds valu1 ge sp rs m n ->
+  valnum_builtin_arg n a = (n', a') ->
+  exists valu2,
+     numbering_holds valu2 ge sp rs m n'
+  /\ eval_builtin_arg ge valu2 sp m a' v
+  /\ valu_agree valu1 valu2 n.(num_next)
+  /\ (forall vn, In vn (params_of_builtin_arg a') -> Plt vn n'.(num_next))
+  /\ Ple n.(num_next) n'.(num_next).
+Proof.
+  induction 1; simpl; intros valu1 nv nv' a' NH VB.
+2-9: inv VB; exists valu1; simpl; intuition eauto using eval_builtin_arg, Ple_refl, valu_agree_refl.
+- destruct (valnum_reg nv x) as (nv1, vn) eqn:VR. inv VB.
+  exploit valnum_reg_holds; eauto. intros (valu2 & A & B & C & D & E).
+  exists valu2; splitall; simpl; auto.
+  + rewrite B; constructor.
+  + intuition congruence.
+- destruct (valnum_builtin_arg nv hi) as (nv1, hi') eqn:VB1.
+  destruct (valnum_builtin_arg nv1 lo) as (nv2, lo') eqn:VB2.
+  inv VB.
+  exploit IHeval_builtin_arg1; eauto. intros (valu2 & A & B & C & D & E).
+  exploit IHeval_builtin_arg2; eauto. intros (valu3 & P & Q & R & S & T).
+  exists valu3; splitall; simpl; auto.
+  + constructor; auto. eapply builtin_arg_val_exten; eauto.
+  + red; intros. transitivity (valu2 v). apply R. extlia. apply C. extlia.
+  + intros. rewrite in_app_iff in H1. destruct H1; auto. apply D in H1. extlia.
+  + extlia.
+- destruct (valnum_builtin_arg nv a1) as (nv1, a1') eqn:VB1.
+  destruct (valnum_builtin_arg nv1 a2) as (nv2, a2') eqn:VB2.
+  inv VB.
+  exploit IHeval_builtin_arg1; eauto. intros (valu2 & A & B & C & D & E).
+  exploit IHeval_builtin_arg2; eauto. intros (valu3 & P & Q & R & S & T).
+  exists valu3; splitall; simpl; auto.
+  + constructor; auto. eapply builtin_arg_val_exten; eauto.
+  + red; intros. transitivity (valu2 v). apply R. extlia. apply C. extlia.
+  + intros. rewrite in_app_iff in H1. destruct H1; auto. apply D in H1. extlia.
+  + extlia.
+Qed.
+
+Lemma valnum_builtin_args_holds:
+  forall (ge: genv) sp rs m al vl,
+  eval_builtin_args ge (fun r => rs#r) sp m al vl ->
+  forall valu1 n n' al',
+  numbering_holds valu1 ge sp rs m n ->
+  valnum_builtin_args n al = (n', al') ->
+  exists valu2,
+     numbering_holds valu2 ge sp rs m n'
+  /\ eval_builtin_args ge valu2 sp m al' vl
+  /\ valu_agree valu1 valu2 n.(num_next)
+  /\ (forall vn, In vn (params_of_builtin_args al') -> Plt vn n'.(num_next))
+  /\ Ple n.(num_next) n'.(num_next).
+Proof.
+  unfold eval_builtin_args; induction 1; simpl; intros.
+- inv H0. simpl. exists valu1; intuition eauto using list_forall2, Ple_refl, valu_agree_refl.
+- destruct (valnum_builtin_arg n a1) as [n1 a1'] eqn:V1.
+  destruct (valnum_builtin_args n1 al) as [n2 al''] eqn:V2.
+  inv H2.
+  exploit valnum_builtin_arg_holds; eauto.
+  intros (valu2 & A & B & C & D & E).
+  exploit (IHlist_forall2 valu2); eauto.
+  intros (valu3 & P & Q & R & S & T).
+  exists valu3; splitall.
+  + auto.
+  + constructor; auto. eapply builtin_arg_val_exten; eauto.
+  + red; intros. transitivity (valu2 v); auto. apply R. extlia.
+  + simpl; intros. rewrite in_app_iff in H2. destruct H2; auto. apply D in H2. extlia.
   + extlia.
 Qed.
 
@@ -294,7 +394,10 @@ Lemma rhs_eval_to_inj:
   forall valu ge sp m rh v1 v2,
   rhs_eval_to valu ge sp m rh v1 -> rhs_eval_to valu ge sp m rh v2 -> v1 = v2.
 Proof.
-  intros. inv H; inv H0; congruence.
+  intros. inv H; inv H0.
+- congruence.
+- congruence.
+- assert (vargs0 = vargs) by eauto using eval_builtin_args_determ. congruence.
 Qed.
 
 Lemma add_rhs_holds:
@@ -403,6 +506,24 @@ Proof.
 + intros. apply Regmap.gso; auto.
 Qed.
 
+Lemma add_builtin_holds:
+  forall valu1 ge sp rs m n bf args res vargs vres,
+  numbering_holds valu1 ge sp rs m n ->
+  eval_builtin_args ge (fun r => rs#r) sp m args vargs ->
+  builtin_function_sem bf vargs = Some vres ->
+  exists valu2, numbering_holds valu2 ge sp (regmap_setres res vres rs) m (add_builtin n res bf args).
+Proof.
+  unfold add_builtin; intros.
+  destruct res; simpl; eauto.
+  destruct (valnum_builtin_args n args) as [n1 args'] eqn:VB.
+  exploit valnum_builtin_args_holds; eauto.
+  intros (valu2 & A & B & C & D & E).
+  eapply add_rhs_holds; eauto.
++ econstructor; eauto.
++ econstructor; eauto. rewrite Regmap.gss; eauto.
++ intros. apply Regmap.gso; auto.
+Qed.
+
 Lemma set_unknown_holds:
   forall valu ge sp rs m n r v,
   numbering_holds valu ge sp rs m n ->
@@ -467,8 +588,9 @@ Lemma kill_all_loads_hold:
 Proof.
   intros. eapply kill_equations_hold; eauto.
   unfold filter_loads; intros. inv H2.
-  constructor. rewrite <- H3. apply op_depends_on_memory_correct; auto.
-  discriminate.
+- constructor. rewrite <- H3. apply op_depends_on_memory_correct; auto.
+- discriminate.
+- econstructor; eauto using builtin_args_depends_on_memory_correct.
 Qed.
 
 Lemma kill_loads_after_store_holds:
@@ -496,6 +618,7 @@ Proof.
   eapply pdisjoint_sound_strong with (bc1 := bc0) (bc2 := bc); eauto.
   apply match_aptr_of_aval. eapply eval_static_addressing_sound; eauto.
   eauto with va.
+- econstructor; eauto using builtin_args_depends_on_memory_correct.
 Qed.
 
 Lemma store_normalized_range_sound:
@@ -569,6 +692,7 @@ Proof.
   eapply Mem.load_storebytes_other. eauto.
   rewrite H4. rewrite Z2Nat.id by lia.
   eapply pdisjoint_sound_strong with (bc1 := bc0) (bc2 := bc); eauto.
+- econstructor; eauto using builtin_args_depends_on_memory_correct.
 Qed.
 
 Lemma load_memcpy:
@@ -648,7 +772,7 @@ Lemma shift_memcpy_eq_holds:
 Proof with (try discriminate).
   intros. set (delta := dst - src) in *. unfold shift_memcpy_eq in H.
   destruct e as [l strict rhs] eqn:E.
-  destruct rhs as [op vl | chunk addr vl]...
+  destruct rhs as [op vl | chunk addr vl | bf args]...
   destruct addr...
   try (rename i into ofs).
   set (i1 := Ptrofs.unsigned ofs) in *. set (j := i1 + delta) in *.
@@ -1193,6 +1317,11 @@ Proof.
   intros (vargs' & A & B).
   exploit external_call_mem_extends; eauto.
   intros (v' & m1' & P & Q & R & S).
+  assert (DEFAULT:
+    (fn_code (transf_function' f approx)) ! pc = Some(Ibuiltin ef args res pc') ->
+    exists s2', step tge (State s' (transf_function' f approx) sp pc rs' m'0) t s2'
+             /\ match_states (State s f sp pc' (regmap_setres res vres rs) m') s2').
+{ intros C'.
   econstructor; split.
   eapply exec_Ibuiltin; eauto.
   eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
@@ -1211,7 +1340,8 @@ Proof.
   destruct ef.
   + apply CASE1.
   + destruct (lookup_builtin_function name sg) as [bf|] eqn:LK.
-    ++ apply CASE2. simpl in H1; red in H1; rewrite LK in H1; inv H1. auto.
+    ++ simpl in H1; red in H1; rewrite LK in H1; inv H1.
+       eapply add_builtin_holds; eauto.
     ++ apply CASE3.
   + apply CASE1.
   + apply CASE2; inv H1; auto.
@@ -1236,6 +1366,23 @@ Proof.
   + apply CASE1.
   + apply CASE2; inv H1; auto.
 * apply set_res_lessdef; auto.
+}
+  destruct ef; auto. destruct res; auto. destruct (lookup_builtin_function name sg) as [bf|] eqn:LK; auto.
+  destruct (valnum_builtin_args approx#pc args) as (n1 & args') eqn:VB.
+  destruct (find_rhs n1 (Builtin bf args')) as [r|] eqn:FIND; auto.
+  hnf in H1. rewrite LK in H1. inv H1.
+  destruct SAT as [valu NH].
+  exploit valnum_builtin_args_holds. eexact H0. eauto. eauto. intros (valu1 & X & Y & Z & U & V).
+  exploit find_rhs_sound; eauto. intros (v & D & E). inv D.
+  assert (vargs0 = vargs) by eauto using eval_builtin_args_determ. subst vargs0.
+  assert (v = vres) by congruence. subst v.
+  econstructor; split.
+  eapply exec_Iop; eauto. simpl; eauto.
+  econstructor; eauto.
+  eapply analysis_correct_1; eauto. simpl; auto.
+* unfold transfer; rewrite H, LK. 
+  eapply add_builtin_holds; eauto.
+* apply set_reg_lessdef; auto. eapply Val.lessdef_trans; eauto.
 
 - (* Icond *)
   destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.

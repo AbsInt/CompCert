@@ -14,7 +14,7 @@
     subexpression elimination. *)
 
 Require Import Coqlib Maps.
-Require Import AST Integers Values Memory.
+Require Import AST Integers Values Memory Builtins Globalenvs Events.
 Require Import Op Registers RTL.
 Require Import ValueDomain.
 
@@ -28,7 +28,8 @@ Definition valnum := positive.
 
 Inductive rhs : Type :=
   | Op: operation -> list valnum -> rhs
-  | Load: memory_chunk -> addressing -> list valnum -> aptr -> rhs.
+  | Load: memory_chunk -> addressing -> list valnum -> aptr -> rhs
+  | Builtin: builtin_function -> list (builtin_arg valnum) -> rhs.
 
 Inductive equation : Type :=
   | Eq (v: valnum) (strict: bool) (r: rhs).
@@ -37,19 +38,15 @@ Definition eq_valnum: forall (x y: valnum), {x=y}+{x<>y} := peq.
 
 Definition eq_list_valnum: forall (x y: list valnum), {x=y}+{x<>y} := list_eq_dec peq.
 
-Definition eq_rhs (x y: rhs) : {x=y}+{x<>y}.
-Proof.
-  generalize chunk_eq eq_operation eq_addressing eq_valnum eq_list_valnum eq_aptr.
-  decide equality.
-Defined.
-
 (** Equality of [rhs] up to differences in regions attached to [Load] rhs. *)
 
 Inductive rhs_compat: rhs -> rhs -> Prop :=
   | rhs_compat_op: forall op vl,
       rhs_compat (Op op vl) (Op op vl)
   | rhs_compat_load: forall chunk addr vl p1 p2,
-      rhs_compat (Load chunk addr vl p1) (Load chunk addr vl p2).
+      rhs_compat (Load chunk addr vl p1) (Load chunk addr vl p2)
+  | rhs_compat_builtin: forall bf args,
+      rhs_compat (Builtin bf args) (Builtin bf args).
 
 Lemma rhs_compat_sym: forall rh1 rh2,
   rhs_compat rh1 rh2 -> rhs_compat rh2 rh1.
@@ -62,6 +59,8 @@ Definition compat_rhs (r1 r2: rhs) : bool :=
   | Op op1 vl1, Op op2 vl2 => eq_operation op1 op2 && eq_list_valnum vl1 vl2
   | Load chunk1 addr1 vl1 p1, Load chunk2 addr2 vl2 p2 =>
       chunk_eq chunk1 chunk2 && eq_addressing addr1 addr2 && eq_list_valnum vl1 vl2
+  | Builtin bf1 args1, Builtin bf2 args2 =>
+      eq_builtin_function bf1 bf2 && list_eq_dec (eq_builtin_arg eq_valnum) args1 args2
   | _, _ => false
   end.
 
@@ -100,10 +99,11 @@ Definition valnums_rhs (r: rhs): list valnum :=
   match r with
   | Op op vl => vl
   | Load chunk addr vl ap => vl
+  | Builtin bf args => params_of_builtin_args args
   end.
 
 Definition wf_rhs (next: valnum) (r: rhs) : Prop :=
-forall v, In v (valnums_rhs r) -> Plt v next.
+  forall v, In v (valnums_rhs r) -> Plt v next.
 
 Definition wf_equation (next: valnum) (e: equation) : Prop :=
   match e with Eq l str r => Plt l next /\ wf_rhs next r end.
@@ -134,7 +134,11 @@ Inductive rhs_eval_to (valu: valuation) (ge: genv) (sp: val) (m: mem):
   | load_eval_to: forall chunk addr vl a v p,
       eval_addressing ge sp addr (map valu vl) = Some a ->
       Mem.loadv chunk m a = Some v ->
-      rhs_eval_to valu ge sp m (Load chunk addr vl p) v.
+      rhs_eval_to valu ge sp m (Load chunk addr vl p) v
+  | builtin_eval_to: forall bf args vargs v,
+      eval_builtin_args ge valu sp m args vargs ->
+      builtin_function_sem bf vargs = Some v ->
+      rhs_eval_to valu ge sp m (Builtin bf args) v.
 
 Lemma rhs_eval_to_compat: forall valu ge sp m rh v rh',
   rhs_eval_to valu ge sp m rh v ->
@@ -155,7 +159,9 @@ Inductive rhs_valid (valu: valuation) (ge: genv): val -> rhs -> Prop :=
   | load_valid: forall sp chunk addr vl p b ofs bc,
       eval_addressing ge (Vptr sp Ptrofs.zero) addr (map valu vl) = Some (Vptr b ofs) ->
       pmatch bc b ofs p -> genv_match bc ge -> bc sp = BCstack ->
-      rhs_valid valu ge (Vptr sp Ptrofs.zero) (Load chunk addr vl p).
+      rhs_valid valu ge (Vptr sp Ptrofs.zero) (Load chunk addr vl p)
+  | builtin_valid: forall sp bf args,
+      rhs_valid valu ge sp (Builtin bf args).
 
 Inductive equation_holds (valu: valuation) (ge: genv) (sp: val) (m: mem):
                                                       equation -> Prop :=
