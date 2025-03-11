@@ -32,3 +32,8 @@ Definition platform_builtin_sig (b: platform_builtin) : signature :=
 
 Definition platform_builtin_sem (b: platform_builtin) : builtin_sem (sig_res (platform_builtin_sig b)) :=
   match b with end.
+
+Definition eq_platform_builtin: forall (x y: platform_builtin), {x=y} + {x<>y}.
+Proof.
+  intros. destruct x.
+Defined.

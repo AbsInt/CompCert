@@ -24,6 +24,12 @@ Inductive builtin_function : Type :=
   | BI_standard (b: standard_builtin)
   | BI_platform (b: platform_builtin).
 
+Definition eq_builtin_function: forall (x y: builtin_function), {x=y} + {x<>y}.
+Proof.
+  generalize eq_standard_builtin eq_platform_builtin; decide equality.
+Defined.
+Global Opaque eq_builtin_function.
+
 Definition builtin_function_sig (b: builtin_function) : signature :=
   match b with
   | BI_standard b => standard_builtin_sig b
