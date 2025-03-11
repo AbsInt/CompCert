@@ -715,6 +715,25 @@ Inductive builtin_res (A: Type) : Type :=
   | BR_none
   | BR_splitlong (hi lo: builtin_res A).
 
+Definition eq_builtin_arg (A: Type) (eq: forall x y: A, {x=y} + {x<>y}) :
+  forall x y : builtin_arg A, {x=y} + {x<>y}.
+Proof.
+  generalize Int.eq_dec Int64.eq_dec Ptrofs.eq_dec Float.eq_dec Float32.eq_dec
+             chunk_eq ident_eq; intros.
+  decide equality.
+Defined.
+
+Definition eq_builtin_res (A: Type) (eq: forall x y: A, {x=y} + {x<>y}) :
+  forall x y : builtin_res A, {x=y} + {x<>y}.
+Proof.
+  decide equality.
+Defined.
+
+Arguments eq_builtin_arg {A}.
+Arguments eq_builtin_res {A}.
+
+Global Opaque eq_builtin_arg eq_builtin_res.
+
 Fixpoint globals_of_builtin_arg (A: Type) (a: builtin_arg A) : list ident :=
   match a with
   | BA_loadglobal chunk id ofs => id :: nil
