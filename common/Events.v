@@ -1718,6 +1718,36 @@ End EVAL_BUILTIN_ARG.
 
 Global Hint Constructors eval_builtin_arg: barg.
 
+Fixpoint builtin_arg_depends_on_memory {A: Type} (ba: builtin_arg A) : bool :=
+  match ba with
+  | BA_loadstack _ _ | BA_loadglobal _ _ _ => true
+  | BA_splitlong a1 a2 | BA_addptr a1 a2 =>
+      builtin_arg_depends_on_memory a1 || builtin_arg_depends_on_memory a2
+  | _ => false
+  end.
+
+Lemma builtin_arg_depends_on_memory_correct:
+  forall (A: Type) m' ge e sp m (ba: builtin_arg A) v,
+  eval_builtin_arg ge e sp m ba v ->
+  builtin_arg_depends_on_memory ba = false ->
+  eval_builtin_arg ge e sp m' ba v.
+Proof.
+  induction 1; simpl; intros; InvBooleans; discriminate || eauto using eval_builtin_arg.
+Qed.
+
+Definition builtin_args_depends_on_memory {A: Type} (bal: list (builtin_arg A)) : bool :=
+  List.existsb builtin_arg_depends_on_memory bal.
+
+Lemma builtin_args_depends_on_memory_correct:
+  forall (A: Type) m' ge e sp m (bal: list (builtin_arg A)) vl,
+  eval_builtin_args ge e sp m bal vl ->
+  builtin_args_depends_on_memory bal = false ->
+  eval_builtin_args ge e sp m' bal vl.
+Proof.
+  unfold eval_builtin_args; induction 1; simpl; intros;
+  InvBooleans; constructor; eauto using builtin_arg_depends_on_memory_correct.
+Qed.
+
 (** Invariance by change of global environment. *)
 
 Section EVAL_BUILTIN_ARG_PRESERVED.
