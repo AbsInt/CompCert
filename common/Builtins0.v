@@ -383,6 +383,11 @@ Inductive standard_builtin : Type :=
   | BI_i64_stof
   | BI_i64_utof.
 
+Definition eq_standard_builtin: forall (x y: standard_builtin), {x=y} + {x<>y}.
+Proof.
+  generalize typ_eq; decide equality.
+Defined.
+
 Local Open Scope string_scope.
 
 Definition standard_builtin_table : list (string * standard_builtin) :=

@@ -53,3 +53,7 @@ Definition platform_builtin_sem (b: platform_builtin) : builtin_sem (sig_res (pl
                       end)
   end.
 
+Definition eq_platform_builtin: forall (x y: platform_builtin), {x=y} + {x<>y}.
+Proof.
+  decide equality.
+Defined.
