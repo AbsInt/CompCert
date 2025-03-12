@@ -850,6 +850,55 @@ Proof.
   eapply shift_memcpy_eq_holds; eauto with cse.
 Qed.
 
+Lemma transfer_builtin_holds:
+  forall (ge: genv) f pc ef args res pc' rs sp m vargs t vres m' valu n vapprox ae am bc rm,
+  f.(fn_code)!pc = Some(Ibuiltin ef args res pc') ->
+  eval_builtin_args ge (fun r => rs#r) (Vptr sp Ptrofs.zero) m args vargs ->
+  external_call ef ge vargs m t vres m' ->
+  numbering_holds valu ge (Vptr sp Ptrofs.zero) rs m n ->
+  vapprox!!pc = VA.State ae am ->
+  ematch bc rs ae -> romatch bc m rm -> mmatch bc m am -> genv_match bc ge -> bc sp = BCstack ->
+  exists valu',
+     numbering_holds valu' ge (Vptr sp Ptrofs.zero) (regmap_setres res vres rs) m'
+                           (transfer f vapprox pc n).
+Proof.
+  intros until rm; intros CODEAT BA EC NH APPROX EM RM MM GM SM.
+  unfold transfer; rewrite CODEAT.
+  assert (CASE1: exists valu, numbering_holds valu ge (Vptr sp Ptrofs.zero) (regmap_setres res vres rs) m' empty_numbering).
+  { exists valu; apply empty_numbering_holds. }
+  assert (CASE2: m' = m -> exists valu, numbering_holds valu ge (Vptr sp Ptrofs.zero) (regmap_setres res vres rs) m' (set_res_unknown n res)).
+  { intros. subst m'. exists valu. apply set_res_unknown_holds; auto. }
+  assert (CASE3: exists valu, numbering_holds valu ge (Vptr sp Ptrofs.zero) (regmap_setres res vres rs) m'
+                         (set_res_unknown (kill_all_loads n) res)).
+  { exists valu. apply set_res_unknown_holds. eapply kill_all_loads_hold; eauto. }
+  destruct ef.
+  + apply CASE1.
+  + destruct (lookup_builtin_function name sg) as [bf|] eqn:LK.
+    ++ hnf in EC; rewrite LK in EC; inv EC. eapply add_builtin_holds; eauto.
+    ++ apply CASE3.
+  + apply CASE1.
+  + apply CASE2; inv EC; auto.
+  + apply CASE3.
+  + apply CASE1.
+  + apply CASE1.
+  + inv BA; auto. inv H0; auto. inv H2; auto.
+    simpl in EC; inv EC.
+    exists valu.
+    apply set_res_unknown_holds.
+    assert (pmatch bc bsrc osrc (aaddr_arg vapprox#pc a0))
+    by (rewrite APPROX; eapply aaddr_arg_sound_1; eauto).
+    assert (pmatch bc bdst odst (aaddr_arg vapprox#pc a1))
+    by (rewrite APPROX; eapply aaddr_arg_sound_1; eauto).
+    eapply add_memcpy_holds; eauto.
+    eapply kill_loads_after_storebytes_holds; eauto. 
+    eapply Mem.loadbytes_length; eauto.
+    simpl. apply Ple_refl.
+  + apply CASE2; inv EC; auto.
+  + apply CASE2; inv EC; auto.
+  + apply CASE1.
+  + apply CASE2; inv EC; auto.
+Qed.
+
 (** Correctness of operator reduction *)
 
 Section REDUCE.
@@ -1321,52 +1370,17 @@ Proof.
     (fn_code (transf_function' f approx)) ! pc = Some(Ibuiltin ef args res pc') ->
     exists s2', step tge (State s' (transf_function' f approx) sp pc rs' m'0) t s2'
              /\ match_states (State s f sp pc' (regmap_setres res vres rs) m') s2').
-{ intros C'.
-  econstructor; split.
-  eapply exec_Ibuiltin; eauto.
-  eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
-  eapply external_call_symbols_preserved; eauto. apply senv_preserved.
-  econstructor; eauto.
-  eapply analysis_correct_1; eauto. simpl; auto.
-* unfold transfer; rewrite H.
-  destruct SAT as [valu NH].
-  assert (CASE1: exists valu, numbering_holds valu ge sp (regmap_setres res vres rs) m' empty_numbering).
-  { exists valu; apply empty_numbering_holds. }
-  assert (CASE2: m' = m -> exists valu, numbering_holds valu ge sp (regmap_setres res vres rs) m' (set_res_unknown approx#pc res)).
-  { intros. subst m'. exists valu. apply set_res_unknown_holds; auto. }
-  assert (CASE3: exists valu, numbering_holds valu ge sp (regmap_setres res vres rs) m'
-                         (set_res_unknown (kill_all_loads approx#pc) res)).
-  { exists valu. apply set_res_unknown_holds. eapply kill_all_loads_hold; eauto. }
-  destruct ef.
-  + apply CASE1.
-  + destruct (lookup_builtin_function name sg) as [bf|] eqn:LK.
-    ++ simpl in H1; red in H1; rewrite LK in H1; inv H1.
-       eapply add_builtin_holds; eauto.
-    ++ apply CASE3.
-  + apply CASE1.
-  + apply CASE2; inv H1; auto.
-  + apply CASE3.
-  + apply CASE1.
-  + apply CASE1.
-  + inv H0; auto. inv H3; auto. inv H4; auto.
-    simpl in H1. inv H1.
-    exists valu.
-    apply set_res_unknown_holds.
-    InvSoundState. unfold vanalyze; rewrite AN.
-    assert (pmatch bc bsrc osrc (aaddr_arg (VA.State ae am) a0))
-    by (eapply aaddr_arg_sound_1; eauto).
-    assert (pmatch bc bdst odst (aaddr_arg (VA.State ae am) a1))
-    by (eapply aaddr_arg_sound_1; eauto).
-    eapply add_memcpy_holds; eauto.
-    eapply kill_loads_after_storebytes_holds; eauto.
-    eapply Mem.loadbytes_length; eauto.
-    simpl. apply Ple_refl.
-  + apply CASE2; inv H1; auto.
-  + apply CASE2; inv H1; auto.
-  + apply CASE1.
-  + apply CASE2; inv H1; auto.
-* apply set_res_lessdef; auto.
-}
+  { intros C'.
+    econstructor; split.
+    eapply exec_Ibuiltin; eauto.
+    eapply eval_builtin_args_preserved with (ge1 := ge); eauto. exact symbols_preserved.
+    eapply external_call_symbols_preserved; eauto. apply senv_preserved.
+    econstructor; eauto.
+  * eapply analysis_correct_1; eauto. simpl; auto.
+    destruct SAT as [valu NH]. InvSoundState.
+    eapply transfer_builtin_holds; eauto.
+  * apply set_res_lessdef; auto.
+  }
   destruct ef; auto. destruct res; auto. destruct (lookup_builtin_function name sg) as [bf|] eqn:LK; auto.
   destruct (valnum_builtin_args approx#pc args) as (n1 & args') eqn:VB.
   destruct (find_rhs n1 (Builtin bf args')) as [r|] eqn:FIND; auto.
@@ -1380,9 +1394,9 @@ Proof.
   eapply exec_Iop; eauto. simpl; eauto.
   econstructor; eauto.
   eapply analysis_correct_1; eauto. simpl; auto.
-* unfold transfer; rewrite H, LK. 
-  eapply add_builtin_holds; eauto.
-* apply set_reg_lessdef; auto. eapply Val.lessdef_trans; eauto.
+  * unfold transfer; rewrite H, LK. 
+    eapply add_builtin_holds; eauto.
+  * apply set_reg_lessdef; auto. eapply Val.lessdef_trans; eauto.
 
 - (* Icond *)
   destruct (valnum_regs approx!!pc args) as [n1 vl] eqn:?.
