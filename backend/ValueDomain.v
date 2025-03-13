@@ -2943,6 +2943,24 @@ Proof.
   destruct (zle n lo). constructor. destruct (zlt hi n); constructor.
 Qed.
 
+Lemma cmp_intv_different_blocks:
+  forall c i n, cmatch (Val.cmp_different_blocks c) (cmp_intv c i n).
+Proof.
+  intros c [lo hi] n; unfold Val.cmp_different_blocks.
+  destruct c; auto using cmp_intv_None; simpl.
+- destruct orb; constructor.
+- constructor.
+Qed.
+
+Lemma cmp_intv_different_blocks_2:
+  forall c i n, cmatch (Val.cmp_different_blocks c) (cmp_intv (swap_comparison c) i n).
+Proof.
+  intros c [lo hi] n; unfold Val.cmp_different_blocks.
+  destruct c; auto using cmp_intv_None; simpl.
+- destruct orb; constructor.
+- constructor.
+Qed.
+
 Definition uintv (v: aval) : Z * Z :=
   match v with
   | I n => (Int.unsigned n, Int.unsigned n)
@@ -3045,8 +3063,8 @@ Definition cmpu_bool (c: comparison) (v w: aval) : abool :=
   | Ptr _, I i => if Int.eq i Int.zero then cmp_different_blocks c else Btop
   | I i, Ptr _ => if Int.eq i Int.zero then cmp_different_blocks c else Btop
   | Ptr p1, Ptr p2 => pcmp c p1 p2
-  | _, (I i | IU i) => club (cmp_intv c (uintv v) (Int.unsigned i)) (cmp_different_blocks c)
-  | (I i | IU i), _ => club (cmp_intv (swap_comparison c) (uintv w) (Int.unsigned i)) (cmp_different_blocks c)
+  | _, (I i | IU i) => cmp_intv c (uintv v) (Int.unsigned i)
+  | (I i | IU i), _ => cmp_intv (swap_comparison c) (uintv w) (Int.unsigned i)
   | _, _ => Btop
   end.
 
@@ -3057,22 +3075,29 @@ Proof.
   assert (IP: forall i b ofs,
     cmatch (Val.cmpu_bool valid c (Vint i) (Vptr b ofs)) (cmp_different_blocks c)).
   {
-    intros. simpl. destruct Archi.ptr64.
-    apply cmp_different_blocks_none.
-    destruct (Int.eq i Int.zero && (valid b (Ptrofs.unsigned ofs) || valid b (Ptrofs.unsigned ofs - 1))).
-    apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
+    intros. simpl. destruct Archi.ptr64; auto using cmp_different_blocks_none.
+    destruct andb; auto using cmp_different_blocks_sound, cmp_different_blocks_none.
   }
   assert (PI: forall i b ofs,
     cmatch (Val.cmpu_bool valid c (Vptr b ofs) (Vint i)) (cmp_different_blocks c)).
   {
-    intros. simpl. destruct Archi.ptr64.
-    apply cmp_different_blocks_none.
-    destruct (Int.eq i Int.zero && (valid b (Ptrofs.unsigned ofs) || valid b (Ptrofs.unsigned ofs - 1))).
-    apply cmp_different_blocks_sound. apply cmp_different_blocks_none.
+    intros. simpl. destruct Archi.ptr64; auto using cmp_different_blocks_none.
+    destruct andb; auto using cmp_different_blocks_sound, cmp_different_blocks_none.
+  }
+  assert (IP2: forall i b ofs itv,
+    cmatch (Val.cmpu_bool valid c (Vint i) (Vptr b ofs)) (cmp_intv (swap_comparison c) itv (Int.unsigned i))).
+  {
+    intros. simpl. destruct Archi.ptr64; auto using cmp_intv_None.
+    destruct andb; auto using cmp_intv_different_blocks_2, cmp_intv_None.
+  }
+  assert (PI2: forall i b ofs itv,
+    cmatch (Val.cmpu_bool valid c (Vptr b ofs) (Vint i)) (cmp_intv c itv (Int.unsigned i))).
+  {
+    intros. simpl. destruct Archi.ptr64; auto using cmp_intv_None.
+    destruct andb; auto using cmp_intv_different_blocks, cmp_intv_None.
   }
   unfold cmpu_bool; inversion H; subst; inversion H0; subst;
-  auto using cmatch_top, cmp_different_blocks_none, pcmp_none,
-             cmatch_lub_l, cmatch_lub_r, pcmp_sound,
+  auto using cmatch_top, cmp_different_blocks_none, pcmp_none, pcmp_sound,
              cmpu_intv_sound, cmpu_intv_sound_2, cmp_intv_None.
 - constructor.
 - constructor.
