@@ -2876,7 +2876,7 @@ Definition cmp_intv (c: comparison) (i: Z * Z) (n: Z) : abool :=
   let (lo, hi) := i in
   match c with
   | Ceq => if zlt n lo || zlt hi n then Maybe false else Btop
-  | Cne => Btop
+  | Cne => if zlt n lo || zlt hi n then Maybe true else Btop
   | Clt => if zlt hi n then Maybe true else if zle n lo then Maybe false else Btop
   | Cle => if zle hi n then Maybe true else if zlt n lo then Maybe false else Btop
   | Cgt => if zlt n lo then Maybe true else if zle hi n then Maybe false else Btop
@@ -2905,6 +2905,8 @@ Proof.
   destruct (zlt hi n). rewrite zeq_false by lia. constructor.
   constructor.
 - (* ne *)
+  destruct (zlt n lo). rewrite zeq_false by lia. constructor.
+  destruct (zlt hi n). rewrite zeq_false by lia. constructor.
   constructor.
 - (* lt *)
   destruct (zlt hi n). rewrite zlt_true by lia. constructor.
@@ -2932,7 +2934,7 @@ Proof.
 - (* eq *)
   destruct (zlt n lo). constructor. destruct (zlt hi n); constructor.
 - (* ne *)
-  constructor.
+  destruct (zlt n lo). constructor. destruct (zlt hi n); constructor.
 - (* lt *)
   destruct (zlt hi n). constructor. destruct (zle n lo); constructor.
 - (* le *)
@@ -2949,7 +2951,7 @@ Proof.
   intros c [lo hi] n; unfold Val.cmp_different_blocks.
   destruct c; auto using cmp_intv_None; simpl.
 - destruct orb; constructor.
-- constructor.
+- destruct orb; constructor.
 Qed.
 
 Lemma cmp_intv_different_blocks_2:
@@ -2958,7 +2960,7 @@ Proof.
   intros c [lo hi] n; unfold Val.cmp_different_blocks.
   destruct c; auto using cmp_intv_None; simpl.
 - destruct orb; constructor.
-- constructor.
+- destruct orb; constructor.
 Qed.
 
 Definition uintv (v: aval) : Z * Z :=
