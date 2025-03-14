@@ -405,6 +405,20 @@ Definition add_memcpy (n1 n2: numbering) (asrc adst: aptr) (sz: Z) :=
   | _, _ => n2
   end.
 
+(** Recognition of function calls to runtime functions with known semantics. *)
+
+Definition defmap := PTree.t (globdef fundef unit).
+
+Definition is_known_runtime_function (dm: defmap) (ros: reg + ident) : option builtin_function :=
+  match ros with
+  | inl r => None
+  | inr id =>
+      match dm!id with
+      | Some(Gfun(External(EF_runtime name sg))) => lookup_builtin_function name sg
+      | _ => None
+      end
+  end.
+
 (** Take advantage of known equations to select more efficient
   forms of operations, addressing modes, and conditions. *)
 
@@ -495,7 +509,7 @@ Module Solver := BBlock_solver(Numbering).
 - Keep all equations and add a new equation.  This is for known builtin functions.
 *)
 
-Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numbering) :=
+Definition transfer (f: function) (dm: defmap) (approx: PMap.t VA.t) (pc: node) (before: numbering) :=
   match f.(fn_code)!pc with
   | None => before
   | Some i =>
@@ -511,7 +525,10 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
           let n := kill_loads_after_store app before chunk addr args in
           add_store_result app n chunk addr args src
       | Icall sig ros args res s =>
-          empty_numbering
+          match is_known_runtime_function dm ros with
+          | None => empty_numbering
+          | Some bf => add_builtin before (BR res) bf (map (@BA _) args)
+          end
       | Itailcall sig ros args =>
           empty_numbering
       | Ibuiltin ef args res s =>
@@ -553,8 +570,8 @@ Definition transfer (f: function) (approx: PMap.t VA.t) (pc: node) (before: numb
   which produces sub-optimal solutions quickly.  The result is
   a mapping from program points to numberings. *)
 
-Definition analyze (f: RTL.function) (approx: PMap.t VA.t): option (PMap.t numbering) :=
-  Solver.fixpoint (fn_code f) successors_instr (transfer f approx) f.(fn_entrypoint).
+Definition analyze (f: RTL.function) (dm: defmap) (approx: PMap.t VA.t): option (PMap.t numbering) :=
+  Solver.fixpoint (fn_code f) successors_instr (transfer f dm approx) f.(fn_entrypoint).
 
 (** * Code transformation *)
 
@@ -568,7 +585,7 @@ Definition analyze (f: RTL.function) (approx: PMap.t VA.t): option (PMap.t numbe
   worth reusing their results.  These operations are detected by the
   function [is_trivial_op] in module [Op]. *)
 
-Definition transf_instr (n: numbering) (instr: instruction) :=
+Definition transf_instr (dm: defmap) (n: numbering) (instr: instruction) :=
   match instr with
   | Iop op args res s =>
       if is_trivial_op op then instr else
@@ -593,6 +610,16 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
       let (n1, vl) := valnum_regs n args in
       let (addr', args') := reduce _ combine_addr n1 addr args vl in
       Istore chunk addr' args' src s
+  | Icall sg ros args res s =>
+      match is_known_runtime_function dm ros with
+      | None => instr
+      | Some bf =>
+          let (n1, args') := valnum_builtin_args n (map (@BA _) args) in
+          match find_rhs n1 (Builtin bf args') with
+          | Some r => Iop Omove (r :: nil) res s
+          | None   => instr
+          end
+      end
   | Ibuiltin (EF_builtin name sg) args (BR res) s =>
       match lookup_builtin_function name sg with
       | Some bf =>
@@ -616,27 +643,29 @@ Definition transf_instr (n: numbering) (instr: instruction) :=
       instr
   end.
 
-Definition transf_code (approxs: PMap.t numbering) (instrs: code) : code :=
-  PTree.map (fun pc instr => transf_instr approxs!!pc instr) instrs.
+Definition transf_code (dm: defmap) (approxs: PMap.t numbering) (instrs: code) : code :=
+  PTree.map (fun pc instr => transf_instr dm approxs!!pc instr) instrs.
 
 Definition vanalyze := ValueAnalysis.analyze.
 
-Definition transf_function (rm: romem) (f: function) : res function :=
+Definition globdefs := PTree.t (globdef fundef unit).
+
+Definition transf_function (dm: defmap) (rm: romem) (f: function) : res function :=
   let approx := vanalyze rm f in
-  match analyze f approx with
+  match analyze f dm approx with
   | None => Error (msg "CSE failure")
   | Some approxs =>
       OK(mkfunction
            f.(fn_sig)
            f.(fn_params)
            f.(fn_stacksize)
-           (transf_code approxs f.(fn_code))
+           (transf_code dm approxs f.(fn_code))
            f.(fn_entrypoint))
   end.
 
-Definition transf_fundef (rm: romem) (f: fundef) : res fundef :=
-  AST.transf_partial_fundef (transf_function rm) f.
+Definition transf_fundef (dm: defmap) (rm: romem) (f: fundef) : res fundef :=
+  AST.transf_partial_fundef (transf_function dm rm) f.
 
 Definition transf_program (p: program) : res program :=
-  transform_partial_program (transf_fundef (romem_for p)) p.
+  transform_partial_program (transf_fundef (prog_defmap p) (romem_for p)) p.
 
