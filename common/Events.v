@@ -1433,10 +1433,8 @@ Remark known_builtin_sem_inject: forall bf ge vargs m1 t vres m2 f ge' vargs' m'
   Val.inject_list f vargs vargs' ->
   exists vres', known_builtin_sem bf ge' vargs' m' t vres' m' /\ Val.inject f vres vres'.
 Proof.
-  intros. inv H. specialize (bs_inject _ (builtin_function_sem bf) _ _ _ H0).
-  unfold val_opt_inject. rewrite H1. intros.
-  destruct (builtin_function_sem bf vargs') as [vres'|] eqn:?; try contradiction.
-  exists vres'; split; auto using known_builtin_sem.
+  intros. inv H. exploit builtin_function_sem_inject; eauto. intros (vres' & A & B).
+  exists vres'; auto using known_builtin_sem.
 Qed.
 
 Remark known_builtin_sem_lessdef: forall bf ge vargs m1 t vres m2 ge' vargs' m',
@@ -1444,10 +1442,8 @@ Remark known_builtin_sem_lessdef: forall bf ge vargs m1 t vres m2 ge' vargs' m',
   Val.lessdef_list vargs vargs' ->
   exists vres', known_builtin_sem bf ge' vargs' m' t vres' m' /\ Val.lessdef vres vres'.
 Proof.
-  intros. apply val_inject_list_lessdef in H0.
-  exploit known_builtin_sem_inject; eauto. intros (vres' & A & B).
-  apply val_inject_lessdef in B.
-  exists vres'; eauto.
+  intros. inv H. exploit builtin_function_sem_lessdef; eauto. intros (vres' & A & B).
+  exists vres'; auto using known_builtin_sem.
 Qed.
 
 Lemma known_builtin_ok: forall bf,
