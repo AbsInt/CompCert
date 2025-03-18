@@ -17,7 +17,7 @@
 *)
 
 Require Import Coqlib Maps.
-Require Import AST Integers Values Events Memory Globalenvs Smallstep.
+Require Import AST Linking Integers Values Builtins Events Memory Globalenvs Smallstep.
 Require Import Op Registers.
 
 (** * Abstract syntax *)
@@ -573,3 +573,38 @@ Proof.
   { apply X; auto. }
   unfold max_reg_function. extlia.
 Qed.
+
+(** Recognition of function calls to runtime functions with known semantics. *)
+
+Definition defmap := PTree.t (globdef fundef unit).
+
+Definition is_known_runtime_function (dm: defmap) (ros: reg + ident) : option builtin_function :=
+  match ros with
+  | inl r => None
+  | inr id =>
+      match dm!id with
+      | Some(Gfun(External(EF_runtime name sg))) => lookup_builtin_function name sg
+      | _ => None
+      end
+  end.
+
+Lemma is_known_runtime_function_sound:
+  forall cu prog ros bf rs fd,
+  is_known_runtime_function (prog_defmap cu) ros = Some bf ->
+  linkorder cu prog ->
+  find_function (Genv.globalenv prog) ros rs = Some fd ->
+  exists name sg, fd = External(EF_runtime name sg)
+               /\ lookup_builtin_function name sg = Some bf.
+Proof.
+  unfold is_known_runtime_function; intros.
+  destruct ros as [r|id]; try discriminate.
+  destruct (prog_defmap cu)!id as [gd|] eqn:D; try discriminate.
+  destruct gd as [f|v]; try discriminate.
+  destruct f as [f|ef]; try discriminate.
+  destruct ef; try discriminate.
+  exploit (prog_defmap_linkorder cu prog); eauto.
+  intros (gd & D2 & LD). inv LD. inv H3.
+  apply Genv.find_def_symbol in D2. fold ge in D2. destruct D2 as (b & F1 & F2).
+  simpl in H1. rewrite F1 in H1. apply Genv.find_funct_ptr_iff in H1.
+  exists name, sg; intuition congruence.
+Qed. 

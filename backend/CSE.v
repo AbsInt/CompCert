@@ -405,20 +405,6 @@ Definition add_memcpy (n1 n2: numbering) (asrc adst: aptr) (sz: Z) :=
   | _, _ => n2
   end.
 
-(** Recognition of function calls to runtime functions with known semantics. *)
-
-Definition defmap := PTree.t (globdef fundef unit).
-
-Definition is_known_runtime_function (dm: defmap) (ros: reg + ident) : option builtin_function :=
-  match ros with
-  | inl r => None
-  | inr id =>
-      match dm!id with
-      | Some(Gfun(External(EF_runtime name sg))) => lookup_builtin_function name sg
-      | _ => None
-      end
-  end.
-
 (** Take advantage of known equations to select more efficient
   forms of operations, addressing modes, and conditions. *)
 

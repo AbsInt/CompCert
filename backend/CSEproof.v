@@ -1157,27 +1157,6 @@ Proof.
   discriminate.
 Qed.
 
-Lemma is_known_runtime_function_sound:
-  forall cu ros bf rs fd,
-  is_known_runtime_function (prog_defmap cu) ros = Some bf ->
-  linkorder cu prog ->
-  find_function ge ros rs = Some fd ->
-  exists name sg, fd = External(EF_runtime name sg)
-               /\ lookup_builtin_function name sg = Some bf.
-Proof.
-  unfold is_known_runtime_function; intros.
-  destruct ros as [r|id]; try discriminate.
-  destruct (prog_defmap cu)!id as [gd|] eqn:D; try discriminate.
-  destruct gd as [f|v]; try discriminate.
-  destruct f as [f|ef]; try discriminate.
-  destruct ef; try discriminate.
-  exploit (prog_defmap_linkorder cu prog); eauto.
-  intros (gd & D2 & LD). inv LD. inv H3.
-  apply Genv.find_def_symbol in D2. fold ge in D2. destruct D2 as (b & F1 & F2).
-  simpl in H1. rewrite F1 in H1. apply Genv.find_funct_ptr_iff in H1.
-  exists name, sg; intuition congruence.
-Qed. 
-
 (** The proof of semantic preservation is a simulation argument using
   diagrams of the following form:
 <<
