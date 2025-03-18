@@ -1585,18 +1585,3 @@ Proof.
 Qed.
 
 End PRESERVATION.
-
-(** ** Commutation with linking *)
-
-Global Instance TransfCSELink : TransfLink match_prog.
-Proof.
-  red; intros. destruct (link_linkorder _ _ _ H) as [LO1 LO2].
-  eapply link_match_program; eauto.
-  intros.
-Local Transparent Linker_fundef.
-  generalize H3 H4; intros A1 A2. destruct f1, f2; monadInv A1; monadInv A2.
-- discriminate.
-- destruct e; inv H2. exists (Internal x); eauto. 
-- destruct e; inv H2. exists (Internal x); eauto. 
-- exists f; split; auto. inv H2. destruct (external_function_eq e e0); inv H6. auto.
-Qed.

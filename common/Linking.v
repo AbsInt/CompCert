@@ -714,6 +714,22 @@ Proof.
 - intros; subst. exists v; auto.
 Qed.
 
+Global Instance TransfPartialContextualLink2
+           {A B C D V: Type} {LV: Linker V}
+           (tr_fun: C -> D -> A -> res B)
+           (ctx1_for: program (fundef A) V -> C)
+           (ctx2_for: program (fundef A) V -> D):
+  TransfLink (fun (p1: program (fundef A) V) (p2: program (fundef B) V) =>
+              match_program
+                (fun cu f tf => AST.transf_partial_fundef (tr_fun (ctx1_for cu) (ctx2_for cu)) f = OK tf)
+                eq p1 p2).
+Proof.
+  red. intros. destruct (link_linkorder _ _ _ H) as [LO1 LO2].
+  eapply link_match_program; eauto.
+- intros. eapply link_transf_partial_fundef; eauto.
+- intros; subst. exists v; auto.
+Qed.
+
 Global Instance TransfPartialLink
            {A B V: Type} {LV: Linker V}
            (tr_fun: A -> res B):
