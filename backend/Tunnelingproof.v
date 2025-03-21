@@ -12,7 +12,7 @@
 
 (** Correctness proof for the branch tunneling optimization. *)
 
-Require Import FunInd.
+From Coq Require Import FunInd.
 Require Import Coqlib Maps UnionFind.
 Require Import AST Linking.
 Require Import Values Memory Events Globalenvs Smallstep.

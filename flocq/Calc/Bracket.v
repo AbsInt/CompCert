@@ -651,7 +651,7 @@ now apply Zpower_gt_1.
 now apply Z_mod_lt.
 rewrite <- 2!Rmult_plus_distr_r, <- 2!plus_IZR.
 rewrite Zmult_comm, Zplus_assoc.
-(try now rewrite <- Z_div_mod_eq_full); now rewrite <- Z_div_mod_eq.  (* remove the try and the second part when requiring Coq >= 8.14 *)
+now rewrite <- Z_div_mod_eq_full.
 Qed.
 
 Theorem inbetween_float_new_location_single :

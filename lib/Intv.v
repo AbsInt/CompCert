@@ -16,10 +16,8 @@
 
 (** Definitions and theorems about semi-open integer intervals *)
 
+From Coq Require Import Zwf Program.Wf Recdef.
 Require Import Coqlib.
-Require Import Zwf.
-Require Coq.Program.Wf.
-Require Import Recdef.
 
 Definition interv : Type := (Z * Z)%type.
 

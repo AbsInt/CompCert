@@ -12,7 +12,7 @@
 
 (** Correctness proof for code linearization *)
 
-Require Import FSets.
+From Coq Require Import FSets.
 Require Import Coqlib Maps Ordered Errors Lattice Kildall Integers.
 Require Import AST Linking.
 Require Import Values Memory Events Globalenvs Smallstep.

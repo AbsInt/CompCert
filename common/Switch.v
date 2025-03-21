@@ -17,11 +17,8 @@
 (** Multi-way branches (``switch'' statements) and their compilation
     to comparison trees. *)
 
-Require Import EqNat.
-Require Import Coqlib.
-Require Import Maps.
-Require Import Integers.
-Require Import Values.
+From Coq Require Import EqNat.
+Require Import Coqlib Maps Integers Values.
 
 (** A multi-way branch is composed of a list of (key, action) pairs,
   plus a default action.  *)

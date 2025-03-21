@@ -12,7 +12,7 @@
 
 (** Semantic preservation for the SimplLocals pass. *)
 
-Require Import FSets.
+From Coq Require Import FSets.
 Require Import Coqlib Errors Ordered Maps Integers Floats.
 Require Import AST Linking.
 Require Import Values Memory Globalenvs Events Smallstep.

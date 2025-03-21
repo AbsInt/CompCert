@@ -18,8 +18,8 @@
   with extra interval-based operations, more efficient than standard
   operations. *)
 
-Require Import FSetInterface.
-Require FSetAVL.
+From Coq Require Import FSetInterface.
+From Coq Require FSetAVL.
 Require Import Coqlib.
 
 Module Make(X: OrderedType).

@@ -16,7 +16,7 @@
 
 (** A persistent union-find data structure. *)
 
-Require Coq.Program.Wf.
+From Coq Require Program.Wf.
 Require Import Coqlib.
 
 Open Scope nat_scope.

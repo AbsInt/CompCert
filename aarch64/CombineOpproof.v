@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import FunInd.
+From Coq Require Import FunInd.
 Require Import Coqlib.
 Require Import AST Integers Values Memory.
 Require Import Op Registers RTL.

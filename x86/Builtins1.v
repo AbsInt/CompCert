@@ -16,8 +16,8 @@
 
 (** Platform-specific built-in functions *)
 
-Require Import String Coqlib.
-Require Import AST Integers Floats Values.
+From Coq Require Import String.
+Require Import Coqlib AST Integers Floats Values.
 Require Import Builtins0.
 Local Open Scope asttyp_scope.
 

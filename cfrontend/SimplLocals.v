@@ -13,8 +13,7 @@
 (** Pulling local scalar variables whose address is not taken
   into temporary variables. *)
 
-Require Import FSets.
-Require FSetAVL.
+From Coq Require Import FSets FSetAVL.
 Require Import Coqlib Ordered Errors.
 Require Import AST Linking.
 Require Import Ctypes Cop Clight.

@@ -10,8 +10,8 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import FunInd.
-Require Import Zwf Coqlib Maps Zbits Integers Floats Lattice.
+From Coq Require Import FunInd Zwf.
+Require Import Coqlib Maps Zbits Integers Floats Lattice.
 Require Import Compopts AST.
 Require Import Values Memory Globalenvs Builtins Events.
 Require Import Registers RTL.

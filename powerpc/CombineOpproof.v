@@ -13,15 +13,9 @@
 (** Recognition of combined operations, addressing modes and conditions
   during the [CSE] phase. *)
 
-Require Import FunInd.
-Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Values.
-Require Import Memory.
-Require Import Op.
-Require Import Registers.
-Require Import RTL.
+From Coq Require Import FunInd.
+Require Import Coqlib AST Integers Values Memory.
+Require Import Op Registers RTL.
 Require Import CSEdomain.
 Require Import CombineOp.
 

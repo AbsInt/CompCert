@@ -17,7 +17,8 @@
 
 (** Correctness of instruction selection for 64-bit integer operations *)
 
-Require Import String Coqlib Maps Integers Floats Errors.
+From Coq Require Import String.
+Require Import Coqlib Maps Integers Floats Errors.
 Require Archi.
 Require Import AST Values Memory Globalenvs Events.
 Require Import Cminor Op CminorSel.

@@ -16,8 +16,8 @@
 
 (** Architecture-dependent parameters for AArch64 *)
 
+From Coq Require Import ZArith List.
 From Flocq Require Import Binary Bits.
-Require Import ZArith List.
 
 Definition ptr64 := true.
 
