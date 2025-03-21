@@ -19,7 +19,7 @@ jobs:
       opamroot: /home/coq/.opam
       configopts: -ignore-coq-version
     container:
-      image: coqorg/coq:8.13
+      image: coqorg/coq:8.15
       options: --user root
     steps:
       - name: Checkout
