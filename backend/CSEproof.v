@@ -628,6 +628,14 @@ Proof.
 - econstructor; eauto using builtin_args_depends_on_memory_correct.
 Qed.
 
+Lemma kill_cheap_computations_hold:
+  forall valu ge sp rs m n,
+  numbering_holds valu ge sp rs m n ->
+  numbering_holds valu ge sp rs m (kill_cheap_computations n).
+Proof.
+  intros. eapply kill_equations_hold; eauto.
+Qed.
+
 Lemma store_normalized_range_sound:
   forall bc chunk v,
   vmatch bc v (store_normalized_range chunk) ->
@@ -1030,7 +1038,6 @@ Qed.
 
 End REDUCELD.
 
-
 (** The numberings associated to each instruction by the static analysis
   are inductively satisfiable, in the following sense: the numbering
   at the function entry point is satisfiable, and for any RTL execution
@@ -1242,15 +1249,15 @@ Lemma transf_step_correct:
 Proof.
   induction 1; intros; inv MS; try (TransfInstr; intro C).
 
-  (* Inop *)
-- left; econstructor; split.
+- (* Inop *)
+  left; econstructor; split.
   eapply exec_Inop; eauto.
   econstructor; eauto.
   eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H; auto.
 
-  (* Iop *)
-- destruct (is_trivial_op op) eqn:TRIV.
+- (* Iop *)
+  destruct (is_trivial_op op) eqn:TRIV.
 + (* unchanged *)
   exploit eval_operation_lessdef. eapply regs_lessdef_regs; eauto. eauto. eauto.
   intros [v' [A B]].
@@ -1388,7 +1395,7 @@ Proof.
   apply EV. intros. econstructor; eauto.
   eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H, IK.
-  eapply add_builtin_holds with (res := BR res); eauto using kill_all_loads_hold, eval_builtin_args_trivial.
+  eapply add_builtin_holds with (res := BR res); eauto using kill_cheap_computations_hold, eval_builtin_args_trivial.
   replace v0 with v by congruence.
   apply set_reg_lessdef; auto.
   apply Val.lessdef_trans with (rs#r); auto.
@@ -1407,7 +1414,7 @@ Proof.
   econstructor; eauto.
   eapply analysis_correct_1; eauto. simpl; auto.
   unfold transfer; rewrite H, IK.
-  eapply add_builtin_holds with (res := BR res); eauto using kill_all_loads_hold, eval_builtin_args_trivial.
+  eapply add_builtin_holds with (res := BR res); eauto using kill_cheap_computations_hold, eval_builtin_args_trivial.
   apply set_reg_lessdef; auto.
 ** (* the builtin function fails *)
   right. econstructor; exists 1%nat; split.

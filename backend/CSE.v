@@ -319,6 +319,25 @@ Definition kill_loads_after_store
   let p := aaddressing app addr args in
   kill_equations (filter_after_store n p (size_chunk chunk)) n.
 
+(** [kill_cheap_computations n] removes all equations corresponding to
+    ``cheap'' computations, i.e. computations that are not worth
+    factoring across a call to a runtime library function.
+    (Such a factoring has its own costs, since the result must be kept
+    in a callee-save register or a stack location.)
+    As a rough approximation of costs, we say that all [Op] and [Load]
+    computations are cheap, and all [Builtin] computations are
+    expensive.  More precise criteria are possible. *)
+
+Definition filter_cheap (r: rhs) : bool :=
+  match r with
+  | Op _ _ => true
+  | Load _ _ _ _ => true
+  | Builtin _ _ => false
+  end.
+
+Definition kill_cheap_computations (n: numbering) : numbering :=
+  kill_equations filter_cheap n.
+
 (** [add_store_result n chunk addr rargs rsrc] updates the numbering [n]
   to reflect the knowledge gained after executing an instruction
   [Istore chunk addr rargs rsrc].  An equation [vsrc >= Load chunk addr vargs]
@@ -469,17 +488,19 @@ Module Solver := BBlock_solver(Numbering).
 
 (** The transfer function for the dataflow analysis returns the numbering
   ``after'' execution of the instruction at [pc], as a function of the
-  numbering ``before''.  For [Iop] and [Iload] instructions, we add
-  equations or reuse existing value numbers as described for
-  [add_op] and [add_load].  For [Istore] instructions, we forget
-  equations involving memory loads at possibly overlapping locations,
-  then add an equation for loads from the same location stored to.
-  For [Icall] instructions, we could simply associate a fresh, unconstrained by equations value number
-  to the result register.  However, it is often undesirable to eliminate
-  common subexpressions across a function call (there is a risk of
-  increasing too much the register pressure across the call), so we
-  just forget all equations and start afresh with an empty numbering.
-  Finally, for instructions that modify neither registers nor
+  numbering ``before''.
+- For [Iop] and [Iload] instructions, we add equations or reuse
+  existing value numbers as described for [add_op] and [add_load].
+- For [Istore] instructions, we forget equations involving memory
+  loads at possibly overlapping locations, then add an equation for
+  loads from the same location stored to.
+- For [Icall] instructions, we could simply associate a fresh,
+  unconstrained by equations value number to the result register.
+  However, it is often undesirable to eliminate common subexpressions
+  across a function call (there is a risk of increasing too much the
+  register pressure across the call), so we just forget all equations
+  and start afresh with an empty numbering.
+- Finally, for instructions that modify neither registers nor
   the memory, we keep the numbering unchanged.
 
   For builtin invocations [Ibuiltin], we have four strategies:
@@ -492,7 +513,12 @@ Module Solver := BBlock_solver(Numbering).
 - Keep all equations, taking advantage of the fact that neither memory
   nor registers are modified.  This is appropriate for annotations and
   volatile loads.
-- Keep all equations and add a new equation.  This is for known builtin functions.
+- Keep all equations and add a new equation.  This is appropriate for
+  builtin functions with known semantics.
+
+  [Icall] instructions that call runtime library functions with known
+  semantics can be analyzed like a builtin invocation,
+  by adding a new [Builtin] equation.
 *)
 
 Definition transfer (f: function) (dm: defmap) (approx: PMap.t VA.t) (pc: node) (before: numbering) :=
@@ -513,7 +539,9 @@ Definition transfer (f: function) (dm: defmap) (approx: PMap.t VA.t) (pc: node) 
       | Icall sig ros args res s =>
           match is_known_runtime_function dm ros with
           | None => empty_numbering
-          | Some bf => add_builtin before (BR res) bf (map (@BA _) args)
+          | Some bf =>
+              let n := kill_cheap_computations before in
+              add_builtin n (BR res) bf (map (@BA _) args)
           end
       | Itailcall sig ros args =>
           empty_numbering
