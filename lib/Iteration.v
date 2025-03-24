@@ -202,8 +202,7 @@ End PrimIter.
   [None] means that iteration does not terminate.
   [Some b] means that iteration terminates with the result [b]. *)
 
-Require Import Classical.
-Require Import ClassicalDescription.
+From Coq Require Import Classical ClassicalDescription.
 
 Module GenIter.
 

@@ -17,14 +17,9 @@
 (** Characterization and properties of deterministic external worlds
   and deterministic semantics *)
 
-Require Import String.
+From Coq Require Import String.
 Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Behaviors.
+Require Import AST Integers Events Globalenvs Smallstep Behaviors.
 
 (** * Deterministic worlds *)
 

@@ -20,7 +20,7 @@
   of Coq 8.5 with more instances of decidable properties, including
   universal and existential quantification over finite types. *)
 
-Require Export DecidableClass.
+From Coq Require Export DecidableClass.
 Require Import Coqlib.
 
 Ltac decide_goal := eapply Decidable_sound; reflexivity.

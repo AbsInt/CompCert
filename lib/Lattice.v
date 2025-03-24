@@ -17,9 +17,8 @@
 
 (** Constructions of semi-lattices. *)
 
-Require Import Coqlib.
-Require Import Maps.
-Require Import FSets.
+From Coq Require Import FSets.
+Require Import Coqlib Maps.
 
 (* To avoid useless definitions of inductors in extracted code. *)
 Local Unset Elimination Schemes.

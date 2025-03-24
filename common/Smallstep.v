@@ -20,12 +20,8 @@
   the one-step transition relations that are used to specify
   operational semantics in small-step style. *)
 
-Require Import Relations.
-Require Import Wellfounded.
-Require Import Coqlib.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Integers.
+From Coq Require Import Relations Wellfounded.
+Require Import Coqlib Events Globalenvs Integers.
 
 Set Implicit Arguments.
 

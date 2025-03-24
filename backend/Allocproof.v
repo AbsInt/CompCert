@@ -13,8 +13,7 @@
 (** Correctness proof for the [Allocation] pass (validated translation from
   RTL to LTL). *)
 
-Require Import FunInd.
-Require Import FSets.
+From Coq Require Import FunInd FSets.
 Require Import Coqlib Ordered Maps Errors Integers Floats.
 Require Import AST Linking Lattice Kildall.
 Require Import Values Memory Globalenvs Events Smallstep.

@@ -17,11 +17,10 @@
 
 (** Formalization of floating-point numbers, using the Flocq library. *)
 
-Require Import Reals.
+From Coq Require Import Reals Program.
 Require Import Coqlib Zbits Integers.
 From Flocq Require Import BinarySingleNaN Binary Bits Core.
 Require Import IEEE754_extra.
-Require Import Program.
 Require Archi.
 Import ListNotations.
 

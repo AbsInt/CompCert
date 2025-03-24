@@ -12,9 +12,8 @@
 
 (** Animating the CompCert C semantics *)
 
-Require Import FunInd.
-Require Import Axioms Classical.
-Require Import String Coqlib Decidableplus.
+From Coq Require Import FunInd Classical String.
+Require Import Axioms Coqlib Decidableplus.
 Require Import Errors Maps Integers Floats.
 Require Import AST Values Memory Events Globalenvs Builtins Determinism.
 Require Import Ctypes Cop Csyntax Csem.

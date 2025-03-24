@@ -16,7 +16,8 @@
 
 (** Known built-in functions *)
 
-Require Import String Coqlib.
+From Coq Require Import String.
+Require Import Coqlib.
 Require Import AST Integers Floats Values.
 Require Export Builtins0 Builtins1.
 
