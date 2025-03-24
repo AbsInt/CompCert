@@ -1,0 +1,9 @@
+(coq.theory
+ (name MenhirLib)
+ (package MenhirLib)
+ ; can only be addressed upstream
+ (flags -w -deprecated-syntactic-definition)
+ (modules_flags 
+  (Interpreter (:standard -w -undeclared-scope))))
+
+(include_subdirs qualified)

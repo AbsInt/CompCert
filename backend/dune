@@ -1,0 +1,11 @@
+
+; apply preprocessor to .vp files
+(rule
+ (action 
+  (with-stdout-to SelectDiv.v 
+   (run ndfun %{dep:SelectDiv.vp}))))
+
+(rule
+ (action 
+  (with-stdout-to SplitLong.v 
+   (run ndfun %{dep:SplitLong.vp}))))

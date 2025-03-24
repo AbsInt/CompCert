@@ -14,27 +14,28 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Coqlib.
-Require Wfsimpl.
-Require DecidableClass Decidableplus.
-Require AST.
-Require Iteration.
-Require Floats.
-Require SelectLong.
-Require Selection.
-Require RTLgen.
-Require Inlining.
-Require ValueDomain.
-Require Tailcall.
-Require Allocation.
-Require Bounds.
-Require Ctypes.
-Require Csyntax.
-Require Ctyping.
-Require Clight.
-Require Compiler.
-Require Parser.
-Require Initializers.
+From compcert Require Coqlib.
+From compcert Require Wfsimpl.
+From Coq Require DecidableClass.
+From compcert Require Decidableplus.
+From compcert Require AST.
+From compcert Require Iteration.
+From compcert Require Floats.
+From compcert Require SelectLong.
+From compcert Require Selection.
+From compcert Require RTLgen.
+From compcert Require Inlining.
+From compcert Require ValueDomain.
+From compcert Require Tailcall.
+From compcert Require Allocation.
+From compcert Require Bounds.
+From compcert Require Ctypes.
+From compcert Require Csyntax.
+From compcert Require Ctyping.
+From compcert Require Clight.
+From compcert Require Compiler.
+From compcert Require Parser.
+From compcert Require Initializers.
 
 (* Standard lib *)
 Require Import ExtrOcamlBasic.
@@ -149,7 +150,7 @@ Set Extraction AccessOpaque.
 
 (* Go! *)
 
-Cd "extraction".
+(* Cd "extraction". *)
 
 Separate Extraction
    Compiler.transf_c_program Compiler.transf_cminor_program

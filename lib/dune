@@ -1,0 +1,2 @@
+; Convert lexer (.mll) files to .ml files
+(ocamllex Readconfig Responsefile Tokenize)

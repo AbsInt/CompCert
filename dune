@@ -1,0 +1,17 @@
+; .ini / .config generation rules 
+; For both the ini_creator and config_creator there is an implicit dependency on the binary itself, so the rule is evaluated again if the tool is changed.
+(rule
+ (targets compcert.ini)
+ (action (with-stdout-to compcert.ini
+  (run ini_creator))))
+
+(rule
+ (targets compcert.config)
+ (action (with-stdout-to compcert.config
+  (run config_creator))))
+
+; binary shorthands
+(env
+ ; for all build envs add tools to path -> makes them available for rules / preprocessing
+ (_ 
+  (binaries tools/ndfun.exe tools/modorder.exe tools/config_to_ml.exe tools/ini_creator.exe tools/config_creator.exe tools/gen_documentation.exe)))

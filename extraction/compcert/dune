@@ -1,0 +1,62 @@
+(include ../shared.dune)
+
+; copy OCaml files from source files - only those not shared with clightgen already
+; when trying to move extraction file into platform directory
+(copy_files %{project_root}/platform/backend/*.{ml,mli})
+(copy_files %{project_root}/platform/TargetPlatformCopy/*.{ml,mli})
+(copy_files %{project_root}/platform/debug/*.{ml,mli})
+; This rule might get ignored by dune as extractionMachdep.v is not recognized as a explicit dependency of 
+; the extraction process. Error Message: Error: Can't find file extractionMachdep.v on loadpath.
+; Can't depend on the copy process it, as the coq.theory stanza does not allow to specify arbitrary 
+; dependencies. Thus we need to explicitly tell dune to copy it over first before running extraction 
+; by using the rule stanza below
+(copy_files %{project_root}/platform/TargetPlatformCopy/extractionMachdep.v)
+(copy_files %{project_root}/platform/driver/*.{ml,mli})
+(copy_files %{project_root}/platform/common/*.{ml,mli})
+
+
+; generate "new" extraction.v to be able to depend on extractionMachdep for the extraction
+(rule
+ (deps extraction.v extractionMachdep.v)
+ (targets extractionFull.v)
+ (package compcert)
+ (action (copy extraction.v extractionFull.v)))
+
+
+; compile library with coq code and all relevant ml/mli files
+(library
+ (name compcert)
+ ; no need to prefix imports to allow transition to dune
+ (wrapped false)
+ (package compcert)
+ ; runtime libraries
+ (modules_without_implementation c debugTypes dwarfTypes)
+ ; Driver is our runner which uses this library, GCC is unneeded file
+ (modules :standard \ Driver GCC)
+ (instrumentation (backend bisect_ppx))
+ (flags -w -32)
+ (libraries menhirLib str unix))
+
+; generate version.ml
+(rule 
+ (targets version.ml)
+ (package compcert)
+ (deps %{project_root}/VERSION)
+ (action
+  (with-stdout-to %{targets}
+    (chdir %{workspace_root}
+    (run config_to_ml %{deps})))))
+
+
+; generate final compcert executable
+(executable
+ (name Driver)
+ (package compcert)
+ (public_name ccomp)
+ (modules Driver)
+ ; generate both bytecode and exe 
+ (modes byte exe)
+ (instrumentation (backend bisect_ppx))
+ (libraries compcert))
+
+(include_subdirs no)
