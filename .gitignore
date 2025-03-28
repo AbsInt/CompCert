@@ -85,3 +85,6 @@
 .nia.cache
 .nra.cache
 .csdp.cache
+
+_build
+.merlin

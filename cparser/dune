@@ -1,0 +1,4 @@
+(rule
+ (targets Parser.v)
+ (action
+  (run menhir --coq --coq-lib-path compcert.MenhirLib --coq-no-version-check %{dep:Parser.vy})))
