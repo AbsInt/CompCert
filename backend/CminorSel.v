@@ -12,6 +12,7 @@
 
 (** The Cminor language after instruction selection. *)
 
+Require Import Recdef.
 Require Import Coqlib.
 Require Import Maps.
 Require Import AST.
@@ -504,6 +505,8 @@ with lift_condexpr (p: nat) (a: condexpr) {struct a}: condexpr :=
 
 Definition lift (a: expr): expr := lift_expr O a.
 
+Definition lift_list (al: exprlist): exprlist := lift_exprlist O al.
+
 (** We now relate the evaluation of a lifted expression with that
     of the original expression. *)
 
@@ -582,4 +585,92 @@ Proof.
   eexact H. apply insert_lenv_0.
 Qed.
 
-Global Hint Resolve eval_lift: evalexpr.
+Lemma eval_lift_list:
+  forall ge sp e m le w al vl,
+  eval_exprlist ge sp e m le al vl ->
+  eval_exprlist ge sp e m (w::le) (lift_list al) vl.
+Proof.
+  induction 1; simpl; eauto using eval_lift, eval_exprlist.
+Qed.
+
+Global Hint Resolve eval_lift eval_lift_list: evalexpr.
+
+(** Some operations over [exprlist]. *)
+
+Fixpoint length_exprlist (al: exprlist) : nat :=
+  match al with Enil => O | Econs a al => S (length_exprlist al) end.
+
+Fixpoint app_exprlist (al bl: exprlist) : exprlist :=
+  match al with Enil => bl | Econs a al => Econs a (app_exprlist al bl) end.
+
+Lemma eval_app_exprlist: forall ge sp e m le al1 al2 vl1 vl2,
+  eval_exprlist ge sp e m le al1 vl1 ->
+  eval_exprlist ge sp e m le al2 vl2 ->
+  eval_exprlist ge sp e m le (app_exprlist al1 al2) (vl1 ++ vl2).
+Proof.
+  intros. revert al1 vl1 H. induction 1; simpl; eauto using eval_exprlist.
+Qed.
+
+(** Binding a list of expressions *)
+
+Function bind_exprs_rec (al: exprlist) (args: exprlist) (f: exprlist -> expr)
+                        {measure length_exprlist al} : expr :=
+  match al with
+  | Enil => f args
+  | Econs a al =>
+      Elet a (bind_exprs_rec (lift_list al)
+                             (app_exprlist (lift_list args) (Econs (Eletvar O) Enil))
+                             f)
+  end.
+Proof.
+  intros. replace (length_exprlist (lift_list al0)) with (length_exprlist al0).
+- simpl; lia.
+- generalize al0. induction al1; simpl; f_equal; auto.
+Qed.
+
+Definition bind_exprs (al: exprlist) (f: exprlist -> expr) : expr :=
+  bind_exprs_rec al Enil f.
+
+Lemma eval_bind_exprs_gen: forall (P: val -> Prop) ge sp e m le al vl f,
+  eval_exprlist ge sp e m le al vl ->
+  (forall args,
+     eval_exprlist ge sp e m (rev vl ++ le) args vl ->
+     exists v, eval_expr ge sp e m (rev vl ++ le) (f args) v /\ P v) ->
+  exists v, eval_expr ge sp e m le (bind_exprs al f) v /\ P v.
+Proof.
+  intros until m.
+  assert (REC: forall al args f le vl1 vl2,
+    (forall args',
+        eval_exprlist ge sp e m (rev vl2 ++ le) args' (vl1 ++ vl2) ->
+        exists v, eval_expr ge sp e m (rev vl2 ++ le) (f args') v /\ P v) ->
+    eval_exprlist ge sp e m le args vl1 ->
+    eval_exprlist ge sp e m le al vl2 ->
+    exists v, eval_expr ge sp e m le (bind_exprs_rec al args f) v /\ P v).
+  { intros until f. functional induction (bind_exprs_rec al args f); intros until vl2; intros F A B.
+  - inv B. apply F. rewrite app_nil_r. auto.
+  - inv B.
+    destruct (IHe0 (v1 :: le) (vl1 ++ v1 :: nil) vl) as (v & X & Y).
+    + intros.
+      assert (EQ: rev vl ++ v1 :: le = rev (v1 :: vl) ++ le).
+      { simpl. rewrite app_ass. auto. }
+      rewrite EQ. apply F. rewrite <- EQ. rewrite app_ass in H. auto.
+    + apply eval_app_exprlist.
+      * apply eval_lift_list; auto.
+      * repeat constructor.
+    + apply eval_lift_list; auto.
+    + exists v; split; eauto using eval_expr.
+  }
+  intros. eapply REC with (args := Enil); eauto using eval_exprlist.
+  assumption.
+Qed.
+
+Lemma eval_bind_exprs: forall ge sp e m le al vl f v, 
+  eval_exprlist ge sp e m le al vl ->
+  (forall args,
+     eval_exprlist ge sp e m (rev vl ++ le) args vl ->
+     eval_expr ge sp e m (rev vl ++ le) (f args) v) ->
+  eval_expr ge sp e m le (bind_exprs al f) v.
+Proof.
+  intros. exploit (eval_bind_exprs_gen (fun v' => v' = v)); eauto.
+  intros (v' & A & B). subst v'; auto.
+Qed.
