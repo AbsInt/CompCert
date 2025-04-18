@@ -338,4 +338,18 @@ Definition cmpl (c: comparison) (e1 e2: expr) :=
       else cmpl_gen Cgt Cge e1 e2
   end.
 
+Definition select_long (cond: condition) (args: exprlist) (e1 e2: expr) :=
+  if select_supported Tlong then
+    select Tlong cond args e1 e2
+  else
+    bind_exprs (e1 ::: e2 ::: args) (fun al =>
+      match al with
+      | e1 ::: e2 ::: args =>
+          makelong
+            (select Tint cond args (Eop Ohighlong (e1 ::: Enil)) (Eop Ohighlong (e2 ::: Enil)))
+            (select Tint cond args (Eop Olowlong (e1 ::: Enil))  (Eop Olowlong (e2 ::: Enil)))
+
+      | _ => longconst Int64.zero    (*r cannot happen *)
+      end).
+
 End SELECT.

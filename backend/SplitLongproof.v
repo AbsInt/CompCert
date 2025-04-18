@@ -1107,5 +1107,52 @@ Proof.
   rewrite Int64.decompose_le. rewrite Int.eq_sym. auto.
 Qed.
 
+Remark select_int_supported: select_supported Tint = true.
+Proof. reflexivity. Qed.
+
+Remark select_long_unsupported: select_supported Tlong = false -> Archi.ptr64 = false.
+Proof.
+  unfold select_supported; intros; auto; congruence.
+Qed.
+
+Theorem eval_select_long:
+  forall le cond al vl a1 v1 a2 v2,
+  eval_exprlist ge sp e m le al vl ->
+  eval_expr ge sp e m le a1 v1 ->
+  eval_expr ge sp e m le a2 v2 ->
+  exists v,
+     eval_expr ge sp e m le (select_long cond al a1 a2) v
+  /\ Val.lessdef (Val.select (eval_condition cond vl m) v1 v2 Tlong) v.
+Proof.
+  unfold select_long; intros. destruct (select_supported Tlong) eqn:SUP.
+- eapply eval_select; eauto.
+- assert (NOT64: Archi.ptr64 = false) by auto using select_long_unsupported.
+  assert (AUX: forall v vhi vlo,
+      Val.lessdef (Val.normalize (Val.hiword v) Tint) vhi ->
+      Val.lessdef (Val.normalize (Val.loword v) Tint) vlo ->
+      Val.lessdef (Val.normalize v Tlong) (Val.longofwords vhi vlo)).
+  { intros. unfold Val.normalize. rewrite NOT64. destruct v; auto.
+    simpl in *. inv H2; inv H3. simpl. rewrite Int64.ofwords_recompose. auto. }
+  eapply eval_bind_exprs_gen with (P := Val.lessdef (Val.select (eval_condition cond vl m) v1 v2 Tlong)); eauto using eval_exprlist.
+  intros args EV. set (le' := app (rev (v1 :: v2 :: vl)) le) in *.
+  inv EV. inv H7. rename a0 into b1. rename a3 into b2. rename al1 into bl.
+  exploit eval_select.
+    apply select_int_supported.
+    eexact H9.
+    eapply eval_Eop with (op := Ohighlong) (al := b1 ::: Enil); eauto using eval_exprlist. simpl; eauto.
+    eapply eval_Eop with (op := Ohighlong) (al := b2 ::: Enil); eauto using eval_exprlist. simpl; eauto.
+  intros (vhi & EHI & LHI).
+  exploit eval_select.
+    apply select_int_supported.
+    eexact H9.
+    eapply eval_Eop with (op := Olowlong) (al := b1 ::: Enil); eauto using eval_exprlist. simpl; eauto.
+    eapply eval_Eop with (op := Olowlong) (al := b2 ::: Enil); eauto using eval_exprlist. simpl; eauto.
+  intros (vlo & ELO & LLO).
+  exists (Val.longofwords vhi vlo); split.
+  eapply eval_Eop; eauto using eval_exprlist.
+  destruct (eval_condition cond vl m) as [b|]; simpl in *; auto.
+  destruct b; apply AUX; auto.
+Qed.
+
 End CMCONSTR.
 
