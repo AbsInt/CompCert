@@ -557,12 +557,12 @@ let expand_ctz ~sixtyfour ~splitlong =
                      else Psrliw(X6, X X6, coqint_of_camlint 31l));
   emit (Psubw(X7, X X7, X X6))
 
-(* Full register width "and" and "or" *)
+(* Full register width "and", "xor" *)
 
 let _Pand (r, a1, a2) =
   if Archi.ptr64 then Pandl(r, a1, a2) else Pandw(r, a1, a2)
-let _Por (r, a1, a2) =
-  if Archi.ptr64 then Porl(r, a1, a2) else Porw(r, a1, a2)
+let _Pxor (r, a1, a2) =
+  if Archi.ptr64 then Pxorl(r, a1, a2) else Pxorw(r, a1, a2)
 
 (* Conditional move *)
 (* res <- if cond then arg1 else arg2
@@ -570,11 +570,11 @@ let _Por (r, a1, a2) =
 
 let expand_csel res cond arg1 arg2 =
   emit (Psubw(X31, X0, cond)); (* X31 = -1 if cond = 1, 0 if cond = 0 *)
-  emit (Paddiw(X1, cond, Int.mone));
-                               (* X1 = 0 if cond = 1, -1 if cond = 0 *)
-  emit (_Pand(X31, arg1, X X31));
-  emit (_Pand(X1, arg2, X X1));
-  emit (_Por(res, X X31, X X1))
+  emit (_Pxor(X1, arg1, arg2));
+  emit (_Pand(X1, X X1, X X31));
+  emit (_Pxor(res, arg2, X X1))
+     (* res = (arg1 ^ arg2) ^ arg2 = arg1  if cond = 1
+        res = 0 ^ arg2 = arg2              if cond = 0 *)
 
 (* Handling of compiler-inlined builtins *)
 
