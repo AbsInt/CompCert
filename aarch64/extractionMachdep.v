@@ -16,7 +16,7 @@
 
 (* Additional extraction directives specific to the AArch64 port *)
 
-Require Archi Asm Asmgen SelectOp.
+From compcert Require Archi Asm Asmgen SelectOp.
 
 (* Archi *)
 

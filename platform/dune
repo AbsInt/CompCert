@@ -1,0 +1,61 @@
+; Selectively compile Coq files based on TARGET_PLATFORM environment variable.
+;
+; We compile all Coq files using the coq.theory stanza of dune, which is very limited in selecting the modules to compile. 
+; One restriction is that we cannot dynamically set which modules to include in the theory, i.e. "everything from common/, backend/ & ppc/ but not arm/".
+; So we resort to collecting the set of modules on the filesystem level and copy the needed directories into the platform/ directory.
+
+; Copy all files from currently selected architecture to "TargetPlatformCopy" directory. 
+; Can't copy processed .vp files from platform directories due to dependency cycle -> generate later in preprocess.dune.
+; a.d. TODO are these aliases used at all?
+(subdir TargetPlatformCopy 
+ (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} ppc)) (files %{project_root}/powerpc/*)))
+
+
+(subdir TargetPlatformCopy
+ (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} x86_32)) (files %{project_root}/x86/*.{v,vp,ml,mli})))
+(subdir TargetPlatformCopy 
+ (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} x86_32)) (files %{project_root}/x86_32/*.{v,vp,ml,mli})))
+
+(subdir TargetPlatformCopy 
+ (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} x86_64)) (files %{project_root}/x86/*.{v,vp,ml,mli})))
+(subdir TargetPlatformCopy 
+ (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} x86_64)) (files %{project_root}/x86_64/*.{v,vp,ml,mli})))
+
+
+(subdir TargetPlatformCopy 
+ (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} riscV)) (files %{project_root}/riscV/*)))
+
+
+(subdir TargetPlatformCopy 
+ (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} arm)) (files %{project_root}/arm/*)))
+
+(subdir TargetPlatformCopy 
+ (copy_files (alias target_platform) (only_sources) (enabled_if (= %{env:TARGET_PLATFORM=ppc} aarch64)) (files %{project_root}/aarch64/*)))
+
+; copy files from all other relevant source directories
+(subdir backend (copy_files %{project_root}/backend/*))
+(subdir cfrontend (copy_files %{project_root}/cfrontend/*))
+(subdir common (copy_files %{project_root}/common/*))
+(subdir cparser (copy_files %{project_root}/cparser/*))
+(subdir debug (copy_files %{project_root}/debug/*))
+(subdir driver (copy_files %{project_root}/driver/*))
+(subdir export (copy_files %{project_root}/export/*))
+(subdir lib (copy_files %{project_root}/lib/*))
+
+
+; Run preprocessing directives on .vp files
+(include preprocess.dune)
+
+;Compile theory from all Coq files, excluding extraction code that is run directly during compilation.
+(coq.theory
+ (name compcert)
+ (theories Flocq MenhirLib)
+ ; temp flag
+ (flags 
+  -w -unused-pattern-matching-variable
+  -w -deprecated-since-8.19
+  -w -deprecated-since-8.20)
+ (modules :standard \ common.Subtyping TargetPlatformCopy.extractionMachdep TargetPlatformCopy.extractionMachdepClight))
+
+; Our Coq files are in subdirectories of platform/ so we need this for dune to compile them too.
+(include_subdirs qualified)

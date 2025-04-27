@@ -16,7 +16,7 @@
 
 (* Additional extraction directives specific to the x86-64 port *)
 
-Require Archi SelectOp.
+From compcert Require Archi SelectOp.
 
 (* Archi *)
 

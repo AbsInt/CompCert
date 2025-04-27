@@ -1,0 +1,30 @@
+; menhir parser generation
+; - TODO: can maybe be replaced with menhir stanza; however 
+; Error: I can't determine what library/executable the files produced by this stanza are part of. 
+; is currently produced
+
+;(menhir 
+; (modules Parser)
+; (flags --coq --coq-no-version-check))
+
+(rule
+ (targets Parser.v)
+ (action
+  (run menhir --coq --coq-no-version-check %{dep:Parser.vy})))
+
+(ocamllex Lexer)
+
+; translate pre_parser to ml
+(rule
+ (deps pre_parser.mly pre_parser_messages.ml)
+ (targets pre_parser.ml pre_parser.mli)
+ (action 
+  (run menhir --table -v --no-stdlib -la 1 --explain pre_parser.mly --base pre_parser)))
+
+; generate error messages file based on cparser/GNUMakefile command
+(rule
+ (targets pre_parser_messages.ml)
+ (action 
+  (with-stdout-to %{targets}
+   ; TODO: configurable table
+   (run menhir --table pre_parser.mly -v --no-stdlib -la 1 -v -la 2 --compile-errors %{dep:handcrafted.messages}))))
