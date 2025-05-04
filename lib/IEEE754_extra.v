@@ -23,6 +23,7 @@ Require Import SpecFloat.
 From Flocq Require Import Core Digits Operations Round Bracket Sterbenz
                           BinarySingleNaN Binary Round_odd.
 Require Import ZArith.
+Require Znumtheory.
 Require Import Psatz.
 Require Import Bool.
 Require Import Eqdep_dec.
