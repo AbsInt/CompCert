@@ -19,6 +19,7 @@
     floating-point numbers, on top of the Flocq library. *)
 
 From Coq Require Import Reals SpecFloat ZArith Psatz Bool Eqdep_dec.
+From Coq Require Znumtheory.
 From Flocq Require Import Core Digits Operations Round Bracket Sterbenz
                           BinarySingleNaN Binary Round_odd.
 
