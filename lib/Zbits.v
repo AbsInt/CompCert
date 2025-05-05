@@ -17,7 +17,7 @@
 (** Additional operations and proofs about binary integers,
     on top of the ZArith standard library. *)
 
-Require Import Psatz Zquot.
+From Coq Require Import Psatz Zquot.
 Require Import Coqlib.
 
 (** ** Modulo arithmetic *)

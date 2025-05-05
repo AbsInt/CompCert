@@ -16,16 +16,10 @@
 
 (** Observable events, execution traces, and semantics of external calls. *)
 
-Require Import String.
+From Coq Require Import String.
 Require Import Coqlib.
 Require Intv.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import Memory.
-Require Import Globalenvs.
-Require Import Builtins.
+Require Import AST Integers Floats Values Memory Globalenvs Builtins.
 Local Open Scope asttyp_scope.
 
 (** Backwards compatibility for Hint Rewrite locality attributes. *)

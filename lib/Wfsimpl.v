@@ -18,9 +18,8 @@
   interface to the [Wf] module of Coq's standard library, where the functions
   to be defined have non-dependent types, and function extensionality is assumed. *)
 
+From Coq Require Import Wf_nat.
 Require Import Axioms.
-Require Import Init.Wf.
-Require Import Wf_nat.
 
 Set Implicit Arguments.
 

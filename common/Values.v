@@ -17,10 +17,7 @@
 (** This module defines the type of values that is used in the dynamic
   semantics of all our intermediate languages. *)
 
-Require Import Coqlib.
-Require Import AST.
-Require Import Integers.
-Require Import Floats.
+Require Import Coqlib AST Integers Floats.
 
 Definition block : Type := positive.
 Definition eq_block := peq.

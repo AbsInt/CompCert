@@ -12,7 +12,7 @@
 
 (** Corollaries of the main semantic preservation theorem. *)
 
-Require Import Classical.
+From Coq Require Import Classical.
 Require Import Coqlib Errors.
 Require Import AST Linking Events Smallstep Behaviors.
 Require Import Csyntax Csem Cstrategy Asm.

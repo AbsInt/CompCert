@@ -12,7 +12,8 @@
 
 (** Register allocation by external oracle and a posteriori validation. *)
 
-Require Import FSets FSetAVLplus.
+From Coq Require Import FSets.
+Require Import FSetAVLplus.
 Require Import Coqlib Ordered Maps Errors Integers Floats.
 Require Import AST Lattice Kildall Memdata.
 Require Archi.

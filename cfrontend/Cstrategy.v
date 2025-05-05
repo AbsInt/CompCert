@@ -16,23 +16,10 @@
 
 (** A deterministic evaluation strategy for C. *)
 
-Require Import Axioms.
-Require Import Classical.
-Require Import Coqlib.
-Require Import Errors.
-Require Import Maps.
-Require Import Integers.
-Require Import Floats.
-Require Import Values.
-Require Import AST.
-Require Import Memory.
-Require Import Events.
-Require Import Globalenvs.
-Require Import Smallstep.
-Require Import Ctypes.
-Require Import Cop.
-Require Import Csyntax.
-Require Import Csem.
+From Coq Require Import Classical.
+Require Import Axioms Coqlib Errors Maps.
+Require Import Integers Floats Values AST Memory Events Globalenvs Smallstep.
+Require Import Ctypes Cop Csyntax Csem.
 
 Section STRATEGY.
 

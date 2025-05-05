@@ -341,6 +341,16 @@ fold (Req_bool (-x) (bpow (mag beta (-x) - 1))); case Req_bool.
 rewrite ulp_FLX_exact_shift; ring.
 Qed.
 
+Lemma pred_FLX_exact_shift :
+  forall x e,
+  (pred beta FLX_exp (x * bpow e) = pred beta FLX_exp x * bpow e)%R.
+Proof.
+intros x e.
+unfold pred.
+rewrite Ropp_mult_distr_l, succ_FLX_exact_shift.
+apply Ropp_mult_distr_l.
+Qed.
+
 (** FLX is a nice format: it has a monotone exponent... *)
 Global Instance FLX_exp_monotone : Monotone_exp FLX_exp.
 Proof.

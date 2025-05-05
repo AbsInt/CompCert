@@ -12,8 +12,8 @@
 
 (** Translation from Mach to AArch64. *)
 
-Require Import Recdef Coqlib Zwf Zbits.
-Require Import Errors AST Integers Floats Op.
+From Coq Require Import Recdef Zwf.
+Require Import Zbits Coqlib Errors AST Integers Floats Op.
 Require Import Locations Mach Asm.
 Require SelectOp.
 

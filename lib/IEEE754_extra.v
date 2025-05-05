@@ -18,15 +18,10 @@
 (** Additional operations and proofs about IEEE-754 binary
     floating-point numbers, on top of the Flocq library. *)
 
-Require Import Reals.
-Require Import SpecFloat.
+From Coq Require Import Reals SpecFloat ZArith Psatz Bool Eqdep_dec.
+From Coq Require Znumtheory.
 From Flocq Require Import Core Digits Operations Round Bracket Sterbenz
                           BinarySingleNaN Binary Round_odd.
-Require Import ZArith.
-Require Znumtheory.
-Require Import Psatz.
-Require Import Bool.
-Require Import Eqdep_dec.
 
 Local Open Scope Z_scope.
 

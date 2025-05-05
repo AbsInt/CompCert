@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Import FunInd.
+From Coq Require Import FunInd.
 Require Import Coqlib Maps Integers Floats Lattice Kildall.
 Require Import Compopts AST Linking.
 Require Import Values Memory Globalenvs Builtins Events.
