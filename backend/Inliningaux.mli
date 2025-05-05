@@ -2,7 +2,7 @@
 (*                                                                     *)
 (*              The Compcert verified compiler                         *)
 (*                                                                     *)
-(*                 Xavier Leroy, INRIA Paris                           *)
+(*          Xavier Leroy, INRIA Paris-Rocquencourt                     *)
 (*                                                                     *)
 (*  Copyright Institut National de Recherche en Informatique et en     *)
 (*  Automatique.  All rights reserved.  This file is distributed       *)
@@ -10,14 +10,10 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Instruction selection for 64-bit integer operations *)
+(* Inlining heuristics *)
 
-From Coq Require Import String.
-Require Import Coqlib Maps Integers Floats Errors.
-Require Archi.
-Require Import AST Values Memory Globalenvs Events.
-Require Import Cminor Op CminorSel.
-Require Import SelectOp SelectOpproof SplitLong SplitLongproof.
-Require Import SelectLong.
+type inlining_info
 
-(** This file is empty because we use the default implementation provided in [SplitLong]. *)
+val inlining_analysis: RTL.program -> inlining_info
+
+val should_inline: inlining_info -> AST.ident -> RTL.coq_function -> bool

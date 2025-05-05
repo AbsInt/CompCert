@@ -16,12 +16,8 @@
 
 (** Postorder numbering of a directed graph. *)
 
-Require Import Wellfounded.
-Require Import Permutation.
-Require Import Mergesort.
-Require Import Coqlib.
-Require Import Maps.
-Require Import Iteration.
+From Coq Require Import Wellfounded Permutation Mergesort.
+Require Import Coqlib Maps Iteration.
 
 (** The graph is presented as a finite map from nodes (of type [positive])
   to the lists of their successors. *)

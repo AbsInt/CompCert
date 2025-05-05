@@ -16,10 +16,10 @@ jobs:
       target: ${{ matrix.target }}
       os: linux
       jobs: 4
-      opamroot: /home/coq/.opam
+      opamroot: /home/rocq/.opam
       configopts: -ignore-coq-version
     container:
-      image: coqorg/coq:latest-ocaml-4.14-flambda
+      image: rocq/rocq-prover:latest
       options: --user root
     steps:
       - name: Checkout
@@ -27,7 +27,7 @@ jobs:
         with:
           submodules: true
       - name: OPAM dependencies
-        run: tools/runner.sh opam_install menhir
+        run: tools/runner.sh opam_install coq menhir
       - name: Configure
         run: tools/runner.sh configure
       - name: Build

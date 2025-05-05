@@ -16,7 +16,8 @@
 
 (* A solver for subtyping constraints. *)
 
-Require Import Recdef Coqlib Maps Errors.
+From Coq Require Import Recdef.
+Require Import Coqlib Maps Errors.
 
 Local Open Scope nat_scope.
 Local Open Scope error_monad_scope.

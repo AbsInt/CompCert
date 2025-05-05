@@ -13,7 +13,7 @@
 (** The whole compiler and its proof of semantic preservation *)
 
 (** Libraries. *)
-Require Import String.
+From Coq Require Import String.
 Require Import Coqlib Errors.
 Require Import AST Linking Smallstep.
 (** Languages (syntax and semantics). *)

@@ -17,10 +17,8 @@
 (** Constructions of ordered types, for use with the [FSet] functors
   for finite sets and the [FMap] functors for finite maps. *)
 
-Require Import FSets.
-Require Import Coqlib.
-Require Import Maps.
-Require Import Integers.
+From Coq Require Import FSets.
+Require Import Coqlib Maps Integers.
 
 Create HintDb ordered_type.
 

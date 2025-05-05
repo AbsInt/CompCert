@@ -14,31 +14,18 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Coqlib.
-Require Wfsimpl.
-Require DecidableClass Decidableplus.
-Require AST.
-Require Iteration.
-Require Floats.
-Require SelectLong.
-Require Selection.
-Require RTLgen.
-Require Inlining.
-Require ValueDomain.
-Require Tailcall.
-Require Allocation.
-Require Bounds.
-Require Ctypes.
-Require Csyntax.
-Require Ctyping.
-Require Clight.
+From Coq Require DecidableClass.
+Require Coqlib Wfsimpl Decidableplus Iteration.
+Require AST Floats.
+Require SelectLong Selection RTLgen Inlining ValueDomain.
+Require Tailcall Allocation Bounds.
+Require Ctypes Csyntax Ctyping Clight.
 Require Compiler.
 Require Parser.
 Require Initializers.
 
 (* Standard lib *)
-Require Import ExtrOcamlBasic.
-Require Import ExtrOcamlString.
+From Coq Require Import ExtrOcamlBasic ExtrOcamlString.
 
 (* Coqlib *)
 Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".

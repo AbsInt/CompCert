@@ -16,8 +16,7 @@
 
 (** This file collects some axioms used throughout the CompCert development. *)
 
-Require ClassicalFacts.
-Require FunctionalExtensionality.
+From Coq Require ClassicalFacts FunctionalExtensionality.
 
 (** * Extensionality axioms *)
 
