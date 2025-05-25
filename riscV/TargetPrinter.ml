@@ -115,10 +115,7 @@ module Target : TARGET =
         assert (ofs = Integers.Ptrofs.zero);
         fprintf oc "	la	%a, %s\n" ireg r (extern_atom id)
       end else begin
-        fprintf oc "	lui	%a, %%hi(%a)\n"
-                                ireg r symbol_offset (id, ofs);
-        fprintf oc "	addi	%a, %a, %%lo(%a)\n"
-                                ireg r ireg r symbol_offset (id, ofs)
+        fprintf oc "	lla	%a, %a\n" ireg r symbol_offset (id, ofs)
       end
 
 (* Emit .file / .loc debugging directives *)
@@ -138,9 +135,14 @@ module Target : TARGET =
 
 (* Offset part of a load or store *)
 
+    let latest_auipc : (ident * Integers.Ptrofs.int) option ref = ref None
+
     let offset oc = function
-    | Ofsimm n -> ptrofs oc n
-    | Ofslow(id, ofs) -> fprintf oc "%%lo(%a)" symbol_offset (id, ofs)
+    | Ofsimm n ->
+        ptrofs oc n
+    | Ofslow(id, ofs) ->
+        assert (!latest_auipc = Some(id, ofs));
+        fprintf oc "%%pcrel_lo(1b)"
 
 (* Printing of instructions *)
     let print_instruction oc = function
@@ -495,7 +497,8 @@ module Target : TARGET =
       | Ploadsymbol(rd, id, ofs) ->
          loadsymbol oc rd id ofs
       | Ploadsymbol_high(rd, id, ofs) ->
-         fprintf oc "	lui	%a, %%hi(%a)\n" ireg rd symbol_offset (id, ofs)
+         fprintf oc "1:	auipc	%a, %%pcrel_hi(%a)\n" ireg rd symbol_offset (id, ofs);
+         latest_auipc := Some(id, ofs)
       | Ploadli(rd, n) ->
          let d = camlint64_of_coqint n in
          let lbl = label_literal64 d in
@@ -516,7 +519,7 @@ module Target : TARGET =
          List.iter (fun l -> fprintf oc "%a " print_label l) tbl;
          fprintf oc "]\n";
          fprintf oc "	sll	x5, %a, 2\n" ireg r;
-         fprintf oc "	la	x31, %a\n" label lbl;
+         fprintf oc "	lla	x31, %a\n" label lbl;
          fprintf oc "	add	x5, x31, x5\n";
          fprintf oc "	lw	x5, 0(x5)\n";
          fprintf oc "	add	x5, x31, x5\n";
@@ -584,6 +587,7 @@ module Target : TARGET =
 
     let print_instructions oc fn =
       current_function_sig := fn.fn_sig;
+      latest_auipc := None;
       List.iter (print_instruction oc) fn.fn_code
 
 
