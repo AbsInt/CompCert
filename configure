@@ -419,7 +419,9 @@ if test "$arch" = "aarch64"; then
     linux)
         abi="standard"
         cprepro_options="-U__GNUC__ -E"
-        system="linux";;
+        system="linux"
+        pic_supported=true
+        ;;
     macos|macosx)
         abi="apple"
         casm="${toolprefix}cc"
@@ -430,7 +432,9 @@ if test "$arch" = "aarch64"; then
         cprepro="${toolprefix}cc"
         cprepro_options="-arch arm64 -U__GNUC__ -U__clang__ -U__BLOCKS__ '-D__attribute__(x)=' '-D__asm(x)=' '-D_Nullable=' '-D_Nonnull=' '-D__DARWIN_OS_INLINE=static inline' -Wno-\\#warnings -E"
         libmath=""
-        system="macos";;
+        system="macos"
+        pic_supported=true
+        ;;
     *)
         echo "Error: invalid eabi/system '$target' for architecture AArch64." 1>&2
         echo "$usage" 1>&2
