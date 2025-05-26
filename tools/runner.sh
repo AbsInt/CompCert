@@ -181,12 +181,14 @@ case "$target,$os" in
   aarch64,linux)
     case "$1" in
       1) Run_test "$simu_aarch64" "";;
-      2) Run_test "$simu_aarch64" "-Os";;
+      2) Run_test "$simu_aarch64" "-fpic";;
+      3) Run_test "$simu_aarch64" "-Os";;
     esac;;
   aarch64,macos)
     case "$1" in
       1) Run_test "" "";;
-      2) Run_test "" "-Os";;
+      2) Run_test "" "-fpic";;
+      3) Run_test "" "-Os";;
     esac;;
   arm,linux)
     case "$1" in
