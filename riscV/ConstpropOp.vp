@@ -18,6 +18,7 @@ Require Import Coqlib Compopts.
 Require Import AST Integers Floats.
 Require Import Op Registers.
 Require Import ValueDomain.
+Require SelectOp.
 
 (** * Converting known values to constants *)
 
@@ -298,7 +299,7 @@ Nondetfunction addr_strength_reduction
                 (addr: addressing) (args: list reg) (vl: list aval) :=
   match addr, args, vl with
   | Aindexed n, r1 :: nil, Ptr(Gl symb n1) :: nil =>
-      if Archi.pic_code tt
+      if SelectOp.symbol_is_relocatable symb
       then (addr, args)
       else (Aglobal symb (Ptrofs.add n1 n), nil)
   | Aindexed n, r1 :: nil, Ptr(Stk n1) :: nil =>

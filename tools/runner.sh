@@ -205,7 +205,8 @@ case "$target,$os" in
   riscv,linux)
     case "$1" in
       1) Run_test "$simu_rv64" "";;
-      2) Run_test "$simu_rv64" "-Os";;
+      2) Run_test "$simu_rv64" "-fpic";;
+      3) Run_test "$simu_rv64" "-Os";;
     esac;;
   x86_32,*)
     case "$1" in

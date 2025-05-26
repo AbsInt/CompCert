@@ -16,13 +16,17 @@
 
 (* Additional extraction directives specific to the RISC-V port *)
 
-Require Archi Asm.
+Require Archi Asm SelectOp.
 
 (* Archi *)
 
 Extract Constant Archi.ptr64 => " Configuration.model = ""64"" ".
-Extract Constant Archi.pic_code => "fun () -> false".  (* for the time being *)
+
+(* SelectOp *)
+
+Extract Constant SelectOp.symbol_is_relocatable => "C2C.atom_needs_GOT_access".
 
 (* Asm *)
+
 Extract Constant Asm.low_half => "fun _ _ _ -> assert false".
 Extract Constant Asm.high_half => "fun _ _ _ -> assert false".

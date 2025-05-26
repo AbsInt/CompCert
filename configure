@@ -409,6 +409,7 @@ if test "$arch" = "riscV"; then
   clinker_options="$model_options"
   cprepro_options="$model_options -U__GNUC__ -E"
   system="linux"
+  pic_supported=true
 fi
 
 #
