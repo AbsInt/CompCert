@@ -989,7 +989,7 @@ Opaque Int.eq.
   apply exec_straight_one. simpl; eauto. auto.
   split; intros; Simpl. 
 - (* addrsymbol *)
-  destruct (Archi.pic_code tt && negb (Ptrofs.eq ofs Ptrofs.zero)).
+  destruct (SelectOp.symbol_is_relocatable id && negb (Ptrofs.eq ofs Ptrofs.zero)).
 + set (rs1 := nextinstr (rs#x <- (Genv.symbol_address ge id Ptrofs.zero))).
   exploit (addptrofs_correct x x ofs k rs1 m); eauto with asmgen. 
   intros (rs2 & A & B & C).

@@ -21,6 +21,7 @@ Require Archi.
 Require Import Coqlib Errors.
 Require Import AST Integers Floats Memdata.
 Require Import Op Locations Mach Asm.
+Require SelectOp.
 
 Local Open Scope string_scope.
 Local Open Scope error_monad_scope.
@@ -419,7 +420,7 @@ Definition transl_op
           else Ploadsi rd f :: k)
   | Oaddrsymbol s ofs, nil =>
       do rd <- ireg_of res;
-      OK (if Archi.pic_code tt && negb (Ptrofs.eq ofs Ptrofs.zero)
+      OK (if SelectOp.symbol_is_relocatable s && negb (Ptrofs.eq ofs Ptrofs.zero)
           then Ploadsymbol rd s Ptrofs.zero :: addptrofs rd rd ofs k
           else Ploadsymbol rd s ofs :: k)
   | Oaddrstack n, nil =>

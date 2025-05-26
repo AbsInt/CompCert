@@ -111,7 +111,7 @@ module Target : TARGET =
 (* Generate code to load the address of id + ofs in register r *)
 
     let loadsymbol oc r id ofs =
-      if Archi.pic_code () then begin
+      if SelectOp.symbol_is_relocatable id then begin
         assert (ofs = Integers.Ptrofs.zero);
         fprintf oc "	la	%a, %s\n" ireg r (extern_atom id)
       end else begin
@@ -143,6 +143,13 @@ module Target : TARGET =
     | Ofslow(id, ofs) ->
         assert (!latest_auipc = Some(id, ofs));
         fprintf oc "%%pcrel_lo(1b)"
+
+(* Emit the target of a call, with a `@plt` suffix in PIC mode. *)
+
+    let symbol_plt oc s =
+      if !Clflags.option_fpic
+      then fprintf oc "%a@plt" symbol s
+      else symbol oc s
 
 (* Printing of instructions *)
     let print_instruction oc = function
@@ -277,11 +284,11 @@ module Target : TARGET =
       | Pj_l(l) ->
          fprintf oc "	j	%a\n" print_label l
       | Pj_s(s, sg) ->
-         fprintf oc "	jump	%a, x31\n" symbol s
+         fprintf oc "	tail	%a\n" symbol_plt s
       | Pj_r(r, sg) ->
          fprintf oc "	jr	%a\n" ireg r
       | Pjal_s(s, sg) ->
-         fprintf oc "	call	%a\n" symbol s
+         fprintf oc "	call	%a\n" symbol_plt s
       | Pjal_r(r, sg) ->
          fprintf oc "	jalr	%a\n" ireg r
 
@@ -596,7 +603,8 @@ module Target : TARGET =
     let address = if Archi.ptr64 then ".quad" else ".long"
 
     let print_prologue oc =
-      fprintf oc "	.option %s\n" (if Archi.pic_code() then "pic" else "nopic");
+      fprintf oc "	.option %s\n"
+        (if !Clflags.option_fpic then "pic" else "nopic");
       if !Clflags.option_g then begin
         section oc Section_text;
       end
