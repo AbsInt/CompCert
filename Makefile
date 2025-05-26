@@ -330,7 +330,8 @@ compcert.ini: Makefile.config
          echo "has_runtime_lib=$(HAS_RUNTIME_LIB)"; \
          echo "has_standard_headers=$(HAS_STANDARD_HEADERS)"; \
          echo "asm_supports_cfi=$(ASM_SUPPORTS_CFI)"; \
-	 echo "response_file_style=$(RESPONSEFILE)";) \
+	 echo "response_file_style=$(RESPONSEFILE)"; \
+	 echo "pic_supported=$(PIC_SUPPORTED)") \
         > compcert.ini
 
 compcert.config: Makefile.config
