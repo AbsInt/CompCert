@@ -27,8 +27,8 @@ Extract Constant Archi.win64 =>
 
 (* SelectOp *)
 
-Extract Constant SelectOp.symbol_is_external =>
+Extract Constant SelectOp.symbol_is_relocatable =>
   "match Configuration.system with
     | ""macos"" -> C2C.atom_is_external
-    | ""cygwin"" when Archi.ptr64 -> C2C.atom_is_external
-    | _ -> (fun _ -> false)".
+    | ""cygwin"" -> if Archi.ptr64 then C2C.atom_is_external else (fun _ -> false)
+    | _ -> C2C.atom_needs_GOT_access".

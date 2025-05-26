@@ -205,10 +205,16 @@ case "$target,$os" in
       1) Run_test "$simu_rv64" "";;
       2) Run_test "$simu_rv64" "-Os";;
     esac;;
-  x86_32,*|x86_64,*)
+  x86_32,*)
     case "$1" in
       1) Run_test "" "";;
       2) Run_test "" "-Os";;
+    esac;;
+  x86_64,*)
+    case "$1" in
+      1) Run_test "" "";;
+      2) Run_test "" "-fpic";;
+      3) Run_test "" "-Os";;
     esac;;
   *)
     Fatal "Unknown configuration \"$target\" - \"$os\""
