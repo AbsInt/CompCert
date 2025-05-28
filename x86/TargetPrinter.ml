@@ -152,7 +152,7 @@ module ELF_System : SYSTEM =
           elf_mergeable_string_section sz ".section	.rodata"
       | Section_literal sz ->
           elf_mergeable_literal_section sz ".section	.rodata"
-      | Section_jumptable -> ".text"
+      | Section_jumptable -> ".section	.rodata"
       | Section_user(s, wr, ex) ->
           sprintf ".section	\"%s\",\"a%s%s\",@progbits"
             s (if wr then "w" else "") (if ex then "x" else "")
