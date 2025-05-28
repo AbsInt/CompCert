@@ -353,6 +353,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         casm_options="-m64 -c"
         clinker="${toolprefix}cc"
         clinker_options="-m64"
+        clinker_needs_no_pie=false
         cprepro="${toolprefix}cc"
         cprepro_options="-m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
         system="bsd"
@@ -363,6 +364,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cc_options="-m64"
         casm_options="-m64 -c"
         clinker_options="-m64"
+        clinker_needs_no_pie=false
         cprepro_options="-m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
         system="linux"
         pic_supported=true
@@ -407,6 +409,7 @@ if test "$arch" = "riscV"; then
   cc_options="$model_options"
   casm_options="$model_options -c"
   clinker_options="$model_options"
+  clinker_needs_no_pie=false
   cprepro_options="$model_options -U__GNUC__ -E"
   system="linux"
   pic_supported=true

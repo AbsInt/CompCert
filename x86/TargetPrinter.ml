@@ -140,7 +140,7 @@ module ELF_System : SYSTEM =
 
     let symbol_function oc symb =
       symbol_paren oc symb;
-      if !Clflags.option_fpic then fprintf oc "@PLT"
+      if SelectOp.symbol_is_relocatable symb then fprintf oc "@PLT"
 
     let label = elf_label
 

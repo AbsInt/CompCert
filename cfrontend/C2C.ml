@@ -64,17 +64,19 @@ let atom_is_external a =
   | _ -> true
   | exception Not_found -> true
 
-(* In ELF PIC code, the rules are different: all non-static symbols
-   must be accessed through the GOT, even if they are defined in the
-   current compilation unit.  (This is to allow symbol interposition by
-   the dynamic loader.)  *)
+(* In ELF PIC code, all non-static symbols must be accessed through
+   the GOT, even if they are defined in the current compilation unit.
+   (This is to allow symbol interposition by the dynamic loader.)
+   In ELF PIE code, there is no interposition, so locally-defined
+   symbols do not need GOT access.
+   In non-PIC, non-PIE mode, the GOT is unused. *)
 let atom_needs_GOT_access a =
-  !Clflags.option_fpic &&
-  begin match Hashtbl.find decl_atom a with
-  | { a_storage = C.Storage_static } -> false
-  | _ -> true
-  | exception Not_found -> true
-  end
+  if !Clflags.option_fpic then
+    not (atom_is_static a)
+  else if !Clflags.option_fpie then
+    atom_is_external a
+  else
+    false
 
 let atom_alignof a =
   try
