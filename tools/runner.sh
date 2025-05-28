@@ -182,7 +182,7 @@ case "$target,$os" in
     case "$1" in
       1) Run_test "$simu_aarch64" "";;
       2) Run_test "$simu_aarch64" "-fpic";;
-      3) Run_test "$simu_aarch64" "-Os";;
+      3) Run_test "$simu_aarch64" "-Os -fno-pie -no-pie";;
     esac;;
   aarch64,macos)
     case "$1" in
@@ -206,7 +206,7 @@ case "$target,$os" in
     case "$1" in
       1) Run_test "$simu_rv64" "";;
       2) Run_test "$simu_rv64" "-fpic";;
-      3) Run_test "$simu_rv64" "-Os";;
+      3) Run_test "$simu_rv64" "-Os -fno-pie -no-pie";;
     esac;;
   x86_32,*)
     case "$1" in
@@ -217,7 +217,7 @@ case "$target,$os" in
     case "$1" in
       1) Run_test "" "";;
       2) Run_test "" "-fpic";;
-      3) Run_test "" "-Os";;
+      3) Run_test "" "-Os -fno-pie -no-pie";;
     esac;;
   *)
     Fatal "Unknown configuration \"$target\" - \"$os\""

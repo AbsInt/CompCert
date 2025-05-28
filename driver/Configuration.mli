@@ -61,4 +61,4 @@ val elf_target: bool
   (** Is the target binary format ELF? *)
 
 val pic_supported: bool
-  (** Are we able to generate PIC code? *)
+  (** Are we able to generate PIC and PIE code? *)

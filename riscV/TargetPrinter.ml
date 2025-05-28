@@ -147,7 +147,7 @@ module Target : TARGET =
 (* Emit the target of a call, with a `@plt` suffix in PIC mode. *)
 
     let symbol_plt oc s =
-      if !Clflags.option_fpic
+      if SelectOp.symbol_is_relocatable s
       then fprintf oc "%a@plt" symbol s
       else symbol oc s
 
@@ -604,7 +604,9 @@ module Target : TARGET =
 
     let print_prologue oc =
       fprintf oc "	.option %s\n"
-        (if !Clflags.option_fpic then "pic" else "nopic");
+        (if !Clflags.option_fpic || !Clflags.option_fpie
+         then "pic"
+         else "nopic");
       if !Clflags.option_g then begin
         section oc Section_text;
       end

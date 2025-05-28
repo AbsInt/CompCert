@@ -35,11 +35,13 @@ let linker exe_name files =
 
 
 let gnu_linker_help =
-{|  -shared        Produce a shared library instead of an executable
-  -nodefaultlibs Do not use the standard system libraries when
+{|  -nodefaultlibs Do not use the standard system libraries when
                  linking
   -nostdlib      Do not use the standard system startup files or
                  libraries when linking
+  -no-pie        Do not produce a position-independent executable
+  -pie           Produce a position-independent executable
+  -shared        Produce a shared library instead of an executable
 |}
 
 let linker_help =
@@ -73,6 +75,8 @@ let linker_actions =
   (if Configuration.gnu_toolchain then
     [ Exact "-nodefaultlibs", Self push_linker_arg;
       Exact "-nostdlib", Self push_linker_arg;
+      Exact "-pie", Self push_linker_arg;
+      Exact "-no-pie", Self push_linker_arg;
       Exact "-shared", Self push_linker_arg]
   else []) @
   [ Exact "-s", Self push_linker_arg;
