@@ -639,6 +639,16 @@ else
 fi
 
 #
+# See if $libdir can be accessed with a relative path from $sharedir
+#
+parentdir=$(dirname "$sharedir")
+if test "$libdir" = "$parentdir/lib/compcert"; then
+  rellibdir="../lib/compcert"
+else
+  rellibdir="$libdir"
+fi
+
+#
 # Generate Makefile.config
 #
 
@@ -647,6 +657,7 @@ cat > Makefile.config <<EOF
 PREFIX=$prefix
 BINDIR=$bindir
 LIBDIR=$libdir
+RELLIBDIR=$rellibdir
 MANDIR=$mandir
 SHAREDIR=$sharedir
 COQDEVDIR=$coqdevdir
@@ -856,6 +867,15 @@ CompCert configuration:
     Shared config installed in.... $(expandprefix $sharedir)
     Runtime library provided...... $has_runtime_lib
     Library files installed in.... $(expandprefix $libdir)
+EOF
+
+if test "$rellibdir" = "$libdir"; then :; else
+cat <<EOF
+                                   ($rellibdir relative to compcert.ini)
+EOF
+fi
+
+cat <<EOF
     Man pages installed in........ $(expandprefix $mandir)
     Standard headers provided..... $has_standard_headers
     Standard headers installed in. $(expandprefix $libdir)/include
