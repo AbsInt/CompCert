@@ -313,9 +313,13 @@ if test "$arch" = "x86" -a "$bitsize" = "32"; then
   case "$target" in
     bsd)
         abi="standard"
+        cc="${toolprefix}cc"
         cc_options="-m32"
+        casm="${toolprefix}cc"
         casm_options="-m32 -c"
+        clinker="${toolprefix}cc"
         clinker_options="-m32"
+        cprepro="${toolprefix}cc"
         cprepro_options="-m32 -U__GNUC__ -E"
         system="bsd"
         ;;
@@ -342,9 +346,13 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
   case "$target" in
     bsd)
         abi="standard"
+        cc="${toolprefix}cc"
         cc_options="-m64"
+        casm="${toolprefix}cc"
         casm_options="-m64 -c"
+        clinker="${toolprefix}cc"
         clinker_options="-m64"
+        cprepro="${toolprefix}cc"
         cprepro_options="-m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
         system="bsd"
         ;;
