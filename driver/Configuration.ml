@@ -142,6 +142,7 @@ let stdlib_path =
   else
     ""
 let asm_supports_cfi = get_bool_config "asm_supports_cfi"
+let pic_supported = get_bool_config "pic_supported"
 
 type response_file_style =
   | Gnu         (* responsefiles in gnu compatible syntax *)

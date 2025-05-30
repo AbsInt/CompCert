@@ -200,6 +200,8 @@ Processing options:
                  single caller [on]
   -fif-conversion Perform if-conversion (generation of conditional moves) [on]
 Code generation options: (use -fno-<opt> to turn off -f<opt>)
+  -fpic / -fPIC  Generate position-independent code [off]
+  -fpie / -fPIE  Generate position-independent executables [on if supported]
   -ffpu          Use FP registers for some integer operations [on]
   -fsmall-data <n>  Set maximal size <n> for allocation in small data area
   -fsmall-const <n>  Set maximal size <n> for allocation in small constant area
@@ -266,6 +268,16 @@ let cmdline_actions =
     if n <= 0 || ((n land (n - 1)) <> 0) then
       error no_loc "requested alignment %d is not a power of 2" n
     in
+  let set_pic_mode () =
+    if Configuration.pic_supported
+    then option_fpic := true
+    else warning no_loc Unnamed
+         "option -fpic not supported on this platform, ignored" in
+  let set_pie_mode () =
+    if Configuration.pic_supported
+    then option_fpie := true
+    else warning no_loc Unnamed
+         "option -fpie not supported on this platform, ignored" in
   [
 (* Getting help *)
   Exact "-help", Unit print_usage_and_exit;
@@ -301,7 +313,15 @@ let cmdline_actions =
   Exact "-ffloat-const-prop", Integer(fun n -> option_ffloatconstprop := n); 
   Exact "-falign-functions", Integer(fun n -> check_align n; option_falignfunctions := Some n);
   Exact "-falign-branch-targets", Integer(fun n -> check_align n; option_falignbranchtargets := n);
-  Exact "-falign-cond-branches", Integer(fun n -> check_align n; option_faligncondbranchs := n);] @
+  Exact "-falign-cond-branches", Integer(fun n -> check_align n; option_faligncondbranchs := n);
+  Exact "-fpic", Unit set_pic_mode;
+  Exact "-fPIC", Unit set_pic_mode;
+  Exact "-fno-pic", Unset option_fpic;
+  Exact "-fno-PIC", Unset option_fpic;
+  Exact "-fpie", Unit set_pie_mode;
+  Exact "-fPIE", Unit set_pie_mode;
+  Exact "-fno-pie", Unset option_fpie;
+  Exact "-fno-PIE", Unset option_fpie ] @
       f_opt "common" option_fcommon @
 (* Target processor options *)
   (if Configuration.arch = "arm" then

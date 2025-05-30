@@ -48,16 +48,15 @@ Local Open Scope cminorsel_scope.
 
 (** External oracle to determine whether a symbol should be addressed
   through [Oindirectsymbol] or can be addressed via [Oleal Aglobal].
-  This is to accommodate MacOS X's limitations on references to data
-  symbols imported from shared libraries.  It can also help with PIC
-  code under ELF. *)
+  Indirect access is needed for data symbols imported from shared libraries
+  in macOS and Cygwin, and for PIC code in ELF. *)
 
-Parameter symbol_is_external: ident -> bool.
+Parameter symbol_is_relocatable: ident -> bool.
 
 Definition Olea_ptr (a: addressing) := if Archi.ptr64 then Oleal a else Olea a.
 
 Definition addrsymbol (id: ident) (ofs: ptrofs) :=
-  if symbol_is_external id then
+  if symbol_is_relocatable id then
     if Ptrofs.eq ofs Ptrofs.zero
     then Eop (Oindirectsymbol id) Enil
     else Eop (Olea_ptr (Aindexed (Ptrofs.unsigned ofs))) (Eop (Oindirectsymbol id) Enil ::: Enil)

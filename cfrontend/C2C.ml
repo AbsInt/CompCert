@@ -52,7 +52,10 @@ let atom_is_static a =
   with Not_found ->
     false
 
-(* Is it possible for symbol [a] to be defined in a DLL? *)
+(* Is it possible for symbol [a] to be defined in a DLL?
+   Yes, unless [a] is defined in the current compilation unit, or is static.
+   (This criterion is appropriate for macOS and for Cygwin; for ELF,
+    see [atom_needs_GOT_access] below.)  *)
 let atom_is_external a =
   match Hashtbl.find decl_atom a with
   | { a_defined = true } -> false
@@ -60,6 +63,20 @@ let atom_is_external a =
   | { a_storage = C.Storage_default; a_size = Some _ } -> !Clflags.option_fcommon
   | _ -> true
   | exception Not_found -> true
+
+(* In ELF PIC code, all non-static symbols must be accessed through
+   the GOT, even if they are defined in the current compilation unit.
+   (This is to allow symbol interposition by the dynamic loader.)
+   In ELF PIE code, there is no interposition, so locally-defined
+   symbols do not need GOT access.
+   In non-PIC, non-PIE mode, the GOT is unused. *)
+let atom_needs_GOT_access a =
+  if !Clflags.option_fpic then
+    not (atom_is_static a)
+  else if !Clflags.option_fpie then
+    atom_is_external a
+  else
+    false
 
 let atom_alignof a =
   try
