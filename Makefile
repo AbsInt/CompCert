@@ -315,7 +315,7 @@ latexdoc:
 	@chmod a-w $*.v
 
 compcert.ini: Makefile.config
-	(echo "stdlib_path=$(LIBDIR)"; \
+	(echo "stdlib_path=$(RELLIBDIR)"; \
          echo "prepro=$(CPREPRO)"; \
          echo "linker=$(CLINKER)"; \
          echo "asm=$(CASM)"; \
