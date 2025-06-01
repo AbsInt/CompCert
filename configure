@@ -871,10 +871,10 @@ CompCert configuration:
     Menhir API library............ $menhir_dir
     The Flocq library............. $library_Flocq
     The MenhirLib library......... $library_MenhirLib
-    Binaries installed in......... $(expandprefix $bindir)
-    Shared config installed in.... $(expandprefix $sharedir)
+    Binaries installed in......... $(expandprefix "$bindir")
+    Shared config installed in.... $(expandprefix "$sharedir")
     Runtime library provided...... $has_runtime_lib
-    Library files installed in.... $(expandprefix $libdir)
+    Library files installed in.... $(expandprefix "$libdir")
 EOF
 
 if test "$rellibdir" = "$libdir"; then :; else
