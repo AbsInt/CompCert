@@ -59,6 +59,7 @@ type warning_type =
   | Non_linear_cond_expr           (** condition that cannot be linearized *)
   | Invalid_UTF8                   (** invalid UTF-8 encoding *)
   | Dollar_in_identifier           (** '$' sign in identifier *)
+  | Unknown_warning                (** unknown warning in '-W' option *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
 (** [warning (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as warining according to
