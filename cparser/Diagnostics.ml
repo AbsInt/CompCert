@@ -54,6 +54,12 @@ let reset () = num_errors := 0; num_warnings := 0
 
 exception Abort
 
+(* Locations are (filename, line number) pairs *)
+
+let no_loc = ("", -1)
+
+let file_loc file = (file,-10)
+
 (* [fatal_error_raw] is identical to [fatal_error], except it uses [Printf]
    to print its message, as opposed to [Format], and does not automatically
    introduce indentation and a final dot into the message. This is useful
@@ -106,6 +112,7 @@ type warning_type =
   | Non_linear_cond_expr
   | Invalid_UTF8
   | Dollar_in_identifier
+  | Unknown_warning
 
 (* List of all warnings with default status.
    "true" means the warning is active by default.
@@ -143,7 +150,8 @@ let all_warnings =
     (Reduced_alignment, false);
     (Non_linear_cond_expr, false);
     (Invalid_UTF8, true);
-    (Dollar_in_identifier, false)
+    (Dollar_in_identifier, false);
+    (Unknown_warning, true)
   ]
 
 (* List of active warnings *)
@@ -188,6 +196,7 @@ let string_of_warning = function
   | Non_linear_cond_expr -> "non-linear-cond-expr"
   | Invalid_UTF8 -> "invalid-utf8"
   | Dollar_in_identifier -> "dollar-in-identifier-extension"
+  | Unknown_warning -> "unknown-warning-option"
 
 (* Activate the given warning *)
 let activate_warning w () =
@@ -363,13 +372,15 @@ let check_errors () =
     raise Abort
   end
 
+let unknown_warning w =
+  warning no_loc Unknown_warning "Unknown warning option %s, ignored." w
 
 let error_option w =
   let key = string_of_warning w in
   [Exact ("-W"^key), Unit (activate_warning w);
    Exact ("-Wno-"^key), Unit (deactivate_warning w);
    Exact ("-Werror="^key), Unit (warning_as_error w);
-   Exact ("-Wno-error="^key), Unit ( warning_not_as_error w)]
+   Exact ("-Wno-error="^key), Unit (warning_not_as_error w)]
 
 let warning_options =
   List.concat (List.map (fun (w, active) -> error_option w) all_warnings) @
@@ -379,6 +390,8 @@ let warning_options =
    Exact ("-Werror"), Unit werror;
    Exact ("-Wall"), Unit wall;
    Exact ("-w"), Unit wnothing;
+   _Regexp("-Wno-.*$"), Ignore;
+   _Regexp("-W.*$"), Self unknown_warning;
    longopt_int ("-fmax-errors") ((:=) max_error);
    Exact("-fno-diagnostics-show-option"),Unset diagnostics_show_option;
    Exact("-fdiagnostics-show-option"),Set diagnostics_show_option;
@@ -424,10 +437,6 @@ let crash exn =
     eprintf "Fatal error: uncaught exception %s\n%s" exc backtrace;
     exit 2
   end
-
-let no_loc = ("", -1)
-
-let file_loc file = (file,-10)
 
 let active_warning ty =
   fst (classify_warning ty) <> SuppressedMsg
