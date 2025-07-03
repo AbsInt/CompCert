@@ -354,7 +354,7 @@ rule initial = parse
   | '\n'                          { new_line lexbuf; initial_linebegin lexbuf }
   | whitespace_char_no_newline +  { initial lexbuf }
   | "/*"                          { multiline_comment lexbuf; initial lexbuf }
-  | "//"                          { singleline_comment lexbuf; initial lexbuf }
+  | "//"                          { singleline_comment lexbuf; initial_linebegin lexbuf }
   | integer_constant as s         { CONSTANT (Cabs.CONST_INT s, currentLoc lexbuf) }
   | decimal_floating_constant     { CONSTANT (Cabs.CONST_FLOAT
                                       {Cabs.isHex_FI = false;
