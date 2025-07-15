@@ -209,6 +209,8 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
   -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
   -fcommon       Put uninitialized globals in the common section [on].
+  -fcf-protection=branch  Add control-flow integrity checks
+  -fcf-protection=none    Don't add control-flow integrity checks
 |} ^
  target_help ^
  toolchain_help ^
@@ -278,6 +280,13 @@ let cmdline_actions =
     then option_fpie := true
     else warning no_loc Unnamed
          "option -fpie not supported on this platform, ignored" in
+  let set_cf_protection () =
+    match Configuration.arch, Configuration.model with
+    | "x86", "64" ->
+        option_fcf_protection := true
+    | _ ->
+        error no_loc "Option -fcf_protection=branch not supported on this target"
+    in
   [
 (* Getting help *)
   Exact "-help", Unit print_usage_and_exit;
@@ -321,8 +330,10 @@ let cmdline_actions =
   Exact "-fpie", Unit set_pie_mode;
   Exact "-fPIE", Unit set_pie_mode;
   Exact "-fno-pie", Unset option_fpie;
-  Exact "-fno-PIE", Unset option_fpie ] @
-      f_opt "common" option_fcommon @
+  Exact "-fno-PIE", Unset option_fpie;
+  Exact "-fcf-protection=branch", Unit set_cf_protection;
+  Exact "-fcf-protection=none", Unset option_fcf_protection ] @
+    f_opt "common" option_fcommon @
 (* Target processor options *)
   (if Configuration.arch = "arm" then
     if Configuration.model = "armv6" then
