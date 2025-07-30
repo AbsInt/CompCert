@@ -1540,12 +1540,14 @@ module I = struct
                 find (f_i :: before) after
         in find [] flds
     | TUnion(id, _), Init_union(id', fld, i) ->
+        (* matches in the most recently activated field, propagating current initializer *)
         if fld.fld_name = name then
           OK(Zunion(z, id, fld), i)
         else if fld.fld_anonymous && has_member env name fld.fld_typ then
           let zi = (Zunion(z, id, fld), i) in
           member env zi name
         else begin
+          (* matches in another field, creation of new default initializer *)
           let rec find = function
             | [] -> NotFound
             | fld1 :: rem ->
