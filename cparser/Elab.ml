@@ -1542,6 +1542,9 @@ module I = struct
     | TUnion(id, _), Init_union(id', fld, i) ->
         if fld.fld_name = name then
           OK(Zunion(z, id, fld), i)
+        else if fld.fld_anonymous && has_member env name fld.fld_typ then
+          let zi = (Zunion(z, id, fld), i) in
+          member env zi name
         else begin
           let rec find = function
             | [] -> NotFound
