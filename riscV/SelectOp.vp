@@ -450,10 +450,18 @@ Definition select (ty: typ) (cond: condition) (args: exprlist) (e1 e2: expr) :=
  
 (** ** Recognition of addressing modes for load and store operations *)
 
+(** Some symbols are relocatable (e.g. global symbols in PIC mode)
+    and cannot be used with [Aglobal] addressing mode. *)
+
+Parameter symbol_is_relocatable: ident -> bool.
+
 Nondetfunction addressing (chunk: memory_chunk) (e: expr) :=
   match e with
   | Eop (Oaddrstack n) Enil => (Ainstack n, Enil)
-  | Eop (Oaddrsymbol id ofs) Enil => if Archi.pic_code tt then (Aindexed Ptrofs.zero, e:::Enil) else (Aglobal id ofs, Enil)
+  | Eop (Oaddrsymbol id ofs) Enil =>
+      if symbol_is_relocatable id
+      then (Aindexed Ptrofs.zero, e:::Enil)
+      else (Aglobal id ofs, Enil)
   | Eop (Oaddimm n) (e1:::Enil) => (Aindexed (Ptrofs.of_int n), e1:::Enil)
   | Eop (Oaddlimm n) (e1:::Enil) => (Aindexed (Ptrofs.of_int64 n), e1:::Enil)
   | _ => (Aindexed Ptrofs.zero, e:::Enil)

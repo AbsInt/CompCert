@@ -71,7 +71,3 @@ Global Opaque ptr64 big_endian splitlong
               fma_order fma_invalid_mul_is_nan
               float_of_single_preserves_sNaN
               float_conversion_default_nan.
-
-(** Whether to generate position-independent code or not *)
-
-Parameter pic_code: unit -> bool.

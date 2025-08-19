@@ -66,3 +66,5 @@ jobs:
         run: tools/runner.sh test1
       - name: Test alternate configuration
         run: tools/runner.sh test2
+      - name: Test alternate configuration 2
+        run: tools/runner.sh test3

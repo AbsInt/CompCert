@@ -109,7 +109,7 @@ Proof.
 - (* pointer *)
   destruct p; try discriminate; SimplVM.
   + (* global *)
-    destruct (SelectOp.symbol_is_external id).
+    destruct (SelectOp.symbol_is_relocatable id).
   * revert H2; predSpec Ptrofs.eq Ptrofs.eq_spec ofs Ptrofs.zero; intros EQ; inv EQ.
     exists (Genv.symbol_address ge id Ptrofs.zero); auto.
   * inv H2. exists (Genv.symbol_address ge id ofs); split.

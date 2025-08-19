@@ -117,7 +117,7 @@ Theorem eval_addrsymbol:
   exists v, eval_expr ge sp e m le (addrsymbol id ofs) v /\ Val.lessdef (Genv.symbol_address ge id ofs) v.
 Proof.
   intros. unfold addrsymbol. exists (Genv.symbol_address ge id ofs); split; auto.
-  destruct (symbol_is_external id).
+  destruct (symbol_is_relocatable id).
   predSpec Ptrofs.eq Ptrofs.eq_spec ofs Ptrofs.zero.
   subst. EvalOp.
   EvalOp. econstructor. EvalOp. simpl; eauto. econstructor.

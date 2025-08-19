@@ -893,7 +893,7 @@ Theorem eval_addressing:
 Proof.
   intros until v. unfold addressing; case (addressing_match a); intros; InvEval.
   - exists (@nil val);  split. eauto with evalexpr. simpl. auto.
-  - destruct (Archi.pic_code tt).
+  - destruct (symbol_is_relocatable id).
   + exists (Vptr b ofs0 :: nil); split.
     constructor. EvalOp. simpl. congruence. constructor. simpl. rewrite Ptrofs.add_zero. congruence.
   + exists (@nil val); split. constructor. simpl; auto.
