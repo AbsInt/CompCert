@@ -226,6 +226,7 @@ case "$target,$os" in
       1) Run_test "" "";;
       2) Rerun_test "" "-fpic";;
       3) Rerun_test "" "-Os -fno-pie -no-pie";;
+      4) Rerun_test "" "-fcf-protection=branch";;
     esac;;
   *)
     Fatal "Unknown configuration \"$target\" - \"$os\""
@@ -246,6 +247,7 @@ case "$1" in
   test1) Run_test_round 1;;
   test2) Run_test_round 2;;
   test3) Run_test_round 3;;
+  test4) Run_test_round 4;;
   build_ccomp) Build_ccomp;;
   check_proof) Check_proof;;
   hygiene) Hygiene;;
