@@ -1,3 +1,35 @@
+# Release 3.16
+
+Code generation and optimization:
+- Extend neededness analysis to 64-bit integer operations, enabling more useless integer computations to be removed.
+- Extend common subexpression elimination (CSE) and dead code elimination to calls to known pure built-in functions and to known pure arithmetic helper functions.
+- Generation of position-independent code (PIC) for AArch64, RISC-V and x86-64 (option `-fpic`) (#551)
+- Generation of position-independent executables (PIE) for AArch64, RISC-V and x86-64 (option `-fpie`) (#551)
+- RISC-V: use PC-relative addressing instead of absolute addressing where possible (#550)
+- PowerPC and x86/ELF: put jump tables in `.rodata` section instead of `.text` section (#508)
+
+Bug fixes:
+- Reject identifiers consisting of a single `$` sign.  This can cause errors with some assemblers, and is not ISO C.
+- Remove syntactic support for `[*]` array declarators, which was introduced in 3.15 (#539).  They are usable only with variable-length arrays, which CompCert doesn't support.
+- Check that `[static <size>]` declarators occur only in function prototypes and only in outermost position, as prescribed by ISO C.
+- Fix corner case of designated initializers involving union with anonymous members.
+- Fix wrong lexing of `#pragma` directives that immediately follow a `//` single-line comment.  (Affects only non-preprocessed `.i` input files; preprocessed `.c` files are not affected.)
+
+Usability:
+- Added warning `dollar-in-identifier-extension` for identifiers that contain `$` signs. (This is not ISO C, just a popular extension.)
+- Revised handling of unknown warnings: `-W<unknown warning>` is now a warning instead of an error; `-Wno-<unknown warning>` is silently ignored (#554).
+- Added warning `unknown-warning-option`, so that warnings about unknown warnings can be ignored (`-Wno-unknown-warning-option`) or turned into an error (`-Werror=unknown-warning-option`) (#554).
+- Recognize option `-shared` and pass it to the linker.
+- Recognize options `-pie` and `-no-pie` and pass them to the linker.
+- Recognize options `-MD` and `-MMD` and pass them to the preprocessor.
+- On BSD platforms, use `cc` instead of `gcc` as the default preprocessor and linker.
+
+Rocq/Coq development:
+- Support Coq 8.21 (#545)
+- Support Rocq 9.0 (using the `coq` compatibility command) (#547)
+- Earliest version supported is now Coq 8.15.
+- Updated vendored Flocq to version 4.2.1
+
 # Release 3.15, 2024-12-13
 
 C language support:
