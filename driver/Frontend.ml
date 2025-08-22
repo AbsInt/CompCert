@@ -192,6 +192,9 @@ let gnu_prepro_help =
 {|  -M            Output a rule suitable for make describing the
                  dependencies of the main source file
   -MM            Like -M but do not mention system header files
+  -MD            Like -M but writes output to a .d file as a side-
+                 effect of compilation
+  -MMD           Like -MD but do not mention system header files
   -MF <file>     Specifies file <file> as output file for -M or -MM
   -MG            Assumes missing header files are generated for -M
   -MP            Add a phony target for each dependency other than
