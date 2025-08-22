@@ -203,6 +203,20 @@ Enabled by default.
 Turn on/off use of FP registers for some integer operations.
 Enabled by default.
 .
+.TP
+.BR \-fpic ", " \-fno\-pic
+Turn on/off position-independent code (PIC).
+Currently available only for AArch64, RISC-V and x86 64-bit target platforms.
+On other platforms, \fB-fpic\fP has no effect but emits a warning.
+Disabled by default.
+.
+.TP
+.BR \-fpie ", " \-fno\-pie
+Turn on/off position-independent executables (PIE).
+Currently available only for AArch64, RISC-V and x86 64-bit target platforms.
+On other platforms, \fB-fpie\fP has no effect but emits a warning.
+Enabled by default.
+.
 .SS
 Code Generation Options (PowerPC)
 .INDENT 0.0
@@ -303,8 +317,18 @@ Pass comma separated arguments in <args> to the driver program used for linking.
 Pass argument <arg> to the linker.
 .
 .TP
+.B \-pie
+Produce a position-independent executable (PIE).
+Default for AArch64, RISC-V and x86 64-bit target platforms.
+Use \fB-fno\-pie\fP to force the production of an absolute executable.
+.
+.TP
 .B \-s
 Remove all symbol table and relocation information from the executable.
+.
+.TP
+.B \-shared
+Produce a shared library (".so" file) instead of an executable.
 .
 .TP
 .B \-static
