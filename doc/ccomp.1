@@ -281,7 +281,8 @@ Generate full debugging information.
 .
 .TP
 .BR \-g0 ", " \-g1 ", " \-g2 ", " \-g3
-Control generation of debugging information (0: none, 1: only globals, 2: globals and locals without locations, 3: full debug information). The default level is 3 for full debug information.
+Control generation of debugging information (0: none, 1: only globals, 2: globals and locals without locations, 3: full debug information).
+The default level is 3 for full debug information.
 .
 .SS
 Debugging Options (GNU Backend)
@@ -328,7 +329,7 @@ Remove all symbol table and relocation information from the executable.
 .
 .TP
 .B \-shared
-Produce a shared library (".so" file) instead of an executable.
+Produce a shared library (\fB.so\fP file) instead of an executable.
 .
 .TP
 .B \-static
@@ -427,6 +428,10 @@ Disabled by default.
 Dangerous conversion of constants, e.g. literals that are too large for the given type.
 Enabled by default.
 .sp
+\fIdollar\-in\-identifier\-extension\fP:
+Use of dollar characters (\fB$\fP) in identifiers.
+Disabled by default.
+.sp
 \fIextern\-after\-definition\fP:
 Extern declarations after non-extern definitions.
 Enabled by default.
@@ -511,6 +516,10 @@ Enabled by default.
 \fIunknown\-pragmas\fP:
 Use of unsupported or unknown pragmas.
 Disabled by default.
+.sp
+\fIunknown\-warning\-option\fP:
+Use of a \fB-W<warning>\fP command-line option with a warning class not known to CompCert.
+Enabled by default.
 .sp
 \fIunused\-ais\-parameter\fP:
 Unused parameter for embedded program annotations.
