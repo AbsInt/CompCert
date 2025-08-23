@@ -54,7 +54,7 @@ type instruction_arg =
   | SPreg of sreg
   | Shift of shift_op
   | String of string
-  | Symbol of ident * BinNums.coq_Z
+  | Symbol of ident * Integers.Ptrofs.int
   | Condition of string
 
 let makedata (c : code_constant) : instruction_arg =
@@ -82,7 +82,7 @@ let pp_shiftreg pp (r, op, n) =
   pp_jobject_start pp;
   pp_jmember ~first:true pp "Register" pp_jstring (TargetPrinter.int_reg_name r);
   pp_jmember pp "Op" pp_jstring op;
-  pp_jmember pp "Amount" pp_z n;
+  pp_jmember pp "Amount" pp_int n;
   pp_jobject_end pp
 
 let pp_shiftop pp so =
@@ -95,7 +95,7 @@ let pp_shiftop pp so =
     | SOror(r, n) -> (Some r, Some "ror", Some n)
   in
   match (r, op, n) with
-    | (None, None, Some n)      -> pp_jsingle_object pp "Integer" pp_int64 n
+    | (None, None, Some n)      -> pp_jsingle_object pp "Integer" pp_int n
     | (Some r, None, None)      -> pp_ireg pp r
     | (Some r, Some op, Some n) -> pp_jsingle_object pp "ShiftedRegister" pp_shiftreg (r, op, n)
     | _ -> assert false
@@ -109,7 +109,7 @@ let pp_label pp l =
 let pp_symbol pp (id, ofs) =
   pp_jobject_start pp;
   pp_jmember ~first:true pp "Name" pp_atom id;
-  pp_jmember pp "Offset" pp_z ofs;
+  pp_jmember pp "Offset" pp_ptrofs ofs;
   pp_jobject_end pp
 
 
@@ -123,7 +123,7 @@ let pp_arg pp = function
   | Float64 f  -> pp_float64_constant pp f
   | Id ->  pp_id_const pp ()
   | Ireg ir -> pp_ireg pp ir
-  | Long i ->  pp_jsingle_object pp "Integer" pp_int64 i
+  | Long i ->  pp_jsingle_object pp "Integer" pp_int i
   | SFreg fr -> pp_single_freg pp fr
   | SPreg sr -> pp_single_param_reg pp sr
   | Shift so -> pp_shiftop pp so

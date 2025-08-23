@@ -37,7 +37,7 @@ let distance_to_emit_constants () =
 let float_labels = (Hashtbl.create 39 : (Floats.float, label) Hashtbl.t)
 let float32_labels = (Hashtbl.create 39 : (Floats.float32, label) Hashtbl.t)
 let symbol_labels =
-  (Hashtbl.create 39 : (ident * Integers.Int.int, label) Hashtbl.t)
+  (Hashtbl.create 39 : (ident * Integers.Ptrofs.int, label) Hashtbl.t)
 
 let get_label tbl sz pinc bf =
   try
@@ -145,8 +145,8 @@ let expand_instruction = function
       1
     end
   | Ploadsymbol(r1, id, ofs) ->
-    let o = camlint_of_coqint ofs in
-    if o >= -32768l && o <= 32767l && Archi.thumb2_support
+    let o = camlint64_of_ptrofs ofs in
+    if o >= -32768L && o <= 32767L && Archi.thumb2_support
        && (not !Clflags.option_Osize) then begin
       emit (Ploadsymbol_imm (r1,id,ofs));
       2

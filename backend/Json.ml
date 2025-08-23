@@ -79,6 +79,9 @@ let pp_int pp i =
 let pp_int64 pp i =
   pp_jint64 pp (camlint64_of_coqint i)
 
+let pp_ptrofs pp i =
+  pp_jint64 pp (camlint64_of_ptrofs i)
+
 let pp_float32 pp f =
   pp_jint32 pp (camlint_of_coqint (Floats.Float32.to_bits f))
 

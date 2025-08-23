@@ -89,6 +89,7 @@ let memcpy_small_arg sz arg tmp =
   | BA (IR r) ->
       (r, _0)
   | BA_addrstack ofs ->
+      let ofs = Ptrofs.to_int ofs in
       if offset_in_range ofs
       && offset_in_range (Int.add ofs (Int.repr (Z.of_uint sz)))
       then (IR13, ofs)
@@ -126,7 +127,7 @@ let memcpy_big_arg arg tmp =
   | BA (IR r) ->
       if r <> tmp then emit (Pmov(tmp, SOreg r))
   | BA_addrstack ofs ->
-      expand_addimm tmp IR13 ofs
+      expand_addimm tmp IR13 (Ptrofs.to_int ofs)
   | _ ->
       assert false
 
@@ -211,6 +212,7 @@ let expand_builtin_vload chunk args res =
   | [BA(IR addr)] ->
       expand_builtin_vload_common chunk addr _0 res
   | [BA_addrstack ofs] ->
+      let ofs = Ptrofs.to_int ofs in
       if offset_in_range chunk ofs then
         expand_builtin_vload_common chunk IR13 ofs res
       else begin
@@ -255,6 +257,7 @@ let expand_builtin_vstore chunk args =
   | [BA(IR addr); src] ->
       expand_builtin_vstore_common chunk addr _0 src
   | [BA_addrstack ofs; src] ->
+      let ofs = Ptrofs.to_int ofs in
       if offset_in_range chunk ofs then
         expand_builtin_vstore_common chunk IR13 ofs src
       else begin
@@ -579,6 +582,8 @@ let (fixup_arguments, fixup_result) =
 let expand_instruction instr =
   match instr with
   | Pallocframe (sz, ofs) ->
+     let sz = Int.repr sz
+     and ofs = Ptrofs.to_int ofs in
      emit (Pmov (IR12,SOreg IR13));
      if (is_current_function_variadic ()) then begin
        emit (Ppush [IR0;IR1;IR2;IR3]);
@@ -600,9 +605,11 @@ let expand_instruction instr =
      PrintAsmaux.current_function_stacksize := camlint_of_coqint sz
   | Pfreeframe (sz, ofs) ->
      let sz =
-       if (is_current_function_variadic ())
-       then coqint_of_camlint (Int32.add 16l (camlint_of_coqint sz))
+       if is_current_function_variadic ()
+       then Z.add (Z.of_uint 16) sz
        else sz in
+     let sz = Int.repr sz
+     and ofs = Ptrofs.to_int ofs in
      if Asmgen.is_immed_arith sz
      then expand_addimm IR13 IR13 sz
      else begin
@@ -623,8 +630,7 @@ let expand_instruction instr =
 	   | EF_annot_val (kind,txt,targ) ->
 	      expand_annot_val kind txt targ args res
 	   | EF_memcpy(sz, al) ->
-	      expand_builtin_memcpy (Int32.to_int (camlint_of_coqint sz))
-		(Int32.to_int (camlint_of_coqint al)) args
+	      expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
 	   | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
               emit instr
 	   | _ ->

@@ -97,7 +97,7 @@ let pp_init_data pp = function
     let pp_addr_of pp (p,i) =
       pp_jobject_start pp;
       pp_jmember ~first:true pp "Addr" pp_atom p;
-      pp_jmember  pp "Offset" pp_int i;
+      pp_jmember  pp "Offset" pp_ptrofs i;
       pp_jobject_end pp  in
     pp_jsingle_object pp "Init_addrof" pp_addr_of (p,i)
 

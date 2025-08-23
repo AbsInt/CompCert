@@ -69,9 +69,9 @@ let print_operation reg pp = function
   | Ofloatconst n, [] -> fprintf pp "%.15F" (camlfloat_of_coqfloat n)
   | Osingleconst n, [] -> fprintf pp "%.15Ff" (camlfloat_of_coqfloat32 n)
   | Oaddrsymbol(id, ofs), [] ->
-      fprintf pp "\"%s\" + %ld" (extern_atom id) (camlint_of_coqint ofs)
+      fprintf pp "\"%s\" + %Ld" (extern_atom id) (camlint64_of_ptrofs ofs)
   | Oaddrstack ofs, [] ->
-      fprintf pp "stack(%ld)" (camlint_of_coqint ofs)
+      fprintf pp "stack(%Ld)" (camlint64_of_ptrofs ofs)
   | Ocast8signed, [r1] -> fprintf pp "int8signed(%a)" reg r1
   | Ocast16signed, [r1] -> fprintf pp "int16signed(%a)" reg r1
   | Oadd, [r1;r2] -> fprintf pp "%a + %a" reg r1 reg r2
@@ -139,5 +139,5 @@ let print_addressing reg pp = function
   | Aindexed n, [r1] -> fprintf pp "%a + %ld" reg r1 (camlint_of_coqint n)
   | Aindexed2, [r1; r2] -> fprintf pp "%a + %a" reg r1 reg r2
   | Aindexed2shift s, [r1; r2] -> fprintf pp "%a + %a %a" reg r1 reg r2 shift s
-  | Ainstack ofs, [] -> fprintf pp "stack(%ld)" (camlint_of_coqint ofs)
+  | Ainstack ofs, [] -> fprintf pp "stack(%Ld)" (camlint64_of_ptrofs ofs)
   | _ -> fprintf pp "<bad addressing>"
