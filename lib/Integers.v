@@ -101,9 +101,17 @@ Global Hint Resolve modulus_pos: ints.
 
 (** A machine integer (type [int]) is represented as a Coq arbitrary-precision
   integer (type [Z]) plus a proof that it is in the range 0 (included) to
-  [modulus] (excluded). *)
+  [modulus] (excluded).
 
-Record int: Type := mkint { intval: Z; intrange: -1 < intval < modulus }.
+  The extra [filler] field was added to control extraction, so that
+  the type [int] is not extracted to an OCaml alias for type [Z], but
+  plays no role in the Coq development. *)
+
+Record int: Type := mkint {
+  intval: Z;
+  intrange: -1 < intval < modulus;
+  filler: unit
+}.
 
 (** Fast normalization modulo [2^wordsize] *)
 
@@ -142,7 +150,7 @@ Definition signed (n: int) : Z :=
   machine integer.  The argument is treated modulo [modulus]. *)
 
 Definition repr (x: Z) : int :=
-  mkint (Z_mod_modulus x) (Z_mod_modulus_range' x).
+  mkint (Z_mod_modulus x) (Z_mod_modulus_range' x) tt.
 
 Definition zero := repr 0.
 Definition one  := repr 1.
@@ -150,9 +158,9 @@ Definition mone := repr (-1).
 Definition iwordsize := repr zwordsize.
 
 Lemma mkint_eq:
-  forall x y Px Py, x = y -> mkint x Px = mkint y Py.
+  forall x y Px Py dx dy, x = y -> mkint x Px dx = mkint y Py dy.
 Proof.
-  intros. subst y.
+  intros. subst y. destruct dx, dy.
   assert (forall (n m: Z) (P1 P2: n < m), P1 = P2).
   {
     unfold Z.lt; intros.
@@ -169,7 +177,7 @@ Lemma eq_dec: forall (x y: int), {x = y} + {x <> y}.
 Proof.
   intros. destruct x; destruct y. destruct (zeq intval0 intval1).
   left. apply mkint_eq. auto.
-  right. red; intro. injection H. exact n.
+  right. red; intro. injection H. tauto.
 Defined.
 
 (** * Arithmetic and logical operations over machine integers *)
