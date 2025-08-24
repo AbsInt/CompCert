@@ -23,11 +23,16 @@ open BinInt
 open BinPos
 open! Floats
 
+exception Overflow of string * coq_Z
+
 (* Coq's [nat] type and some of its operations *)
 
 module Nat = struct
 
   type t = nat = O | S of t
+
+  (* The [to_int] functions will do a stack overflow well before
+     they hit [max_int], so we do not detect this case. *)
 
   let rec to_int = function
   | O -> 0
@@ -47,7 +52,6 @@ module Nat = struct
 
 end
 
-
 (* Coq's [positive] type and some of its operations *)
 
 module P = struct
@@ -64,21 +68,21 @@ module P = struct
   let ge x y = (Pos.compare x y <> Lt)
   let compare x y = match Pos.compare x y with Lt -> -1 | Eq -> 0 | Gt -> 1
 
-  let rec to_int = function
-  | Coq_xI p -> let n = to_int p in n + n + 1
-  | Coq_xO p -> let n = to_int p in n + n
-  | Coq_xH -> 1
-
   let rec of_int n =
     if n land 1 = 0 then
       if n = 0 then assert false else Coq_xO (of_int (n lsr 1))
     else
       if n = 1 then Coq_xH else Coq_xI (of_int (n lsr 1))
 
-  let rec to_int32 = function
-  | Coq_xI p -> Int32.add (Int32.shift_left (to_int32 p) 1) 1l
-  | Coq_xO p -> Int32.shift_left (to_int32 p) 1
-  | Coq_xH -> 1l
+  let rec to_int_mod = function
+  | Coq_xI p -> let n = to_int_mod p in n + n + 1
+  | Coq_xO p -> let n = to_int_mod p in n + n
+  | Coq_xH -> 1
+
+  let to_int =
+    let m = of_int max_int in
+    fun x ->
+      if le x m then to_int_mod x else raise(Overflow("P.to_int", Zpos x))
 
   let rec of_int32 n =
     if Int32.logand n 1l = 0l then
@@ -90,10 +94,20 @@ module P = struct
       then Coq_xH
       else Coq_xI (of_int32 (Int32.shift_right_logical n 1))
 
-  let rec to_int64 = function
-  | Coq_xI p -> Int64.add (Int64.shift_left (to_int64 p) 1) 1L
-  | Coq_xO p -> Int64.shift_left (to_int64 p) 1
-  | Coq_xH -> 1L
+  let rec to_int32_mod = function
+  | Coq_xI p -> Int32.add (Int32.shift_left (to_int32_mod p) 1) 1l
+  | Coq_xO p -> Int32.shift_left (to_int32_mod p) 1
+  | Coq_xH -> 1l
+
+  let to_int32 =
+    let m = of_int32 Int32.max_int in
+    fun x ->
+      if le x m then to_int32_mod x else raise(Overflow("P.to_int32", Zpos x))
+
+  let to_uint32 =
+    let m = of_int32 (-1l) in
+    fun x ->
+      if le x m then to_int32_mod x else raise(Overflow("P.to_uint32", Zpos x))
 
   let rec of_int64 n =
     if Int64.logand n 1L = 0L then
@@ -104,6 +118,21 @@ module P = struct
       if n = 1L
       then Coq_xH
       else Coq_xI (of_int64 (Int64.shift_right_logical n 1))
+
+  let rec to_int64_mod = function
+  | Coq_xI p -> Int64.add (Int64.shift_left (to_int64_mod p) 1) 1L
+  | Coq_xO p -> Int64.shift_left (to_int64_mod p) 1
+  | Coq_xH -> 1L
+
+  let to_int64 =
+    let m = of_int64 Int64.max_int in
+    fun x ->
+      if le x m then to_int64_mod x else raise(Overflow("P.to_int64", Zpos x))
+
+  let to_uint64 =
+    let m = of_int64 (-1L) in
+    fun x ->
+      if le x m then to_int64_mod x else raise(Overflow("P.to_uint64", Zpos x))
 
   let (=) = eq
   let (<) = lt
@@ -128,26 +157,51 @@ module N = struct
   let ge x y = (N.compare x y <> Lt)
   let compare x y = match N.compare x y with Lt -> -1 | Eq -> 0 | Gt -> 1
 
-  let to_int = function
-  | N0 -> 0
-  | Npos p -> P.to_int p
-
   let of_int n =
     if n = 0 then N0 else Npos (P.of_int n)
 
-  let to_int32 = function
-  | N0 -> 0l
-  | Npos p -> P.to_int32 p
+  let to_int_mod = function
+  | N0 -> 0
+  | Npos p -> P.to_int_mod p
+
+  let to_int =
+    let m = of_int max_int in
+    fun x ->
+      if le x m then to_int_mod x else raise(Overflow("N.to_int", Z.of_N x))
 
   let of_int32 n =
     if n = 0l then N0 else Npos (P.of_int32 n)
 
-  let to_int64 = function
-  | N0 -> 0L
-  | Npos p -> P.to_int64 p
+  let to_int32_mod = function
+  | N0 -> 0l
+  | Npos p -> P.to_int32_mod p
+
+  let to_int32 =
+    let m = of_int32 Int32.max_int in
+    fun x ->
+      if le x m then to_int32_mod x else raise(Overflow("N.to_int32", Z.of_N x))
+
+  let to_uint32 =
+    let m = of_int32 (-1l) in
+    fun x ->
+      if le x m then to_int32_mod x else raise(Overflow("N.to_uint32", Z.of_N x))
 
   let of_int64 n =
     if n = 0L then N0 else Npos (P.of_int64 n)
+
+  let to_int64_mod = function
+  | N0 -> 0L
+  | Npos p -> P.to_int64_mod p
+
+  let to_int64 =
+    let m = of_int64 Int64.max_int in
+    fun x ->
+      if le x m then to_int64_mod x else raise(Overflow("N.to_int64", Z.of_N x))
+
+  let to_uint64 =
+    let m = of_int64 (-1L) in
+    fun x ->
+      if le x m then to_int64_mod x else raise(Overflow("N.to_uint64", Z.of_N x))
 
   let (=) = eq
   let (<) = lt
@@ -180,11 +234,6 @@ module Z = struct
   let ge x y = (Z.compare x y <> Lt)
   let compare x y = match Z.compare x y with Lt -> -1 | Eq -> 0 | Gt -> 1
 
-  let to_int = function
-  | Z0 -> 0
-  | Zpos p -> P.to_int p
-  | Zneg p -> - (P.to_int p)
-
   let of_sint n =
     if n = 0 then Z0 else
     if n > 0 then Zpos (P.of_int n)
@@ -193,10 +242,17 @@ module Z = struct
   let of_uint n =
     if n = 0 then Z0 else Zpos (P.of_int n)
 
-  let to_int32 = function
-  | Z0 -> 0l
-  | Zpos p -> P.to_int32 p
-  | Zneg p -> Int32.neg (P.to_int32 p)
+  let to_int_mod = function
+  | Z0 -> 0
+  | Zpos p -> P.to_int_mod p
+  | Zneg p -> - (P.to_int_mod p)
+
+  let to_int =
+    let min = of_sint min_int and max = of_sint max_int in
+    fun x ->
+      if le x max && ge x min
+      then to_int_mod x
+      else raise(Overflow("Z.to_int", x))
 
   let of_sint32 n =
     if n = 0l then Z0 else
@@ -206,10 +262,24 @@ module Z = struct
   let of_uint32 n =
     if n = 0l then Z0 else Zpos (P.of_int32 n)
 
-  let to_int64 = function
-  | Z0 -> 0L
-  | Zpos p -> P.to_int64 p
-  | Zneg p -> Int64.neg (P.to_int64 p)
+  let to_int32_mod = function
+  | Z0 -> 0l
+  | Zpos p -> P.to_int32_mod p
+  | Zneg p -> Int32.neg (P.to_int32_mod p)
+
+  let to_int32 =
+    let min = of_sint32 Int32.min_int and max = of_sint32 Int32.max_int in
+    fun x ->
+      if le x max && ge x min
+      then to_int32_mod x
+      else raise(Overflow("Z.to_int32", x))
+
+  let to_uint32 =
+    let min = zero and max = of_uint32 (-1l) in
+    fun x ->
+      if le x max && ge x min
+      then to_int32_mod x
+      else raise(Overflow("Z.to_uint32", x))
 
   let of_sint64 n =
     if n = 0L then Z0 else
@@ -218,6 +288,25 @@ module Z = struct
 
   let of_uint64 n =
     if n = 0L then Z0 else Zpos (P.of_int64 n)
+
+  let to_int64_mod = function
+  | Z0 -> 0L
+  | Zpos p -> P.to_int64_mod p
+  | Zneg p -> Int64.neg (P.to_int64_mod p)
+
+  let to_int64 =
+    let min = of_sint64 Int64.min_int and max = of_sint64 Int64.max_int in
+    fun x ->
+      if le x max && ge x min
+      then to_int64_mod x
+      else raise(Overflow("Z.to_int64", x))
+
+  let to_uint64 =
+    let min = zero and max = of_uint64 (-1L) in
+    fun x ->
+      if le x max && ge x min
+      then to_int64_mod x
+      else raise(Overflow("Z.to_uint64", x))
 
   let of_N = Z.of_N
 
@@ -264,19 +353,37 @@ module Z = struct
   let (>=) = ge
 end
 
+let _ =
+  Printexc.register_printer
+    (function 
+      | Overflow(fn, arg) ->
+          Some(Printf.sprintf "Overflow in %s on %s" fn (Z.to_string arg))
+      | _ -> None)
 
-(* Alternate names *)
+(* Conversion functions for the 32- and 64-bit machine integers
+   defined in module Integers.  These functions never overflow, since
+   the range of these integers is known and enforced by the Coq type checker.
+   The resulting OCaml int32 / int64 integers still have to be interpreted 
+   as signed or unsigned, depending on the intended use. *)
 
 let camlint_of_coqint (x: Integers.Int.int) : int32 =
-  Z.to_int32 (Integers.Int.unsigned x)
+  Z.to_int32_mod (Integers.Int.unsigned x)
 let coqint_of_camlint (x: int32) : Integers.Int.int =
   Integers.Int.repr (Z.of_uint32 x)
+
 let camlint64_of_coqint (x: Integers.Int64.int) : int64 =
-  Z.to_int64 (Integers.Int64.unsigned x)
+  Z.to_int64_mod (Integers.Int64.unsigned x)
 let coqint_of_camlint64 (x: int64) : Integers.Int64.int =
   Integers.Int64.repr (Z.of_uint64 x)
+
+(* Integers.Ptrofs.int is either 32-bit or 64-bit wide, depending on the
+   target platform.  It is always safe to treat it as an OCaml int64.
+   It can be treated as an int32 on 32-bit target platforms. *)
+
 let camlint64_of_ptrofs (x: Integers.Ptrofs.int) : int64 =
-  Z.to_int64 (Integers.Ptrofs.signed x)
+  Z.to_int64_mod (Integers.Ptrofs.signed x)
+let camlint_of_ptrofs (x: Integers.Ptrofs.int) : int32 =
+  assert (not Archi.ptr64); Z.to_int32_mod (Integers.Ptrofs.signed x)
 
 (* Atoms (positive integers representing strings) *)
 
