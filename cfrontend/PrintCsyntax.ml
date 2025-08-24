@@ -101,7 +101,7 @@ let rec name_cdecl id ty =
         | _                      -> sprintf "*%s%s" (attributes_space a) id in
       name_cdecl id' t
   | Tarray(t, n, a) ->
-      name_cdecl (sprintf "%s[%ld]" id (camlint_of_coqint n)) t
+      name_cdecl (sprintf "%s[%s]" id (Z.to_string n)) t
   | Tfunction(args, res, cconv) ->
       let b = Buffer.create 20 in
       if id = ""
@@ -170,7 +170,7 @@ let rec precedence = function
 (* Expressions *)
 
 let print_pointer_hook
-   : (formatter -> Values.block * Integers.Int.int -> unit) ref
+   : (formatter -> Values.block * Integers.Ptrofs.int -> unit) ref
    = ref (fun p (b, ofs) -> ())
 
 let print_typed_value p v ty =
@@ -251,8 +251,8 @@ let rec expr p (prec, e) =
   | Ecall(a1, al, _) ->
       fprintf p "%a@[<hov 1>(%a)@]" expr (prec', a1) exprlist (true, al)
   | Ebuiltin(EF_memcpy(sz, al), _, args, _) ->
-      fprintf p "__builtin_memcpy_aligned@[<hov 1>(%ld,@ %ld,@ %a)@]"
-                (camlint_of_coqint sz) (camlint_of_coqint al)
+      fprintf p "__builtin_memcpy_aligned@[<hov 1>(%s,@ %s,@ %a)@]"
+                (Z.to_string sz) (Z.to_string al)
                 exprlist (true, args)
   | Ebuiltin(EF_annot(_,txt, _), _, args, _) ->
       fprintf p "__builtin_annot@[<hov 1>(%S%a)@]"
@@ -460,7 +460,7 @@ let string_of_init id =
 
 let chop_last_nul id =
   match List.rev id with
-  | Init_int8 Z.Z0 :: tl -> List.rev tl
+  | Init_int8 n :: tl when n = Integers.Int.zero -> List.rev tl
   | _ -> id
 
 let print_init p = function
@@ -472,10 +472,10 @@ let print_init p = function
   | Init_float64 n -> fprintf p "%.15F" (camlfloat_of_coqfloat n)
   | Init_space n -> fprintf p "/* skip %s */@ " (Z.to_string n)
   | Init_addrof(symb, ofs) ->
-      let ofs = camlint_of_coqint ofs in
-      if ofs = 0l
+      let ofs = camlint64_of_ptrofs ofs in
+      if ofs = 0L
       then fprintf p "&%s" (extern_atom symb)
-      else fprintf p "(void *)((char *)&%s + %ld)" (extern_atom symb) ofs
+      else fprintf p "(void *)((char *)&%s + %Ld)" (extern_atom symb) ofs
 
 let print_composite_init p il =
   fprintf p "{@ ";

@@ -143,17 +143,17 @@ let sizeof_uleb128 value =
 
 let sizeof_sleb128 value =
   let size = ref 1 in
-  let byte = ref (value land 0x7f) in
-  let value = ref (value lsr 7) in
-  while not ((!value = 0 && (!byte land 0x40) = 0) || (!value = -1 && ((!byte land 0x40) <> 0))) do
-    byte := !value land 0x7f;
-    value := !value lsr 7;
+  let byte = ref (Int64.logand value 0x7fL) in
+  let value = ref (Int64.shift_right_logical value 7) in
+  while not ((!value = 0L && Int64.logand !byte 0x40L = 0L) || (!value = -1L && Int64.logand !byte 0x40L <> 0L)) do
+    byte := Int64.logand !value 0x7fL;
+    value := Int64.shift_right_logical !value 7;
     incr size;
   done;
   !size
 
 let size_of_loc_expr = function
-  | DW_OP_bregx (a,b) -> 1 + (sizeof_uleb128 a)  + (sizeof_sleb128 (Int32.to_int b))
+  | DW_OP_bregx (a,b) -> 1 + (sizeof_uleb128 a)  + (sizeof_sleb128 b)
   | DW_OP_plus_uconst a
   | DW_OP_piece a -> 1 + (sizeof_uleb128 a)
   | DW_OP_reg i -> if i < 32 then 1 else  1 + (sizeof_uleb128 i)

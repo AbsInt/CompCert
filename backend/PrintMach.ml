@@ -36,14 +36,14 @@ let ros pp = function
 let print_instruction pp i =
   match i with
   | Mgetstack(ofs, ty, res) ->
-      fprintf pp "\t%a = stack(%ld, %s)\n"
-              reg res (camlint_of_coqint ofs) (name_of_type ty)
+      fprintf pp "\t%a = stack(%Ld, %s)\n"
+              reg res (camlint64_of_ptrofs ofs) (name_of_type ty)
   | Msetstack(arg, ofs, ty) ->
-      fprintf pp "\tstack(%ld, %s) = %a\n"
-              (camlint_of_coqint ofs) (name_of_type ty) reg arg
+      fprintf pp "\tstack(%Ld, %s) = %a\n"
+              (camlint64_of_ptrofs ofs) (name_of_type ty) reg arg
   | Mgetparam(ofs, ty, res) ->
-      fprintf pp "\t%a = param(%ld, %s)\n"
-              reg res (camlint_of_coqint ofs) (name_of_type ty)
+      fprintf pp "\t%a = param(%Ld, %s)\n"
+              reg res (camlint64_of_ptrofs ofs) (name_of_type ty)
   | Mop(op, args, res) ->
       fprintf pp "\t%a = %a\n"
          reg res (PrintOp.print_operation reg) (op, args)

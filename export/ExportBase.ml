@@ -49,10 +49,10 @@ let coqint p n =
   else fprintf p "(Int.repr (%ld))" n
 
 let coqptrofs p n =
-  let s = Z.to_string n in
-  if Z.ge n Z.zero
-  then fprintf p "(Ptrofs.repr %s)" s
-  else fprintf p "(Ptrofs.repr (%s))" s
+  let n = camlint64_of_ptrofs n in
+  if n >= 0L
+  then fprintf p "(Ptrofs.repr %Ld)" n
+  else fprintf p "(Ptrofs.repr (%Ld))" n
 
 let coqint64 p n =
   let n = camlint64_of_coqint n in

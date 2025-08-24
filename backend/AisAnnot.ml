@@ -22,11 +22,11 @@ type t =
   | Symbol of ident
 
 let offset ofs =
-  let ofs = camlint_of_coqint ofs in
-  if ofs = 0l then "" else sprintf " + %ld" ofs
+  let ofs = camlint64_of_ptrofs ofs in
+  if ofs = 0L then "" else sprintf " + %Ld" ofs
 
 let size_chunk c =
-  sprintf "%ld" (camlint_of_coqint (size_chunk c))
+  Z.to_string (size_chunk c)
 
 let addr_global id ofs =
   let addr_o = "("

@@ -364,12 +364,12 @@ module Dwarfgenaux (Target: TARGET) =
 
     let translate_function_loc a = function
       | BA_addrstack (ofs) ->
-          let ofs = camlint_of_coqint ofs in
+          let ofs = camlint64_of_ptrofs ofs in
           Some (LocSimple (DW_OP_bregx (a,ofs))),[]
       | BA_splitlong (BA_addrstack hi,BA_addrstack lo)->
-          let hi = camlint_of_coqint hi
-          and lo = camlint_of_coqint lo in
-          if lo = Int32.add hi 4l then
+          let hi = camlint64_of_ptrofs hi
+          and lo = camlint64_of_ptrofs lo in
+          if lo = Int64.add hi 4L then
             Some (LocSimple (DW_OP_bregx (a,hi))),[]
           else
             let op_hi = [DW_OP_bregx (a,hi)]
@@ -381,7 +381,7 @@ module Dwarfgenaux (Target: TARGET) =
       let rec aux = function
         | BA i ->  [DW_OP_reg i]
         | BA_addrstack ofs ->
-            let ofs = camlint_of_coqint ofs in
+            let ofs = camlint64_of_ptrofs ofs in
             [DW_OP_bregx (sp,ofs)]
         | BA_splitlong (hi,lo) ->
             let hi = aux hi

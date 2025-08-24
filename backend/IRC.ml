@@ -106,11 +106,11 @@ let name_of_loc = function
                 | Some s -> s
       end
   | S (Local, ofs, ty) ->
-      sprintf "L%c%ld" (PrintXTL.short_name_of_type ty) (camlint_of_coqint ofs)
+      sprintf "L%c%s" (PrintXTL.short_name_of_type ty) (Z.to_string ofs)
   | S (Incoming, ofs, ty) ->
-      sprintf "I%c%ld" (PrintXTL.short_name_of_type ty) (camlint_of_coqint ofs)
+      sprintf "I%c%s" (PrintXTL.short_name_of_type ty) (Z.to_string ofs)
   | S (Outgoing, ofs, ty) ->
-      sprintf "O%c%ld" (PrintXTL.short_name_of_type ty) (camlint_of_coqint ofs)
+      sprintf "O%c%s" (PrintXTL.short_name_of_type ty) (Z.to_string ofs)
 
 let name_of_node n =
   match n.var with

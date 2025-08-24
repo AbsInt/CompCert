@@ -35,10 +35,10 @@ let mode = ref First
 (* Printing events *)
 
 let print_id_ofs p (id, ofs) =
-  let id = extern_atom id and ofs = camlint_of_coqint ofs in
-  if ofs = 0l
+  let id = extern_atom id and ofs = camlint64_of_ptrofs ofs in
+  if ofs = 0L
   then fprintf p " %s" id
-  else fprintf p " %s%+ld" id ofs
+  else fprintf p " %s%+Ld" id ofs
 
 let print_eventval p = function
   | EVint n -> fprintf p "%ld" (camlint_of_coqint n)
@@ -60,14 +60,14 @@ let print_event p = function
                 print_eventval_list args
                 print_eventval res
   | Event_vload(chunk, id, ofs, res) ->
-      fprintf p "volatile load %s[&%s%+ld] -> %a"
+      fprintf p "volatile load %s[&%s%+Ld] -> %a"
                 (PrintAST.name_of_chunk chunk)
-                (extern_atom id) (camlint_of_coqint ofs)
+                (extern_atom id) (camlint64_of_ptrofs ofs)
                 print_eventval res
   | Event_vstore(chunk, id, ofs, arg) ->
-      fprintf p "volatile store %s[&%s%+ld] <- %a"
+      fprintf p "volatile store %s[&%s%+Ld] <- %a"
                 (PrintAST.name_of_chunk chunk)
-                (extern_atom id) (camlint_of_coqint ofs)
+                (extern_atom id) (camlint64_of_ptrofs ofs)
                 print_eventval arg
   | Event_annot(text, args) ->
       fprintf p "annotation \"%s\" %a"
@@ -266,7 +266,7 @@ let extract_string m blk ofs =
   let rec extract blk ofs =
     match Mem.load Mint8unsigned m blk ofs with
     | Some(Vint n) ->
-        let c = Char.chr (Z.to_int n) in
+        let c = Char.chr (Int32.to_int (camlint_of_coqint n)) in
         if c = '\000' then begin
           Some(Buffer.contents b)
         end else begin
@@ -275,7 +275,7 @@ let extract_string m blk ofs =
         end
     | _ ->
         None in
-  extract blk ofs
+  extract blk (Integers.Ptrofs.unsigned ofs)
 
 (* Emulation of printf *)
 
@@ -316,7 +316,7 @@ let format_value m flags length conv arg =
   | 's', "", _ ->
       "<pointer argument expected>"
   | 'p', "", Vptr(blk, ofs) ->
-      Printf.sprintf "<%ld%+ld>" (P.to_int32 blk) (camlint_of_coqint ofs)
+      Printf.sprintf "<%ld%+Ld>" (P.to_int32 blk) (camlint64_of_ptrofs ofs)
   | 'p', "", Vint i ->
       format_int32 (flags ^ "x") (camlint_of_coqint i)
   | 'p', "", _ ->
@@ -408,14 +408,14 @@ and world_io ge m id args =
 
 and world_vload ge m chunk id ofs =
   Genv.find_symbol ge.genv_genv id >>= fun b ->
-  Mem.load chunk m b ofs >>= fun v ->
+  Mem.load chunk m b (Integers.Ptrofs.unsigned ofs) >>= fun v ->
   Cexec.eventval_of_val ge v (type_of_chunk chunk) >>= fun ev ->
   Some(ev, world ge m)
 
 and world_vstore ge m chunk id ofs ev =
   Genv.find_symbol ge.genv_genv id >>= fun b ->
   Cexec.val_of_eventval ge ev (type_of_chunk chunk) >>= fun v ->
-  Mem.store chunk m b ofs v >>= fun m' ->
+  Mem.store chunk m b (Integers.Ptrofs.unsigned ofs) v >>= fun m' ->
   Some(world ge m')
 
 let do_event p ge time w ev =

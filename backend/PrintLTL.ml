@@ -34,11 +34,11 @@ let rec mregs pp = function
 let slot pp (sl, ofs, ty) =
   match sl with
   | Locations.Local ->
-      fprintf pp "local(%ld,%s)" (camlint_of_coqint ofs) (name_of_type ty)
+      fprintf pp "local(%s,%s)" (Z.to_string ofs) (name_of_type ty)
   | Locations.Incoming ->
-      fprintf pp "incoming(%ld,%s)" (camlint_of_coqint ofs) (name_of_type ty)
+      fprintf pp "incoming(%s,%s)" (Z.to_string ofs) (name_of_type ty)
   | Locations.Outgoing ->
-      fprintf pp "outgoing(%ld,%s)" (camlint_of_coqint ofs) (name_of_type ty)
+      fprintf pp "outgoing(%s,%s)" (Z.to_string ofs) (name_of_type ty)
 
 let loc pp l =
   match l with

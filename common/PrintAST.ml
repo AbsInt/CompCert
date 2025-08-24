@@ -79,14 +79,14 @@ let rec print_builtin_arg px oc = function
   | BA_float n -> fprintf oc "float %.15F" (camlfloat_of_coqfloat n)
   | BA_single n -> fprintf oc "single %.15F" (camlfloat_of_coqfloat32 n)
   | BA_loadstack(chunk, ofs) ->
-      fprintf oc "%s[sp + %ld]" (name_of_chunk chunk) (camlint_of_coqint ofs)
+      fprintf oc "%s[sp + %Ld]" (name_of_chunk chunk) (camlint64_of_ptrofs ofs)
   | BA_addrstack(ofs) ->
-      fprintf oc "sp + %ld" (camlint_of_coqint ofs)
+      fprintf oc "sp + %Ld" (camlint64_of_ptrofs ofs)
   | BA_loadglobal(chunk, id, ofs) ->
-      fprintf oc "%s[&%s + %ld]"
-              (name_of_chunk chunk) (extern_atom id) (camlint_of_coqint ofs)
+      fprintf oc "%s[&%s + %Ld]"
+              (name_of_chunk chunk) (extern_atom id) (camlint64_of_ptrofs ofs)
   | BA_addrglobal(id, ofs) ->
-      fprintf oc "&%s + %ld" (extern_atom id) (camlint_of_coqint ofs)
+      fprintf oc "&%s + %Ld" (extern_atom id) (camlint64_of_ptrofs ofs)
   | BA_splitlong(hi, lo) ->
       fprintf oc "splitlong(%a, %a)"
                  (print_builtin_arg px) hi (print_builtin_arg px) lo

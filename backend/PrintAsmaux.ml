@@ -173,23 +173,23 @@ let rec annot_arg preg_string sp_reg_name = function
   | BA_float n -> sprintf "%.18g" (camlfloat_of_coqfloat n)
   | BA_single n -> sprintf "%.18g" (camlfloat_of_coqfloat32 n)
   | BA_loadstack(chunk, ofs) ->
-      sprintf "mem(%s + %ld, %ld)"
+      sprintf "mem(%s + %Ld, %s)"
          sp_reg_name
-         (camlint_of_coqint ofs)
-         (camlint_of_coqint (size_chunk chunk))
+         (camlint64_of_ptrofs ofs)
+         (Z.to_string (size_chunk chunk))
   | BA_addrstack ofs ->
-      sprintf "(%s + %ld)"
+      sprintf "(%s + %Ld)"
          sp_reg_name
-         (camlint_of_coqint ofs)
+         (camlint64_of_ptrofs ofs)
   | BA_loadglobal(chunk, id, ofs) ->
-      sprintf "mem(\"%s\" + %ld, %ld)"
+      sprintf "mem(\"%s\" + %Ld, %s)"
          (extern_atom id)
-         (camlint_of_coqint ofs)
-         (camlint_of_coqint (size_chunk chunk))
+         (camlint64_of_ptrofs ofs)
+         (Z.to_string (size_chunk chunk))
   | BA_addrglobal(id, ofs) ->
-      sprintf "(\"%s\" + %ld)"
+      sprintf "(\"%s\" + %Ld)"
          (extern_atom id)
-         (camlint_of_coqint ofs)
+         (camlint64_of_ptrofs ofs)
   | BA_splitlong(hi, lo) ->
       sprintf "(%s * 0x100000000 + %s)"
         (annot_arg preg_string sp_reg_name hi)

@@ -626,7 +626,7 @@ let typeStringLiteral s =
 let global_for_string s id =
   let init = ref [] in
   let add_char c =
-    init := AST.Init_int8(Z.of_uint(Char.code c)) :: !init in
+    init := AST.Init_int8(Integers.Int.repr (Z.of_uint(Char.code c))) :: !init in
   add_char '\000';
   for i = String.length s - 1 downto 0 do add_char s.[i] done;
   AST.(id, Gvar { gvar_info = typeStringLiteral s;  gvar_init = !init;
@@ -667,7 +667,7 @@ let global_for_wide_string (s, ik) id =
     | 4 -> (fun z -> AST.Init_int32 z)
     | _ -> assert false in
   let add_char c =
-    init := init_of_char(Z.of_uint64 c) :: !init in
+    init := init_of_char(Integers.Int.repr (Z.of_uint64 c)) :: !init in
   List.iter add_char s;
   add_char 0L;
   AST.(id, Gvar { gvar_info = typeWideStringLiteral s ik;
@@ -985,7 +985,7 @@ let rec convertExpr env e =
       and tres = convertTyp env e.etyp in
       let sg =
         signature_of_type targs tres
-           { AST.cc_vararg = Some (coqint_of_camlint 1l); cc_unproto = false; cc_structret = false} in
+           { AST.cc_vararg = Some (Z.of_uint 1); cc_unproto = false; cc_structret = false} in
       Ebuiltin( AST.EF_external(coqstring_of_camlstring "printf", sg),
                targs, convertExprList env args, tres)
 

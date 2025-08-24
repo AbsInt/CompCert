@@ -333,6 +333,9 @@ module DwarfPrinter(Target: DWARF_TARGET):
     let print_sleb128 oc c d =
       fprintf oc "	.sleb128	%d%a\n" d print_comment c
 
+    let print_sleb128_64 oc c d =
+      fprintf oc "	.sleb128	%Ld%a\n" d print_comment c
+
     let print_byte oc c b =
       fprintf oc "	.byte		0x%X%a\n" b print_comment c
 
@@ -356,7 +359,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
       | DW_OP_bregx (a,b) ->
           print_byte oc "DW_OP_bregx" dw_op_bregx;
           print_uleb128 oc "Register number" a;
-          print_sleb128 oc "Offset" (Int32.to_int b);
+          print_sleb128_64 oc "Offset" b
       | DW_OP_plus_uconst i ->
           print_byte oc "DW_OP_plus_uconst" dw_op_plus_uconst;
           print_uleb128 oc "Constant" i

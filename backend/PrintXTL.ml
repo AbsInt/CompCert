@@ -37,11 +37,11 @@ let short_name_of_type = function
 let loc pp = function
   | Locations.R r -> mreg pp r
   | Locations.S(Locations.Local, ofs, ty) ->
-      fprintf pp "L%c%ld" (short_name_of_type ty) (camlint_of_coqint ofs)
+      fprintf pp "L%c%s" (short_name_of_type ty) (Z.to_string ofs)
   | Locations.S(Locations.Incoming, ofs, ty) ->
-      fprintf pp "I%c%ld" (short_name_of_type ty) (camlint_of_coqint ofs)
+      fprintf pp "I%c%s" (short_name_of_type ty) (Z.to_string ofs)
   | Locations.S(Locations.Outgoing, ofs, ty) ->
-      fprintf pp "O%c%ld" (short_name_of_type ty) (camlint_of_coqint ofs)
+      fprintf pp "O%c%s" (short_name_of_type ty) (Z.to_string ofs)
 
 let current_alloc = ref (None: (var -> Locations.loc) option)
 let current_liveness = ref (None: VSet.t PMap.t option)

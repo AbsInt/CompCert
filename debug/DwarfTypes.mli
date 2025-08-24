@@ -37,7 +37,7 @@ type address = int
 
 type location_expression =
   | DW_OP_plus_uconst of constant
-  | DW_OP_bregx of constant * int32
+  | DW_OP_bregx of constant * int64
   | DW_OP_piece of constant
   | DW_OP_reg of constant
 

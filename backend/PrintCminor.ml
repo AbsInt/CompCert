@@ -186,12 +186,12 @@ let rec expr p (prec, e) =
   | Econst(Olongconst n) ->
       fprintf p "%LdLL" (camlint64_of_coqint n)
   | Econst(Oaddrsymbol(id, ofs)) ->
-      let ofs = camlint_of_coqint ofs in
-      if ofs = 0l
+      let ofs = camlint64_of_ptrofs ofs in
+      if ofs = 0L
       then fprintf p "\"%s\"" (extern_atom id)
-      else fprintf p "(\"%s\" + %ld)" (extern_atom id) ofs
+      else fprintf p "(\"%s\" + %Ld)" (extern_atom id) ofs
   | Econst(Oaddrstack n) ->
-      fprintf p "&%ld" (camlint_of_coqint n)
+      fprintf p "&%Ld" (camlint64_of_ptrofs n)
   | Eunop(op, a1) ->
       fprintf p "%s %a" (name_of_unop op) expr (prec', a1)
   | Ebinop(op, a1, a2) ->
@@ -359,7 +359,7 @@ let print_init_data p = function
   | Init_float32 f -> fprintf p "float32 %.15F" (camlfloat_of_coqfloat f)
   | Init_float64 f -> fprintf p "%.15F" (camlfloat_of_coqfloat f)
   | Init_space i -> fprintf p "[%s]" (Z.to_string i)
-  | Init_addrof(id,off) -> fprintf p "%ld(\"%s\")" (camlint_of_coqint off) (extern_atom id)
+  | Init_addrof(id, off) -> fprintf p "%Ld(\"%s\")" (camlint64_of_ptrofs off) (extern_atom id)
 
 let rec print_init_data_list p = function
   | [] -> ()

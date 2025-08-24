@@ -251,7 +251,7 @@ let block_of_RTL_instr funsig tyenv = function
       movelist args1 args3 (Xop(op, args3, res3) :: move res3 res1 [Xbranch s])
   | RTL.Iload(chunk, addr, args, dst, s) ->
       if Archi.splitlong && chunk = Mint64 then begin
-        match offset_addressing addr (coqint_of_camlint 4l) with
+        match offset_addressing addr (Z.of_uint 4) with
         | None -> assert false
         | Some addr' ->
             [Xload(Mint32, addr, vregs tyenv args,
@@ -263,7 +263,7 @@ let block_of_RTL_instr funsig tyenv = function
         [Xload(chunk, addr, vregs tyenv args, vreg tyenv dst); Xbranch s]
   | RTL.Istore(chunk, addr, args, src, s) ->
       if Archi.splitlong && chunk = Mint64 then begin
-        match offset_addressing addr (coqint_of_camlint 4l) with
+        match offset_addressing addr (Z.of_uint 4) with
         | None -> assert false
         | Some addr' ->
             [Xstore(Mint32, addr, vregs tyenv args,
