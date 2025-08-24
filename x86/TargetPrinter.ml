@@ -365,16 +365,16 @@ module Target(System: SYSTEM):TARGET =
       | Datatypes.Coq_inr(id, ofs) ->
           if Archi.ptr64 then begin
             (* RIP-relative addressing *)
-            let ofs' = Z.to_int64 ofs in
+            let ofs' = camlint64_of_ptrofs ofs in
             if ofs' = 0L
             then fprintf oc "%a(%%rip)" symbol_paren id
             else fprintf oc "(%a + %Ld)(%%rip)" symbol id ofs'
           end else begin
             (* Absolute addressing *)
-            let ofs' = Z.to_int32 ofs in
-            if ofs' = 0l
+            let ofs' = camlint64_of_ptrofs ofs in
+            if ofs' = 0L
             then fprintf oc "%a" symbol_paren id
-            else fprintf oc "(%a + %ld)" symbol id ofs'
+            else fprintf oc "(%a + %Ld)" symbol id ofs'
           end
       end;
       begin match base, shift with

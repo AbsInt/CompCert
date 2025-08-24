@@ -66,10 +66,10 @@ let print_addressing reg pp = function
       fprintf pp "%a * %s + %s" reg r1 (Z.to_string sc) (Z.to_string n)
   | Aindexed2scaled(sc, n), [r1; r2] ->
       fprintf pp "%a + %a * %s + %s" reg r1 reg r2 (Z.to_string sc) (Z.to_string n)
-  | Aglobal(id, ofs), [] -> fprintf pp "%s + %s" (extern_atom id) (Z.to_string ofs)
-  | Abased(id, ofs), [r1] -> fprintf pp "%s + %s + %a" (extern_atom id) (Z.to_string ofs) reg r1
-  | Abasedscaled(sc,id, ofs), [r1] -> fprintf pp "%s + %s + %a * %ld" (extern_atom id) (Z.to_string ofs) reg r1 (camlint_of_coqint sc)
-  | Ainstack ofs, [] -> fprintf pp "stack(%s)" (Z.to_string ofs)
+  | Aglobal(id, ofs), [] -> fprintf pp "%s + %Ld" (extern_atom id) (camlint64_of_ptrofs ofs)
+  | Abased(id, ofs), [r1] -> fprintf pp "%s + %Ld + %a" (extern_atom id) (camlint64_of_ptrofs ofs) reg r1
+  | Abasedscaled(sc, id, ofs), [r1] -> fprintf pp "%s + %Ld + %a * %s" (extern_atom id) (camlint64_of_ptrofs ofs) reg r1 (Z.to_string sc)
+  | Ainstack ofs, [] -> fprintf pp "stack(%Ld)" (camlint64_of_ptrofs ofs)
   | _ -> fprintf pp "<bad addressing>"
 
 let print_operation reg pp = function

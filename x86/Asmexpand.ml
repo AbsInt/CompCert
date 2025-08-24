@@ -99,7 +99,7 @@ let offset_addressing (Addrmode(base, ofs, cst)) delta =
   Addrmode(base, ofs,
            match cst with
            | Coq_inl n -> Coq_inl(Z.add n delta)
-           | Coq_inr(id, n) -> Coq_inr(id, Integers.Ptrofs.add n delta))
+           | Coq_inr(id, n) -> Coq_inr(id, Integers.Ptrofs.(add n (repr delta))))
 
 let linear_addr reg ofs = Addrmode(Some reg, None, Coq_inl ofs)
 let global_addr id ofs = Addrmode(None, None, Coq_inr(id, ofs))
@@ -453,10 +453,10 @@ let expand_builtin_inline name args res =
      emit (Pmull_r RDX)
   (* Memory accesses *)
   | "__builtin_read16_reversed", [BA(IR a1)], BR(IR res) ->
-     emit (Pmovzw_rm (res, linear_addr a1 _0));
+     emit (Pmovzw_rm (res, linear_addr a1 _0z));
      emit (Pbswap16 res)
   | "__builtin_read32_reversed", [BA(IR a1)], BR(IR res) ->
-     emit (Pmovl_rm (res, linear_addr a1 _0));
+     emit (Pmovl_rm (res, linear_addr a1 _0z));
      emit (Pbswap32 res)
   | "__builtin_write16_reversed", [BA(IR a1); BA(IR a2)], _ ->
      let tmp = if a1 = RCX then RDX else RCX in
@@ -539,11 +539,11 @@ let expand_instruction instr =
                         {sig_args = []; sig_res = Xvoid; sig_cc = cc_default}));
        (* Allocate frame *)
        let sz' = Z.of_uint sz in
-       emit (Psubq_ri (RSP, sz'));
-       emit (Pcfi_adjust sz');
+       emit (Psubq_ri (RSP, Integers.Int64.repr sz'));
+       emit (Pcfi_adjust (Integers.Int.repr sz'));
        (* Stack chaining *)
        let addr1 = linear_addr RSP (Z.of_uint (sz + 8)) in
-       let addr2 = linear_addr RSP ofs_link in
+       let addr2 = linear_addr RSP (Integers.Ptrofs.unsigned ofs_link) in
        emit_leaq RAX addr1;
        emit (Pmovq_mr (addr2, RAX));
        current_function_stacksize := Int64.of_int (sz + 8)
@@ -551,8 +551,8 @@ let expand_instruction instr =
        let (sz, save_regs) = sp_adjustment_elf64 sz in
        (* Allocate frame *)
        let sz' = Z.of_uint sz in
-       emit (Psubq_ri (RSP, sz'));
-       emit (Pcfi_adjust sz');
+       emit (Psubq_ri (RSP, Integers.Int64.repr sz'));
+       emit (Pcfi_adjust (Integers.Int.repr sz'));
        if save_regs >= 0 then begin
          (* Save the registers *)
          emit_leaq R10 (linear_addr RSP (Z.of_uint save_regs));
@@ -562,7 +562,7 @@ let expand_instruction instr =
        (* Stack chaining *)
        let fullsz = sz + 8 in
        let addr1 = linear_addr RSP (Z.of_uint fullsz) in
-       let addr2 = linear_addr RSP ofs_link in
+       let addr2 = linear_addr RSP (Integers.Ptrofs.unsigned ofs_link) in
        emit_leaq RAX addr1;
        emit (Pmovq_mr (addr2, RAX));
        current_function_stacksize := Int64.of_int fullsz
@@ -570,11 +570,11 @@ let expand_instruction instr =
        let sz = sp_adjustment_32 sz in
        (* Allocate frame *)
        let sz' = Z.of_uint sz in
-       emit (Psubl_ri (RSP, sz'));
-       emit (Pcfi_adjust sz');
+       emit (Psubl_ri (RSP, Integers.Int.repr sz'));
+       emit (Pcfi_adjust (Integers.Int.repr sz'));
        (* Stack chaining *)
        let addr1 = linear_addr RSP (Z.of_uint (sz + 4)) in
-       let addr2 = linear_addr RSP ofs_link in
+       let addr2 = linear_addr RSP (Integers.Ptrofs.unsigned ofs_link) in
        emit (Pleal (RAX,addr1));
        emit (Pmovl_mr (addr2,RAX));
        PrintAsmaux.current_function_stacksize := Int32.of_int sz
@@ -582,13 +582,13 @@ let expand_instruction instr =
   | Pfreeframe(sz, ofs_ra, ofs_link) ->
      if Archi.win64 then begin
        let sz = sp_adjustment_win64 sz in
-       emit (Paddq_ri (RSP, Z.of_uint sz))
+       emit (Paddq_ri (RSP, Integers.Int64.repr (Z.of_uint sz)))
      end else if Archi.ptr64 then begin
        let (sz, _) = sp_adjustment_elf64 sz in
-       emit (Paddq_ri (RSP, Z.of_uint sz))
+       emit (Paddq_ri (RSP, Integers.Int64.repr (Z.of_uint sz)))
      end else begin
        let sz = sp_adjustment_32 sz in
-       emit (Paddl_ri (RSP, Z.of_uint sz))
+       emit (Paddl_ri (RSP, Integers.Int.repr (Z.of_uint sz)))
      end
   | Pjmp_s(_, sg) | Pjmp_r(_, sg) | Pcall_s(_, sg) | Pcall_r(_, sg) ->
      fixup_funcall sg;
