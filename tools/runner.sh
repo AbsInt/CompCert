@@ -173,6 +173,14 @@ Run_test() {
   make -C test SIMU="$1" test
 }
 
+# Like Run_test, but don't test the clightgen tool, it's been done already
+
+Rerun_test() {
+  make -C test -s clean
+  make -C test CLIGHTGEN=false CCOMPOPTS="$2" -j$jobs all
+  make -C test CLIGHTGEN=false SIMU="$1" test
+}
+
 # Rounds of testing.
 # First parameter: round number (1, 2, ...)
 
@@ -181,43 +189,43 @@ case "$target,$os" in
   aarch64,linux)
     case "$1" in
       1) Run_test "$simu_aarch64" "";;
-      2) Run_test "$simu_aarch64" "-fpic";;
-      3) Run_test "$simu_aarch64" "-Os -fno-pie -no-pie";;
+      2) Rerun_test "$simu_aarch64" "-fpic";;
+      3) Rerun_test "$simu_aarch64" "-Os -fno-pie -no-pie";;
     esac;;
   aarch64,macos)
     case "$1" in
       1) Run_test "" "";;
-      2) Run_test "" "-fpic";;
-      3) Run_test "" "-Os";;
+      2) Rerun_test "" "-fpic";;
+      3) Rerun_test "" "-Os";;
     esac;;
   arm,linux)
     case "$1" in
       1) Run_test "$simu_armhf" "-marm";;
-      2) Run_test "$simu_armhf" "-mthumb";;
+      2) Rerun_test "$simu_armhf" "-mthumb";;
       3) Rebuild_runtime -toolprefix arm-linux-gnueabi- arm-eabi
-         Run_test "$simu_armsf" "-marm";;
+         Rerun_test "$simu_armsf" "-marm";;
     esac;;
   ppc,linux)
     case "$1" in
       1) Run_test "$simu_ppc32" "";;
-      2) Run_test "$simu_ppc32" "-Os";;
+      2) Rerun_test "$simu_ppc32" "-Os";;
     esac;;
   riscv,linux)
     case "$1" in
       1) Run_test "$simu_rv64" "";;
-      2) Run_test "$simu_rv64" "-fpic";;
-      3) Run_test "$simu_rv64" "-Os -fno-pie -no-pie";;
+      2) Rerun_test "$simu_rv64" "-fpic";;
+      3) Rerun_test "$simu_rv64" "-Os -fno-pie -no-pie";;
     esac;;
   x86_32,*)
     case "$1" in
       1) Run_test "" "";;
-      2) Run_test "" "-Os";;
+      2) Rerun_test "" "-Os";;
     esac;;
   x86_64,*)
     case "$1" in
       1) Run_test "" "";;
-      2) Run_test "" "-fpic";;
-      3) Run_test "" "-Os -fno-pie -no-pie";;
+      2) Rerun_test "" "-fpic";;
+      3) Rerun_test "" "-Os -fno-pie -no-pie";;
     esac;;
   *)
     Fatal "Unknown configuration \"$target\" - \"$os\""
