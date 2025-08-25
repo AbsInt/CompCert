@@ -48,9 +48,9 @@ FUNCTION(__compcert_i64_dtou)
         addq .LC2(%rip), INT_RES
         ret
 
+ENDFUNCTION(__compcert_i64_dtou)
+        
+RODATA
         .p2align 3
 .LC1:   .quad 0x43e0000000000000       // 2^63 in double precision
 .LC2:   .quad 0x8000000000000000       // 2^63 as an integer
-
-ENDFUNCTION(__compcert_i64_dtou)
-        

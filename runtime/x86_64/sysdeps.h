@@ -48,6 +48,8 @@ f:
 #define ENDFUNCTION(f) \
 	.type f, @function; .size f, . - f
 
+#define RODATA .section .rodata
+
 #endif
 
 #if defined(SYS_macos)
@@ -61,6 +63,8 @@ _##f:
 
 #define ENDFUNCTION(f)
 
+#define RODATA .text
+
 #endif
 
 #if defined(SYS_cygwin)
@@ -73,6 +77,8 @@ _##f:
 f:
 
 #define ENDFUNCTION(f)
+
+#define RODATA .text
 
 #endif
 
