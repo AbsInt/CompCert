@@ -11,7 +11,6 @@ simu_armsf="qemu-arm -L /usr/arm-linux-gnueabi"
 simu_armhf="qemu-arm -L /usr/arm-linux-gnueabihf"
 simu_ppc32="qemu-ppc -L /usr/powerpc-linux-gnu -cpu G4"
 simu_rv64="qemu-riscv64 -L /usr/riscv64-linux-gnu"
-# simu_x86_32="qemu-i386 -L /usr/i686-linux-gnu"
 
 # Fatal error
 
@@ -58,17 +57,11 @@ System_install() {
     riscv,linux)
       Apt_install gcc-riscv64-linux-gnu
       ;;
-    x86_32,linux)
-      sudo apt-get update
-      sudo apt-get -y install gcc-multilib
-      ;;
     x86_64,linux)
       ;;
     aarch64,macos)
       ;;
     x86_64,macos)
-      ;;
-    x86_32,windows)
       ;;
     x86_64,windows)
       ;;
@@ -104,9 +97,6 @@ Configure() {
     riscv,linux)
       ./configure $configopts -toolprefix riscv64-linux-gnu- rv64-linux
       ;;
-    x86_32,linux)
-      ./configure $configopts x86_32-linux
-      ;;
     x86_64,linux)
       ./configure $configopts -clightgen x86_64-linux
       ;;
@@ -115,9 +105,6 @@ Configure() {
       ;;
     x86_64,macos)
       ./configure $configopts x86_64-macos
-      ;;
-    x86_32,windows)
-      ./configure $configopts x86_32-cygwin
       ;;
     x86_64,windows)
       ./configure $configopts x86_64-cygwin
@@ -215,11 +202,6 @@ case "$target,$os" in
       1) Run_test "$simu_rv64" "";;
       2) Rerun_test "$simu_rv64" "-fpic";;
       3) Rerun_test "$simu_rv64" "-Os -fno-pie -no-pie";;
-    esac;;
-  x86_32,*)
-    case "$1" in
-      1) Run_test "" "";;
-      2) Rerun_test "" "-Os";;
     esac;;
   x86_64,*)
     case "$1" in

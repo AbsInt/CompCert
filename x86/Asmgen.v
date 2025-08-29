@@ -23,8 +23,6 @@ Local Open Scope error_monad_scope.
 - Argument and result registers are of the correct type.
 - For two-address instructions, the result and the first argument
   are in the same register.  (True by construction in [RTLgen], and preserved by [Reload].)
-- The top of the floating-point stack ([ST0], a.k.a. [FP0]) can only
-  appear in [mov] instructions, but never in arithmetic instructions.
 
 All these properties are true by construction, but it is painful to track them statically.  Instead, we recheck them during code generation and fail if they do not hold.
 *)
@@ -60,30 +58,6 @@ Definition mk_shrxlimm (n: int) (k: code) : res code :=
       Pleaq RAX (Addrmode (Some RAX) (Some(RDX, 1)) (inl _ 0)) ::
       Psarq_ri RAX n :: k).
 
-Definition low_ireg (r: ireg) : bool :=
-  match r with RAX | RBX | RCX | RDX => true | _ => false end.
-
-Definition mk_intconv (mk: ireg -> ireg -> instruction) (rd rs: ireg) (k: code) :=
-  if Archi.ptr64 || low_ireg rs then
-    OK (mk rd rs :: k)
-  else
-    OK (Pmov_rr RAX rs :: mk rd RAX :: k).
-
-Definition addressing_mentions (addr: addrmode) (r: ireg) : bool :=
-  match addr with Addrmode base displ const =>
-      match base with Some r' => ireg_eq r r' | None => false end
-   || match displ with Some(r', sc) => ireg_eq r r' | None => false end
-  end.
-
-Definition mk_storebyte (addr: addrmode) (rs: ireg) (k: code) :=
-  if Archi.ptr64 || low_ireg rs then
-    OK (Pmovb_mr addr rs :: k)
-  else if addressing_mentions addr RAX then
-    OK (Pleal RCX addr :: Pmov_rr RAX rs ::
-        Pmovb_mr (Addrmode (Some RCX) None (inl _ 0)) RAX :: k)
-  else
-    OK (Pmov_rr RAX rs :: Pmovb_mr addr RAX :: k).
-
 (** Accessing slots in the stack frame. *)
 
 Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
@@ -92,11 +66,8 @@ Definition loadind (base: ireg) (ofs: ptrofs) (ty: typ) (dst: mreg) (k: code) :=
   | Tint, IR r => OK (Pmovl_rm r a :: k)
   | Tlong, IR r => OK (Pmovq_rm r a :: k)
   | Tsingle, FR r => OK (Pmovss_fm r a :: k)
-  | Tsingle, ST0  => OK (Pflds_m a :: k)
   | Tfloat, FR r => OK (Pmovsd_fm r a :: k)
-  | Tfloat, ST0  => OK (Pfldl_m a :: k)
-  | Tany32, IR r => if Archi.ptr64 then Error (msg "Asmgen.loadind1") else OK (Pmov_rm_a r a :: k)
-  | Tany64, IR r => if Archi.ptr64 then OK (Pmov_rm_a r a :: k) else Error (msg "Asmgen.loadind2")
+  | Tany64, IR r => OK (Pmov_rm_a r a :: k)
   | Tany64, FR r => OK (Pmovsd_fm_a r a :: k)
   | _, _ => Error (msg "Asmgen.loadind")
   end.
@@ -107,11 +78,8 @@ Definition storeind (src: mreg) (base: ireg) (ofs: ptrofs) (ty: typ) (k: code) :
   | Tint, IR r => OK (Pmovl_mr a r :: k)
   | Tlong, IR r => OK (Pmovq_mr a r :: k)
   | Tsingle, FR r => OK (Pmovss_mf a r :: k)
-  | Tsingle, ST0 => OK (Pfstps_m a :: k)
   | Tfloat, FR r => OK (Pmovsd_mf a r :: k)
-  | Tfloat, ST0 => OK (Pfstpl_m a :: k)
-  | Tany32, IR r => if Archi.ptr64 then Error (msg "Asmgen.storeind1") else OK (Pmov_mr_a a r :: k)
-  | Tany64, IR r => if Archi.ptr64 then OK (Pmov_mr_a a r :: k) else Error (msg "Asmgen.storeind2")
+  | Tany64, IR r => OK (Pmov_mr_a a r :: k)
   | Tany64, FR r => OK (Pmovsd_mf_a a r :: k)
   | _, _ => Error (msg "Asmgen.storeind")
   end.
@@ -157,7 +125,7 @@ Definition normalize_addrmode_64 (a: addrmode) :=
       then (a, None)
       else (Addrmode base ofs (inl _ 0), Some (Int64.repr n))
   | Addrmode base ofs (inr (id, delta)) =>
-      if Op.ptroffset_in_range delta || negb Archi.ptr64
+      if Op.ptroffset_in_range delta
       then (a, None)
       else (Addrmode base ofs (inr _ (id, Ptrofs.zero)), Some (Ptrofs.to_int64 delta))
   end.
@@ -279,7 +247,7 @@ Definition testcond_for_condition (cond: condition) : extcond :=
 
 (** Acting upon extended conditions. *)
 
-Definition mk_setcc_base (cond: extcond) (rd: ireg) (k: code) :=
+Definition mk_setcc (cond: extcond) (rd: ireg) (k: code) :=
   match cond with
   | Cond_base c =>
       Psetcc c rd :: k
@@ -292,11 +260,6 @@ Definition mk_setcc_base (cond: extcond) (rd: ireg) (k: code) :=
       then Psetcc c1 RAX :: Psetcc c2 RCX :: Porl_rr RAX RCX :: k
       else Psetcc c1 RAX :: Psetcc c2 rd  :: Porl_rr rd RAX :: k
   end.
-
-Definition mk_setcc (cond: extcond) (rd: ireg) (k: code) :=
-  if Archi.ptr64 || low_ireg rd
-  then mk_setcc_base cond rd k
-  else mk_setcc_base cond RAX (Pmov_rr rd RAX :: k).
 
 Definition mk_jcc (cond: extcond) (lbl: label) (k: code) :=
   match cond with
@@ -358,9 +321,9 @@ Definition transl_op
       do r <- ireg_of res;
       OK (Pmov_rs r id :: k)
   | Ocast8signed, a1 :: nil =>
-      do r1 <- ireg_of a1; do r <- ireg_of res; mk_intconv Pmovsb_rr r r1 k
+      do r1 <- ireg_of a1; do r <- ireg_of res; OK (Pmovsb_rr r r1 :: k)
   | Ocast8unsigned, a1 :: nil =>
-      do r1 <- ireg_of a1; do r <- ireg_of res; mk_intconv Pmovzb_rr r r1 k
+      do r1 <- ireg_of a1; do r <- ireg_of res; OK (Pmovzb_rr r r1 :: k)
   | Ocast16signed, a1 :: nil =>
       do r1 <- ireg_of a1; do r <- ireg_of res; OK (Pmovsw_rr r r1 :: k)
   | Ocast16unsigned, a1 :: nil =>
@@ -673,7 +636,7 @@ Definition transl_store (chunk: memory_chunk)
   do am <- transl_addressing addr args;
   match chunk with
   | Mint8unsigned =>
-      do r <- ireg_of src; mk_storebyte am r k
+      do r <- ireg_of src; OK (Pmovb_mr am r :: k)
   | Mint16unsigned =>
       do r <- ireg_of src; OK(Pmovw_mr am r :: k)
   | Mint32 =>

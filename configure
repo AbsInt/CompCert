@@ -49,8 +49,6 @@ Supported targets:
   armeb-eabi           (ARM, EABI, big endian)
   armeb-eabihf         (ARM, EABI using hardware FP registers, big endian)
   armeb-linux          (ARM, EABI using hardware FP registers, big endian)
-  x86_32-linux         (x86 32 bits, Linux)
-  x86_32-bsd           (x86 32 bits, BSD)
   x86_64-linux         (x86 64 bits, Linux)
   x86_64-bsd           (x86 64 bits, BSD)
   x86_64-macos         (x86 64 bits, MacOS X)
@@ -61,7 +59,6 @@ Supported targets:
   aarch64-macos        (AArch64, i.e. Apple silicon, MacOS)
   manual               (edit configuration file by hand)
 
-For x86 targets, the "x86_32-" prefix can also be written "ia32-" or "i386-".
 For x86 targets, the "x86_64-" prefix can also be written "amd64-".
 For AArch64 targets, the "aarch64-" prefix can also be written "arm64-".
 For RISC-V targets, the "rv32-" or "rv64-" prefix can also be written "riscv32-" or "riscv64-".
@@ -182,8 +179,6 @@ case "$target" in
       arch="arm"; model="armv7r"; endianness="big"; bitsize=32;;
   armebv7m-*)
       arch="arm"; model="armv7m"; endianness="big"; bitsize=32;;
-  x86_32-*|ia32-*|i386-*)
-      arch="x86"; model="32sse2"; endianness="little"; bitsize=32;;
   x86_64-*|amd64-*)
       arch="x86"; model="64"; endianness="little"; bitsize=64;;
   powerpc-*|ppc-*)
@@ -303,40 +298,6 @@ if test "$arch" = "powerpc"; then
         cprepro_options="-U__GNUC__ -E"
         system="linux"
         ;;
-  esac
-fi
-
-
-#
-# x86 (32 bits) Target Configuration
-#
-if test "$arch" = "x86" -a "$bitsize" = "32"; then
-
-  case "$target" in
-    bsd)
-        abi="standard"
-        cc="${toolprefix}cc"
-        cc_options="-m32"
-        casm="${toolprefix}cc"
-        casm_options="-m32 -c"
-        clinker="${toolprefix}cc"
-        clinker_options="-m32"
-        cprepro="${toolprefix}cc"
-        cprepro_options="-m32 -U__GNUC__ -E"
-        system="bsd"
-        ;;
-    linux)
-        abi="standard"
-        cc_options="-m32"
-        casm_options="-m32 -c"
-        clinker_options="-m32"
-        cprepro_options="-m32 -U__GNUC__ -E"
-        system="linux"
-        ;;
-    *)
-        echo "Error: invalid eabi/system '$target' for architecture IA32/X86_32." 1>&2
-        echo "$usage" 1>&2
-        exit 2;;
   esac
 fi
 

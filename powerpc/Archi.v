@@ -24,9 +24,6 @@ Definition ptr64 := false.
 
 Definition big_endian := true.
 
-Definition align_int64 := 8%Z.
-Definition align_float64 := 8%Z.
-
 (** Can we use the 64-bit extensions to the PowerPC architecture? *)
 Parameter ppc64 : bool.
 

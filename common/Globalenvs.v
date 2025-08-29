@@ -1462,7 +1462,7 @@ Definition init_data_alignment (i: init_data) : Z :=
   | Init_int32 n => 4
   | Init_int64 n => 8
   | Init_float32 n => 4
-  | Init_float64 n => 4
+  | Init_float64 n => 8
   | Init_addrof symb ofs => if Archi.ptr64 then 8 else 4
   | Init_space n => 1
   end.

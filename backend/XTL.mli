@@ -66,10 +66,6 @@ val vmreg: mreg -> var
 val vmregs: mreg list -> var list
 val vlocpairs: loc rpair list -> var list
 
-(* Tests over variables *)
-
-val is_stack_reg: var -> bool
-
 (* Sets of variables *)
 
 module VSet: Set.S with type elt = var

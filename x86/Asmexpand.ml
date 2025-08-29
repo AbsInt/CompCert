@@ -114,11 +114,6 @@ let emit_leaq r addr =
       emit (Pleaq (r, addr));
       emit (Paddq_ri (r, delta))
 
-(* Pseudo "lea" instruction for 32/64 bit compatibility *)
-
-let emit_lea r addr =
-  if Archi.ptr64 then emit_leaq r addr else emit (Pleal (r, addr))
-
 (* Translate a builtin argument into an addressing mode *)
 
 let addressing_of_builtin_arg = function
@@ -136,7 +131,7 @@ let addressing_of_builtin_arg = function
 
 let expand_builtin_memcpy_small sz al src dst =
   let rec copy src dst sz =
-    if sz >= 8 && Archi.ptr64 then begin
+    if sz >= 8 then begin
 	emit (Pmovq_rm (RCX, src));
 	emit (Pmovq_mr (dst, RCX));
         copy (offset_addressing src _8z) (offset_addressing dst _8z) (sz - 8)
@@ -160,8 +155,8 @@ let expand_builtin_memcpy_small sz al src dst =
   copy (addressing_of_builtin_arg src) (addressing_of_builtin_arg dst) sz
 
 let expand_builtin_memcpy_big sz al src dst =
-  if src <> BA (IR RSI) then emit_lea RSI (addressing_of_builtin_arg src);
-  if dst <> BA (IR RDI) then emit_lea RDI (addressing_of_builtin_arg dst);
+  if src <> BA (IR RSI) then emit_leaq RSI (addressing_of_builtin_arg src);
+  if dst <> BA (IR RDI) then emit_leaq RDI (addressing_of_builtin_arg dst);
   (* TODO: movsq? *)
   emit (Pmovl_ri (RCX,coqint_of_camlint (Int32.of_int (sz / 4))));
   emit Prep_movsl;
@@ -190,15 +185,6 @@ let expand_builtin_vload_common chunk addr res =
      emit (Pmovl_rm (res,addr))
   | Mint64, BR(IR res) ->
      emit (Pmovq_rm (res,addr))
-  | Mint64, BR_splitlong(BR(IR res1), BR(IR res2)) ->
-     let addr' = offset_addressing addr _4z in
-     if not (Asmgen.addressing_mentions addr res2) then begin
-	 emit (Pmovl_rm (res2,addr));
-	 emit (Pmovl_rm (res1,addr'))
-       end else begin
-	 emit (Pmovl_rm (res1,addr'));
-	 emit (Pmovl_rm (res2,addr))
-       end
   | Mfloat32, BR(FR res) ->
      emit (Pmovss_fm (res,addr))
   | Mfloat64, BR(FR res) ->
@@ -213,15 +199,10 @@ let expand_builtin_vload chunk args res =
   | _ ->
      assert false
 
-let expand_builtin_vstore_common chunk addr src tmp =
+let expand_builtin_vstore_common chunk addr src =
   match chunk, src with
   | (Mbool | Mint8signed | Mint8unsigned), BA(IR src) ->
-     if Archi.ptr64 || Asmgen.low_ireg src then
-       emit (Pmovb_mr (addr,src))
-     else begin
-       emit (Pmov_rr (tmp,src));
-       emit (Pmovb_mr (addr,tmp))
-     end
+     emit (Pmovb_mr (addr,src))
   | (Mint16signed | Mint16unsigned), BA(IR src) ->
      emit (Pmovw_mr (addr,src))
   | Mint32, BA(IR src) ->
@@ -244,7 +225,6 @@ let expand_builtin_vstore chunk args =
   | [addr; src] ->
      let addr = addressing_of_builtin_arg addr in
      expand_builtin_vstore_common chunk addr src
-       (if Asmgen.addressing_mentions addr RAX then RCX else RAX)
   | _ -> assert false
 
 (* Handling of varargs *)
@@ -262,16 +242,6 @@ let rec next_arg_locations ir fr ofs = function
       else next_arg_locations ir fr (ofs + 8) l
 
 let current_function_stacksize = ref 0L
-
-let expand_builtin_va_start_32 r =
-  if not (is_current_function_variadic ()) then
-    invalid_arg "Fatal error: va_start used in non-vararg function";
-  let ofs =
-    Int32.(add (add !PrintAsmaux.current_function_stacksize 4l)
-               (mul 4l (Z.to_int32 (Conventions.size_arguments
-                                      (get_current_function_sig ()))))) in
-  emit (Pleal (RAX, linear_addr RSP (Z.of_uint32 ofs)));
-  emit (Pmovl_mr (linear_addr r _0z, RAX))
 
 let expand_builtin_va_start_elf64 r =
   if not (is_current_function_variadic ()) then
@@ -350,11 +320,6 @@ let expand_builtin_inline name args res =
      if a1 <> res then
        emit (Pmov_rr (res,a1));
      emit (Pbswap64 res)
-  | "__builtin_bswap64", [BA_splitlong(BA(IR ah), BA(IR al))],
-                         BR_splitlong(BR(IR rh), BR(IR rl)) ->
-     assert (ah = RAX && al = RDX && rh = RDX && rl = RAX);
-     emit (Pbswap32 RAX);
-     emit (Pbswap32 RDX)
   | "__builtin_bswap16", [BA(IR a1)], BR(IR res) ->
      if a1 <> res then
        emit (Pmov_rr (res,a1));
@@ -363,13 +328,8 @@ let expand_builtin_inline name args res =
      emit (Pbsrl (res,a1));
      emit (Pxorl_ri(res,coqint_of_camlint 31l))
   | "__builtin_clzl", [BA(IR a1)], BR(IR res) ->
-     if not(Archi.ptr64) then begin
-       emit (Pbsrl (res,a1));
-       emit (Pxorl_ri(res,coqint_of_camlint 31l))
-     end else begin
-       emit (Pbsrq (res,a1));
-       emit (Pxorl_ri(res,coqint_of_camlint 63l))
-     end
+     emit (Pbsrq (res,a1));
+     emit (Pxorl_ri(res,coqint_of_camlint 63l))
   | "__builtin_clzll", [BA(IR a1)], BR(IR res) ->
      emit (Pbsrq (res,a1));
      emit (Pxorl_ri(res,coqint_of_camlint 63l))
@@ -388,10 +348,7 @@ let expand_builtin_inline name args res =
   | "__builtin_ctz", [BA(IR a1)], BR(IR res) ->
      emit (Pbsfl (res,a1))
   | "__builtin_ctzl", [BA(IR a1)], BR(IR res) ->
-     if not(Archi.ptr64) then
-       emit (Pbsfl (res,a1))
-     else
-       emit (Pbsfq (res,a1))
+     emit (Pbsfq (res,a1))
   | "__builtin_ctzll", [BA(IR a1)], BR(IR res) ->
      emit (Pbsfq (res,a1))
   | "__builtin_ctzll", [BA_splitlong(BA (IR ah), BA (IR al))], BR(IR res) ->
@@ -428,29 +385,6 @@ let expand_builtin_inline name args res =
         (fun r1 r2 r3 -> Pfnmsub132(r1, r2, r3))
         (fun r1 r2 r3 -> Pfnmsub213(r1, r2, r3))
         (fun r1 r2 r3 -> Pfnmsub231(r1, r2, r3))
-  (* 64-bit integer arithmetic *)
-  | "__builtin_negl", [BA_splitlong(BA(IR ah), BA(IR al))],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
-     assert (ah = RDX && al = RAX && rh = RDX && rl = RAX);
-     emit (Pnegl RAX);
-     emit (Padcl_ri (RDX,_0));
-     emit (Pnegl RDX)
-  | "__builtin_addl", [BA_splitlong(BA(IR ah), BA(IR al));
-                       BA_splitlong(BA(IR bh), BA(IR bl))],
-                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
-     assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
-     emit (Paddl_rr (RAX,RBX));
-     emit (Padcl_rr (RDX,RCX))
-  | "__builtin_subl", [BA_splitlong(BA(IR ah), BA(IR al));
-                       BA_splitlong(BA(IR bh), BA(IR bl))],
-                       BR_splitlong(BR(IR rh), BR(IR rl)) ->
-     assert (ah = RDX && al = RAX && bh = RCX && bl = RBX && rh = RDX && rl = RAX);
-     emit (Psubl_rr (RAX,RBX));
-     emit (Psbbl_rr (RDX,RCX))
-  | "__builtin_mull", [BA(IR a); BA(IR b)],
-                      BR_splitlong(BR(IR rh), BR(IR rl)) ->
-     assert (a = RAX && b = RDX && rh = RDX && rl = RAX);
-     emit (Pmull_r RDX)
   (* Memory accesses *)
   | "__builtin_read16_reversed", [BA(IR a1)], BR(IR res) ->
      emit (Pmovzw_rm (res, linear_addr a1 _0));
@@ -473,9 +407,9 @@ let expand_builtin_inline name args res =
   (* Vararg stuff *)
   | "__builtin_va_start", [BA(IR a)], _ ->
      assert (a = RDX);
-     if Archi.win64 then expand_builtin_va_start_win64 a
-     else if Archi.ptr64 then expand_builtin_va_start_elf64 a
-     else expand_builtin_va_start_32 a
+     if Archi.win64
+     then expand_builtin_va_start_win64 a
+     else expand_builtin_va_start_elf64 a
   (* Synchronization *)
   | "__builtin_membar", [], _ ->
      ()
@@ -520,11 +454,9 @@ let fixup_funcall_win64 sg =
     copy_fregs_to_iregs (proj_sig_args sg) [XMM0; XMM1; XMM2; XMM3] [RCX; RDX; R8; R9]
 
 let fixup_funcall sg =
-  if Archi.ptr64
-  then if Archi.win64
-       then fixup_funcall_win64 sg
-       else fixup_funcall_elf64 sg
-  else ()
+  if Archi.win64
+  then fixup_funcall_win64 sg
+  else fixup_funcall_elf64 sg
 
 (* Expansion of instructions *)
 
@@ -547,7 +479,7 @@ let expand_instruction instr =
        emit_leaq RAX addr1;
        emit (Pmovq_mr (addr2, RAX));
        current_function_stacksize := Int64.of_int (sz + 8)
-     end else if Archi.ptr64 then begin
+     end else begin
        let (sz, save_regs) = sp_adjustment_elf64 sz in
        (* Allocate frame *)
        let sz' = Z.of_uint sz in
@@ -566,29 +498,14 @@ let expand_instruction instr =
        emit_leaq RAX addr1;
        emit (Pmovq_mr (addr2, RAX));
        current_function_stacksize := Int64.of_int fullsz
-     end else begin
-       let sz = sp_adjustment_32 sz in
-       (* Allocate frame *)
-       let sz' = Z.of_uint sz in
-       emit (Psubl_ri (RSP, sz'));
-       emit (Pcfi_adjust sz');
-       (* Stack chaining *)
-       let addr1 = linear_addr RSP (Z.of_uint (sz + 4)) in
-       let addr2 = linear_addr RSP ofs_link in
-       emit (Pleal (RAX,addr1));
-       emit (Pmovl_mr (addr2,RAX));
-       PrintAsmaux.current_function_stacksize := Int32.of_int sz
      end
   | Pfreeframe(sz, ofs_ra, ofs_link) ->
      if Archi.win64 then begin
        let sz = sp_adjustment_win64 sz in
        emit (Paddq_ri (RSP, Z.of_uint sz))
-     end else if Archi.ptr64 then begin
+     end else begin
        let (sz, _) = sp_adjustment_elf64 sz in
        emit (Paddq_ri (RSP, Z.of_uint sz))
-     end else begin
-       let sz = sp_adjustment_32 sz in
-       emit (Paddl_ri (RSP, Z.of_uint sz))
      end
   | Pjmp_s(_, sg) | Pjmp_r(_, sg) | Pcall_s(_, sg) | Pcall_r(_, sg) ->
      fixup_funcall sg;
@@ -613,18 +530,7 @@ let expand_instruction instr =
      end
   | _ -> emit instr
 
-let int_reg_to_dwarf_32 = function
-  | RAX -> 0
-  | RBX -> 3
-  | RCX -> 1
-  | RDX -> 2
-  | RSI -> 6
-  | RDI -> 7
-  | RBP -> 5
-  | RSP -> 4
-  | _ -> assert false
-
-let int_reg_to_dwarf_64 = function
+let int_reg_to_dwarf = function
   | RAX -> 0
   | RDX -> 1
   | RCX -> 2
@@ -642,21 +548,7 @@ let int_reg_to_dwarf_64 = function
   | R14 -> 14
   | R15 -> 15
 
-let int_reg_to_dwarf =
-  if Archi.ptr64 then int_reg_to_dwarf_64 else int_reg_to_dwarf_32
-
-let float_reg_to_dwarf_32 = function
-  | XMM0 -> 21
-  | XMM1 -> 22
-  | XMM2 -> 23
-  | XMM3 -> 24
-  | XMM4 -> 25
-  | XMM5 -> 26
-  | XMM6 -> 27
-  | XMM7 -> 28
-  | _ -> assert false
-
-let float_reg_to_dwarf_64 = function
+let float_reg_to_dwarf = function
   | XMM0 -> 17
   | XMM1 -> 18
   | XMM2 -> 19
@@ -673,9 +565,6 @@ let float_reg_to_dwarf_64 = function
   | XMM13 -> 30
   | XMM14 -> 31
   | XMM15 -> 32
-
-let float_reg_to_dwarf =
-  if Archi.ptr64 then float_reg_to_dwarf_64 else float_reg_to_dwarf_32
 
 let preg_to_dwarf = function
    | IR r -> int_reg_to_dwarf r

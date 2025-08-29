@@ -49,7 +49,6 @@ Inductive preg: Type :=
   | PC: preg                            (**r program counter *)
   | IR: ireg -> preg                    (**r integer register *)
   | FR: freg -> preg                    (**r XMM register *)
-  | ST0: preg                           (**r top of FP stack *)
   | CR: crbit -> preg                   (**r bit of the flags register *)
   | RA: preg.                   (**r pseudo-reg representing return address *)
 
@@ -122,10 +121,6 @@ Inductive instruction: Type :=
   | Pmovss_fi (rd: freg) (n: float32)   (**r [movss] (single 32-bit float) *)
   | Pmovss_fm (rd: freg) (a: addrmode)
   | Pmovss_mf (a: addrmode) (r1: freg)
-  | Pfldl_m (a: addrmode)               (**r [fld] double precision *)
-  | Pfstpl_m (a: addrmode)              (**r [fstp] double precision *)
-  | Pflds_m (a: addrmode)               (**r [fld] simple precision *)
-  | Pfstps_m (a: addrmode)              (**r [fstp] simple precision *)
   (** Moves with conversion *)
   | Pmovb_mr (a: addrmode) (rs: ireg)   (**r [mov] (8-bit int) *)
   | Pmovw_mr (a: addrmode) (rs: ireg)   (**r [mov] (16-bit int) *)
@@ -417,7 +412,7 @@ Definition eval_addrmode64 (a: addrmode) (rs: regset) : val :=
             end)).
 
 Definition eval_addrmode (a: addrmode) (rs: regset) : val :=
-  if Archi.ptr64 then eval_addrmode64 a rs else eval_addrmode32 a rs.
+  eval_addrmode64 a rs.
 
 (** Performing a comparison *)
 
@@ -581,10 +576,9 @@ Definition exec_load (chunk: memory_chunk) (m: mem)
   end.
 
 Definition exec_store (chunk: memory_chunk) (m: mem)
-                      (a: addrmode) (rs: regset) (r1: preg)
-                      (destroyed: list preg) :=
+                      (a: addrmode) (rs: regset) (r1: preg) :=
   match Mem.storev chunk m (eval_addrmode a rs) (rs r1) with
-  | Some m' => Next (nextinstr_nf (undef_regs destroyed rs)) m'
+  | Some m' => Next (nextinstr_nf rs) m'
   | None => Stuck
   end.
 
@@ -623,9 +617,9 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmovq_rm rd a =>
       exec_load Mint64 m a rs rd
   | Pmovl_mr a r1 =>
-      exec_store Mint32 m a rs r1 nil
+      exec_store Mint32 m a rs r1
   | Pmovq_mr a r1 =>
-      exec_store Mint64 m a rs r1 nil
+      exec_store Mint64 m a rs r1
   | Pmovsd_ff rd r1 =>
       Next (nextinstr (rs#rd <- (rs r1))) m
   | Pmovsd_fi rd n =>
@@ -633,26 +627,18 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pmovsd_fm rd a =>
       exec_load Mfloat64 m a rs rd
   | Pmovsd_mf a r1 =>
-      exec_store Mfloat64 m a rs r1 nil
+      exec_store Mfloat64 m a rs r1
   | Pmovss_fi rd n =>
       Next (nextinstr (rs#rd <- (Vsingle n))) m
   | Pmovss_fm rd a =>
       exec_load Mfloat32 m a rs rd
   | Pmovss_mf a r1 =>
-      exec_store Mfloat32 m a rs r1 nil
-  | Pfldl_m a =>
-      exec_load Mfloat64 m a rs ST0
-  | Pfstpl_m a =>
-      exec_store Mfloat64 m a rs ST0 (ST0 :: nil)
-  | Pflds_m a =>
-      exec_load Mfloat32 m a rs ST0
-  | Pfstps_m a =>
-      exec_store Mfloat32 m a rs ST0 (ST0 :: nil)
+      exec_store Mfloat32 m a rs r1
   (** Moves with conversion *)
   | Pmovb_mr a r1 =>
-      exec_store Mint8unsigned m a rs r1 nil
+      exec_store Mint8unsigned m a rs r1
   | Pmovw_mr a r1 =>
-      exec_store Mint16unsigned m a rs r1 nil
+      exec_store Mint16unsigned m a rs r1
   | Pmovzb_rr rd r1 =>
       Next (nextinstr (rs#rd <- (Val.zero_ext 8 rs#r1))) m
   | Pmovzb_rm rd a =>
@@ -935,13 +921,13 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Next (rs#PC <- (rs#RA)) m
   (** Saving and restoring registers *)
   | Pmov_rm_a rd a =>
-      exec_load (if Archi.ptr64 then Many64 else Many32) m a rs rd
+      exec_load Many64 m a rs rd
   | Pmov_mr_a a r1 =>
-      exec_store (if Archi.ptr64 then Many64 else Many32) m a rs r1 nil
+      exec_store Many64 m a rs r1
   | Pmovsd_fm_a rd a =>
       exec_load Many64 m a rs rd
   | Pmovsd_mf_a a r1 =>
-      exec_store Many64 m a rs r1 nil
+      exec_store Many64 m a rs r1
   (** Pseudo-instructions *)
   | Plabel lbl =>
       Next (nextinstr rs) m
@@ -1052,7 +1038,6 @@ Definition preg_of (r: mreg) : preg :=
   | X13 => FR XMM13
   | X14 => FR XMM14
   | X15 => FR XMM15
-  | FP0 => ST0
   end.
 
 (** Undefine all registers except SP and callee-save registers *)
@@ -1216,7 +1201,6 @@ Definition data_preg (r: preg) : bool :=
   | PC => false
   | IR _ => true
   | FR _ => true
-  | ST0 => true
   | CR _ => false
   | RA => false
   end.

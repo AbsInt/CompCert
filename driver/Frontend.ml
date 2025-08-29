@@ -117,14 +117,7 @@ let init () =
     | "arm"     -> if Configuration.is_big_endian
                    then Machine.arm_bigendian
                    else Machine.arm_littleendian
-    | "x86"     -> if Configuration.model = "64" then
-                     Machine.x86_64
-                   else
-                     if Configuration.abi = "macos"
-                     then Machine.x86_32_macos
-                     else if Configuration.system = "bsd"
-                     then Machine.x86_32_bsd
-                     else Machine.x86_32
+    | "x86"     -> Machine.x86_64
     | "riscV"   -> if Configuration.model = "64"
                    then Machine.rv64
                    else Machine.rv32
