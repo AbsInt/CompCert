@@ -229,6 +229,7 @@ casmruntime=""
 clinker="${toolprefix}gcc"
 clinker_options=""
 clinker_needs_no_pie=true
+clinker_needs_nobtcfi=false
 cprepro="${toolprefix}gcc"
 cprepro_options="-E"
 archiver="${toolprefix}ar rcs"
@@ -358,6 +359,7 @@ if test "$arch" = "x86" -a "$bitsize" = "64"; then
         cprepro_options="-m64 -U__GNUC__ -U__SIZEOF_INT128__ -E"
         system="bsd"
         pic_supported=true
+        clinker_needs_nobtcfi=true
         ;;
     linux)
         abi="standard"
@@ -467,7 +469,7 @@ int main (void)
 EOF
     errout=$("$@" -o "$tmpout" "$tmpsrc" 2>&1 >/dev/null)
     retcode=$?
-    errcount=$(echo "${errout}" | grep -ciE "(unknown|unsupported|unrecognized).*(option|argument)")
+    errcount=$(echo "${errout}" | grep -ciE "(unknown|unsupported|unrecognized|ignored)")
     rm -f "$tmpsrc" "$tmpout"
     # Test failed or error is logged to stderr
     if [ "${retcode}" != "0" ] || [ "${errcount}" != "0" ]; then return 1; fi
@@ -512,6 +514,18 @@ if ($clinker_needs_no_pie) then
   fi
 fi
 
+#
+# Test Availability of Option '-z nobtcfi' or '-Wl,-z,nobtcfi'
+#
+if ($clinker_needs_nobtcfi) then
+  echo "Testing linker support for 'nobtcfi' option... " | tr -d '\n'
+  if testcompiler ${cc} -z nobtcfi;
+  then echo "yes, '-z nobtcfi'"; clinker_options="${clinker_options} -z nobtcfi"
+  elif testcompiler ${cc} -Wl,-z,nobtcfi;
+  then echo "yes, '-Wl,-z,nobtcfi'"; clinker_options="${clinker_options} -Wl,-z,nobtcfi"
+  else echo "no"
+  fi
+fi
 
 #
 # Test Availability of Required Tools
