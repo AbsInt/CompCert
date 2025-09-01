@@ -1,4 +1,4 @@
-# Release 3.16
+# Release 3.16, 2025-09-01
 
 Code generation and optimization:
 - Extend neededness analysis to 64-bit integer operations, enabling more useless integer computations to be removed.
@@ -23,6 +23,7 @@ Usability:
 - Recognize options `-pie` and `-no-pie` and pass them to the linker.
 - Recognize options `-MD` and `-MMD` and pass them to the preprocessor.
 - On BSD platforms, use `cc` instead of `gcc` as the default preprocessor and linker.
+- On BSD platforms, add `-z nobtcfi` linker option.  (This turns IBT/BTI off on OpenBSD, until it is properly supported by CompCert.)
 
 Rocq/Coq development:
 - Support Coq 8.21 (#545)
