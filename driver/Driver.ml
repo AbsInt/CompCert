@@ -427,6 +427,7 @@ let _ =
     Printexc.record_backtrace true;
     Frontend.init ();
     parse_cmdline cmdline_actions;
+    Diagnostics.raise_on_errors (); (* Any error for command line arguments? *)
     DebugInit.init (); (* Initialize the debug functions *)
     if nolink () && !option_o <> None && !num_source_files >= 2 then
       fatal_error no_loc "ambiguous '-o' option (multiple source files)";

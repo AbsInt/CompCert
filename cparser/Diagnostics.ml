@@ -390,7 +390,7 @@ let warning_options =
    Exact ("-Werror"), Unit werror;
    Exact ("-Wall"), Unit wall;
    Exact ("-w"), Unit wnothing;
-   _Regexp("-Wno-.*$"), Ignore;
+   _Regexp("-Wno-.*$"), Unit (fun () -> ());
    _Regexp("-W.*$"), Self unknown_warning;
    longopt_int ("-fmax-errors") ((:=) max_error);
    Exact("-fno-diagnostics-show-option"),Unset diagnostics_show_option;
