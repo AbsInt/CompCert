@@ -1016,6 +1016,27 @@ Proof.
   destruct (env!i). apply X. apply Z.divide_0_r.
 Qed.
 
+Lemma alignof_alignof_blockcopy_compat:
+  forall env ty, naturally_aligned ty -> (alignof_blockcopy env ty | alignof env ty).
+Proof.
+  assert (X: forall co, (Z.min 8 (co_alignof co) | co_alignof co)).
+  {
+    intros.
+    destruct (co_alignof_two_p co) as [n EQ]. rewrite EQ.
+    destruct n. apply Z.divide_refl.
+    destruct n. apply Z.divide_refl.
+    destruct n. apply Z.divide_refl.
+    apply Z.min_case.
+    exists (two_p (Z.of_nat n)).
+    change 8 with (two_p 3).
+    rewrite <- two_p_is_exp by lia.
+    rewrite two_power_nat_two_p. rewrite !Nat2Z.inj_succ. f_equal. lia.
+    apply Z.divide_refl.
+  }
+  induction ty; simpl; intros [A B]; unfold align_attr; rewrite ? A;
+  auto using Z.divide_refl; destruct (env!i); auto using Z.divide_refl.
+Qed.
+
 (** Type ranks *)
 
 (** The rank of a type is a nonnegative integer that measures the direct nesting
