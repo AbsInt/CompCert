@@ -16,7 +16,6 @@
 
 open Lexing
 open Pre_parser.MenhirInterpreter
-module S = MenhirLib.General (* Streams *)
 
 (* -------------------------------------------------------------------------- *)
 
@@ -125,73 +124,53 @@ let shorten k text =
 
 (* -------------------------------------------------------------------------- *)
 
-(* [stack checkpoint] extracts the parser's stack out of a checkpoint. *)
+(* [env checkpoint] extracts a parser environment out of a checkpoint,
+   which must be of the form [HandlingError env]. *)
 
-let stack checkpoint =
+let env checkpoint =
   match checkpoint with
   | HandlingError env ->
-      stack env
+      env
   | _ ->
-      assert false (* this cannot happen, I promise *)
+      assert false
 
 (* -------------------------------------------------------------------------- *)
 
 (* [state checkpoint] extracts the number of the current state out of a
-   parser checkpoint. *)
+   checkpoint, which must be of the form [HandlingError env]. *)
 
 let state checkpoint : int =
-  match Lazy.force (stack checkpoint) with
-  | S.Nil ->
-      (* Hmm... The parser is in its initial state. Its number is
-         usually 0. This is a BIG HACK. TEMPORARY *)
-      0
-  | S.Cons (Element (s, _, _, _), _) ->
-      number s
+  current_state_number (env checkpoint)
 
 (* -------------------------------------------------------------------------- *)
 
-(* TEMPORARY move to MenhirLib.General *)
+(* [range text checkpoint i] converts the stack index [i] to the fragment of
+   the source text that corresponds to this stack entry. This text fragment is
+   placed within single quotes and shortened if it is too long. We also ensure
+   that it does not contain any special characters.
 
-let rec drop n (xs : 'a S.stream) : 'a S.stream =
-  match n, xs with
-  | 0, _
-  | _, lazy (S.Nil) ->
-      xs
-  | _, lazy (S.Cons (_, xs)) ->
-      drop (n - 1) xs
-
-(* -------------------------------------------------------------------------- *)
-
-(* [element checkpoint i] returns the [i]-th cell of the parser stack. The index
-   [i] is 0-based. [i] should (ideally) be within bounds; we raise [Not_found]
-   if it isn't. *)
-
-let element checkpoint i : element =
-  match Lazy.force (drop i (stack checkpoint)) with
-  | S.Nil ->
-      (* [i] is out of range. This could happen if the handwritten error
-         messages are out of sync with the grammar, or if a mistake was
-         made. We fail in a non-fatal way. *)
-      raise Not_found
-  | S.Cons (e, _) ->
-      e
-
-(* -------------------------------------------------------------------------- *)
-
-(* [range text e] converts the stack element [e] to the fragment of the source
-   text that corresponds to this stack element. The fragment is placed within
-   single quotes and shortened if it is too long. We also ensure that it does
-   not contain any special characters. *)
+   [text] is the source text. [checkpoint] represents the point where the
+   parser detected a syntax error; it must be of the form [HandlingError env].
+   [i] is a 0-based index into the stack. *)
 
 let width = 30
 
-let range text (e : element) : string =
-  (* Extract the start and positions of this stack element. *)
-  let Element (_, _, pos1, pos2) = e in
-  (* Get the underlying source text fragment. *)
-  let fragment = extract text (pos1, pos2) in
-  (* Sanitize it and limit its length. Enclose it in single quotes. *)
-  "'" ^ shorten width (sanitize (compress fragment)) ^ "'"
+let range text checkpoint (i : int) : string =
+  (* Access the stack at index [i]. *)
+  match get i (env checkpoint) with
+  | None ->
+      (* The index is out of range. This should not happen if [$i]
+         keywords are correctly inside the syntax error message
+         database. The integer [i] should always be a valid offset
+         into the known suffix of the stack. *)
+      "???"
+  | Some e ->
+      (* Extract the start and positions of this stack element. *)
+      let Element (_, _, pos1, pos2) = e in
+      (* Get the underlying source text fragment. *)
+      let fragment = extract text (pos1, pos2) in
+      (* Sanitize it and limit its length. Enclose it in single quotes. *)
+      "'" ^ shorten width (sanitize (compress fragment)) ^ "'"
 
 (* -------------------------------------------------------------------------- *)
 
@@ -202,7 +181,7 @@ let range text (e : element) : string =
 let fragment text checkpoint message =
   try
     let i = int_of_string (Str.matched_group 1 message) in
-    range text (element checkpoint i)
+    range text checkpoint i
   with
   | Failure _ ->
       (* In principle, this should not happen, but if it does, let's cover up
