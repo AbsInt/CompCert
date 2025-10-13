@@ -403,9 +403,9 @@ fi
 #
 if test "$arch" = "riscV"; then
   if test "$model" = "64"; then
-    model_options="-march=rv64imafd -mabi=lp64d"
+    model_options="-mabi=lp64d"
   else
-    model_options="-march=rv32imafd -mabi=ilp32d"
+    model_options="-mabi=ilp32d"
   fi
   abi="standard"
   cc_options="$model_options"
