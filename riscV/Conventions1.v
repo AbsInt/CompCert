@@ -91,7 +91,9 @@ Definition is_float_reg (r: mreg) :=
 
 (** How to use registers for register allocation.
     We favor the use of caller-save registers, using callee-save registers
-    only when no caller-save is available. *)
+    only when no caller-save is available.
+    We favor the use of registers x8 to x15, as they enable more compact
+    encodings of instructions (with the C extension of the ISA). *)
 
 Record alloc_regs := mk_alloc_regs {
   preferred_int_regs: list mreg;
@@ -101,8 +103,11 @@ Record alloc_regs := mk_alloc_regs {
 }.
 
 Definition allocatable_registers (_: unit) :=
-  {| preferred_int_regs := int_caller_save_regs;
-     remaining_int_regs := int_callee_save_regs;
+  {| preferred_int_regs :=
+       R10 :: R11 :: R12 :: R13 :: R14 :: R15 :: nil;
+     remaining_int_regs :=
+       R5  :: R6  :: R7  :: R16 :: R17 :: R28 :: R29 :: R30 ::
+       int_callee_save_regs;
      preferred_float_regs := float_caller_save_regs;
      remaining_float_regs := float_callee_save_regs |}.
 
