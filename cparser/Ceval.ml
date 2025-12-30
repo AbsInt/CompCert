@@ -119,7 +119,7 @@ let unop env op tyres ty v =
    | Olognot, _, _ -> if boolean_value v then I 0L else I 1L
    | Onot, _, I n -> I (Int64.lognot n)
    | _ -> raise Notconst
-  in cast env ty res
+  in cast env tyres res
 
 let comparison env direction ptraction tyop v1 v2 =
   (* tyop = type at which the comparison is done.
