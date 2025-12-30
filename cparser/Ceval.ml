@@ -122,9 +122,10 @@ let unop env op tyres ty v =
   in cast env ty res
 
 let comparison env direction ptraction tyop v1 v2 =
-  (* tyop = type at which the comparison is done *)
+  (* tyop = type at which the comparison is done.
+     v1, v2 have been converted to tyop already. *)
   let b =
-    match cast env tyop v1, cast env tyop v2 with
+    match v1, v2 with
     | I n1, I n2 ->
         if is_signed env tyop
         then direction (compare n1 n2) 0
@@ -140,29 +141,31 @@ let comparison env direction ptraction tyop v1 v2 =
 let binop env op tyop tyres ty1 v1 ty2 v2 =
   (* tyop = type at which the computation is done
      tyres = expected result type *)
+  let v1 = cast env tyop v1
+  and v2 = cast env tyop v2 in
   let res =
     match op with
     | Oadd ->
         if is_arith_type env ty1 && is_arith_type env ty2 then begin
-          match cast env tyop v1, cast env tyop v2 with
+          match v1, v2 with
           | I n1, I n2 -> I (Int64.add n1 n2)
           | _, _ -> raise Notconst
         end else
           raise Notconst
     | Osub ->
         if is_arith_type env ty1 && is_arith_type env ty2 then begin
-          match cast env tyop v1, cast env tyop v2 with
+          match v1, v2 with
           | I n1, I n2 -> I (Int64.sub n1 n2)
           | _, _ -> raise Notconst
         end else
           raise Notconst
     | Omul ->
-        begin match cast env tyop v1, cast env tyop v2 with
+        begin match v1, v2 with
           | I n1, I n2 -> I (Int64.mul n1 n2)
           | _, _ -> raise Notconst
         end
     | Odiv ->
-        begin match cast env tyop v1, cast env tyop v2 with
+        begin match v1, v2 with
           | I n1, I n2 ->
               if n2 = 0L then raise Notconst else
               if is_signed env tyop then I (Int64.div n1 n2)
