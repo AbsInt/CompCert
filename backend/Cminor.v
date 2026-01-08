@@ -194,15 +194,15 @@ Definition env := PTree.t val.
 
 Fixpoint set_params (vl: list val) (il: list ident) {struct il} : env :=
   match il, vl with
-  | i1 :: is, v1 :: vs => PTree.set i1 v1 (set_params vs is)
-  | i1 :: is, nil => PTree.set i1 Vundef (set_params nil is)
+  | i1 :: si, v1 :: vs => PTree.set i1 v1 (set_params vs si)
+  | i1 :: si, nil => PTree.set i1 Vundef (set_params nil si)
   | _, _ => PTree.empty val
   end.
 
 Fixpoint set_locals (il: list ident) (e: env) {struct il} : env :=
   match il with
   | nil => e
-  | i1 :: is => PTree.set i1 Vundef (set_locals is e)
+  | i1 :: si => PTree.set i1 Vundef (set_locals si e)
   end.
 
 Definition set_optvar (optid: option ident) (v: val) (e: env) : env :=
