@@ -294,14 +294,14 @@ let expand_builtin_vload chunk args res =
   | [BA(IR addr)] ->
       expand_builtin_vload_common chunk (RR1 addr) _0 res
   | [BA_addrstack ofs] ->
-      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
+      if Asmgen.offset_representable (Memdata.size_chunk chunk) ofs then
         expand_builtin_vload_common chunk XSP ofs res
       else begin
         expand_addimm64 (RR1 X16) XSP ofs; (* X16 <- SP + ofs *)
         expand_builtin_vload_common chunk (RR1 X16) _0 res
       end
   | [BA_addptr(BA(IR addr), BA_long ofs)] ->
-      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
+      if Asmgen.offset_representable (Memdata.size_chunk chunk) ofs then
         expand_builtin_vload_common chunk (RR1 addr) ofs res
       else begin
         expand_addimm64 (RR1 X16) (RR1 addr) ofs; (* X16 <- addr + ofs *)
@@ -333,14 +333,14 @@ let expand_builtin_vstore chunk args =
   | [BA(IR addr); src] ->
       expand_builtin_vstore_common chunk (RR1 addr) _0 src
   | [BA_addrstack ofs; src] ->
-      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
+      if Asmgen.offset_representable (Memdata.size_chunk chunk) ofs then
         expand_builtin_vstore_common chunk XSP ofs src
       else begin
         expand_addimm64 (RR1 X16) XSP ofs; (* X16 <- SP + ofs *)
         expand_builtin_vstore_common chunk (RR1 X16) _0 src
       end
   | [BA_addptr(BA(IR addr), BA_long ofs); src] ->
-      if offset_in_range (Z.add ofs (Memdata.size_chunk chunk)) then
+      if Asmgen.offset_representable (Memdata.size_chunk chunk) ofs then
         expand_builtin_vstore_common chunk (RR1 addr) ofs src
       else begin
         expand_addimm64 (RR1 X16) (RR1 addr) ofs; (* X16 <- addr + ofs *)
