@@ -92,6 +92,14 @@ let is_signed env ty =
   | TEnum(_, _) -> is_signed_ikind enum_ikind
   | _ -> false
 
+let int_bit_size env ty =
+  let byte_size =
+    match unroll env ty with
+    | TInt(ik, _) -> sizeof_ikind ik
+    | TEnum(_, _) -> sizeof_ikind enum_ikind
+    | _ -> 0 in
+  Int64.of_int (byte_size * 8)
+
 let cast env ty_to v =
   match unroll env ty_to, v with
   | TInt(IBool, _), _ ->
@@ -197,13 +205,13 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
         end
     | Oshl ->
         begin match v1, v2 with
-          | I n1, I n2 when n2 >= 0L && n2 < 64L ->
+          | I n1, I n2 when n2 >= 0L && n2 < int_bit_size env tyop ->
                I (Int64.shift_left n1 (Int64.to_int n2))
           | _, _ -> raise Notconst
         end
     | Oshr ->
         begin match v1, v2 with
-          | I n1, I n2 when n2 >= 0L && n2 < 64L ->
+          | I n1, I n2 when n2 >= 0L && n2 < int_bit_size env tyop ->
               if is_signed env tyop
               then I (Int64.shift_right n1 (Int64.to_int n2))
               else I (Int64.shift_right_logical n1 (Int64.to_int n2))
