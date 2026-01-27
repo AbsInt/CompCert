@@ -14,11 +14,11 @@ let register_names : (Machregs.mreg, string) Hashtbl.t = Hashtbl.create 31
 
 let _ =
   List.iter
-    (fun (s, r) -> Hashtbl.add register_names r (Camlcoq.camlstring_of_coqstring s))
+    (fun (s, r) -> Hashtbl.add register_names r s)
     Machregs.register_names
 
 let name_of_register r =
   Hashtbl.find_opt register_names r
 
 let register_by_name s =
-  Machregs.register_by_name (Camlcoq.coqstring_uppercase_ascii_of_camlstring s)
+  Machregs.register_by_name (String.uppercase_ascii s)

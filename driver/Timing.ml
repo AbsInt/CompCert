@@ -47,10 +47,10 @@ let time_coq name fn arg =
     let start = Sys.time() in
     try
       let res = fn arg in
-      add_to_timer (Camlcoq.camlstring_of_coqstring name) (Sys.time() -. start);
+      add_to_timer name (Sys.time() -. start);
       res
     with x ->
-      add_to_timer (Camlcoq.camlstring_of_coqstring name) (Sys.time() -. start);
+      add_to_timer name (Sys.time() -. start);
       raise x
   end
 

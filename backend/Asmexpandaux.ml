@@ -97,8 +97,7 @@ let translate_annot sp preg_to_dwarf annot =
 
 let builtin_nop =
   let signature ={sig_args = []; sig_res = Xvoid; sig_cc = cc_default} in
-  let name = coqstring_of_camlstring "__builtin_nop" in
-  Pbuiltin(EF_builtin(name,signature),[],BR_none)
+  Pbuiltin(EF_builtin("__builtin_nop", signature), [], BR_none)
 
 let rec lbl_follows = function
   | Pbuiltin (EF_debug _, _, _):: rest ->

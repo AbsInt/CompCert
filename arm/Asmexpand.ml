@@ -615,7 +615,7 @@ let expand_instruction instr =
   | Pbuiltin (ef,args,res) ->
      begin match ef with
 	   | EF_builtin (name,sg) ->
-	      expand_builtin_inline (camlstring_of_coqstring name) args res
+	      expand_builtin_inline name args res
 	   | EF_vload chunk ->
 	      expand_builtin_vload chunk args res
 	   | EF_vstore chunk ->
@@ -683,7 +683,7 @@ let expand_function id fn =
     let fn = Constantexpand.expand_constants fn in
     Errors.OK fn
   with Error s ->
-    Errors.Error (Errors.msg (coqstring_of_camlstring s))
+    Errors.Error (Errors.msg s)
 
 let expand_fundef id = function
   | Internal f ->

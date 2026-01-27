@@ -138,7 +138,7 @@ let pp_instructions pp ic =
         begin match ef with
           | EF_inline_asm _ -> true
           | EF_annot  (kind,txt,targs) ->
-            P.to_int kind = 2 && AisAnnot.json_ais_annot TargetPrinter.preg_annot "r13" (camlstring_of_coqstring txt) args <> []
+            P.to_int kind = 2 && AisAnnot.json_ais_annot TargetPrinter.preg_annot "r13" txt args <> []
           | _ -> false
         end
       (* Only debug relevant *)
@@ -164,7 +164,7 @@ let pp_instructions pp ic =
 
           begin match P.to_int kind with
           | 2 ->
-            let annots = AisAnnot.json_ais_annot TargetPrinter.preg_annot "r13" (camlstring_of_coqstring txt) args in
+            let annots = AisAnnot.json_ais_annot TargetPrinter.preg_annot "r13" txt args in
             let annots = List.map (function
                 | AisAnnot.String s -> String s
                 | AisAnnot.Symbol s -> Atom s

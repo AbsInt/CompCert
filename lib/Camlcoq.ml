@@ -374,14 +374,6 @@ let first_unused_ident () =
   then P.of_int 128
   else !next_atom
 
-(* Strings *)
-
-let camlstring_of_coqstring s = s
-
-let coqstring_of_camlstring s = s
-
-let coqstring_uppercase_ascii_of_camlstring s = String.uppercase_ascii s
-
 (* Floats *)
 
 let coqfloat_of_camlfloat f =

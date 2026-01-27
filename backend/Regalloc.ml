@@ -1197,7 +1197,7 @@ let regalloc f =
   let f1 = Splitting.rename_function f in
   match RTLtyping.type_function f1 with
   | Errors.Error msg ->
-      Errors.Error(Errors.MSG (coqstring_of_camlstring "RTL code after splitting is ill-typed:") :: msg)
+      Errors.Error(Errors.MSG "RTL code after splitting is ill-typed:" :: msg)
   | Errors.OK tyenv ->
       let f2 = function_of_RTL_function f1 tyenv in
       let liveness = liveness_analysis f2 in
@@ -1210,9 +1210,9 @@ let regalloc f =
         Errors.OK(first_round f3 liveness)
       with
       | Timeout ->
-          Errors.Error(Errors.msg (coqstring_of_camlstring "spilling fails to converge"))
+          Errors.Error(Errors.msg "spilling fails to converge")
       | Type_error_at pc ->
-          Errors.Error [Errors.MSG(coqstring_of_camlstring "ill-typed XTL code at PC ");
-                 Errors.POS pc]
+          Errors.Error [Errors.MSG "ill-typed XTL code at PC ";
+                        Errors.POS pc]
       | Bad_LTL ->
-          Errors.Error(Errors.msg (coqstring_of_camlstring "bad LTL after spilling"))
+          Errors.Error(Errors.msg "bad LTL after spilling")

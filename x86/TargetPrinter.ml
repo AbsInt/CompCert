@@ -863,12 +863,12 @@ module Target(System: SYSTEM):TARGET =
           begin match ef with
             | EF_annot(kind,txt, targs) ->
                 begin match (P.to_int kind) with
-                  | 1 ->  let annot = annot_text preg_annot "esp" (camlstring_of_coqstring txt) args in
+                  | 1 ->  let annot = annot_text preg_annot "esp" txt args in
                     fprintf oc "%s annotation: %S\n" comment annot
                   | 2 -> let lbl = new_label () in
                     fprintf oc "%a:\n" label lbl;
                     let sp = if Archi.ptr64 then "rsp" else "esp" in
-                    add_ais_annot lbl preg_ais_annot sp (camlstring_of_coqstring txt) args
+                    add_ais_annot lbl preg_ais_annot sp txt args
                   | _ -> assert false
                 end
           | EF_debug(kind, txt, targs) ->
@@ -876,7 +876,7 @@ module Target(System: SYSTEM):TARGET =
                                (P.to_int kind) (extern_atom txt) args
           | EF_inline_asm(txt, sg, clob) ->
               fprintf oc "%s begin inline assembly\n\t" comment;
-              print_inline_asm preg_asm oc (camlstring_of_coqstring txt) sg args res;
+              print_inline_asm preg_asm oc txt sg args res;
               fprintf oc "%s end inline assembly\n" comment
           | _ ->
               assert false
