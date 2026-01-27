@@ -1103,8 +1103,8 @@ Qed.
 
 Fixpoint set_params' (vl: list val) (il: list ident) (te: Cminor.env) : Cminor.env :=
   match il, vl with
-  | i1 :: si, v1 :: vs => set_params' vs si (PTree.set i1 v1 te)
-  | i1 :: si, nil => set_params' nil si (PTree.set i1 Vundef te)
+  | i1 :: il, v1 :: vl => set_params' vl il (PTree.set i1 v1 te)
+  | i1 :: il, nil => set_params' nil il (PTree.set i1 Vundef te)
   | _, _ => te
   end.
 
