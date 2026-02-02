@@ -256,14 +256,14 @@ let rec expr p (prec, e) =
                 exprlist (true, args)
   | Ebuiltin(EF_annot(_,txt, _), _, args, _) ->
       fprintf p "__builtin_annot@[<hov 1>(%S%a)@]"
-                (camlstring_of_coqstring txt) exprlist (false, args)
+                txt exprlist (false, args)
   | Ebuiltin(EF_annot_val(_,txt, _), _, args, _) ->
       fprintf p "__builtin_annot_intval@[<hov 1>(%S%a)@]"
-                (camlstring_of_coqstring txt) exprlist (false, args)
+                txt exprlist (false, args)
   | Ebuiltin(EF_external(id, sg), _, args, _) ->
-      fprintf p "%s@[<hov 1>(%a)@]" (camlstring_of_coqstring id) exprlist (true, args)
+      fprintf p "%s@[<hov 1>(%a)@]" id exprlist (true, args)
   | Ebuiltin(EF_runtime(id, sg), _, args, _) ->
-      fprintf p "%s@[<hov 1>(%a)@]" (camlstring_of_coqstring id) exprlist (true, args)
+      fprintf p "%s@[<hov 1>(%a)@]" id exprlist (true, args)
   | Ebuiltin(EF_inline_asm(txt, sg, clob), _, args, _) ->
       extended_asm p txt None args clob
   | Ebuiltin(EF_debug(kind,txt,_),_,args,_) ->
@@ -271,7 +271,7 @@ let rec expr p (prec, e) =
         (P.to_int kind) (extern_atom txt) exprlist (false,args)
   | Ebuiltin(EF_builtin(name, _), _, args, _) ->
       fprintf p "%s@[<hov 1>(%a)@]"
-                (camlstring_of_coqstring name) exprlist (true, args)
+                name exprlist (true, args)
   | Ebuiltin(_, _, args, _) ->
       fprintf p "<unknown builtin>@[<hov 1>(%a)@]" exprlist (true, args)
   | Eparen(a1, tycast, ty) ->
@@ -288,7 +288,7 @@ and exprlist p (first, rl) =
       exprlist p (false, rl)
 
 and extended_asm p txt res args clob =
-  fprintf p "asm volatile (@[<hv 0>%S" (camlstring_of_coqstring txt);
+  fprintf p "asm volatile (@[<hv 0>%S" txt;
   fprintf p "@ :";
   begin match res with
   | None -> ()
@@ -305,9 +305,9 @@ and extended_asm p txt res args clob =
   begin match clob with
   | [] -> ()
   | c1 :: cl ->
-      fprintf p "@ : @[<hov 0>%S" (camlstring_of_coqstring c1);
+      fprintf p "@ : @[<hov 0>%S" c1;
       List.iter
-        (fun c -> fprintf p ",@ %S" (camlstring_of_coqstring c))
+        (fun c -> fprintf p ",@ %S" c)
         cl;
       fprintf p "@]"
   end;

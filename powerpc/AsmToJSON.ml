@@ -118,7 +118,7 @@ let pp_instructions pp ic =
           | EF_annot (kind,txt,targs) ->
             begin match  P.to_int kind with
               | 1 -> false
-              | 2 ->  AisAnnot.json_ais_annot preg_annot "r1" (camlstring_of_coqstring txt) args <> []
+              | 2 ->  AisAnnot.json_ais_annot preg_annot "r1" txt args <> []
               | _ -> false
             end
           | _ -> false
@@ -350,7 +350,7 @@ let pp_instructions pp ic =
       | EF_annot (kind,txt,targs) ->
         begin match P.to_int kind with
           | 2 ->
-            let annots = AisAnnot.json_ais_annot preg_annot "r1" (camlstring_of_coqstring txt) args in
+            let annots = AisAnnot.json_ais_annot preg_annot "r1" txt args in
             let annots = List.map (function
                 | AisAnnot.String s -> String s
                 | AisAnnot.Symbol s -> Atom s

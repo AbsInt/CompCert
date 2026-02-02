@@ -374,30 +374,6 @@ let first_unused_ident () =
   then P.of_int 128
   else !next_atom
 
-(* Strings *)
-
-let camlstring_of_coqstring (s: char list) =
-  let r = Bytes.create (List.length s) in
-  let rec fill pos = function
-  | [] -> r
-  | c :: s -> Bytes.set r pos c; fill (pos + 1) s
-  in Bytes.to_string (fill 0 s)
-
-let coqstring_of_camlstring s =
-  let rec cstring accu pos =
-    if pos < 0 then accu else cstring (s.[pos] :: accu) (pos - 1)
-  in cstring [] (String.length s - 1)
-
-let coqstring_uppercase_ascii_of_camlstring s =
-  let rec cstring accu pos =
-    if pos < 0 then accu else
-    let d = if s.[pos] >= 'a' && s.[pos] <= 'z' then
-      Char.chr (Char.code s.[pos] - 32)
-    else
-      s.[pos] in
-    cstring (d :: accu) (pos - 1)
-  in cstring [] (String.length s - 1)
-
 (* Floats *)
 
 let coqfloat_of_camlfloat f =

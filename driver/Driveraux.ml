@@ -113,7 +113,7 @@ let ensure_inputfile_exists name =
 
 let print_error pp msg =
   let print_one_error = function
-  | Errors.MSG s -> Format.pp_print_string pp (Camlcoq.camlstring_of_coqstring s)
+  | Errors.MSG s -> Format.pp_print_string pp s
   | Errors.CTX i -> Format.pp_print_string pp (Camlcoq.extern_atom i)
   | Errors.POS i -> Format.fprintf pp "%ld" (Camlcoq.P.to_int32 i)
   in

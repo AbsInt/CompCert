@@ -597,7 +597,7 @@ let expand_instruction instr =
      begin
        match ef with
        | EF_builtin(name, sg) ->
-	  expand_builtin_inline (camlstring_of_coqstring name) args res
+	  expand_builtin_inline name args res
        | EF_vload chunk ->
           expand_builtin_vload chunk args res
        | EF_vstore chunk ->
@@ -689,7 +689,7 @@ let expand_function id fn =
     expand id (int_reg_to_dwarf RSP) preg_to_dwarf expand_instruction fn.fn_code;
     Errors.OK (get_current_function ())
   with Error s ->
-    Errors.Error (Errors.msg (coqstring_of_camlstring s))
+    Errors.Error (Errors.msg s)
 
 let expand_fundef id = function
   | Internal f ->

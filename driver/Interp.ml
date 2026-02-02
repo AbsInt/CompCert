@@ -56,7 +56,7 @@ let print_eventval_list p = function
 let print_event p = function
   | Event_syscall(id, args, res) ->
       fprintf p "extcall %s(%a) -> %a"
-                (camlstring_of_coqstring id)
+                id
                 print_eventval_list args
                 print_eventval res
   | Event_vload(chunk, id, ofs, res) ->
@@ -71,7 +71,7 @@ let print_event p = function
                 print_eventval arg
   | Event_annot(text, args) ->
       fprintf p "annotation \"%s\" %a"
-                (camlstring_of_coqstring text)
+                text
                 print_eventval_list args
 
 (* Printing states *)
@@ -384,7 +384,7 @@ let rec convert_external_args ge vl tl =
   | _, _ -> None
 
 let do_external_function id sg ge w args m =
-  match camlstring_of_coqstring id, args with
+  match id, args with
   | "printf", Vptr(b, ofs) :: args' ->
       extract_string m b ofs >>= fun fmt ->
       let fmt' = do_printf m fmt args' in
@@ -522,7 +522,7 @@ let rec explore_one p prog ge time s w =
       | Random -> List.nth succs (Random.int (List.length succs))
       | All -> assert false in
     if !trace >= 2 then
-      fprintf p "--[%s]-->@." (camlstring_of_coqstring r);
+      fprintf p "--[%s]-->@." r;
     explore_one p prog ge (time + 1) s' w'
   end
 
@@ -556,7 +556,7 @@ let rec explore_all p prog ge time states =
            numseen + 1) in
       if !trace >= 2 then begin
         fprintf p "Transition state %d.%d --[%s]--> state %d.%d@."
-                  time n (camlstring_of_coqstring r) (time + 1) n'
+                  time n r (time + 1) n'
       end;
       add_reducts nextstates' seen' numseen' states n reducts
   in

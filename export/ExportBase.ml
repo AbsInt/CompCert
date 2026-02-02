@@ -80,7 +80,7 @@ let coqZ p n =
 (* Coq strings *)
 
 let coqstring p s =
-  fprintf p "\"%s\"" (camlstring_of_coqstring s)
+  fprintf p "\"%s\"" s
 
 (* Identifiers *)
 

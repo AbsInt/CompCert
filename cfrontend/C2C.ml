@@ -170,7 +170,7 @@ let warning t msg =
 
 let string_of_errmsg msg =
   let string_of_err = function
-  | Errors.MSG s -> camlstring_of_coqstring s
+  | Errors.MSG s -> s
   | Errors.CTX i -> extern_atom i
   | Errors.POS i -> Z.to_string (Z.Zpos i)
   in String.concat "" (List.map string_of_err msg)
@@ -911,7 +911,7 @@ let rec convertExpr env e =
       | {edesc = C.EConst(CStr txt)} :: args1 ->
           let targs1 = convertTypAnnotArgs env args1 in
           Ebuiltin(
-             AST.EF_annot(P.of_int 1,coqstring_of_camlstring txt, List.map typ_of_type targs1),
+             AST.EF_annot(P.of_int 1, txt, List.map typ_of_type targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "argument 1 of '__builtin_annot' must be a string literal";
@@ -923,7 +923,7 @@ let rec convertExpr env e =
       | [ {edesc = C.EConst(CStr txt)}; arg ] ->
           let targ = convertTyp env
                          (Cutil.default_argument_conversion env arg.etyp) in
-          Ebuiltin(AST.EF_annot_val(P.of_int 1,coqstring_of_camlstring txt, typ_of_type targ),
+          Ebuiltin(AST.EF_annot_val(P.of_int 1, txt, typ_of_type targ),
                    [targ], convertExprList env [arg],
                    convertTyp env e.etyp)
       | _ ->
@@ -940,7 +940,7 @@ let rec convertExpr env e =
         let targs1 = convertTypAnnotArgs env args1 in
         AisAnnot.validate_ais_annot env !currentLocation txt args1;
           Ebuiltin(
-             AST.EF_annot(P.of_int 2,coqstring_of_camlstring (loc_string ^ txt), List.map typ_of_type targs1),
+             AST.EF_annot(P.of_int 2, loc_string ^ txt, List.map typ_of_type targs1),
             targs1, convertExprList env args1, convertTyp env e.etyp)
       | _ ->
           error "argument 1 of '__builtin_ais_annot' must be a string literal";
@@ -986,7 +986,7 @@ let rec convertExpr env e =
       let sg =
         signature_of_type targs tres
            { AST.cc_vararg = Some (coqint_of_camlint 1l); cc_unproto = false; cc_structret = false} in
-      Ebuiltin( AST.EF_external(coqstring_of_camlstring "printf", sg),
+      Ebuiltin(AST.EF_external("printf", sg),
                targs, convertExprList env args, tres)
 
   | C.ECall(fn, args) ->
@@ -1040,14 +1040,14 @@ let convertAsm loc env txt outputs inputs clobber =
   let (txt', output', inputs') =
     ExtendedAsm.transf_asm loc env txt outputs inputs clobber in
   let clobber' =
-    List.map (fun s -> coqstring_uppercase_ascii_of_camlstring s) clobber in
+    List.map String.uppercase_ascii clobber in
   let ty_res =
     match output' with None -> TVoid [] | Some e -> e.etyp in
   (* Build the Ebuiltin expression *)
   let e =
     let tinputs = convertTypAnnotArgs env inputs' in
     let toutput = convertTyp env ty_res in
-    Ebuiltin( AST.EF_inline_asm(coqstring_of_camlstring txt',
+    Ebuiltin(AST.EF_inline_asm(txt',
                            signature_of_type tinputs toutput  AST.cc_default,
                            clobber'),
              tinputs,
@@ -1204,15 +1204,14 @@ let convertFundecl env (sto, id, ty, optinit) =
     | Tfunction(args, res, cconv) -> (args, res, cconv)
     | _ -> assert false in
   let id' = intern_string id.name in
-  let id'' = coqstring_of_camlstring id.name in
   let sg = signature_of_type args res cconv in
   let ef =
     if id.name = "malloc" then AST.EF_malloc else
     if id.name = "free" then AST.EF_free else
     if Str.string_match re_builtin id.name 0
     && List.mem_assoc id.name builtins.builtin_functions
-    then AST.EF_builtin(id'', sg)
-    else AST.EF_external(id'', sg) in
+    then AST.EF_builtin(id.name, sg)
+    else AST.EF_external(id.name, sg) in
   (id',  AST.Gfun(Ctypes.External(ef, args, res, cconv)))
 
 (** Initializers *)
@@ -1396,7 +1395,7 @@ let helper_functions () = [
 
 let helper_function_declaration (name, tyres, tyargs) =
   let ef =
-    AST.EF_runtime(coqstring_of_camlstring name,
+    AST.EF_runtime(name,
                    signature_of_type tyargs tyres AST.cc_default) in
   (intern_string name,
    AST.Gfun (Ctypes.External(ef, tyargs, tyres, AST.cc_default)))
