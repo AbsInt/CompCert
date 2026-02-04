@@ -85,7 +85,7 @@ Definition typealign (ty: typ) : Z :=
   match ty with
   | Tint => 1
   | Tlong => 2
-  | Tfloat => 1
+  | Tfloat => 2
   | Tsingle => 1
   | Tany32 => 1
   | Tany64 => 1

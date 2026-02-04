@@ -2,14 +2,6 @@ include ../Makefile.config
 
 CFLAGS=-O1 -g -Wall
 
-ifeq ($(ARCH),x86)
-ifeq ($(MODEL),64)
-ARCH=x86_64
-else
-ARCH=x86_32
-endif
-endif
-
 ifeq ($(ARCH),powerpc)
 ifeq ($(MODEL),ppc64)
 ARCH=powerpc64
@@ -18,7 +10,7 @@ ARCH=powerpc64
 endif
 endif
 
-ifeq ($(ARCH),x86_64)
+ifeq ($(ARCH),x86)
 OBJS=i64_dtou.o i64_utod.o i64_utof.o vararg.o
 else ifeq ($(ARCH),powerpc64)
 OBJS=i64_dtou.o i64_stof.o i64_utod.o i64_utof.o vararg.o

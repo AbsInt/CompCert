@@ -92,8 +92,6 @@ Module IndexedMreg <: INDEXED_TYPE.
   Qed.
 End IndexedMreg.
 
-Definition is_stack_reg (r: mreg) : bool := false.
-
 (** ** Names of registers *)
 
 Local Open Scope string_scope.
