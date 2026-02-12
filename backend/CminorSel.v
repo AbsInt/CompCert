@@ -12,18 +12,10 @@
 
 (** The Cminor language after instruction selection. *)
 
-Require Import Recdef.
-Require Import Coqlib.
-Require Import Maps.
-Require Import AST.
-Require Import Integers.
-Require Import Events.
-Require Import Values.
-Require Import Memory.
-Require Import Cminor.
-Require Import Op.
-Require Import Globalenvs.
-Require Import Smallstep.
+From Coq Require Import Recdef.
+Require Import Coqlib Maps AST Integers Events Values Memory.
+Require Import Cminor Op.
+Require Import Globalenvs Smallstep.
 
 (** * Abstract syntax *)
 
