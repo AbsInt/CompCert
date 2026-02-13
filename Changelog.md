@@ -1,3 +1,22 @@
+# Release 3.17, 2026-02-13
+
+Bug fixes:
+- Elaboration of switch statements: convert case values to the type of the controlling expression
+- cparser/Ceval.ml: minor errors in compile-time evaluation (#565, #566, #568)
+- AArch64: unsupported addressing modes were sometimes generated for volatile accesses (#569)
+- Warning `unknown-warning-option` was not handled correctly.
+
+Performance:
+- RISC-V: enable the use of compressed instructions (C extension); favor the use of registers x10-x15 to improve code compressibility.
+
+Usability:
+- AArch64/macOS: silence the 'redefining builtin macro' preprocessor warning
+
+Rocq/Coq development:
+- Extract Rocq strings to OCaml strings (#571)
+- Support Rocq 9.1.
+- Support Menhir >= 20260203.
+
 # Release 3.16, 2025-09-01
 
 Code generation and optimization:
