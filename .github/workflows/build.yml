@@ -42,6 +42,8 @@ jobs:
         run: tools/runner.sh test2
       - name: Test alternate configuration 2
         run: tools/runner.sh test3
+      - name: Test alternate configuration 3
+        run: tools/runner.sh test4
   macos:
     runs-on: macos-latest
     env:
@@ -67,3 +69,5 @@ jobs:
         run: tools/runner.sh test2
       - name: Test alternate configuration 2
         run: tools/runner.sh test3
+      - name: Test alternate configuration 3
+        run: tools/runner.sh test4
