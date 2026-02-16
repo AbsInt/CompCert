@@ -157,7 +157,7 @@ Separate Extraction
    Conventions1.allocatable_registers
    RTL.instr_defs RTL.instr_uses
    Machregs.mregs_for_operation Machregs.mregs_for_builtin
-   Machregs.two_address_op Machregs.is_stack_reg
+   Machregs.two_address_op
    Machregs.destroyed_at_indirect_call
    AST.signature_main
    Floats.Float32.from_parsed Floats.Float.from_parsed

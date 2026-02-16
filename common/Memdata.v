@@ -92,7 +92,7 @@ Definition align_chunk (chunk: memory_chunk) : Z :=
   | Mint32 => 4
   | Mint64 => 8
   | Mfloat32 => 4
-  | Mfloat64 => 4
+  | Mfloat64 => 8
   | Many32 => 4
   | Many64 => 4
   end.

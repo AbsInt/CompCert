@@ -23,9 +23,6 @@ Definition ptr64 := true.
 
 Definition big_endian := false.
 
-Definition align_int64 := 8%Z.
-Definition align_float64 := 8%Z.
-
 Definition splitlong := false.
 
 Lemma splitlong_ptr32: splitlong = true -> ptr64 = false.

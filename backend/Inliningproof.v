@@ -769,7 +769,6 @@ Proof.
     auto.
   destruct chunk; simpl in *; auto using Z.divide_1_l.
   apply H2; lia.
-  apply H2; lia.
 Qed.
 
 (** Preservation by external calls *)

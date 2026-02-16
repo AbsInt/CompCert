@@ -28,12 +28,10 @@ Require Import AST Integers Op.
 Inductive mreg: Type :=
   (** Allocatable integer regs *)
   | AX | BX | CX | DX | SI | DI | BP
-  | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15  (**r only in 64-bit mode *)
+  | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15
   (** Allocatable float regs *)
   | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7
-  | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15  (**r only in 64-bit mode *)
-  (** Special float reg *)
-  | FP0.
+  | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15.
 
 Lemma mreg_eq: forall (r1 r2: mreg), {r1 = r2} + {r1 <> r2}.
 Proof. decide equality. Defined.
@@ -44,7 +42,7 @@ Definition all_mregs :=
   :: R8 :: R9 :: R10 :: R11 :: R12 :: R13 :: R14 :: R15
   :: X0 :: X1 :: X2 :: X3 :: X4 :: X5 :: X6 :: X7
   :: X8 :: X9 :: X10 :: X11 :: X12 :: X13 :: X14 :: X15
-  :: FP0 :: nil.
+  :: nil.
 
 Lemma all_mregs_complete:
   forall (r: mreg), In r all_mregs.
@@ -62,11 +60,10 @@ Global Instance Finite_mreg : Finite mreg := {
 
 Definition mreg_type (r: mreg): typ :=
   match r with
-  | AX | BX | CX | DX | SI | DI | BP => if Archi.ptr64 then Tany64 else Tany32
+  | AX | BX | CX | DX | SI | DI | BP => Tany64
   | R8 | R9 | R10 | R11 | R12 | R13 | R14 | R15 => Tany64
   | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 => Tany64
   | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15 => Tany64
-  | FP0 => Tany64
   end.
 
 Local Open Scope positive_scope.
@@ -80,7 +77,6 @@ Module IndexedMreg <: INDEXED_TYPE.
     | R8 => 8 | R9 => 9 | R10 => 10 | R11 => 11 | R12 => 12 | R13 => 13 | R14 => 14 | R15 => 15
     | X0 => 16 | X1 => 17 | X2 => 18 | X3 => 19 | X4 => 20 | X5 => 21 | X6 => 22 | X7 => 23
     | X8 => 24 | X9 => 25 | X10 => 26 | X11 => 27 | X12 => 28 | X13 => 29 | X14 => 30 | X15 => 31
-    | FP0 => 32
     end.
   Lemma index_inj:
     forall r1 r2, index r1 = index r2 -> r1 = r2.
@@ -88,9 +84,6 @@ Module IndexedMreg <: INDEXED_TYPE.
     decide_goal.
   Qed.
 End IndexedMreg.
-
-Definition is_stack_reg (r: mreg) : bool :=
-  match r with FP0 => true | _ => false end.
 
 (** ** Names of registers *)
 
@@ -107,7 +100,7 @@ Definition register_names :=
   ("XMM4", X4) :: ("XMM5", X5) :: ("XMM6", X6) :: ("XMM7", X7) ::
   ("XMM8", X8) :: ("XMM9", X9) :: ("XMM10", X10) :: ("XMM11", X11) ::
   ("XMM12", X12) :: ("XMM13", X13) :: ("XMM14", X14) :: ("XMM15", X15) ::
-  ("ST0", FP0) :: nil.
+  nil.
 
 Definition register_by_name (s: string) : option mreg :=
   let fix assoc (l: list (string * mreg)) : option mreg :=
@@ -144,10 +137,7 @@ Definition destroyed_by_load (chunk: memory_chunk) (addr: addressing): list mreg
   nil.
 
 Definition destroyed_by_store (chunk: memory_chunk) (addr: addressing): list mreg :=
-  match chunk with
-  | Mbool | Mint8signed | Mint8unsigned => if Archi.ptr64 then nil else AX :: CX :: nil
-  | _ => nil
-  end.
+  nil.
 
 Definition destroyed_by_cond (cond: condition): list mreg :=
   nil.
@@ -169,8 +159,6 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_memcpy sz al =>
       if zle sz 32 then CX :: X7 :: nil else CX :: SI :: DI :: nil
-  | EF_vstore (Mint8unsigned|Mint8signed) =>
-      if Archi.ptr64 then nil else AX :: CX :: nil
   | EF_builtin name sg =>
       if string_dec name "__builtin_va_start" then AX :: nil
       else if string_dec name "__builtin_write16_reversed"
@@ -183,13 +171,10 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
 
 Definition destroyed_at_function_entry: list mreg :=
   (* must include [destroyed_by_setstack ty] *)
-  AX :: FP0 :: nil.
+  AX :: nil.
 
 Definition destroyed_by_setstack (ty: typ): list mreg :=
-  match ty with
-  | Tfloat | Tsingle => FP0 :: nil
-  | _ => nil
-  end.
+  nil.
 
 Definition destroyed_at_indirect_call: list mreg :=
   AX :: nil.
@@ -236,8 +221,6 @@ Definition mregs_for_builtin (ef: external_function): list (option mreg) * list 
        (Some AX :: Some DX :: nil, Some DX :: Some AX :: nil)
      else if string_dec name "__builtin_va_start" then
        (Some DX :: nil, nil)
-     else if (negb Archi.ptr64) && string_dec name "__builtin_bswap64" then
-       (Some AX :: Some DX :: nil, Some DX :: Some AX :: nil)
      else
        (nil, nil)
   | _ => (nil, nil)

@@ -308,7 +308,7 @@ Definition loc_argument_acceptable (l: loc) : Prop :=
 Definition loc_argument_charact (ofs: Z) (l: loc) : Prop :=
   match l with
   | R r => is_callee_save r = false
-  | S Outgoing ofs' ty => ofs' >= ofs /\ typealign ty = 1
+  | S Outgoing ofs' ty => ofs' >= ofs /\ (typealign ty | ofs')
   | _ => False
   end.
 
@@ -343,42 +343,42 @@ Proof.
   destruct a.
 - (* int *)
   destruct (zlt ir 4); destruct H.
-  subst. apply ireg_param_caller_save.
-  eapply IHtyl; eauto.
-  subst. split; [lia | auto].
-  eapply Y; eauto. lia.
+  + subst. apply ireg_param_caller_save.
+  + eapply IHtyl; eauto.
+  + subst. split; simpl. lia. apply Z.divide_1_l.
+  + eapply Y; eauto. lia.
 - (* float *)
   destruct (zlt fr 8); destruct H.
-  subst. apply freg_param_caller_save.
-  eapply IHtyl; eauto.
-  subst. split. apply Z.le_ge. apply align_le. lia. auto.
-  eapply Y; eauto. apply Z.le_trans with (align ofs 2). apply align_le; lia. lia.
+  + subst. apply freg_param_caller_save.
+  + eapply IHtyl; eauto.
+  + subst. split. apply Z.le_ge. apply align_le. lia. apply align_divides. lia.
+  + eapply Y; eauto. apply Z.le_trans with (align ofs 2). apply align_le; lia. lia.
 - (* long *)
   set (ir' := align ir 2) in *.
   assert (ofs <= align ofs 2) by (apply align_le; lia).
-  destruct (zlt ir' 4).
-  destruct H. subst p. split; apply ireg_param_caller_save.
-  eapply IHtyl; eauto.
-  destruct H. subst p. split; destruct Archi.big_endian; (split; [ lia | auto ]).
-  eapply Y. eapply IHtyl; eauto. lia.
+  destruct (zlt ir' 4); destruct H.
+  + subst p. split; apply ireg_param_caller_save.
+  + eapply IHtyl; eauto.
+  + subst p. split; destruct Archi.big_endian; (split; [ lia | apply Z.divide_1_l ]).
+  + eapply Y. eapply IHtyl; eauto. lia.
 - (* single *)
   destruct (zlt fr 8); destruct H.
-  subst. apply freg_param_caller_save.
-  eapply IHtyl; eauto.
-  subst. split; [lia|auto].
-  eapply Y; eauto. lia.
+  + subst. apply freg_param_caller_save.
+  + eapply IHtyl; eauto.
+  + subst. split; [lia | apply Z.divide_1_l].
+  + eapply Y; eauto. lia.
 - (* any32 *)
   destruct (zlt ir 4); destruct H.
-  subst. apply ireg_param_caller_save.
-  eapply IHtyl; eauto.
-  subst. split; [lia | auto].
-  eapply Y; eauto. lia.
+  + subst. apply ireg_param_caller_save.
+  + eapply IHtyl; eauto.
+  + subst. split; [lia | apply Z.divide_1_l].
+  + eapply Y; eauto. lia.
 - (* any64 *)
   destruct (zlt fr 8); destruct H.
-  subst. apply freg_param_caller_save.
-  eapply IHtyl; eauto.
-  subst. split. apply Z.le_ge. apply align_le. lia. auto.
-  eapply Y; eauto. apply Z.le_trans with (align ofs 2). apply align_le; lia. lia.
+  + subst. apply freg_param_caller_save.
+  + eapply IHtyl; eauto.
+  + subst. split. apply Z.le_ge. apply align_le. lia. apply Z.divide_1_l.
+  + eapply Y; eauto. apply Z.le_trans with (align ofs 2). apply align_le; lia. lia.
 Qed.
 
 Remark loc_arguments_sf_charact:
@@ -396,7 +396,7 @@ Proof.
   destruct H.
   destruct (zlt ofs 0); subst p.
   apply ireg_param_caller_save.
-  split; [extlia|auto].
+  split; [extlia | apply Z.divide_1_l].
   eapply Y; eauto. lia.
 - (* float *)
   set (ofs' := align ofs 2) in *.
@@ -404,7 +404,7 @@ Proof.
   destruct H.
   destruct (zlt ofs' 0); subst p.
   apply freg_param_caller_save.
-  split; [extlia|auto].
+  split; [extlia | apply align_divides; lia].
   eapply Y. eapply IHtyl; eauto. lia.
 - (* long *)
   set (ofs' := align ofs 2) in *.
@@ -412,19 +412,19 @@ Proof.
   destruct H.
   destruct (zlt ofs' 0); subst p.
   split; apply ireg_param_caller_save.
-  split; destruct Archi.big_endian; (split; [extlia|auto]).
+  split; destruct Archi.big_endian; (split; [extlia|apply Z.divide_1_l]).
   eapply Y. eapply IHtyl; eauto. lia.
 - (* single *)
   destruct H.
   destruct (zlt ofs 0); subst p.
   apply freg_param_caller_save.
-  split; [extlia|auto].
+  split; [extlia | apply Z.divide_1_l].
   eapply Y; eauto. lia.
 - (* any32 *)
   destruct H.
   destruct (zlt ofs 0); subst p.
   apply ireg_param_caller_save.
-  split; [extlia|auto].
+  split; [extlia| apply Z.divide_1_l].
   eapply Y; eauto. lia.
 - (* any64 *)
   set (ofs' := align ofs 2) in *.
@@ -432,7 +432,7 @@ Proof.
   destruct H.
   destruct (zlt ofs' 0); subst p.
   apply freg_param_caller_save.
-  split; [extlia|auto].
+  split; [extlia | apply Z.divide_1_l].
   eapply Y. eapply IHtyl; eauto. lia.
 Qed.
 
@@ -441,9 +441,6 @@ Lemma loc_arguments_acceptable:
   In p (loc_arguments s) -> forall_rpair loc_argument_acceptable p.
 Proof.
   unfold loc_arguments; intros.
-  assert (X: forall l, loc_argument_charact 0 l -> loc_argument_acceptable l).
-  { unfold loc_argument_charact, loc_argument_acceptable.
-    destruct l as [r | [] ofs ty]; auto. intros (A & B); split; auto. rewrite B; apply Z.divide_1_l. }
   assert (Y: forall p, forall_rpair (loc_argument_charact 0) p -> forall_rpair loc_argument_acceptable p).
   { destruct p0; simpl; intuition auto. }
   assert (In p (loc_arguments_sf (proj_sig_args s) (-4)) -> forall_rpair loc_argument_acceptable p).
