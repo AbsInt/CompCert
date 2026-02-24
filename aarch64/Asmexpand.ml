@@ -407,6 +407,70 @@ let expand_builtin_inline name args res =
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
 
+(* Branch relaxation *)
+
+module BInfo: BRANCH_INFORMATION = struct
+
+  let builtin_size = function
+    | EF_annot _ -> 0
+    | EF_debug _ -> 0
+    | EF_inline_asm _ -> 32  (* hope it's no more than 8 instructions *)
+    | _ -> assert false
+
+  let instr_size = function
+    | Pfmovimmd _ | Pfmovimms _ -> 8
+    | Pbtbl(_, tbl) -> 12 + 4 * List.length tbl
+    | Plabel _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
+    | Pbuiltin(ef, _, _) -> builtin_size ef
+    | _ -> 4
+
+  let branch_overflow ~map pc lbl range =
+    let displ = pc + 4 - map lbl in
+    displ < -range || displ >= range
+
+  let need_relaxation ~map pc instr =
+    match instr with
+    | Pbc(_, lbl) | Pcbnz(_, _, lbl) | Pcbz(_, _, lbl) ->
+        (* +/- 1 MB *)
+        branch_overflow ~map pc lbl 0x100_000
+    | Ptbnz(_, _, _, lbl) | Ptbz(_, _, _, lbl) ->
+        (* +/- 32 KB *)
+        branch_overflow ~map pc lbl 0x8_000
+    | _ ->
+        false
+
+  let negate_testcond = function
+    | TCeq -> TCne   | TCne -> TCeq
+    | TChs -> TClo   | TClo -> TChs
+    | TCmi -> TCpl   | TCpl -> TCmi
+    | TChi -> TCls   | TCls -> TChi
+    | TCge -> TClt   | TClt -> TCge
+    | TCgt -> TCle   | TCle -> TCgt
+
+  let relax_instruction instr =
+    match instr with
+    | Pbc(c, lbl) ->
+        let lbl' = new_label() in
+        [Pbc(negate_testcond c, lbl'); Pb lbl; Plabel lbl']
+    | Pcbnz(sz, r, lbl) ->
+        let lbl' = new_label() in
+        [Pcbz(sz, r, lbl'); Pb lbl; Plabel lbl']
+    | Pcbz(sz, r, lbl) ->
+        let lbl' = new_label() in
+        [Pcbnz(sz, r, lbl'); Pb lbl; Plabel lbl']
+    | Ptbnz(sz, r, n, lbl) ->
+        let lbl' = new_label() in
+        [Ptbz(sz, r, n, lbl'); Pb lbl; Plabel lbl']
+    | Ptbz(sz, r, n, lbl) ->
+        let lbl' = new_label() in
+        [Ptbnz(sz, r, n, lbl'); Pb lbl; Plabel lbl']
+    | _ ->
+        assert false
+
+end
+
+module BRelax = Branch_relaxation (BInfo)
+
 (* Expansion of instructions *)
 
 let expand_instruction instr =
@@ -478,7 +542,8 @@ let expand_function id fn =
   try
     set_current_function fn;
     expand id (* sp= *) 31 preg_to_dwarf expand_instruction fn.fn_code;
-    Errors.OK (get_current_function ())
+    let fn' = BRelax.relaxation (get_current_function ()) in
+    Errors.OK fn'
   with Error s ->
     Errors.Error (Errors.msg s)
 
