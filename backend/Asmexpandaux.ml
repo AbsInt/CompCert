@@ -11,9 +11,10 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* Util functions used for the expansion of built-ins and some
+(* Utility functions used for the expansion of built-ins and some
    pseudo-instructions *)
 
+open Maps
 open Asm
 open AST
 open Camlcoq
@@ -186,3 +187,63 @@ let expand id sp preg simple l =
     expand_debug id sp preg simple l
   else
     expand_simple simple l
+
+(* Branch relaxation *)
+
+module type BRANCH_INFORMATION = sig
+  val instr_size: instruction -> int
+  val need_relaxation: map: (label -> int) -> int -> instruction -> bool
+  val relax_instruction: instruction -> instruction list
+end
+
+module Branch_relaxation (B: BRANCH_INFORMATION) = struct
+
+(* Fill the table label -> position in code *)
+
+let rec set_label_positions tbl pc = function
+  | [] ->
+      tbl
+  | Plabel lbl :: code ->
+      set_label_positions (PTree.set lbl pc tbl) pc code
+  | instr :: code ->
+      set_label_positions tbl (pc + B.instr_size instr) code
+
+let get_label_position tbl lbl =
+  match PTree.get lbl tbl with
+  | Some pc -> pc
+  | None -> 
+      invalid_arg
+        (Printf.sprintf "Fatal error: unknown label %d" (P.to_int lbl))
+
+let rec need_relaxation tbl pc = function
+  | [] ->
+      false
+  | instr :: code ->
+      B.need_relaxation ~map:(get_label_position tbl) pc instr
+      || need_relaxation tbl (pc + B.instr_size instr) code
+
+let rec do_relaxation tbl accu pc = function
+  | [] ->
+      List.rev accu
+  | instr :: code ->
+      do_relaxation
+        tbl
+        (if B.need_relaxation ~map:(get_label_position tbl) pc instr
+         then List.rev_append (B.relax_instruction instr) accu
+         else instr :: accu)
+        (pc + B.instr_size instr)
+        code
+
+let relaxation fn =
+  set_current_function fn;
+  let rec relax fn =
+    let tbl = set_label_positions PTree.empty 0 fn.fn_code in
+    if not (need_relaxation tbl 0 fn.fn_code) then fn else begin
+      let code' = do_relaxation tbl [] 0 fn.fn_code in
+      relax {fn with fn_code = code'}
+    end in
+  let res = relax fn in
+  set_current_function dummy_function;
+  res
+
+end
