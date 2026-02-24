@@ -14,7 +14,6 @@
 
 open Printf
 open Fileinfo
-open Maps
 open Camlcoq
 open Sections
 open AST
@@ -381,17 +380,9 @@ module Target (System : SYSTEM):TARGET =
           assert false
       in leftmost_one 0 0x8000_0000_0000_0000L
 
-    (* Determine if the displacement of a conditional branch fits the short form *)
-
-    let short_cond_branch tbl pc lbl_dest =
-      match PTree.get lbl_dest tbl with
-      | None -> assert false
-      | Some pc_dest ->
-          let disp = pc_dest - pc in -0x2000 <= disp && disp < 0x2000
-
     (* Printing of instructions *)
 
-    let print_instruction oc tbl pc fallthrough = function
+    let print_instruction oc fallthrough = function
       | Padd(r1, r2, r3) | Padd64(r1, r2, r3) ->
           fprintf oc "	add	%a, %a, %a\n" ireg r1 ireg r2 ireg r3
       | Paddc(r1, r2, r3) ->
@@ -435,14 +426,7 @@ module Target (System : SYSTEM):TARGET =
       | Pbf(bit, lbl) ->
           if !Clflags.option_faligncondbranchs > 0 then
             fprintf oc "	.balign	%d\n" !Clflags.option_faligncondbranchs;
-          if short_cond_branch tbl pc lbl then
-            fprintf oc "	bf	%a, %a\n" crbit bit label (transl_label lbl)
-          else begin
-            let next = new_label() in
-            fprintf oc "	bt	%a, %a\n" crbit bit label next;
-            fprintf oc "	b	%a\n" label (transl_label lbl);
-            fprintf oc "%a:\n" label next
-          end
+          fprintf oc "	bf	%a, %a\n" crbit bit label (transl_label lbl)
       | Pbl(s, sg) ->
           fprintf oc "	bl	%a\n" symbol s
       | Pbs(s, sg) ->
@@ -452,14 +436,7 @@ module Target (System : SYSTEM):TARGET =
       | Pbt(bit, lbl) ->
           if !Clflags.option_faligncondbranchs > 0 then
             fprintf oc "	.balign	%d\n" !Clflags.option_faligncondbranchs;
-          if short_cond_branch tbl pc lbl then
-            fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
-          else begin
-            let next = new_label() in
-            fprintf oc "	bf	%a, %a\n" crbit bit label next;
-            fprintf oc "	b	%a\n" label (transl_label lbl);
-            fprintf oc "%a:\n" label next
-          end
+          fprintf oc "	bt	%a, %a\n" crbit bit label (transl_label lbl)
       | Pbtbl(r, tbl) ->
           let lbl = new_label() in
           fprintf oc "%s begin pseudoinstr btbl(%a)\n" comment ireg r;
@@ -866,39 +843,15 @@ module Target (System : SYSTEM):TARGET =
       | Pblr -> false
       | _ -> true
 
-    (* Estimate the size of an Asm instruction encoding, in number of actual
-       PowerPC instructions.  We can over-approximate. *)
-
-    let instr_size = function
-      | Pbf(bit, lbl) -> 2
-      | Pbt(bit, lbl) -> 2
-      | Pbtbl(r, tbl) -> 5
-      | Pldi (r1,c) -> 2
-      | Plfi(r1, c) -> 2
-      | Plfis(r1, c) -> 2
-      | Plabel lbl -> 0
-      | Pbuiltin((EF_annot _ | EF_debug _), args, res) -> 0
-      | Pbuiltin(ef, args, res) -> 3
-      | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
-      | _ -> 1
-
-   (* Build a table label -> estimated position in generated code.
-      Used to predict if relative conditional branches can use the short form. *)
-
-    let rec label_positions tbl pc = function
-      | [] -> tbl
-      | Plabel lbl :: c -> label_positions (PTree.set lbl pc tbl) pc c
-      | i :: c -> label_positions tbl (pc + instr_size i) c
-
     (* Emit a sequence of instructions *)
 
     let print_instructions oc fn =
-      let rec aux  oc tbl pc fallthrough = function
+      let rec aux oc fallthrough = function
       | [] -> ()
       | i :: c ->
-          print_instruction oc tbl pc fallthrough i;
-         aux oc tbl (pc + instr_size i) (instr_fall_through i) c in
-      aux oc (label_positions PTree.empty 0 fn.fn_code) 0 true fn.fn_code
+          print_instruction oc fallthrough i;
+          aux oc (instr_fall_through i) c in
+      aux oc true fn.fn_code
 
     (* Print the code for a function *)
 
