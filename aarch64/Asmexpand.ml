@@ -407,6 +407,20 @@ let expand_builtin_inline name args res =
   | _ ->
      raise (Error ("unrecognized builtin " ^ name))
 
+(* Number of statements in a piece of inline assembly code.
+   This gives an upper bound on the number of machine instructions.
+   (Some statements can be labels or directives.) *)
+
+let re_asm_comment = Str.regexp "\\(//\\|^#\\).*$" (* // or # at BOL *)
+let re_blank_line = Str.regexp "^[ \t]*\n"
+let re_asm_stmt_separator = Str.regexp "[\n;]"    (* newline or ; *)
+
+let num_statements_inline_asm txt =
+  txt |> Str.global_replace re_asm_comment ""
+      |> Str.global_replace re_blank_line ""
+      |> Str.split re_asm_stmt_separator
+      |> List.length
+
 (* Branch relaxation *)
 
 module BInfo: BRANCH_INFORMATION = struct
@@ -414,7 +428,7 @@ module BInfo: BRANCH_INFORMATION = struct
   let builtin_size = function
     | EF_annot _ -> 0
     | EF_debug _ -> 0
-    | EF_inline_asm _ -> 32  (* hope it's no more than 8 instructions *)
+    | EF_inline_asm(txt, _, _) -> 4 * num_statements_inline_asm txt
     | _ -> assert false
 
   let instr_size = function
