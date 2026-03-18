@@ -827,6 +827,66 @@ let set_cr6 sg =
     else emit (Pcrxor(CRbit_6, CRbit_6, CRbit_6))
   end
 
+(* Number of statements in a piece of inline assembly code.
+   This gives an upper bound on the number of machine instructions.
+   (Some statements can be labels or directives.) *)
+
+let re_asm_comment =
+  if Configuration.system = "diab"
+  then Str.regexp "[#;].*$"    (* comments start with # or ;  *)
+  else Str.regexp "#.*$"       (* comments start with # *)
+let re_blank_line = Str.regexp "^[ \t]*\n"
+let re_asm_stmt_separator = Str.regexp "[\n;]"    (* newline or ; *)
+
+let num_statements_inline_asm txt =
+  txt |> Str.global_replace re_asm_comment ""
+      |> Str.global_replace re_blank_line ""
+      |> Str.split re_asm_stmt_separator
+      |> List.length
+
+(* Branch relaxation *)
+
+module BInfo: BRANCH_INFORMATION = struct
+
+  let builtin_size = function
+    | EF_annot _ -> 0
+    | EF_debug _ -> 0
+    | EF_inline_asm(txt, _, _) -> 4 * num_statements_inline_asm txt
+    | _ -> assert false
+
+  let instr_size = function
+    | Pbtbl(r, tbl) -> 20
+    | Pldi (r1,c) -> 8
+    | Plfi(r1, c) -> 8
+    | Plfis(r1, c) -> 8
+    | Plabel lbl -> 0
+    | Pbuiltin(ef, _, _) -> builtin_size ef
+    | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
+    | _ -> 4
+
+  let need_relaxation ~map pc instr =
+    match instr with
+    | Pbf(_, lbl) | Pbt(_, lbl) ->
+        let displ = pc + 4 - map lbl in
+        displ < -0x8000 || displ >= 0x8000
+    | _ ->
+        false
+
+  let relax_instruction instr =
+    match instr with
+    | Pbf(bit, lbl) ->
+        let lbl' = new_label() in
+        [Pbt(bit, lbl'); Pb lbl; Plabel lbl']
+    | Pbt(bit, lbl) ->
+        let lbl' = new_label() in
+        [Pbf(bit, lbl'); Pb lbl; Plabel lbl']
+    | _ ->
+        assert false
+
+end
+
+module BRelax = Branch_relaxation (BInfo)
+
 (* Expand instructions *)
 
 let expand_instruction instr =
@@ -973,7 +1033,8 @@ let expand_function id fn =
   try
     set_current_function fn;
     expand id 1 preg_to_dwarf expand_instruction fn.fn_code;
-    Errors.OK (get_current_function ())
+    let fn' = BRelax.relaxation (get_current_function ()) in
+    Errors.OK fn'
   with Error s ->
     Errors.Error (Errors.msg s)
 
