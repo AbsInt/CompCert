@@ -54,6 +54,6 @@ module type BRANCH_INFORMATION = sig
          Can call [Asmexpandaux.new_label] to obtain fresh labels. *)
 end
 
-module Branch_relaxation (_: BRANCH_INFORMATION) : sig
+module Branch_relaxation : BRANCH_INFORMATION -> sig
   val relaxation: coq_function -> coq_function
 end
