@@ -450,7 +450,9 @@ let string_of_init id =
   let b = Buffer.create (List.length id) in
   let add_init = function
   | Init_int8 n ->
-      let c = Int32.to_int (camlint_of_coqint n) in
+      let n = camlint_of_coqint n in
+      assert (n >= 0l && n < 256l);
+      let c = Int32.to_int n in
       if c >= 32 && c <= 126 && c <> Char.code '\"' && c <> Char.code '\\'
       then Buffer.add_char b (Char.chr c)
       else Buffer.add_string b (Printf.sprintf "\\%03o" c)
@@ -486,8 +488,6 @@ let print_composite_init p il =
     il;
   fprintf p "}"
 
-let re_string_literal = Str.regexp "__stringlit_[0-9]+"
-
 let print_globvar p id v =
   let name1 = extern_atom id in
   let name2 = if v.gvar_readonly then "const " ^ name1 else name1 in
@@ -506,8 +506,7 @@ let print_globvar p id v =
         [i1] ->
           print_init p i1
       | _, il ->
-          if Str.string_match re_string_literal (extern_atom id) 0
-          && List.for_all (function Init_int8 _ -> true | _ -> false) il
+          if C2C.atom_literal id = C2C.String_literal
           then fprintf p "\"%s\"" (string_of_init (chop_last_nul il))
           else print_composite_init p il
       end;
