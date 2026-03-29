@@ -609,7 +609,7 @@ Qed.
 Definition truncate_aux t k :=
   let '(m, e, l) := t in
   let p := Zpower beta k in
-  (Z.div m p, (e + k)%Z, new_location p (Zmod m p) l).
+  (Z.div m p, (e + k)%Z, new_location p (Z.modulo m p) l).
 
 Theorem truncate_aux_comp :
   forall t k1 k2,
@@ -1143,7 +1143,7 @@ Definition truncate_FIX t :=
   let k := (emin - e)%Z in
   if Zlt_bool 0 k then
     let p := Zpower beta k in
-    (Z.div m p, (e + k)%Z, new_location p (Zmod m p) l)
+    (Z.div m p, (e + k)%Z, new_location p (Z.modulo m p) l)
   else t.
 
 Theorem truncate_FIX_correct :

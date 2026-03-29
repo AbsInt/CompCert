@@ -443,11 +443,11 @@ apply trans_eq with (negb (Z.even (Fnum ff))).
 rewrite K3; easy.
 apply sym_eq.
 generalize (DN_UP_parity_generic beta fexp).
-unfold DN_UP_parity_prop; intros T; apply (T x); clear T; try assumption...
-rewrite <- K1; apply Rnd_DN_pt_unique with (generic_format beta fexp) x; try easy...
-now apply round_DN_pt...
-rewrite <- L1; apply Rnd_UP_pt_unique with (generic_format beta fexp) x; try easy...
-now apply round_UP_pt...
+unfold DN_UP_parity_prop; intros T; apply (T x); clear T; try assumption.
+rewrite <- K1; apply Rnd_DN_pt_unique with (generic_format beta fexp) x; try easy.
+now apply round_DN_pt.
+rewrite <- L1; apply Rnd_UP_pt_unique with (generic_format beta fexp) x; try easy.
+now apply round_UP_pt.
 (* *)
 destruct H1' as (ff,(K1,(K2,K3))).
 destruct H2' as (gg,(L1,(L2,L3))).
@@ -457,11 +457,11 @@ apply trans_eq with (negb (Z.even (Fnum gg))).
 rewrite L3; easy.
 apply sym_eq.
 generalize (DN_UP_parity_generic beta fexp).
-unfold DN_UP_parity_prop; intros T; apply (T x); clear T; try assumption...
-rewrite <- L1; apply Rnd_DN_pt_unique with (generic_format beta fexp) x; try easy...
-now apply round_DN_pt...
-rewrite <- K1; apply Rnd_UP_pt_unique with (generic_format beta fexp) x; try easy...
-now apply round_UP_pt...
+unfold DN_UP_parity_prop; intros T; apply (T x); clear T; try assumption.
+rewrite <- L1; apply Rnd_DN_pt_unique with (generic_format beta fexp) x; try easy.
+now apply round_DN_pt.
+rewrite <- K1; apply Rnd_UP_pt_unique with (generic_format beta fexp) x; try easy.
+now apply round_UP_pt.
 apply Rnd_UP_pt_unique with format x; assumption.
 Qed.
 

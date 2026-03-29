@@ -91,7 +91,7 @@ assert (Hx2 : x - round beta fexp1 Zfloor x
 set (x'' := round beta fexp2 (Znearest choice2) x).
 assert (Hr1 : Rabs (x'' - x) <= / 2 * bpow (fexp2 (mag x))).
 apply Rle_trans with (/ 2 * ulp beta fexp2 x).
-now unfold x''; apply error_le_half_ulp...
+now unfold x''; apply error_le_half_ulp.
 rewrite ulp_neq_0;[now right|now apply Rgt_not_eq].
 assert (Pxx' : 0 <= x - x').
 { apply Rle_0_minus.
@@ -189,7 +189,7 @@ assert (Pxx' : 0 <= x - x').
   apply round_DN_pt.
   exact Vfexp1. }
 assert (x < bpow (mag x) - / 2 * bpow (fexp2 (mag x)));
-  [|apply round_round_lt_mid_further_place'; try assumption]...
+  [|apply round_round_lt_mid_further_place'; try assumption].
 2: rewrite ulp_neq_0;[assumption|now apply Rgt_not_eq].
 destruct (Req_dec x' 0) as [Zx'|Nzx'].
 - (* x' = 0 *)
@@ -348,7 +348,7 @@ set (x'' := round beta fexp2 (Znearest choice2) x).
 intros Hx1 Hx2.
 assert (Hr1 : Rabs (x'' - x) <= / 2 * bpow (fexp2 (mag x))).
   apply Rle_trans with (/2* ulp beta fexp2 x).
-  now unfold x''; apply error_le_half_ulp...
+  now unfold x''; apply error_le_half_ulp.
   rewrite ulp_neq_0;[now right|now apply Rgt_not_eq].
 assert (Px'x : 0 <= x' - x).
 { apply Rle_0_minus.

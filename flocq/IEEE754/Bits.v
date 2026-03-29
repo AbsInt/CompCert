@@ -77,7 +77,7 @@ Qed.
 Definition split_bits x :=
   let mm := Zpower 2 mw in
   let em := Zpower 2 ew in
-  (Zle_bool (mm * em) x, Zmod x mm, Zmod (Z.div x mm) em)%Z.
+  (Zle_bool (mm * em) x, Z.modulo x mm, Z.modulo (Z.div x mm) em)%Z.
 
 Theorem split_join_bits :
   forall s m e,

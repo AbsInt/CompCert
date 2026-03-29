@@ -626,7 +626,7 @@ Theorem inbetween_float_new_location :
   forall x m e l k,
   (0 < k)%Z ->
   inbetween_float m e x l ->
-  inbetween_float (Z.div m (Zpower beta k)) (e + k) x (new_location (Zpower beta k) (Zmod m (Zpower beta k)) l).
+  inbetween_float (Z.div m (Zpower beta k)) (e + k) x (new_location (Zpower beta k) (Z.modulo m (Zpower beta k)) l).
 Proof.
 intros x m e l k Hk Hx.
 unfold inbetween_float in *.
@@ -657,7 +657,7 @@ Qed.
 Theorem inbetween_float_new_location_single :
   forall x m e l,
   inbetween_float m e x l ->
-  inbetween_float (Z.div m beta) (e + 1) x (new_location beta (Zmod m beta) l).
+  inbetween_float (Z.div m beta) (e + 1) x (new_location beta (Z.modulo m beta) l).
 Proof.
 intros x m e l Hx.
 replace (radix_val beta) with (Zpower beta 1).

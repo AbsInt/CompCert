@@ -324,7 +324,7 @@ Section Div_Mod.
 
 Theorem Zmod_mod_mult :
   forall n a b, (0 < a)%Z -> (0 <= b)%Z ->
-  Zmod (Zmod n (a * b)) b = Zmod n b.
+  Z.modulo (Z.modulo n (a * b)) b = Z.modulo n b.
 Proof.
   intros n a b Ha Hb. destruct (Zle_lt_or_eq _ _ Hb) as [H'b|H'b].
   - rewrite (Z.mul_comm a b), Z.rem_mul_r, Z.add_mod, Z.mul_mod, Z.mod_same,
@@ -358,13 +358,13 @@ Qed.
 
 Theorem Zdiv_mod_mult :
   forall n a b, (0 <= a)%Z -> (0 <= b)%Z ->
-  (Z.div (Zmod n (a * b)) a) = Zmod (Z.div n a) b.
+  (Z.div (Z.modulo n (a * b)) a) = Z.modulo (Z.div n a) b.
 Proof.
 intros n a b Ha Hb.
 destruct (Zle_lt_or_eq _ _ Ha) as [Ha'|<-].
 - destruct (Zle_lt_or_eq _ _ Hb) as [Hb'|<-].
   + rewrite Z.rem_mul_r, Z.add_comm, Z.mul_comm, Z.div_add_l by lia.
-    rewrite (Zdiv_small (Zmod n a)).
+    rewrite (Zdiv_small (Z.modulo n a)).
     apply Z.add_0_r.
     now apply Z.mod_pos_bound.
   + now rewrite Z.mul_0_r, !Zmod_0_r, ?Zdiv_0_l.
@@ -852,10 +852,10 @@ Section faster_div.
 
 Lemma Zdiv_eucl_unique :
   forall a b,
-  Z.div_eucl a b = (Z.div a b, Zmod a b).
+  Z.div_eucl a b = (Z.div a b, Z.modulo a b).
 Proof.
 intros a b.
-unfold Z.div, Zmod.
+unfold Z.div, Z.modulo.
 now case Z.div_eucl.
 Qed.
 
