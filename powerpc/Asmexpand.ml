@@ -867,7 +867,7 @@ module BInfo: BRANCH_INFORMATION = struct
   let need_relaxation ~map pc instr =
     match instr with
     | Pbf(_, lbl) | Pbt(_, lbl) ->
-        let displ = pc + 4 - map lbl in
+        let displ = map lbl - pc in
         displ < -0x8000 || displ >= 0x8000
     | _ ->
         false

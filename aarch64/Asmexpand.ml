@@ -440,7 +440,7 @@ module BInfo: BRANCH_INFORMATION = struct
     | _ -> 4
 
   let branch_overflow ~map pc lbl range =
-    let displ = pc + 4 - map lbl in
+    let displ = map lbl - pc in
     displ < -range || displ >= range
 
   let need_relaxation ~map pc instr =
