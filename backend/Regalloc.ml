@@ -85,11 +85,7 @@ let rec constrain_regs vl cl =
 let move v1 v2 k =
   if v1 = v2 then
     k
-  else if XTL.is_stack_reg v1 then begin
-    let t = new_temp (typeof v2) in Xmove(v1, t) :: Xmove(t, v2) :: k
-  end else if XTL.is_stack_reg v2 then begin
-    let t = new_temp (typeof v1) in Xmove(v1, t) :: Xmove(t, v2) :: k
-  end else
+  else
     Xmove(v1, v2) :: k
 
 let rec movelist vl1 vl2 k =
@@ -355,7 +351,7 @@ let rec vset_removeres r after =
 let live_before instr after =
   match instr with
   | Xmove(src, dst) | Xspill(src, dst) | Xreload(src, dst) ->
-      if VSet.mem dst after || XTL.is_stack_reg src
+      if VSet.mem dst after
       then VSet.add src (VSet.remove dst after)
       else after
   | Xparmove(srcs, dsts, itmp, ftmp) ->
@@ -432,7 +428,7 @@ let rec dce_parmove srcs dsts after =
   | [], [] -> [], []
   | src1 :: srcs, dst1 :: dsts ->
       let (srcs', dsts') = dce_parmove srcs dsts after in
-      if VSet.mem dst1 after || XTL.is_stack_reg src1
+      if VSet.mem dst1 after
       then (src1 :: srcs', dst1 :: dsts')
       else (srcs', dsts')
   | _, _ -> assert false
@@ -446,7 +442,7 @@ let rec keep_builtin_arg after = function
 let dce_instr instr after k =
   match instr with
   | Xmove(src, dst) ->
-      if VSet.mem dst after || XTL.is_stack_reg src
+      if VSet.mem dst after
       then instr :: k
       else k
   | Xparmove(srcs, dsts, itmp, ftmp) ->
@@ -521,23 +517,9 @@ let spill_costs f =
   let charge_ros amount ros =
     match ros with Coq_inl v -> charge amount 1 v | Coq_inr id -> () in
 
-  let force_stack_allocation v =
-    match v with
-    | L l -> ()
-    | V(r, ty) ->
-        let st = get_stats r in
-        assert (st.cost < max_int);
-        st.cost <- (-1) in
-
   let charge_instr = function
     | Xmove(src, dst) ->
-        if XTL.is_stack_reg src then
-          force_stack_allocation dst
-        else if XTL.is_stack_reg dst then
-          force_stack_allocation src
-        else begin
-          charge 1 1 src; charge 1 1 dst
-        end
+        charge 1 1 src; charge 1 1 dst
     | Xreload(src, dst) ->
         charge 1 1 src; charge max_int 1 dst
         (* dest must not be spilled! *)

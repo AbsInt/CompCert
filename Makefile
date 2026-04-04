@@ -22,13 +22,7 @@ BUILDNR ?= $(buildnr)
 TAG ?= $(tag)
 BRANCH ?= $(branch)
 
-ifeq ($(wildcard $(ARCH)_$(BITSIZE)),)
-ARCHDIRS=$(ARCH)
-else
-ARCHDIRS=$(ARCH)_$(BITSIZE) $(ARCH)
-endif
-
-DIRS := lib common $(ARCHDIRS) backend cfrontend driver cparser
+DIRS := lib common $(ARCH) backend cfrontend driver cparser
 
 ifeq ($(CLIGHTGEN),true)
 DIRS += export

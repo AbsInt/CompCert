@@ -69,12 +69,6 @@ let rec vlocpairs = function
   | One l :: ll -> L l :: vlocpairs ll
   | Twolong(l1, l2) :: ll -> L l1 :: L l2 :: vlocpairs ll
 
-(* Tests over variables *)
-
-let is_stack_reg = function
-  | L(R r) -> Machregs.is_stack_reg r
-  | _      -> false
-
 (* Sets of variables *)
 
 module VSet = Set.Make(struct type t = var let compare = compare end)

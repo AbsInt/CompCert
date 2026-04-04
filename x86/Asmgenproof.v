@@ -139,22 +139,6 @@ Proof.
 Qed.
 Hint Resolve mk_shrxlimm_label: labels.
 
-Remark mk_intconv_label:
-  forall f r1 r2 k c, mk_intconv f r1 r2 k = OK c ->
-  (forall r r', nolabel (f r r')) ->
-  tail_nolabel k c.
-Proof.
-  unfold mk_intconv; intros. TailNoLabel.
-Qed.
-Hint Resolve mk_intconv_label: labels.
-
-Remark mk_storebyte_label:
-  forall addr r k c, mk_storebyte addr r k = OK c -> tail_nolabel k c.
-Proof.
-  unfold mk_storebyte; intros. TailNoLabel.
-Qed.
-Hint Resolve mk_storebyte_label: labels.
-
 Remark loadind_label:
   forall base ofs ty dst k c,
   loadind base ofs ty dst k = OK c ->
@@ -171,20 +155,11 @@ Proof.
   unfold storeind; intros. destruct ty; try discriminate; destruct (preg_of src); TailNoLabel.
 Qed.
 
-Remark mk_setcc_base_label:
-  forall xc rd k,
-  tail_nolabel k (mk_setcc_base xc rd k).
-Proof.
-  intros. destruct xc; simpl; destruct (ireg_eq rd RAX); TailNoLabel.
-Qed.
-
 Remark mk_setcc_label:
   forall xc rd k,
   tail_nolabel k (mk_setcc xc rd k).
 Proof.
-  intros. unfold mk_setcc. destruct (Archi.ptr64 || low_ireg rd).
-  apply mk_setcc_base_label.
-  eapply tail_nolabel_trans. apply mk_setcc_base_label. TailNoLabel.
+  intros. destruct xc; simpl; destruct (ireg_eq rd RAX); TailNoLabel.
 Qed.
 
 Remark mk_jcc_label:
@@ -857,7 +832,7 @@ Transparent destroyed_by_jumptable.
   apply agree_nextinstr. eapply agree_change_sp; eauto.
 Transparent destroyed_at_function_entry.
   apply agree_undef_regs with rs0; eauto.
-  simpl; intros. apply Pregmap.gso; auto with asmgen. tauto.
+  simpl; intros. apply Pregmap.gso; auto with asmgen.
   congruence.
   intros. Simplifs. eapply agree_sp; eauto.
 
