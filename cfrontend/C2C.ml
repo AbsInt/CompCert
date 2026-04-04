@@ -32,6 +32,11 @@ type inline_status =
   | Noinline     (* The atom is declared with the noinline attribute *)
   | Inline       (* The atom is declared inline *)
 
+type literal_status =
+  | No_literal
+  | String_literal
+  | Wide_string_literal
+
 type atom_info =
   { a_storage: C.storage;              (* storage class *)
     a_defined: bool;                   (* defined in the current comp. unit? *)
@@ -41,6 +46,7 @@ type atom_info =
       (* 1 section for data, 3 sections (code/lit/jumptbl) for functions *)
     a_access: Sections.access_mode;    (* access mode, e.g. small data area *)
     a_inline: inline_status;           (* function declared inline? *)
+    a_literal: literal_status;         (* is this a string literal? *)
     a_loc: location                    (* source location *)
 }
 
@@ -137,6 +143,12 @@ let atom_location a =
     (Hashtbl.find decl_atom a).a_loc
   with Not_found ->
     Cutil.no_loc
+
+let atom_literal a =
+  try
+    (Hashtbl.find decl_atom a).a_literal
+  with Not_found ->
+    No_literal
 
 (** The current environment of composite definitions *)
 
@@ -594,6 +606,14 @@ let is_int64 env ty =
 (** String literals *)
 
 let stringNum = ref 0   (* number of next global for string literals *)
+
+let rec gensym_string_literal () =
+  incr stringNum;
+  let name = Printf.sprintf "__stringlit_%d" !stringNum in
+  if Hashtbl.mem atom_of_string name
+  then gensym_string_literal ()
+  else name
+
 let stringTable : (string, AST.ident) Hashtbl.t = Hashtbl.create 47
 let wstringTable : (int64 list * ikind, AST.ident) Hashtbl.t = Hashtbl.create 47
 
@@ -603,8 +623,7 @@ let name_for_string_literal s =
   try
     Hashtbl.find stringTable s
   with Not_found ->
-    incr stringNum;
-    let name = Printf.sprintf "__stringlit_%d" !stringNum in
+    let name = gensym_string_literal () in
     let id = intern_string name in
     let mergeable = if is_C_string s then 1 else 0 in
     Hashtbl.add decl_atom id
@@ -615,6 +634,7 @@ let name_for_string_literal s =
         a_sections = [Sections.for_stringlit mergeable];
         a_access = Sections.Access_default;
         a_inline = No_specifier;
+        a_literal = String_literal;
         a_loc = Cutil.no_loc };
     Hashtbl.add stringTable s id;
     id
@@ -638,8 +658,7 @@ let name_for_wide_string_literal s ik =
   try
     Hashtbl.find wstringTable (s, ik)
   with Not_found ->
-    incr stringNum;
-    let name = Printf.sprintf "__stringlit_%d" !stringNum in
+    let name = gensym_string_literal () in
     let id = intern_string name in
     let wchar_size = Cutil.sizeof_ikind ik in
     let mergeable = if is_C_wide_string s then wchar_size else 0 in
@@ -652,6 +671,7 @@ let name_for_wide_string_literal s ik =
         a_sections = [Sections.for_stringlit mergeable];
         a_access = Sections.Access_default;
         a_inline = No_specifier;
+        a_literal = Wide_string_literal;
         a_loc = Cutil.no_loc };
     Hashtbl.add wstringTable (s, ik) id;
     id
@@ -1185,6 +1205,7 @@ let convertFundef loc env fd =
       a_sections = Sections.for_function env loc id' fd.fd_attrib;
       a_access = Sections.Access_default;
       a_inline = inline;
+      a_literal = No_literal;
       a_loc = loc };
   (id',  AST.Gfun(Ctypes.Internal
           {fn_return = ret;
@@ -1276,6 +1297,7 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
       a_sections = [section];
       a_access = access;
       a_inline = No_specifier;
+      a_literal = No_literal;
       a_loc = loc };
   let volatile = List.mem C.AVolatile attr in
   let readonly = List.mem C.AConst attr && not volatile in
