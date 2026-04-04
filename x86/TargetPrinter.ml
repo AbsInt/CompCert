@@ -183,7 +183,23 @@ module ELF_System : SYSTEM =
 
     let print_var_info = elf_print_var_info
 
-    let print_epilogue _ = ()
+    let print_epilogue oc =
+      if !Clflags.option_fcf_protection then begin
+        output_string oc
+{|	.section        .note.gnu.property,"a"
+	.align	8
+	.long	4
+	.long	4f - 1f
+	.long	5
+	.string	"GNU"
+1:	.align	8
+	.long	0xc0000002
+	.long	3f - 2f
+2:	.long	0x3
+3:	.align	8
+4:
+|}
+      end
 
     let print_comm_decl oc name sz al =
       fprintf oc "	.comm	%a, %s, %d\n" symbol name (Z.to_string sz) al
@@ -754,7 +770,9 @@ module Target(System: SYSTEM):TARGET =
             fprintf oc "	leaq	%a(%%rip), %a\n" label l ireg tmp1;
             fprintf oc "	movslq	(%a, %a, 4), %a\n" ireg tmp1 ireg r ireg tmp2;
             fprintf oc "	addq	%a, %a\n" ireg tmp2 ireg tmp1;
-            fprintf oc "	jmp	*%a\n" ireg tmp1
+            fprintf oc "	%sjmp	*%a\n"
+              (if !Clflags.option_fcf_protection then "notrack " else "")
+              ireg tmp1
           end else begin
             fprintf oc "	jmp	*%a(, %a, 4)\n" label l ireg r
           end
@@ -911,6 +929,8 @@ module Target(System: SYSTEM):TARGET =
 
     let print_instructions oc fn =
       current_function_sig := fn.fn_sig;
+      if !Clflags.option_fcf_protection then
+        fprintf oc "	endbr64\n";
       List.iter (print_instruction oc) fn.fn_code
 
     let print_optional_fun_info _ = ()
