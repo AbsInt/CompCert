@@ -19,7 +19,7 @@ jobs:
       opamroot: /home/rocq/.opam
       configopts: -ignore-coq-version
     container:
-      image: rocq/rocq-prover:latest
+      image: rocq/rocq-prover:9.1.1
       options: --user root
     steps:
       - name: Checkout
