@@ -127,13 +127,11 @@ module Printer(Target:TARGET) =
           symbol_offset (symb, ofs)
 
 
-    let print_init_data oc name id =
-      if Str.string_match PrintCsyntax.re_string_literal (extern_atom name) 0
-          && List.for_all (function Init_int8 _ -> true | _ -> false) id
-      then
-        fprintf oc "	.ascii	\"%s\"\n" (PrintCsyntax.string_of_init id)
+    let print_init_data oc name il =
+      if C2C.atom_literal name = C2C.String_literal then
+        fprintf oc "	.ascii	\"%s\"\n" (PrintCsyntax.string_of_init il)
       else
-        List.iter (print_init oc) id
+        List.iter (print_init oc) il
 
     let print_var oc name v =
       match v.gvar_init with
