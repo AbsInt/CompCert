@@ -1270,7 +1270,8 @@ let convertGlobvar loc env (sto, id, ty, optinit) =
   Debug.atom_global id id';
   let ty' = convertTyp env ty in
   let sz = Ctypes.sizeof !comp_env ty' in
-  let al = Ctypes.alignof !comp_env ty' in
+  let al =
+    Z.max (Ctypes.alignof !comp_env ty') (Memdata.min_safe_alignment sz) in
   let attr = Cutil.attributes_of_type env ty in
   let init' =
     match optinit with
