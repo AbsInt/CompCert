@@ -13,7 +13,7 @@
 (** Translation from Csharpminor to Cminor. *)
 
 From Coq Require Import FSets FSetAVL Orders Mergesort.
-Require Import Coqlib Maps Ordered Errors Integers Floats.
+Require Import Coqlib Maps Ordered Errors Integers Floats Memory.
 Require Import AST Linking.
 Require Import Csharpminor Cminor.
 
@@ -216,16 +216,11 @@ with transl_lblstmt (cenv: compilenv) (xenv: exit_env) (ls: Csharpminor.lbl_stmt
   allocated a slot in the Cminor stack data.  Sufficient padding is
   inserted to ensure adequate alignment of addresses. *)
 
-Definition block_alignment (sz: Z) : Z :=
-  if zlt sz 2 then 1
-  else if zlt sz 4 then 2
-  else if zlt sz 8 then 4 else 8.
-
 Definition assign_variable
     (cenv_stacksize: compilenv * Z) (id_sz: ident * Z) : compilenv * Z :=
   let (id, sz) := id_sz in
   let (cenv, stacksize) := cenv_stacksize in
-  let ofs := align stacksize (block_alignment sz) in
+  let ofs := align stacksize (min_safe_alignment sz) in
   (PTree.set id ofs cenv, ofs + Z.max 0 sz).
 
 Definition assign_variables (cenv_stacksize: compilenv * Z) (vars: list (ident * Z)) : compilenv * Z :=

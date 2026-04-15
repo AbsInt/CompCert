@@ -12,7 +12,7 @@
 
 (** RTL function inlining: relational specification *)
 
-Require Import Coqlib Wfsimpl Maps Errors Integers.
+Require Import Coqlib Wfsimpl Maps Errors Integers Memory.
 Require Import AST Linking.
 Require Import Op Registers RTL.
 Require Import Inlining.
@@ -256,7 +256,7 @@ Definition context_stack_call (ctx1 ctx2: context): Prop :=
   ctx1.(mstk) >= 0 /\ ctx1.(dstk) + ctx1.(mstk) <= ctx2.(dstk).
 
 Definition context_stack_tailcall (ctx1: context) (f: function) (ctx2: context) : Prop :=
-  ctx2.(dstk) = align ctx1.(dstk) (min_alignment f.(fn_stacksize)).
+  ctx2.(dstk) = align ctx1.(dstk) (min_safe_alignment f.(fn_stacksize)).
 
 Section INLINING_BODY_SPEC.
 
@@ -332,7 +332,7 @@ with tr_funbody: context -> function -> code -> Prop :=
       (forall r, In r f.(fn_params) -> Ple r ctx.(mreg)) ->
       (forall pc i, f.(fn_code)!pc = Some i -> tr_instr ctx pc i c) ->
       ctx.(mstk) = Z.max f.(fn_stacksize) 0 ->
-      (min_alignment f.(fn_stacksize) | ctx.(dstk)) ->
+      (min_safe_alignment f.(fn_stacksize) | ctx.(dstk)) ->
       ctx.(dstk) >= 0 -> ctx.(dstk) + ctx.(mstk) <= stacksize ->
       tr_funbody ctx f c.
 
@@ -454,18 +454,11 @@ Hypothesis rec_spec:
   Ple (Pos.add ctx.(dreg) ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 ->
   ctx.(mstk) = Z.max (fn_stacksize f) 0 ->
-  (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
+  (min_safe_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
   (forall pc, Ple ctx.(dpc) pc -> Plt pc s'.(st_nextnode) -> c!pc = s'.(st_code)!pc) ->
   tr_funbody ctx f c.
-
-Remark min_alignment_pos:
-  forall sz, min_alignment sz > 0.
-Proof.
-  intros; unfold min_alignment.
-  destruct (zle sz 1). lia. destruct (zle sz 2). lia. destruct (zle sz 4); lia.
-Qed.
 
 Ltac inv_incr :=
   match goal with
@@ -508,14 +501,14 @@ Proof.
     simpl. subst s2; simpl in *; extlia.
     simpl. subst s3; simpl in *; extlia.
     simpl. extlia.
-    simpl. apply align_divides. apply min_alignment_pos.
-    assert (dstk ctx + mstk ctx <= dstk ctx'). simpl. apply align_le. apply min_alignment_pos. lia.
+    simpl. apply align_divides. apply min_safe_alignment_pos.
+    assert (dstk ctx + mstk ctx <= dstk ctx'). simpl. apply align_le. apply min_safe_alignment_pos. lia.
     lia.
     intros. simpl in H. rewrite S1.
     transitivity (s1.(st_code)!pc0). eapply set_instr_other; eauto. unfold node in *; extlia.
     eapply add_moves_unchanged; eauto. unfold node in *; extlia. extlia.
   red; simpl. subst s2; simpl in *. extlia.
-  red; simpl. split. auto. apply align_le. apply min_alignment_pos.
+  red; simpl. split. auto. apply align_le. apply min_safe_alignment_pos.
 (* tailcall *)
   destruct (can_inline fe s1) as [|id f P Q].
   (* not inlined *)
@@ -538,8 +531,8 @@ Proof.
     simpl. subst s3; simpl in *. subst s2; simpl in *. extlia.
     simpl. subst s3; simpl in *; extlia.
     simpl. extlia.
-    simpl. apply align_divides. apply min_alignment_pos.
-    assert (dstk ctx <= dstk ctx'). simpl. apply align_le. apply min_alignment_pos. lia.
+    simpl. apply align_divides. apply min_safe_alignment_pos.
+    assert (dstk ctx <= dstk ctx'). simpl. apply align_le. apply min_safe_alignment_pos. lia.
     lia.
     intros. simpl in H. rewrite S1.
     transitivity (s1.(st_code))!pc0. eapply set_instr_other; eauto. unfold node in *; extlia.
@@ -612,7 +605,7 @@ Lemma expand_cfg_rec_spec:
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 ->
   ctx.(mstk) = Z.max (fn_stacksize f) 0 ->
-  (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
+  (min_safe_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
   (forall pc', Ple ctx.(dpc) pc' -> Plt pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->
@@ -665,7 +658,7 @@ Lemma expand_cfg_spec:
   Ple (ctx.(dreg) + ctx.(mreg)) s.(st_nextreg) ->
   ctx.(mstk) >= 0 ->
   ctx.(mstk) = Z.max (fn_stacksize f) 0 ->
-  (min_alignment (fn_stacksize f) | ctx.(dstk)) ->
+  (min_safe_alignment (fn_stacksize f) | ctx.(dstk)) ->
   ctx.(dstk) >= 0 ->
   s'.(st_stksize) <= stacksize ->
   (forall pc', Ple ctx.(dpc) pc' -> Plt pc' s'.(st_nextnode) -> c!pc' = s'.(st_code)!pc') ->

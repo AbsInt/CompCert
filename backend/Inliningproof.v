@@ -748,30 +748,6 @@ Proof.
   intros. eapply Mem.perm_free_3; eauto.
 Qed.
 
-Lemma min_alignment_sound:
-  forall sz n, (min_alignment sz | n) -> Mem.inj_offset_aligned n sz.
-Proof.
-  intros; red; intros. unfold min_alignment in H.
-  assert (2 <= sz -> (2 | n)). intros.
-    destruct (zle sz 1). extlia.
-    destruct (zle sz 2). auto.
-    destruct (zle sz 4). apply Z.divide_trans with 4; auto. exists 2; auto.
-    apply Z.divide_trans with 8; auto. exists 4; auto.
-  assert (4 <= sz -> (4 | n)). intros.
-    destruct (zle sz 1). extlia.
-    destruct (zle sz 2). extlia.
-    destruct (zle sz 4). auto.
-    apply Z.divide_trans with 8; auto. exists 2; auto.
-  assert (8 <= sz -> (8 | n)). intros.
-    destruct (zle sz 1). extlia.
-    destruct (zle sz 2). extlia.
-    destruct (zle sz 4). extlia.
-    auto.
-  destruct chunk; simpl in *; auto using Z.divide_1_l.
-  apply H2; lia.
-  apply H2; lia.
-Qed.
-
 (** Preservation by external calls *)
 
 Section EXTCALL.
@@ -843,9 +819,9 @@ Proof.
   intros. inv H.
   (* base *)
   eapply match_stacks_inside_base; eauto. congruence.
-  rewrite H1. rewrite DSTK. apply align_unchanged. apply min_alignment_pos. apply Z.divide_0_r.
+  rewrite H1. rewrite DSTK. apply align_unchanged. apply min_safe_alignment_pos. apply Z.divide_0_r.
   (* inlined *)
-  assert (dstk ctx <= dstk ctx'). rewrite H1. apply align_le. apply min_alignment_pos.
+  assert (dstk ctx <= dstk ctx'). rewrite H1. apply align_le. apply min_safe_alignment_pos.
   eapply match_stacks_inside_inlined; eauto.
   red; intros. destruct (zlt ofs (dstk ctx)). apply PAD; lia. apply H3. inv H4. extlia.
   congruence.
@@ -1071,7 +1047,7 @@ Proof.
   apply agree_val_regs_gen; auto.
   eapply Mem.free_left_inject; eauto.
   red; intros; apply PRIV'.
-    assert (dstk ctx <= dstk ctx'). red in H14; rewrite H14. apply align_le. apply min_alignment_pos.
+    assert (dstk ctx <= dstk ctx'). red in H14; rewrite H14. apply align_le. apply min_safe_alignment_pos.
     lia.
 
 - (* builtin *)
@@ -1210,7 +1186,7 @@ Proof.
     eapply range_private_perms; eauto. extlia.
     (* offset is aligned *)
     replace (fn_stacksize f - 0) with (fn_stacksize f) by lia.
-    inv FB. apply min_alignment_sound; auto.
+    inv FB. red; intros. eapply Z.divide_trans; eauto. apply min_safe_alignment_sound; auto.
     (* nobody maps to (sp, dstk ctx...) *)
     intros. exploit (PRIV (ofs + delta')); eauto. extlia.
     intros [A B]. eelim B; eauto.
