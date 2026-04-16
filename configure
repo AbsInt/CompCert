@@ -533,7 +533,7 @@ fi
 missingtools=false
 
 echo "Testing Coq... " | tr -d '\n'
-coq_ver=$(${COQBIN}coqc --print-version 2>/dev/null | tr -d '\r' | cut -d' ' -f1)
+coq_ver=$("${COQBIN}"coqc --print-version 2>/dev/null | tr -d '\r' | cut -d' ' -f1)
 case "$coq_ver" in
   8.15.0|8.15.1|8.15.2|8.16.0|8.16.1|8.17.0|8.17.1|8.18.0|8.19.0|8.19.1|8.19.2|8.20.0|8.20.1|9.0.0|9.1.0|9.1.1)
         echo "version $coq_ver -- good!";;
@@ -547,7 +547,7 @@ case "$coq_ver" in
         fi;;
   "")
         echo "NOT FOUND"
-        rocq_ver=$(${COQBIN}rocq --print-version 2>/dev/null | tr -d '\r' | cut -d' ' -f1)
+        rocq_ver=$("${COQBIN}"rocq --print-version 2>/dev/null | tr -d '\r' | cut -d' ' -f1)
         case "$rocq_ver" in
             "") echo "Error: make sure Coq is installed.";;
              *) echo "Rocq prover version $rocq_ver found."
@@ -557,7 +557,7 @@ case "$coq_ver" in
 esac
 
 echo "Testing OCaml... " | tr -d '\n'
-ocaml_ver=`ocamlc -version 2>/dev/null | tr -d '\r'`
+ocaml_ver=$(ocamlc -version 2>/dev/null | tr -d '\r')
 case "$ocaml_ver" in
   4.0[5-9].*|4.1?.*)
         echo "version $ocaml_ver -- good!";;
@@ -575,7 +575,7 @@ case "$ocaml_ver" in
 esac
 
 echo "Testing OCaml native-code compiler... " | tr -d '\n'
-ocamlopt_ver=`ocamlopt -version 2>/dev/null | tr -d '\r'`
+ocamlopt_ver=$(ocamlopt -version 2>/dev/null | tr -d '\r')
 if test "$ocamlopt_ver" = "$ocaml_ver"; then
   echo "yes"
   ocaml_native_comp=true
@@ -585,7 +585,7 @@ else
 fi
 
 echo "Testing OCaml .opt compilers... " | tr -d '\n'
-ocamlopt_opt_ver=`ocamlopt.opt -version 2>/dev/null | tr -d '\r'`
+ocamlopt_opt_ver=$(ocamlopt.opt -version 2>/dev/null | tr -d '\r')
 if test "$ocamlopt_opt_ver" = "$ocaml_ver"; then
   echo "yes"
   ocaml_opt_comp=true
@@ -596,7 +596,7 @@ fi
 
 MENHIR_REQUIRED=20200624
 echo "Testing Menhir... " | tr -d '\n'
-menhir_ver=`menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p'`
+menhir_ver=$(menhir --version 2>/dev/null | sed -n -e 's/^.*version \([0-9]*\).*$/\1/p')
 case "$menhir_ver" in
   20[0-9][0-9][0-9][0-9][0-9][0-9])
       if test "$menhir_ver" -ge $MENHIR_REQUIRED; then
@@ -625,7 +625,7 @@ esac
 echo "Testing GNU make... " | tr -d '\n'
 make=''
 for mk in make gmake gnumake; do
-  make_ver=`$mk -v 2>/dev/null | tr -d '\r' | head -1 | sed -n -e 's/^GNU Make //p'`
+  make_ver=$($mk -v 2>/dev/null | tr -d '\r' | head -1 | sed -n -e 's/^GNU Make //p')
   case "$make_ver" in
     3.8*|3.9*|[4-9].*)
         echo "version $make_ver (command '$mk') -- good!"
@@ -915,14 +915,14 @@ EOF
 fi
 
 cat <<EOF
-    Man pages installed in........ $(expandprefix $mandir)
+    Man pages installed in........ $(expandprefix "$mandir")
     Standard headers provided..... $has_standard_headers
-    Standard headers installed in. $(expandprefix $libdir)/include
+    Standard headers installed in. $(expandprefix "$libdir")/include
 EOF
 
 if $install_coqdev; then
 cat <<EOF
-    Coq development installed in.. $(expandprefix $coqdevdir)
+    Coq development installed in.. $(expandprefix "$coqdevdir")
 EOF
 else
 cat <<EOF
