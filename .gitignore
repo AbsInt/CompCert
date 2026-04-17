@@ -85,3 +85,5 @@
 .nia.cache
 .nra.cache
 .csdp.cache
+# Build auxiliaries
+/build

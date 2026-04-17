@@ -245,6 +245,12 @@ ifeq ($(INSTALL_COQDEV),true)
 	$(MAKE) compcert.config
 endif
 
+light:
+	@test -f .depend || $(MAKE) depend
+	$(MAKE) proof
+	$(MAKE) extraction
+	$(MAKE) ccomp
+
 proof: $(FILES:.v=.vo)
 
 extraction: extraction/STAMP
@@ -406,6 +412,7 @@ clean:
 	rm -f tools/ndfun tools/modorder tools/*.cm? tools/*.o
 	rm -f $(GENERATED) .depend
 	rm -f .lia.cache
+	rm -rf build
 	$(MAKE) -f Makefile.extr clean
 	$(MAKE) -C runtime clean
 
@@ -429,6 +436,28 @@ print-includes:
 
 CoqProject:
 	@echo $(COQINCLUDES) > _CoqProject
+
+ALL_ARCHES=aarch64 arm ppc rv64 x86_32 x86_64
+ALL_BUILDS=$(patsubst %, build/%, $(ALL_ARCHES))
+
+setup-build: FORCE
+	rm -rf build
+	@if [ ! -d .git ]; then echo "build-setup is only available for git checkouts"; exit 2; fi
+	@for a in $(ALL_ARCHES); do \
+           echo "Setting up build/$$a"; \
+           tools/linkhier build/$$a; \
+           (cd build/$$a && ./configure $$a-linux); \
+         done
+
+$(ALL_BUILDS): FORCE
+	@if [ ! -d $@ ]; then echo "$@ is missing, please run 'make setup-build'"; exit 2; fi
+	@echo "$@ started"; \
+         if output=$$($(MAKE) -C $@ light 2>&1); \
+         then echo "$@ succeeded" ; \
+         else echo "$$output"; echo "$@ FAILED"; exit 2; \
+         fi
+
+build-all: $(ALL_BUILDS)
 
 -include .depend
 

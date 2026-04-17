@@ -1,0 +1,20 @@
+#!/bin/sh
+# Mirror the hierarchy of source files in the directory given as first argument,
+# using fresh directories and symbolic links for files.
+# The source files are those listed by git ls-files.
+
+set -e
+
+case $# in
+    1) dst="$1";;
+    *) echo "Usage: linkhier <destination directory>" 1>&2; exit 2;;
+esac
+
+src=$(pwd)
+files=$(git ls-files --recurse-submodules)
+mkdir -p "$dst"
+cd "$dst"
+mkdir -p $(dirname $files | sort -u)
+for f in $files; do
+  ln -sf "$src/$f" "$f"
+done
