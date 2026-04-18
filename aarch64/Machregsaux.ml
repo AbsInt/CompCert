@@ -13,4 +13,5 @@
 (** Auxiliary functions on machine registers *)
 
 let is_scratch_register s =
-  s = "X16" || s = "x16" || s = "X30" || s = "x30"
+  s = "X16" || s = "x16" || s = "W16" || s = "w16" ||
+  s = "X30" || s = "x30" || s = "W30" || s = "w30"
