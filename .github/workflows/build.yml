@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [aarch64, arm, ppc, riscv, x86_32, x86_64]
+        target: [aarch64, arm, ppc, riscv, x86_64]
     env:
       target: ${{ matrix.target }}
       os: linux

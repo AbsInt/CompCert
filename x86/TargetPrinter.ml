@@ -504,14 +504,6 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	movss	%a, %a\n" addressing a freg rd
       | Pmovss_mf(a, r1) ->
           fprintf oc "	movss	%a, %a\n" freg r1 addressing a
-      | Pfldl_m(a) ->
-          fprintf oc "	fldl	%a\n" addressing a
-      | Pfstpl_m(a) ->
-          fprintf oc "	fstpl	%a\n" addressing a
-      | Pflds_m(a) ->
-          fprintf oc "	flds	%a\n" addressing a
-      | Pfstps_m(a) ->
-          fprintf oc "	fstps	%a\n" addressing a
             (* Moves with conversion *)
       | Pmovb_mr(a, r1) ->
           fprintf oc "	movb	%a, %a\n" ireg8 r1 addressing a

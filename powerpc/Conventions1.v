@@ -303,7 +303,7 @@ Opaque list_nth_z.
   destruct (list_nth_z float_param_regs fr) as [r|] eqn:E; destruct H.
   subst. right. eapply list_nth_z_in; eauto.
   eapply IHtyl; eauto.
-  subst. split. lia. apply Z.divide_1_l.
+  subst. split. lia. apply align_divides; lia.
   eapply Y; eauto. lia.
 - (* long *)
   assert (ofs <= align ofs 2) by (apply align_le; lia).

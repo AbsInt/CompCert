@@ -333,9 +333,9 @@ Fixpoint alignof (env: composite_env) (t: type) : Z :=
       | Tint I16 _ _ => 2
       | Tint I32 _ _ => 4
       | Tint IBool _ _ => 1
-      | Tlong _ _ => Archi.align_int64
+      | Tlong _ _ => 8
       | Tfloat F32 _ => 4
-      | Tfloat F64 _ => Archi.align_float64
+      | Tfloat F64 _ => 8
       | Tpointer _ _ => if Archi.ptr64 then 8 else 4
       | Tarray t' _ _ => alignof env t'
       | Tfunction _ _ _ => 1
@@ -363,10 +363,10 @@ Proof.
     exists 1%nat; auto.
     exists 2%nat; auto.
     exists 0%nat; auto.
-    unfold Archi.align_int64. destruct Archi.ptr64; ((exists 2%nat; reflexivity) || (exists 3%nat; reflexivity)).
+    exists 3%nat; auto.
   destruct f.
     exists 2%nat; auto.
-    unfold Archi.align_float64. destruct Archi.ptr64; ((exists 2%nat; reflexivity) || (exists 3%nat; reflexivity)).
+    exists 3%nat; auto.
   exists (if Archi.ptr64 then 3%nat else 2%nat); destruct Archi.ptr64; auto.
   apply IHt.
   exists 0%nat; auto.
@@ -435,14 +435,8 @@ Fixpoint naturally_aligned (t: type) : Prop :=
 Lemma sizeof_alignof_compat:
   forall env t, naturally_aligned t -> (alignof env t | sizeof env t).
 Proof.
-  induction t; intros [A B]; unfold alignof, align_attr; rewrite A; simpl.
-- apply Z.divide_refl.
-- destruct i; apply Z.divide_refl.
-- exists (8 / Archi.align_int64). unfold Archi.align_int64; destruct Archi.ptr64; reflexivity.
-- destruct f. apply Z.divide_refl. exists (8 / Archi.align_float64). unfold Archi.align_float64; destruct Archi.ptr64; reflexivity.
-- apply Z.divide_refl.
+  induction t; intros [A B]; unfold alignof, align_attr; rewrite A; simpl; auto using Z.divide_refl.
 - apply Z.divide_mul_l; auto.
-- apply Z.divide_refl.
 - destruct (env!i). apply co_sizeof_alignof. apply Z.divide_0_r.
 - destruct (env!i). apply co_sizeof_alignof. apply Z.divide_0_r.
 Qed.
@@ -1004,16 +998,10 @@ Proof.
     rewrite two_power_nat_two_p. rewrite !Nat2Z.inj_succ. f_equal. lia.
     apply Z.divide_refl.
   }
-  induction ty; simpl.
-  apply Z.divide_refl.
-  apply Z.divide_refl.
-  apply Z.divide_refl.
-  apply Z.divide_refl.
-  apply Z.divide_refl.
-  apply Z.divide_mul_l. auto.
-  apply Z.divide_refl.
-  destruct (env!i). apply X. apply Z.divide_0_r.
-  destruct (env!i). apply X. apply Z.divide_0_r.
+  induction ty; simpl; auto using Z.divide_refl.
+- apply Z.divide_mul_l. auto.
+- destruct (env!i). apply X. apply Z.divide_0_r.
+- destruct (env!i). apply X. apply Z.divide_0_r.
 Qed.
 
 (** Type ranks *)
