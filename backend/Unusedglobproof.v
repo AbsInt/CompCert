@@ -836,7 +836,9 @@ Proof.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.
-- simpl in H. exploit Mem.load_inject; eauto. rewrite Z.add_0_r.
+- assert (Val.inject j (Val.offset_ptr (Vptr sp Ptrofs.zero) ofs) (Val.offset_ptr (Vptr sp' Ptrofs.zero) ofs)).
+  { econstructor; eauto. rewrite Ptrofs.add_zero; auto. }
+  exploit Mem.loadv_inject; eauto.
   intros (v' & A & B). exists v'; auto with barg.
 - econstructor; split; eauto with barg. simpl. econstructor; eauto. rewrite Ptrofs.add_zero; auto.
 - assert (Val.inject j (Senv.symbol_address ge id ofs) (Senv.symbol_address tge id ofs)).

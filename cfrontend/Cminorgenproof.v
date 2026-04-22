@@ -143,8 +143,8 @@ Lemma nextblock_storev:
   forall chunk m addr v m',
   Mem.storev chunk m addr v = Some m' -> Mem.nextblock m' = Mem.nextblock m.
 Proof.
-  unfold Mem.storev; intros. destruct addr; try discriminate.
-  eapply Mem.nextblock_store; eauto.
+  intros. destruct addr; try discriminate.
+  eapply Mem.nextblock_store; eauto with mem.
 Qed.
 
 (** * Correspondence between C#minor's and Cminor's environments and memory states *)
@@ -1974,7 +1974,7 @@ Proof.
   left; econstructor; split.
   apply plus_one. econstructor; eauto.
   econstructor; eauto.
-  inv VINJ1; simpl in H1; try discriminate. unfold Mem.storev in STORE'.
+  inv VINJ1; try discriminate. apply Mem.storev_store in H1, STORE'.
   rewrite (Mem.nextblock_store _ _ _ _ _ _ H1).
   rewrite (Mem.nextblock_store _ _ _ _ _ _ STORE').
   eapply match_callstack_invariant with f0 m tm; eauto.

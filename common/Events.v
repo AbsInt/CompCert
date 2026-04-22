@@ -565,7 +565,7 @@ Inductive volatile_load (ge: Senv.t):
                       (Val.load_result chunk v)
   | volatile_load_nonvol: forall chunk m b ofs v,
       Senv.block_is_volatile ge b = false ->
-      Mem.load chunk m b (Ptrofs.unsigned ofs) = Some v ->
+      Mem.loadv chunk m (Vptr b ofs) = Some v ->
       volatile_load ge chunk m b ofs E0 v.
 
 Inductive volatile_store (ge: Senv.t):
@@ -579,7 +579,7 @@ Inductive volatile_store (ge: Senv.t):
                       m
   | volatile_store_nonvol: forall chunk m b ofs v m',
       Senv.block_is_volatile ge b = false ->
-      Mem.store chunk m b (Ptrofs.unsigned ofs) v = Some m' ->
+      Mem.storev chunk m (Vptr b ofs) v = Some m' ->
       volatile_store ge chunk m b ofs v E0 m'.
 
 (** * Semantics of external functions *)
@@ -733,7 +733,7 @@ Lemma volatile_load_extends:
 Proof.
   intros. inv H.
   econstructor; split; eauto. econstructor; eauto.
-  exploit Mem.load_extends; eauto. intros [v' [A B]]. exists v'; split; auto. constructor; auto.
+  exploit Mem.loadv_extends; eauto. intros [v' [A B]]. exists v'; split; auto. constructor; auto.
 Qed.
 
 Lemma volatile_load_inject:
@@ -754,7 +754,7 @@ Proof.
   erewrite D; eauto.
   apply Val.load_result_inject. auto.
 - (* normal load *)
-  exploit Mem.loadv_inject; eauto. simpl; eauto. simpl; intros (v2 & X & Y).
+  exploit Mem.loadv_inject; eauto. intros (v2 & X & Y).
   exists v2; split; auto.
   constructor; auto.
   inv VI. erewrite D; eauto.
@@ -779,7 +779,7 @@ Proof.
   intros; constructor; intros.
 (* well typed *)
 - inv H. inv H0. apply Val.load_result_xtype.
-  eapply Mem.load_xtype; eauto.
+  eapply Mem.load_xtype; eauto with mem.
 (* symbols *)
 - inv H0. constructor. eapply volatile_load_preserved; eauto.
 (* valid blocks *)
@@ -856,8 +856,8 @@ Lemma volatile_store_readonly:
 Proof.
   intros. inv H.
 - apply Mem.unchanged_on_refl.
-- eapply Mem.store_unchanged_on; eauto.
-  exploit Mem.store_valid_access_3; eauto. intros [P Q].
+- eapply Mem.storev_unchanged_on; eauto.
+  exploit Mem.store_valid_access_3; eauto with mem. intros [P Q].
   intros. unfold loc_not_writable. red; intros. elim H2.
   apply Mem.perm_cur_max. apply P. auto.
 Qed.
@@ -876,14 +876,14 @@ Proof.
 - econstructor; split. econstructor; eauto.
   eapply eventval_match_lessdef; eauto. apply Val.load_result_lessdef; auto.
   auto with mem.
-- exploit Mem.store_within_extends; eauto. intros [m2' [A B]].
+- exploit Mem.storev_extends; eauto. intros [m2' [A B]].
   exists m2'; intuition auto with mem.
 + econstructor; eauto.
-+ eapply Mem.store_unchanged_on; eauto.
++ eapply Mem.storev_unchanged_on; eauto.
   unfold loc_out_of_bounds; intros.
   assert (Mem.perm m1 b i Max Nonempty).
   { apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
-    exploit Mem.store_valid_access_3. eexact H3. intros [P Q]. eauto. }
+    exploit Mem.store_valid_access_3. eapply Mem.storev_store. eexact H3. intros [P Q]. eauto. }
   tauto.
 Qed.
 
@@ -911,19 +911,18 @@ Proof.
   intuition auto with mem.
 - (* normal store *)
   inversion AI; subst.
-  assert (Mem.storev chunk m1 (Vptr b ofs) v = Some m2). simpl; auto.
   exploit Mem.storev_mapped_inject; eauto. intros [m2' [A B]].
   exists m2'; intuition auto.
 + constructor; auto. erewrite S; eauto.
-+ eapply Mem.store_unchanged_on; eauto.
++ eapply Mem.storev_unchanged_on; eauto.
   unfold loc_unmapped; intros. inv AI; congruence.
-+ eapply Mem.store_unchanged_on; eauto.
-  unfold loc_out_of_reach; intros. red; intros. simpl in A.
-  assert (EQ: Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta)) = Ptrofs.unsigned ofs + delta)
-  by (eapply Mem.address_inject; eauto with mem).
++ eapply Mem.storev_unchanged_on; eauto.
+  unfold loc_out_of_reach; intros. red; intros.
+  assert (EQ: Ptrofs.unsigned (Ptrofs.add ofs (Ptrofs.repr delta)) = Ptrofs.unsigned ofs + delta).
+  { eapply Mem.address_inject' with (m1 := m1); eauto with mem. }
   rewrite EQ in *.
-  eelim H3; eauto.
-  exploit Mem.store_valid_access_3. eexact H0. intros [X Y].
+  eelim H2; eauto.
+  exploit Mem.store_valid_access_3. eapply Mem.storev_store. eexact H0. intros [X Y].
   apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.
   apply X. lia.
 Qed.

@@ -415,15 +415,14 @@ Qed.
 
 Program Definition contains (chunk: memory_chunk) (b: block) (ofs: Z) (spec: val -> Prop) : massert := {|
   m_pred := fun m =>
-       0 <= ofs <= Ptrofs.max_unsigned
+       0 <= ofs /\ ofs + size_chunk chunk <= Ptrofs.modulus
     /\ Mem.valid_access m chunk b ofs Freeable
     /\ exists v, Mem.load chunk m b ofs = Some v /\ spec v;
   m_footprint := fun b' ofs' => b' = b /\ ofs <= ofs' < ofs + size_chunk chunk
 |}.
 Next Obligation.
-  rename H2 into v. split;[|split].
-- auto.
-- destruct H1; split; auto. red; intros; eapply Mem.perm_unchanged_on; eauto. simpl; auto.
+  rename H3 into v. intuition auto.
+- destruct H2; split; auto. red; intros; eapply Mem.perm_unchanged_on; eauto. simpl; auto.
 - exists v. split; auto. eapply Mem.load_unchanged_on; eauto. simpl; auto.
 Qed.
 Next Obligation.
@@ -435,7 +434,7 @@ Lemma contains_no_overflow:
   m |= contains chunk b ofs spec ->
   0 <= ofs <= Ptrofs.max_unsigned.
 Proof.
-  intros. simpl in H. tauto.
+  intros. destruct H as (A & B & C & D). generalize (size_chunk_pos chunk); unfold Ptrofs.max_unsigned; lia.
 Qed.
 
 Lemma load_rule:
@@ -443,7 +442,7 @@ Lemma load_rule:
   m |= contains chunk b ofs spec ->
   exists v, Mem.load chunk m b ofs = Some v /\ spec v.
 Proof.
-  intros. destruct H as (D & E & v & F & G).
+  intros. destruct H as (D & E & F & v & P & Q).
   exists v; auto.
 Qed.
 
@@ -452,8 +451,11 @@ Lemma loadv_rule:
   m |= contains chunk b ofs spec ->
   exists v, Mem.loadv chunk m (Vptr b (Ptrofs.repr ofs)) = Some v /\ spec v.
 Proof.
-  intros. exploit load_rule; eauto. intros (v & A & B). exists v; split; auto.
-  simpl. rewrite Ptrofs.unsigned_repr; auto. eapply contains_no_overflow; eauto.
+  intros.
+  exploit load_rule; eauto. intros (v & A & B).
+  assert (EQ: Ptrofs.unsigned (Ptrofs.repr ofs) = ofs) by (apply Ptrofs.unsigned_repr; eauto using contains_no_overflow).
+  destruct H as (D & E & F & _).
+  exists v; split; auto. simpl. rewrite zle_true by lia. rewrite EQ; auto.
 Qed.
 
 Lemma store_rule:
@@ -463,7 +465,7 @@ Lemma store_rule:
   exists m',
   Mem.store chunk m b ofs v = Some m' /\ m' |= contains chunk b ofs spec ** P.
 Proof.
-  intros. destruct H as (A & B & C). destruct A as (D & E & v0 & F & G).
+  intros. destruct H as (A & B & C). destruct A as (D & E & E' & v0 & F & G).
   assert (H: Mem.valid_access m chunk b ofs Writable) by eauto with mem.
   destruct (Mem.valid_access_store _ _ _ _ v H) as [m' STORE].
   exists m'; split; auto. simpl. intuition auto.
@@ -481,8 +483,12 @@ Lemma storev_rule:
   exists m',
   Mem.storev chunk m (Vptr b (Ptrofs.repr ofs)) v = Some m' /\ m' |= contains chunk b ofs spec ** P.
 Proof.
-  intros. exploit store_rule; eauto. intros (m' & A & B). exists m'; split; auto.
-  simpl. rewrite Ptrofs.unsigned_repr; auto. eapply contains_no_overflow. eapply sep_pick1; eauto.
+  intros.
+  exploit store_rule; eauto. intros (m' & A & B).
+  assert (EQ: Ptrofs.unsigned (Ptrofs.repr ofs) = ofs).
+  { apply Ptrofs.unsigned_repr. eapply contains_no_overflow. eapply sep_pick1; eauto. }
+  apply sep_pick1 in H. destruct H as (D & E & F & _).
+  exists m'; split; auto. simpl. rewrite zle_true by lia. rewrite EQ; auto.
 Qed.
 
 Lemma range_contains:
@@ -491,11 +497,12 @@ Lemma range_contains:
   (align_chunk chunk | ofs) ->
   m |= contains chunk b ofs (fun v => True) ** P.
 Proof.
-  intros. destruct H as (A & B & C). destruct A as (D & E & F).
+  intros. destruct H as (A & B & C).  destruct A as (D & E & F).
   split; [|split].
 - assert (Mem.valid_access m chunk b ofs Freeable).
   { split; auto. red; auto. }
   split. generalize (size_chunk_pos chunk). unfold Ptrofs.max_unsigned. lia.
+  split. auto.
   split. auto.
 + destruct (Mem.valid_access_load m chunk b ofs) as [v LOAD].
   eauto with mem.
@@ -666,7 +673,7 @@ Proof.
   split; [|split].
 - exact INJ.
 - apply (m_invar P) with m2; auto.
-  eapply Mem.store_unchanged_on; eauto.
+  eapply Mem.storev_unchanged_on; eauto.
   intros; red; intros. eelim C; eauto. simpl.
   exists b1, delta; split; auto. destruct VALID as [V1 V2].
   apply Mem.perm_cur_max. apply Mem.perm_implies with Writable; auto with mem.

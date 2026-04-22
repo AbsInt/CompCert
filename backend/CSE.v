@@ -396,7 +396,7 @@ Definition shift_memcpy_eq (src sz delta: Z) (e: equation) :=
       && zle (i + size_chunk chunk) (src + sz)
       && zeq (Z.modulo delta (align_chunk chunk)) 0
       && zle 0 j
-      && zle j Ptrofs.max_unsigned
+      && zle (j + size_chunk chunk) Ptrofs.modulus
       then Some(Eq l strict (Load chunk (Ainstack (Ptrofs.repr j)) nil (Stk (Ptrofs.repr j))))
       else None
   | _ => None

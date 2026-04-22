@@ -4492,8 +4492,8 @@ Theorem loadv_sound:
   vmatch addr aaddr ->
   vmatch v (loadv chunk rm am aaddr).
 Proof.
-  intros. destruct addr; simpl in H; try discriminate.
-  eapply load_sound; eauto. apply match_aptr_of_aval; auto.
+  intros. destruct addr; try discriminate.
+  eapply load_sound; eauto with mem. apply match_aptr_of_aval; auto.
 Qed.
 
 Theorem store_sound:
@@ -4570,8 +4570,8 @@ Theorem storev_sound:
   vmatch v av ->
   mmatch m' (storev chunk am aaddr av).
 Proof.
-  intros. destruct addr; simpl in H; try discriminate.
-  eapply store_sound; eauto. apply match_aptr_of_aval; auto.
+  intros. destruct addr; try discriminate.
+  eapply store_sound; eauto with mem. apply match_aptr_of_aval; auto.
 Qed.
 
 Theorem loadbytes_sound:

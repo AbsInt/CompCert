@@ -330,7 +330,7 @@ Local Opaque mreg_type.
   simpl in *; InvBooleans.
   econstructor; eauto.
   apply wt_setreg. eapply Val.has_subtype; eauto.
-  destruct a; simpl in H0; try discriminate. eapply Mem.load_type; eauto.
+  destruct a; try discriminate. eapply Mem.load_type; eauto with mem.
   apply wt_undef_regs; auto.
 - (* store *)
   simpl in *; InvBooleans.

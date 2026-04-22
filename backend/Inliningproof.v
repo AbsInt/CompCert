@@ -683,13 +683,13 @@ Qed.
 (** Preservation by a memory store *)
 
 Lemma match_stacks_inside_store:
-  forall F m m' stk stk' f' ctx sp' rs' chunk b ofs v m1 chunk' b' ofs' v' m1',
+  forall F m m' stk stk' f' ctx sp' rs' chunk addr v m1 chunk' addr' v' m1',
   match_stacks_inside F m m' stk stk' f' ctx sp' rs' ->
-  Mem.store chunk m b ofs v = Some m1 ->
-  Mem.store chunk' m' b' ofs' v' = Some m1' ->
+  Mem.storev chunk m addr v = Some m1 ->
+  Mem.storev chunk' m' addr' v' = Some m1' ->
   match_stacks_inside F m1 m1' stk stk' f' ctx sp' rs'.
 Proof.
-  intros.
+  intros. destruct addr; try discriminate. destruct addr'; try discriminate.
   eapply match_stacks_inside_invariant; eauto with mem.
 Qed.
 
@@ -964,15 +964,13 @@ Proof.
     rewrite <- P. apply eval_addressing_preserved. exact symbols_preserved.
   left; econstructor; split.
   eapply plus_one. eapply exec_Istore; eauto.
-  destruct a; simpl in H1; try discriminate.
-  destruct a'; simpl in U; try discriminate.
+  destruct a; try discriminate. 
+  destruct a'; try discriminate.
   econstructor; eauto.
   eapply match_stacks_inside_store; eauto.
-  eapply Mem.store_valid_block_1; eauto.
-  eapply range_private_invariant; eauto.
-  intros; split; auto. eapply Mem.perm_store_2; eauto.
-  intros; eapply Mem.perm_store_1; eauto.
-  intros. eapply SSZ2. eapply Mem.perm_store_2; eauto.
+  eapply Mem.store_valid_block_1; eauto with mem.
+  eapply range_private_invariant; eauto with mem.
+  intros. eapply SSZ2. eapply Mem.perm_store_2; eauto with mem.
 
 - (* call *)
   exploit match_stacks_inside_globalenvs; eauto. intros [bound G].

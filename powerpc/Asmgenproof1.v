@@ -1778,7 +1778,7 @@ Proof.
 - (* Mint8signed *)
   assert (exists v1, Mem.loadv Mint8unsigned m a = Some v1 /\ v = Val.sign_ext 8 v1).
   {
-    destruct a; simpl in *; try discriminate.
+    destruct a; simpl in *; try discriminate. destruct zle; try discriminate.
     rewrite Mem.load_int8_signed_unsigned in H1.
     destruct (Mem.load Mint8unsigned m b (Ptrofs.unsigned i)); simpl in H1; inv H1.
     exists v0; auto.
