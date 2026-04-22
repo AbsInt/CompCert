@@ -616,12 +616,12 @@ Proof.
   intros. unfold filter_after_store in H6; inv H8.
 - constructor. rewrite <- H9. apply op_depends_on_memory_correct; auto.
 - econstructor; eauto. rewrite <- H10.
-  destruct a; simpl in H1; try discriminate.
-  destruct a0; simpl in H10; try discriminate.
-  simpl.
+  destruct a; try discriminate.
+  destruct a0; try discriminate.
+  simpl. destruct zle; auto.
   rewrite negb_false_iff in H6. unfold aaddressing in H6.
   inv H7. rewrite H9 in H14; inv H14.
-  eapply Mem.load_store_other. eauto.
+  eapply Mem.load_store_other. eauto with mem.
   eapply pdisjoint_sound_strong with (bc1 := bc0) (bc2 := bc); eauto.
   apply match_aptr_of_aval. eapply eval_static_addressing_sound; eauto.
   eauto with va.
@@ -678,7 +678,8 @@ Proof.
   red; simpl; intros. auto.
 + destruct H6; eauto with cse. subst eq. apply eq_holds_lessdef with (Val.load_result chunk rs#src).
   * apply load_eval_to with a. rewrite <- Q; auto.
-    destruct a; try discriminate. simpl. eapply Mem.load_store_same; eauto.
+    destruct a; try discriminate. simpl in *. destruct zle; try congruence.
+    eapply Mem.load_store_same; eauto.
   * rewrite B. rewrite R by auto. apply store_normalized_range_sound with bc.
     rewrite <- B. eapply vmatch_ge. apply vincl_ge; eauto. apply H4.
   * destruct a; try discriminate. econstructor; eauto. rewrite <- Q. eassumption.
@@ -702,7 +703,7 @@ Proof.
   intros. unfold filter_after_store in H6; inv H8.
 - constructor. rewrite <- H9. apply op_depends_on_memory_correct; auto.
 - inv H7. rewrite H9 in H15; inv H15.
-  econstructor; eauto. rewrite <- H10. simpl.
+  econstructor; eauto. rewrite <- H10. simpl. destruct zle; auto.
   rewrite negb_false_iff in H6.
   eapply Mem.load_storebytes_other. eauto.
   rewrite H4. rewrite Z2Nat.id by lia.
@@ -768,12 +769,7 @@ Lemma shift_memcpy_eq_wf:
   wf_equation next e'.
 Proof with (try discriminate).
   unfold shift_memcpy_eq; intros.
-  destruct e. destruct r... destruct a...
-  try (rename i into ofs).
-  destruct (zle src (Ptrofs.unsigned ofs) &&
-        zle (Ptrofs.unsigned ofs + size_chunk m) (src + sz) &&
-        zeq (delta mod align_chunk m) 0 && zle 0 (Ptrofs.unsigned ofs + delta) &&
-        zle (Ptrofs.unsigned ofs + delta) Ptrofs.max_unsigned)...
+  destruct e. destruct r... destruct a... destruct andb...
   inv H. destruct H0. split. auto. red; simpl; tauto.
 Qed.
 
@@ -795,30 +791,33 @@ Proof with (try discriminate).
   destruct (zle (i1 + size_chunk chunk) (src + sz))...
   destruct (zeq (delta mod align_chunk chunk) 0)...
   destruct (zle 0 j)...
-  destruct (zle j Ptrofs.max_unsigned)...
+  destruct (zle (j + size_chunk chunk) Ptrofs.modulus)...
+  assert (j <= Ptrofs.max_unsigned) by (generalize (size_chunk_pos chunk); unfold Ptrofs.max_unsigned; lia).
   simpl in H; inv H.
   assert (LD: forall v,
     Mem.loadv chunk m (Vptr sp ofs) = Some v ->
     Mem.loadv chunk m' (Vptr sp (Ptrofs.repr j)) = Some v).
   {
-    simpl; intros. rewrite Ptrofs.unsigned_repr by lia.
+    intros. simpl in H; destruct zle; try discriminate.
+    simpl. rewrite zle_true. rewrite Ptrofs.unsigned_repr by lia.
     unfold j, delta. eapply load_memcpy; eauto.
     apply Zmod_divide; auto. generalize (align_chunk_pos chunk); lia.
+    rewrite Ptrofs.unsigned_repr by lia. auto.
   }
   rename a into ap.
   assert (eval_addressing ge (Vptr sp Ptrofs.zero) (Ainstack (Ptrofs.repr j)) nil = Some (Vptr sp (Ptrofs.repr j))).
   { rewrite eval_addressing_Ainstack. simpl. rewrite Ptrofs.add_zero_l. auto. }
   inv H2.
-+ inv H5. exploit eval_addressing_Ainstack_inv; eauto. intros [E1 E2].
++ inv H6. exploit eval_addressing_Ainstack_inv; eauto. intros [E1 E2].
   simpl in E2; rewrite Ptrofs.add_zero_l in E2. subst a.
   apply eq_holds_strict.
   * econstructor; eauto.
-  * inv H7. econstructor; eauto with va.
-+ inv H6. exploit eval_addressing_Ainstack_inv; eauto. intros [E1 E2].
+  * inv H8. econstructor; eauto with va.
++ inv H7. exploit eval_addressing_Ainstack_inv; eauto. intros [E1 E2].
   simpl in E2; rewrite Ptrofs.add_zero_l in E2. subst a.
   apply eq_holds_lessdef with v; auto.
   * econstructor; eauto.
-  * inv H8. econstructor; eauto with va.
+  * inv H9. econstructor; eauto with va.
 Qed.
 
 Lemma add_memcpy_eqs_charact:

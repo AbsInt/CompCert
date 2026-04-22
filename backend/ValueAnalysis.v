@@ -1176,7 +1176,7 @@ Proof.
   assert (A: pmatch bc b i Ptop).
   { inv H0; eapply pmatch_top'; eauto. }
   inv A.
-  intros. eapply Mem.loadbytes_store_other; eauto. left; congruence.
+  intros. eapply Mem.loadbytes_store_other; eauto with mem. left; congruence.
 Qed.
 
 Lemma sound_stack_storebytes:
@@ -1278,7 +1278,7 @@ Proof.
   eapply sound_succ_state; eauto. simpl; auto.
   unfold transfer; rewrite H. eauto.
   eapply storev_sound; eauto.
-  destruct a; simpl in H1; try discriminate. eapply romatch_store; eauto.
+  destruct a; simpl in H1; try discriminate. eapply romatch_store; eauto with mem.
   eapply sound_stack_storev; eauto.
 
 - (* call *)
@@ -1408,7 +1408,7 @@ Proof.
     exploit loadv_sound; eauto. simpl; eauto. intros V.
     destruct (va_strict tt).
     apply vmatch_lub_l. auto.
-    eapply vnormalize_cast; eauto. eapply vmatch_top; eauto.
+    eapply vnormalize_cast; eauto with mem. eapply vmatch_top; eauto.
 + (* volatile store *)
   inv H0; auto. inv H3; auto. inv H4; auto. inv H1.
   exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H0. intros VM1.
@@ -1422,8 +1422,8 @@ Proof.
     eapply sound_succ_state; eauto. simpl; auto.
     apply set_builtin_res_sound; auto. constructor.
     apply mmatch_lub_r. eapply storev_sound; eauto. auto.
-    eapply romatch_store; eauto.
-    eapply sound_stack_storev; eauto. simpl; eauto.
+    eapply romatch_store; eauto with mem.
+    eapply sound_stack_storev; eauto.
 + (* memcpy *)
   inv H0; auto. inv H3; auto. inv H4; auto. inv H1.
   exploit abuiltin_arg_sound. eauto. eauto. eauto. eauto. eauto. eexact H0. intros VM1.

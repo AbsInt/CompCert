@@ -850,8 +850,8 @@ Lemma wt_exec_Iload:
   wt_regset env rs ->
   wt_regset env (rs#dst <- v).
 Proof.
-  intros. destruct a; simpl in H0; try discriminate. inv H.
-  eapply wt_regset_assign; eauto. rewrite H8; eapply Mem.load_type; eauto.
+  intros. destruct a; try discriminate. inv H.
+  eapply wt_regset_assign; eauto. rewrite H8; eapply Mem.load_type; eauto with mem.
 Qed.
 
 Lemma wt_exec_Ibuiltin:

@@ -127,6 +127,18 @@ Proof.
   apply val_inject_id. subst v. apply decode_val_inject; auto.
 Qed.
 
+Lemma magree_loadv:
+  forall m1 m2 P chunk b ofs v,
+  magree m1 m2 P ->
+  Mem.loadv chunk m1 (Vptr b ofs) = Some v ->
+  (forall i, Ptrofs.unsigned ofs <= i < Ptrofs.unsigned ofs + size_chunk chunk -> P b i) ->
+  exists v', Mem.loadv chunk m2 (Vptr b ofs) = Some v' /\ Val.lessdef v v'.
+Proof.
+  intros. simpl in H0; destruct zle; try discriminate.
+  exploit magree_load; eauto. intros (v' & A & B).
+  exists v'; split; auto. simpl. rewrite zle_true by auto. auto.
+Qed.
+
 Lemma magree_storebytes_parallel:
   forall m1 m2 (P Q: locset) b ofs bytes1 m1' bytes2,
   magree m1 m2 P ->
@@ -195,6 +207,19 @@ Proof.
   intros [m2' [SB2 AG]].
   exists m2'; split; auto.
   apply Mem.storebytes_store; auto.
+Qed.
+
+Lemma magree_storev_parallel:
+  forall m1 m2 (P Q: locset) chunk b ofs v1 m1' v2,
+  magree m1 m2 P ->
+  Mem.storev chunk m1 (Vptr b ofs) v1 = Some m1' ->
+  vagree v1 v2 (store_argument chunk) ->
+  (forall b' i, Q b' i ->
+                b' <> b \/ i < Ptrofs.unsigned ofs \/ Ptrofs.unsigned ofs + size_chunk chunk <= i ->
+                P b' i) ->
+  exists m2', Mem.storev chunk m2 (Vptr b ofs) v2 = Some m2' /\ magree m1' m2' Q.
+Proof.
+  simpl; intros. destruct zle; try discriminate. eapply magree_store_parallel; eauto.
 Qed.
 
 Lemma magree_storebytes_left:
@@ -587,19 +612,19 @@ Proof.
 - exists (Vlong n); intuition auto. constructor. apply vagree_same.
 - exists (Vfloat n); intuition auto. constructor. apply vagree_same.
 - exists (Vsingle n); intuition auto. constructor. apply vagree_same.
-- simpl in H. exploit magree_load; eauto.
+- exploit magree_loadv; eauto with mem.
   intros. eapply nlive_add; eauto with va. rewrite Ptrofs.add_zero_l in H0; auto.
   intros (v' & A & B).
   exists v'; intuition auto. constructor; auto. apply vagree_lessdef; auto.
   eapply magree_monotone; eauto. intros; eapply incl_nmem_add; eauto.
 - exists (Vptr sp (Ptrofs.add Ptrofs.zero ofs)); intuition auto with na. constructor.
 - unfold Senv.symbol_address in H; simpl in H.
-  destruct (Genv.find_symbol ge id) as [b|] eqn:FS; simpl in H; try discriminate.
-  exploit magree_load; eauto.
+  destruct (Genv.find_symbol ge id) as [b|] eqn:FS; try discriminate.
+  exploit magree_loadv; eauto.
   intros. eapply nlive_add; eauto. constructor. apply GM; auto.
   intros (v' & A & B).
   exists v'; intuition auto.
-  constructor. simpl. unfold Senv.symbol_address; simpl; rewrite FS; auto.
+  constructor. unfold Senv.symbol_address; simpl; rewrite FS; auto.
   apply vagree_lessdef; auto.
   eapply magree_monotone; eauto. intros; eapply incl_nmem_add; eauto.
 - exists (Senv.symbol_address ge id ofs); intuition auto with na. constructor.
@@ -654,7 +679,8 @@ Proof.
               Mem.loadv chunk m addr = Some v ->
               exists v', Mem.loadv chunk m' addr = Some v').
   {
-    intros. destruct addr; simpl in H; try discriminate.
+    intros. destruct addr; simpl in H; try discriminate. destruct zle; try discriminate.
+    simpl. rewrite zle_true by auto.
     eapply Mem.valid_access_load. eapply magree_valid_access; eauto.
     eapply Mem.load_valid_access; eauto. }
   induction 1; try (econstructor; now constructor).
@@ -701,7 +727,7 @@ Proof.
   exists tm; split; auto. econstructor. econstructor; eauto.
   eapply eventval_match_lessdef; eauto. apply store_argument_load_result; auto.
 - (* not volatile *)
-  exploit magree_store_parallel. eauto. eauto. eauto.
+  exploit magree_storev_parallel. eauto. eauto. eauto.
   instantiate (1 := nlive ge sp nm). auto.
   intros (tm' & P & Q).
   exists tm'; split. econstructor. econstructor; eauto. auto.
@@ -848,8 +874,8 @@ Ltac UseTransfer :=
 + (* preserved *)
   exploit eval_addressing_lessdef. eapply add_needs_all_lessdef; eauto. eauto.
   intros (ta & U & V). inv V; try discriminate.
-  destruct ta; simpl in H1; try discriminate.
-  exploit magree_load; eauto.
+  destruct ta; try discriminate.
+  exploit magree_loadv; eauto.
   exploit aaddressing_sound; eauto. intros (bc & A & B & C).
   intros. apply nlive_add with bc i; assumption.
   intros (tv & P & Q).
@@ -869,8 +895,8 @@ Ltac UseTransfer :=
   simpl in *.
   exploit eval_addressing_lessdef. eapply add_needs_all_lessdef; eauto. eauto.
   intros (ta & U & V). inv V; try discriminate.
-  destruct ta; simpl in H1; try discriminate.
-  exploit magree_store_parallel. eauto. eauto. instantiate (1 := te#src). eauto with na.
+  destruct ta; try discriminate.
+  exploit magree_storev_parallel. eauto. eauto. instantiate (1 := te#src). eauto with na.
   instantiate (1 := nlive ge sp0 nm).
   exploit aaddressing_sound; eauto. intros (bc & A & B & C).
   intros. apply nlive_remove with bc b i; assumption.
@@ -882,11 +908,11 @@ Ltac UseTransfer :=
   eapply match_succ_states; eauto. simpl; auto.
   eauto 3 with na.
 + (* dead instruction, turned into a nop *)
-  destruct a; simpl in H1; try discriminate.
+  destruct a; try discriminate.
   left; econstructor; split.
   eapply exec_Inop; eauto.
   eapply match_succ_states; eauto. simpl; auto.
-  eapply magree_store_left; eauto.
+  eapply magree_store_left; eauto with mem.
   exploit aaddressing_sound; eauto. intros (bc & A & B & C).
   intros. eapply nlive_contains; eauto.
 
@@ -974,7 +1000,7 @@ Ltac UseTransfer :=
   {
     inv H2.
   * exists (Val.load_result chunk v); split; auto. constructor; auto.
-  * exploit magree_load; eauto.
+  * exploit magree_loadv; eauto.
     exploit aaddr_arg_sound_1; eauto. rewrite <- AN. intros.
     intros. eapply nlive_add; eassumption.
     intros (tv & P & Q).

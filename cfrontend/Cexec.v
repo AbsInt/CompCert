@@ -212,7 +212,7 @@ Definition do_volatile_load (w: world) (chunk: memory_chunk) (m: mem) (b: block)
         Some(w', Event_vload chunk id ofs res :: nil, Val.load_result chunk vres)
     end
   else
-    do v <- Mem.load chunk m b (Ptrofs.unsigned ofs);
+    do v <- Mem.loadv chunk m (Vptr b ofs);
     Some(w, E0, v).
 
 Definition do_volatile_store (w: world) (chunk: memory_chunk) (m: mem) (b: block) (ofs: ptrofs) (v: val)
@@ -223,7 +223,7 @@ Definition do_volatile_store (w: world) (chunk: memory_chunk) (m: mem) (b: block
     do w' <- nextworld_vstore w chunk id ofs ev;
     Some(w', Event_vstore chunk id ofs ev :: nil, m, v)
   else
-    do m' <- Mem.store chunk m b (Ptrofs.unsigned ofs) v;
+    do m' <- Mem.storev chunk m (Vptr b ofs) v;
     Some(w, E0, m', v).
 
 Lemma do_volatile_load_sound:

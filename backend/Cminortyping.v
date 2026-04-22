@@ -612,7 +612,7 @@ Proof.
 - inv WT. eapply type_constant_sound; eauto.
 - inv WT. replace t with (snd (type_unop op)) by (rewrite H3; auto). eapply type_unop_sound; eauto.
 - inv WT. replace t with (snd (type_binop op)) by (rewrite H5; auto). eapply type_binop_sound; eauto.
-- inv WT. destruct vaddr; try discriminate. eapply Mem.load_type; eauto.
+- inv WT. destruct vaddr; try discriminate. eapply Mem.load_type; eauto with mem.
 Qed.
 
 Lemma wt_eval_exprlist: forall env sp e m al vl,

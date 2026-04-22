@@ -232,7 +232,8 @@ Lemma get_location:
 Proof.
   intros. destruct H as (D & E & F & G & H).
   exploit H; eauto. intros (v & U & V). exists v; split; auto.
-  unfold load_stack; simpl. rewrite Ptrofs.add_zero_l, Ptrofs.unsigned_repr; auto.
+  unfold load_stack; simpl. rewrite Ptrofs.add_zero_l, Ptrofs.unsigned_repr, zle_true; auto.
+  rewrite size_type_chunk, typesize_typesize. lia.
   unfold Ptrofs.max_unsigned. generalize (typesize_pos ty). lia.
 Qed.
 
@@ -251,7 +252,8 @@ Proof.
   assert (PERM: Mem.range_perm m' sp pos (pos + 4 * bound) Cur Freeable).
   { red; intros; eauto with mem. }
   exists m'; split.
-- unfold store_stack; simpl. rewrite Ptrofs.add_zero_l, Ptrofs.unsigned_repr; eauto.
+- unfold store_stack; simpl. rewrite Ptrofs.add_zero_l, Ptrofs.unsigned_repr, zle_true; eauto.
+  rewrite size_type_chunk, typesize_typesize. lia.
   unfold Ptrofs.max_unsigned. generalize (typesize_pos ty). lia.
 - simpl. intuition auto.
 + unfold Locmap.set.
@@ -444,7 +446,7 @@ Proof.
   exploit set_location; eauto. intros (m' & A & B).
   exists m'; split; auto.
   assert (forall i k p, Mem.perm m sp i k p -> Mem.perm m' sp i k p).
-  {  intros. unfold store_stack in A; simpl in A. eapply Mem.perm_store_1; eauto. }
+  {  intros. unfold store_stack in A; simpl in A. eapply Mem.perm_store_1; eauto with mem. }
   eapply frame_mconj. eauto.
   unfold frame_contents_1; rewrite ! sep_assoc; exact B.
   eapply sep_preserved.
@@ -469,7 +471,7 @@ Proof.
   exploit set_location; eauto. intros (m' & A & B).
   exists m'; split; auto.
   assert (forall i k p, Mem.perm m sp i k p -> Mem.perm m' sp i k p).
-  {  intros. unfold store_stack in A; simpl in A. eapply Mem.perm_store_1; eauto. }
+  {  intros. unfold store_stack in A; simpl in A. eapply Mem.perm_store_1; eauto with mem. }
   eapply frame_mconj. eauto.
   unfold frame_contents_1; rewrite ! sep_assoc, sep_swap; eauto.
   eapply sep_preserved.
@@ -962,7 +964,7 @@ Local Opaque mreg_type.
   exists rs2, m2.
   split. eapply star_left; eauto. constructor. exact STORE. auto. traceEq.
   split. rewrite sep_assoc, sep_swap. exact B.
-  split. intros. apply C. unfold store_stack in STORE; simpl in STORE. eapply Mem.perm_store_1; eauto.
+  split. intros. apply C. unfold store_stack in STORE. eapply Mem.perm_store_1; eauto with mem.
   auto.
 Qed.
 
@@ -1137,7 +1139,7 @@ Local Opaque b fe.
     { intros. apply PERMS.
       unfold store_stack in STORE_PARENT, STORE_RETADDR.
       simpl in STORE_PARENT, STORE_RETADDR.
-      eauto using Mem.perm_store_1. }
+      eauto using Mem.perm_store_1 with mem. }
     eapply sep_preserved. eapply sep_proj1. eapply mconj_proj2. eexact SEPCONJ.
     intros; apply range_preserved with m2'; auto.
     intros; apply range_preserved with m2'; auto.
@@ -1318,6 +1320,7 @@ Lemma simplify_load_correct: forall chunk m a v,
 Proof.
   intros. destruct a; simpl in *; try discriminate.
   destruct chunk; simpl; try (exists v; auto; fail).
+  simpl in H. destruct zle; try discriminate.
   rewrite Mem.load_bool_int8_unsigned in H.
   destruct (Mem.load Mint8unsigned m b (Ptrofs.unsigned i)) as [v'|]; simpl in H; inv H.
   exists v'; auto using Val.norm_bool_is_lessdef.
@@ -1327,8 +1330,8 @@ Lemma simplify_store_correct: forall chunk m a v m',
   Mem.storev chunk m a v = Some m' ->
   Mem.storev (simplify_store chunk) m a v = Some m'.
 Proof.
-  intros. destruct a; simpl in *; try discriminate. rewrite <- H. symmetry.
-  destruct chunk; simpl; auto.
+  intros. destruct a; simpl in *; try discriminate. rewrite <- H; clear H; symmetry.
+  destruct chunk; simpl in *; auto; destruct zle; auto.
 - apply Mem.store_bool_unsigned_8.
 - apply Mem.store_signed_unsigned_8.
 - apply Mem.store_signed_unsigned_16.
