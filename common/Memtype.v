@@ -1144,7 +1144,7 @@ Axiom alloc_left_unmapped_inject:
   /\ (forall b, b <> b1 -> f' b = f b).
 
 Definition inj_offset_aligned (delta: Z) (size: Z) : Prop :=
-  forall chunk, size_chunk chunk <= size -> (align_chunk chunk | delta).
+  (min_safe_alignment size | delta).
 
 Axiom alloc_left_mapped_inject:
   forall f m1 m2 lo hi m1' b1 b2 delta,

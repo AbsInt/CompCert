@@ -1186,7 +1186,7 @@ Proof.
     eapply range_private_perms; eauto. extlia.
     (* offset is aligned *)
     replace (fn_stacksize f - 0) with (fn_stacksize f) by lia.
-    inv FB. red; intros. eapply Z.divide_trans; eauto. apply min_safe_alignment_sound; auto.
+    inv FB. assumption.
     (* nobody maps to (sp, dstk ctx...) *)
     intros. exploit (PRIV (ofs + delta')); eauto. extlia.
     intros [A B]. eelim B; eauto.

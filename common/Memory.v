@@ -2258,10 +2258,10 @@ Record mem_inj (f: meminj) (m1 m2: mem) : Prop :=
       perm m1 b1 ofs k p ->
       perm m2 b2 (ofs + delta) k p;
     mi_align:
-      forall b1 b2 delta chunk ofs p,
-      f b1 = Some(b2, delta) ->
-      range_perm m1 b1 ofs (ofs + size_chunk chunk) Max p ->
-      (align_chunk chunk | delta);
+      forall b1 b2 delta ofs sz p,
+      f b1 = Some(b2, delta) -> sz > 0 ->
+      range_perm m1 b1 ofs (ofs + sz) Max p ->
+      (min_safe_alignment sz | delta);
     mi_memval:
       forall b1 ofs b2 delta,
       f b1 = Some(b2, delta) ->
@@ -2304,7 +2304,10 @@ Proof.
   replace (ofs + delta + size_chunk chunk)
      with ((ofs + size_chunk chunk) + delta) by lia.
   eapply range_perm_inj; eauto.
-  apply Z.divide_add_r; auto. eapply mi_align; eauto with mem.
+  apply Z.divide_add_r; auto.
+  apply Z.divide_trans with (min_safe_alignment (size_chunk chunk)).
+  apply min_safe_alignment_sound. lia.
+  eapply mi_align; eauto using size_chunk_pos with mem.
 Qed.
 
 (** Preservation of loads. *)
@@ -2662,7 +2665,7 @@ Proof.
 Qed.
 
 Definition inj_offset_aligned (delta: Z) (size: Z) : Prop :=
-  forall chunk, size_chunk chunk <= size -> (align_chunk chunk | delta).
+  (min_safe_alignment size | delta).
 
 Lemma alloc_left_mapped_inj:
   forall f m1 m2 lo hi m1' b1 b2 delta,
@@ -2675,21 +2678,23 @@ Lemma alloc_left_mapped_inj:
   mem_inj f m1' m2.
 Proof.
   intros. inversion H. constructor.
-(* perm *)
+- (* perm *)
   intros.
   exploit perm_alloc_inv; eauto. intros. destruct (eq_block b0 b1). subst b0.
   rewrite H4 in H5; inv H5. eauto. eauto.
-(* align *)
+- (* align *)
   intros. destruct (eq_block b0 b1).
-  subst b0. assert (delta0 = delta) by congruence. subst delta0.
++ subst b0. assert (delta0 = delta) by congruence. subst delta0.
+  apply Z.divide_trans with (min_safe_alignment (hi - lo)); auto.
+  apply min_safe_alignment_mono.
   assert (lo <= ofs < hi).
-  { eapply perm_alloc_3; eauto. apply H6. generalize (size_chunk_pos chunk); lia. }
-  assert (lo <= ofs + size_chunk chunk - 1 < hi).
-  { eapply perm_alloc_3; eauto. apply H6. generalize (size_chunk_pos chunk); lia. }
-  apply H2. lia.
-  eapply mi_align0 with (ofs := ofs) (p := p); eauto.
+  { eapply perm_alloc_3; eauto. apply H7; lia. }
+  assert (lo <= ofs + sz - 1 < hi).
+  { eapply perm_alloc_3; eauto. apply H7; lia. }
+  lia.
++ eapply mi_align0 with (ofs := ofs) (p := p); eauto.
   red; intros. eapply perm_alloc_4; eauto.
-(* mem_contents *)
+- (* mem_contents *)
   injection H0; intros NEXT MEM.
   intros. rewrite <- MEM; simpl. rewrite NEXT.
   exploit perm_alloc_inv; eauto. intros.
@@ -3813,24 +3818,25 @@ Proof.
   intros. inversion H.
   set (f' := fun b => if eq_block b b1 then Some(b2, delta) else f b).
   assert (inject_incr f f').
-    red; unfold f'; intros. destruct (eq_block b b1). subst b.
+  { red; unfold f'; intros. destruct (eq_block b b1). subst b.
     assert (f b1 = None). eauto with mem. congruence.
-    auto.
+    auto. }
   assert (mem_inj f' m1 m2).
-    inversion mi_inj0; constructor; eauto with mem.
-    unfold f'; intros. destruct (eq_block b0 b1).
+  { inversion mi_inj0; constructor; eauto with mem.
+  + unfold f'; intros. destruct (eq_block b0 b1).
       inversion H8. subst b0 b3 delta0.
       elim (fresh_block_alloc _ _ _ _ _ H0). eauto with mem.
       eauto.
-    unfold f'; intros. destruct (eq_block b0 b1).
+  + unfold f'; intros. destruct (eq_block b0 b1).
       inversion H8. subst b0 b3 delta0.
       elim (fresh_block_alloc _ _ _ _ _ H0).
-      eapply perm_valid_block with (ofs := ofs). apply H9. generalize (size_chunk_pos chunk); lia.
+      eapply perm_valid_block with (ofs := ofs). apply H10. lia.
       eauto.
-    unfold f'; intros. destruct (eq_block b0 b1).
+  + unfold f'; intros. destruct (eq_block b0 b1).
       inversion H8. subst b0 b3 delta0.
       elim (fresh_block_alloc _ _ _ _ _ H0). eauto with mem.
       apply memval_inject_incr with f; auto.
+  }
   exists f'. split. constructor.
 (* inj *)
   eapply alloc_left_mapped_inj; eauto. unfold f'; apply dec_eq_true.
@@ -4067,7 +4073,7 @@ Proof.
   eapply mi_align0; eauto.
   eapply mi_align1 with (ofs := ofs + delta') (p := p); eauto.
   red; intros. replace ofs0 with ((ofs0 - delta') + delta') by lia.
-  eapply mi_perm0; eauto. apply H0. lia.
+  eapply mi_perm0; eauto. apply H1. lia.
   (* memval *)
   destruct (f b1) as [[b' delta'] |] eqn:?; try discriminate.
   destruct (f' b') as [[b'' delta''] |] eqn:?; inv H.
