@@ -144,9 +144,16 @@ Qed.
 Lemma min_safe_alignment_sound: forall sz chunk,
   size_chunk chunk <= sz -> (align_chunk chunk | min_safe_alignment sz).
 Proof.
-  intros. exists (min_safe_alignment sz / align_chunk chunk).
+  intros.
+  generalize Z.divide_1_l Z.divide_refl; intros.
+  assert (2 | 4) by (exists 2; auto).
+  assert (2 | 8) by (exists 4; auto).
+  assert (4 | 8) by (exists 2; auto).
   unfold size_chunk, align_chunk, min_safe_alignment in *.
-  repeat destruct zlt; destruct chunk; reflexivity || lia.
+  destruct (zlt sz 2). destruct chunk; auto; lia.
+  destruct (zlt sz 4). destruct chunk; auto; lia.
+  destruct (zlt sz 8). destruct chunk; auto; lia.
+  destruct chunk; auto.
 Qed.
 
 Lemma min_safe_alignment_8: forall sz,
@@ -154,6 +161,13 @@ Lemma min_safe_alignment_8: forall sz,
 Proof.
   intros. exists (8 / min_safe_alignment sz).
   unfold min_safe_alignment. repeat destruct zlt; reflexivity.
+Qed.
+
+Lemma min_safe_alignment_mono: forall sz1 sz2,
+  sz1 <= sz2 -> (min_safe_alignment sz1 | min_safe_alignment sz2).
+Proof.
+  intros. exists (min_safe_alignment sz2 / min_safe_alignment sz1).
+  unfold min_safe_alignment. repeat destruct zlt; reflexivity || lia.
 Qed.
 
 (** Memory quantities are a coarser variant of memory chunks, used to represent

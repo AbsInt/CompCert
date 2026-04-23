@@ -912,9 +912,7 @@ Remark inj_offset_aligned_block:
   forall stacksize sz,
   Mem.inj_offset_aligned (align stacksize (min_safe_alignment sz)) sz.
 Proof.
-  intros; red; intros. eapply Z.divide_trans.
-  apply min_safe_alignment_sound; eauto.
-  apply align_divides. apply min_safe_alignment_pos.
+  intros; red. apply align_divides. apply min_safe_alignment_pos.
 Qed.
 
 Remark inj_offset_aligned_block':
