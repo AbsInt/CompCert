@@ -23,7 +23,7 @@ jobs:
       options: --user root
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: true
       - name: OS dependencies
@@ -51,7 +51,7 @@ jobs:
       configopts: -ignore-coq-version -ignore-ocaml-version
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: true
       - name: OS dependencies
