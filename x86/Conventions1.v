@@ -296,7 +296,7 @@ Definition loc_argument_acceptable (l: loc) : Prop :=
 
 Definition loc_argument_32_charact (ofs: Z) (l: loc) : Prop :=
   match l with
-  | S Outgoing ofs' ty => ofs' >= ofs /\ typealign ty = 1
+  | S Outgoing ofs' ty => ofs' >= ofs
   | _ => False
   end.
 
@@ -319,7 +319,7 @@ Remark loc_arguments_32_charact:
   In p (loc_arguments_32 tyl ofs) -> forall_rpair (loc_argument_32_charact ofs) p.
 Proof.
   assert (X: forall ofs1 ofs2 l, loc_argument_32_charact ofs2 l -> ofs1 <= ofs2 -> loc_argument_32_charact ofs1 l).
-  { destruct l; simpl; intros; auto. destruct sl; auto. intuition lia. }
+  { destruct l; simpl; intros; auto. destruct sl; auto. lia. }
   induction tyl as [ | ty tyl]; simpl loc_arguments_32; intros.
 - contradiction.
 - destruct H.
@@ -434,8 +434,10 @@ Proof.
   unfold forall_rpair; destruct p; intuition auto.
 
 - (* 32 bits *)
+  assert (A: forall ty, typealign ty = 1).
+  { intros. discriminate SF || (destruct ty; reflexivity). }
   assert (X: forall l, loc_argument_32_charact 0 l -> loc_argument_acceptable l).
-  { destruct l as [r | [] ofs ty]; simpl; intuition auto. rewrite H2; apply Z.divide_1_l. }
+  { destruct l as [r | [] ofs ty]; simpl; intuition auto. rewrite A; apply Z.divide_1_l. }
   exploit loc_arguments_32_charact; eauto.
   unfold forall_rpair; destruct p; intuition auto.
 Qed.

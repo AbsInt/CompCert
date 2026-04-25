@@ -303,12 +303,12 @@ Proof.
     exists (2 / typealign ty). destruct ty; reflexivity.
     apply align_divides. lia. }
   assert (STK: forall tyl ofs,
-               ofs >= 0 -> OK (loc_arguments_stack tyl ofs)).
-  { induction tyl as [ | ty tyl]; intros ofs OO; red; simpl; intros.
+               ofs >= 0 -> (2 | ofs) -> OK (loc_arguments_stack tyl ofs)).
+  { induction tyl as [ | ty tyl]; intros ofs OO AL; red; simpl; intros.
   - contradiction.
   - destruct H.
-    + subst p. split. auto. simpl. apply Z.divide_1_l.
-    + apply IHtyl with (ofs := ofs + 2). lia. auto.
+    + subst p. split. auto. exact AL.
+    + apply IHtyl with (ofs := ofs + 2). lia. auto with divide. auto.
   }  
   assert (A: forall ty ri rf ofs f,
              OKF f -> ofs >= 0 -> OK (stack_arg ty ri rf ofs f)).
@@ -340,7 +340,7 @@ Proof.
   induction tyl as [ | ty1 tyl]; intros until ofs; intros OO; simpl.
 - red; simpl; tauto.
 - destruct (zle fixed  0).
-  + apply (STK (ty1 :: tyl)); auto. 
+  + apply (STK (ty1 :: tyl)); auto with divide. 
   + unfold OKF in *; destruct ty1; eauto.
 Qed.
 

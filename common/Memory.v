@@ -906,12 +906,10 @@ Proof.
   exploit loadbytes_split. eexact LB. lia. lia.
   intros (bytes1 & bytes2 & LB1 & LB2 & APP).
   change 4 with (size_chunk Mint32) in LB1.
-  exploit loadbytes_load. eexact LB1.
-  simpl. apply Z.divide_trans with 8; auto. exists 2; auto.
+  exploit loadbytes_load. eexact LB1. eauto with divide.
   intros L1.
   change 4 with (size_chunk Mint32) in LB2.
-  exploit loadbytes_load. eexact LB2.
-  simpl. apply Z.divide_add_r. apply Z.divide_trans with 8; auto. exists 2; auto. exists 1; auto.
+  exploit loadbytes_load. eexact LB2. eauto with divide.
   intros L2.
   exists (decode_val Mint32 (if Archi.big_endian then bytes1 else bytes2));
   exists (decode_val Mint32 (if Archi.big_endian then bytes2 else bytes1)).
@@ -1634,10 +1632,8 @@ Proof.
   exploit storebytes_split. eexact SB. intros [m1 [SB1 SB2]].
   rewrite encode_val_length in SB2. simpl in SB2.
   exists m1; split.
-  apply storebytes_store. exact SB1.
-  simpl. apply Z.divide_trans with 8; auto. exists 2; auto.
-  apply storebytes_store. exact SB2.
-  simpl. apply Z.divide_add_r. apply Z.divide_trans with 8; auto. exists 2; auto. exists 1; auto.
+  apply storebytes_store. exact SB1. eauto with divide.
+  apply storebytes_store. exact SB2. eauto with divide.
 Qed.
 
 Theorem storev_int64_split:
@@ -3471,16 +3467,12 @@ Proof.
   assert (P: al > 0) by lia.
   assert (Q: Z.abs al <= Z.abs sz). apply Zdivide_bounds; auto. lia.
   rewrite Z.abs_eq in Q; try lia. rewrite Z.abs_eq in Q; try lia.
-  assert (R: exists chunk, al = align_chunk chunk /\ al = size_chunk chunk).
-    destruct H0. subst; exists Mint8unsigned; auto.
-    destruct H0. subst; exists Mint16unsigned; auto.
-    destruct H0. subst; exists Mint32; auto.
-    subst; exists Mint64; auto.
-  destruct R as [chunk [A B]].
-  assert (valid_access m chunk b ofs Nonempty).
-    split. red; intros; apply H3. lia. congruence.
-  exploit valid_access_inject; eauto. intros [C D].
-  congruence.
+  assert (A: (min_safe_alignment sz | delta)).
+  { destruct H. destruct mi_inj0. eapply mi_align0; eauto with mem. }
+  assert (B: min_safe_alignment al = al).
+  { destruct H0 as [E | [E | [E | E]]]; subst al; reflexivity. }
+  apply Z.divide_add_r; auto. rewrite <- B. eapply Z.divide_trans; eauto.
+  eapply min_safe_alignment_mono; eauto.
 Qed.
 
 (** Preservation of loads *)
