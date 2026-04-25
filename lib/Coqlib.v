@@ -20,6 +20,8 @@
 
 From Coq Require Export String ZArith Znumtheory List Bool Lia.
 
+Create HintDb coqlib.
+
 (** * Useful tactics *)
 
 Ltac inv H := inversion H; clear H; subst.
@@ -550,6 +552,15 @@ Proof.
   rewrite E, Z.div_add_l, Z.div_small by lia.
   lia.
 Qed.
+
+(** A hint database for divisibility. *)
+
+Create HintDb divide.
+Global Hint Resolve
+  Z.divide_1_l Z.divide_refl Z.divide_factor_l Z.divide_factor_r
+  Z.divide_trans Z.divide_add_r Z.divide_sub_r : divide.
+Global Hint Extern 2 (?n | ?p) => (exists (p / n); reflexivity) : divide.
+Global Hint Extern 2 (_ | align _ _) => (apply align_divides; lia) : divide.
 
 (** Floor: [floor n amount] returns the greatest multiple of [amount]
     less than or equal to [n]. *)
