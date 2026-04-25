@@ -16,6 +16,7 @@
 From Coq Require Import OrderedType.
 Require Import Coqlib Maps Ordered.
 Require Import AST Values.
+Require Archi.
 Require Export Machregs.
 
 (** * Representation of locations *)
@@ -84,11 +85,11 @@ Qed.
 Definition typealign (ty: typ) : Z :=
   match ty with
   | Tint => 1
-  | Tlong => 2
-  | Tfloat => 1
+  | Tlong => Archi.align_int64 / 4
+  | Tfloat => Archi.align_float64 / 4
   | Tsingle => 1
   | Tany32 => 1
-  | Tany64 => 1
+  | Tany64 => (Z.max Archi.align_int64 Archi.align_float64) / 4
   end.
 
 Lemma typealign_pos:
