@@ -12,7 +12,7 @@
 
 (** RTL function inlining *)
 
-Require Import Coqlib Wfsimpl Maps Errors Integers.
+Require Import Coqlib Wfsimpl Maps Errors Integers Memory.
 Require Import AST Linking.
 Require Import Op Registers RTL.
 
@@ -230,17 +230,12 @@ Definition initcontext (dpc dreg nreg: positive) (sz: Z) :=
 
 (** The context used to inline a call to another function. *)
 
-Definition min_alignment (sz: Z) :=
-  if zle sz 1 then 1
-  else if zle sz 2 then 2
-  else if zle sz 4 then 4 else 8.
-
 Definition callcontext (ctx: context)
                       (dpc dreg nreg: positive) (sz: Z)
                       (retpc: node) (retreg: reg) :=
   {| dpc := dpc;
      dreg := dreg;
-     dstk := align (ctx.(dstk) + ctx.(mstk)) (min_alignment sz);
+     dstk := align (ctx.(dstk) + ctx.(mstk)) (min_safe_alignment sz);
      mreg := nreg;
      mstk := Z.max sz 0;
      retinfo := Some (spc ctx retpc, sreg ctx retreg) |}.
@@ -250,7 +245,7 @@ Definition callcontext (ctx: context)
 Definition tailcontext (ctx: context) (dpc dreg nreg: positive) (sz: Z) :=
   {| dpc := dpc;
      dreg := dreg;
-     dstk := align ctx.(dstk) (min_alignment sz);
+     dstk := align ctx.(dstk) (min_safe_alignment sz);
      mreg := nreg;
      mstk := Z.max sz 0;
      retinfo := ctx.(retinfo) |}.

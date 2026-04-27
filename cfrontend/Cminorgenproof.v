@@ -885,21 +885,12 @@ Qed.
 
 (** Properties of the compilation environment produced by [build_compilenv] *)
 
-Remark block_alignment_pos:
-  forall sz, block_alignment sz > 0.
-Proof.
-  unfold block_alignment; intros.
-  destruct (zlt sz 2). lia.
-  destruct (zlt sz 4). lia.
-  destruct (zlt sz 8); lia.
-Qed.
-
 Remark assign_variable_incr:
   forall id sz cenv stksz cenv' stksz',
   assign_variable (cenv, stksz) (id, sz) = (cenv', stksz') -> stksz <= stksz'.
 Proof.
   simpl; intros. inv H.
-  generalize (align_le stksz (block_alignment sz) (block_alignment_pos sz)).
+  generalize (align_le stksz (min_safe_alignment sz) (min_safe_alignment_pos sz)).
   assert (0 <= Z.max 0 sz). apply Zmax_bound_l. lia.
   lia.
 Qed.
@@ -919,35 +910,22 @@ Qed.
 
 Remark inj_offset_aligned_block:
   forall stacksize sz,
-  Mem.inj_offset_aligned (align stacksize (block_alignment sz)) sz.
+  Mem.inj_offset_aligned (align stacksize (min_safe_alignment sz)) sz.
 Proof.
-  intros; red; intros.
-  apply Z.divide_trans with (block_alignment sz).
-  unfold align_chunk.  unfold block_alignment.
-  generalize Z.divide_1_l; intro.
-  generalize Z.divide_refl; intro.
-  assert (2 | 4). exists 2; auto.
-  assert (2 | 8). exists 4; auto.
-  assert (4 | 8). exists 2; auto.
-  destruct (zlt sz 2).
-  destruct chunk; simpl in *; auto; extlia.
-  destruct (zlt sz 4).
-  destruct chunk; simpl in *; auto; extlia.
-  destruct (zlt sz 8).
-  destruct chunk; simpl in *; auto; extlia.
-  destruct chunk; simpl; auto.
-  apply align_divides. apply block_alignment_pos.
+  intros; red; intros. eapply Z.divide_trans.
+  apply min_safe_alignment_sound; eauto.
+  apply align_divides. apply min_safe_alignment_pos.
 Qed.
 
 Remark inj_offset_aligned_block':
   forall stacksize sz,
-  Mem.inj_offset_aligned (align stacksize (block_alignment sz)) (Z.max 0 sz).
+  Mem.inj_offset_aligned (align stacksize (min_safe_alignment sz)) (Z.max 0 sz).
 Proof.
   intros.
-  replace (block_alignment sz) with (block_alignment (Z.max 0 sz)).
+  replace (min_safe_alignment sz) with (min_safe_alignment (Z.max 0 sz)).
   apply inj_offset_aligned_block.
   rewrite Zmax_spec. destruct (zlt sz 0); auto.
-  transitivity 1. reflexivity. unfold block_alignment. rewrite zlt_true. auto. lia.
+  transitivity 1. reflexivity. unfold min_safe_alignment. rewrite zlt_true. auto. lia.
 Qed.
 
 Lemma assign_variable_sound:
@@ -962,21 +940,22 @@ Lemma assign_variable_sound:
 Proof.
   unfold assign_variable; intros until vars; intros ASV NOREPET POS COMPAT SEP.
   inv ASV.
-  assert (LE: sz1 <= align sz1 (block_alignment sz)). apply align_le. apply block_alignment_pos.
+  assert (LE: sz1 <= align sz1 (min_safe_alignment sz)).
+  { apply align_le. apply min_safe_alignment_pos. }
   assert (EITHER: forall id' sz',
              In (id', sz') (vars ++ (id, sz) :: nil) ->
              In (id', sz') vars /\ id' <> id \/ (id', sz') = (id, sz)).
-    intros. rewrite in_app in H. destruct H.
+  { intros. rewrite in_app in H. destruct H.
     left; split; auto. red; intros; subst id'. elim NOREPET.
     change id with (fst (id, sz')). apply in_map; auto.
-    simpl in H. destruct H. auto. contradiction.
+    simpl in H. destruct H. auto. contradiction. }
   split; red; intros.
   apply EITHER in H. destruct H as [[P Q] | P].
   exploit COMPAT; eauto. intros [ofs [A [B [C D]]]].
   exists ofs.
   split. rewrite PTree.gso; auto.
   split. auto. split. auto. zify; lia.
-  inv P. exists (align sz1 (block_alignment sz)).
+  inv P. exists (align sz1 (min_safe_alignment sz)).
   split. apply PTree.gss.
   split. apply inj_offset_aligned_block.
   split. lia.

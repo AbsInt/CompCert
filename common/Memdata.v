@@ -126,6 +126,39 @@ Proof.
         | exists 8; reflexivity ].
 Qed.
 
+(** Given the size [sz] of a block, [min_safe_alignment sz] is the minimum
+    alignment that guarantees that all valid memory accesses in the block
+    have at least this alignment.  *)
+
+Definition min_safe_alignment (sz: Z) : Z :=
+  if zlt sz 2 then 1
+  else if zlt sz 4 then 2
+  else if zlt sz 8 then 4 else 8.
+
+Lemma min_safe_alignment_pos: forall sz,
+  min_safe_alignment sz > 0.
+Proof.
+  intros; unfold min_safe_alignment. repeat (destruct zlt); lia.
+Qed.
+
+Lemma min_safe_alignment_sound: forall sz chunk,
+  size_chunk chunk <= sz -> (align_chunk chunk | min_safe_alignment sz).
+Proof.
+  intros. exists (min_safe_alignment sz / align_chunk chunk).
+  unfold size_chunk, align_chunk, min_safe_alignment in *.
+  repeat destruct zlt; destruct chunk; reflexivity || lia.
+Qed.
+
+Lemma min_safe_alignment_8: forall sz,
+  (min_safe_alignment sz | 8).
+Proof.
+  intros. exists (8 / min_safe_alignment sz).
+  unfold min_safe_alignment. repeat destruct zlt; reflexivity.
+Qed.
+
+(** Memory quantities are a coarser variant of memory chunks, used to represent
+    the size of a pointer (32 or 64 bits). *)
+
 Inductive quantity : Type := Q32 | Q64.
 
 Definition quantity_eq (q1 q2: quantity) : {q1 = q2} + {q1 <> q2}.

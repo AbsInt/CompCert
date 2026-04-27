@@ -179,6 +179,8 @@ module Z = struct
   let le x y = (Z.compare x y <> Gt)
   let ge x y = (Z.compare x y <> Lt)
   let compare x y = match Z.compare x y with Lt -> -1 | Eq -> 0 | Gt -> 1
+  let max = Z.max
+  let min = Z.min
 
   let to_int = function
   | Z0 -> 0
