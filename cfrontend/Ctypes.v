@@ -942,9 +942,9 @@ Fixpoint alignof_blockcopy (env: composite_env) (t: type) : Z :=
   | Tint I16 _ _ => 2
   | Tint I32 _ _ => 4
   | Tint IBool _ _ => 1
-  | Tlong _ _ => 8
+  | Tlong _ _ => Archi.align_int64
   | Tfloat F32 _ => 4
-  | Tfloat F64 _ => 8
+  | Tfloat F64 _ => Archi.align_float64
   | Tpointer _ _ => if Archi.ptr64 then 8 else 4
   | Tarray t' _ _ => alignof_blockcopy env t'
   | Tfunction _ _ _ => 1
@@ -1005,15 +1005,30 @@ Proof.
     apply Z.divide_refl.
   }
   induction ty; simpl.
-  apply Z.divide_refl.
-  apply Z.divide_refl.
-  apply Z.divide_refl.
-  apply Z.divide_refl.
-  apply Z.divide_refl.
-  apply Z.divide_mul_l. auto.
-  apply Z.divide_refl.
-  destruct (env!i). apply X. apply Z.divide_0_r.
-  destruct (env!i). apply X. apply Z.divide_0_r.
+- auto with divide.
+- destruct i; auto with divide.
+- auto with divide.
+- destruct f; auto with divide.
+- auto with divide.
+- apply Z.divide_mul_l; auto.
+- auto with divide.
+- destruct (env!i). apply X. apply Z.divide_0_r.
+- destruct (env!i). apply X. apply Z.divide_0_r.
+Qed.
+
+Lemma alignof_alignof_blockcopy_compat:
+  forall env ty, naturally_aligned ty -> alignof_blockcopy env ty = Z.min 8 (alignof env ty).
+Proof.
+  induction ty; intros [A B]; unfold alignof, align_attr; rewrite A; simpl.
+- auto.
+- destruct i; auto.
+- auto.
+- destruct f; auto.
+- destruct Archi.ptr64; auto.
+- apply IHty; auto.
+- auto.
+- destruct (env!i); auto.
+- destruct (env!i); auto.
 Qed.
 
 (** Type ranks *)
