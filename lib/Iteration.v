@@ -16,11 +16,8 @@
 
 (** Bounded and unbounded iterators *)
 
-Require Import Axioms.
+From Coq Require Import ClassicalFacts ChoiceFacts.
 Require Import Coqlib.
-Require Import Wfsimpl.
-
-Set Asymmetric Patterns.
 
 (** This modules defines several Coq encodings of a general "while" loop.
   The loop is presented in functional style as the iteration
@@ -56,13 +53,13 @@ Proof.
   caseEq (step a); intros. left; exists b; auto. right; exists a0; auto.
 Defined.
 
-Definition iterate_F (a: A) (rec: forall a', ord a' a -> B) : B :=
+Fixpoint iterate_rec (a: A) (acc: Acc ord a) : B :=
   match step_info a with
-  | inl (exist b P) => b
-  | inr (exist2 a' P Q) => rec a' Q
+  | inl (exist _ b P) => b
+  | inr (exist2 _ _ a' P Q) => iterate_rec a' (Acc_inv acc Q)
   end.
 
-Definition iterate (a: A) : B := Fix ord_wf iterate_F a.
+Definition iterate (a: A) : B := iterate_rec a (ord_wf a).
 
 (** We now prove an invariance property [iterate_prop], similar to the Hoare
   logic rule for "while" loops. *)
@@ -77,11 +74,15 @@ Hypothesis step_prop:
 Lemma iterate_prop:
   forall a, P a -> Q (iterate a).
 Proof.
-  intros a0. pattern a0. apply well_founded_ind with (R := ord). auto.
-  intros. unfold iterate; rewrite unroll_Fix. unfold iterate_F.
-  destruct (step_info x) as [[b U] | [a' U V]].
-  exploit step_prop; eauto. rewrite U; auto.
-  apply H. auto. exploit step_prop; eauto. rewrite U; auto.
+  assert (REC: forall a acc, P a -> Q (iterate_rec a acc)).
+  { induction a using (well_founded_induction ord_wf); intros.
+    destruct acc; simpl.
+    generalize (step_prop a H0).
+    destruct (step_info a) as [[b U] | [a' U V]]; rewrite U; intros.
+    + auto.
+    + apply H; auto.
+  }
+  intros. apply REC; auto.
 Qed.
 
 End ITERATION.
@@ -141,24 +142,20 @@ Fixpoint iterate (niter: nat) (a: A) {struct niter} : option B :=
   so we cannot define [iterate] as a Coq fixpoint and must use
   Noetherian recursion instead. *)
 
-Definition iter_step (x: positive)
-                     (next: forall y, Plt y x -> A -> option B)
-                     (s: A) : option B :=
+Fixpoint iter (x: positive) (s: A) (acc: Acc Plt x) : option B :=
   match peq x xH with
   | left EQ => None
   | right NOTEQ =>
       match step s with
       | inl res => Some res
-      | inr s'  => next (Pos.pred x) (Ppred_Plt x NOTEQ) s'
+      | inr s'  => iter (Pos.pred x) s' (Acc_inv acc (Ppred_Plt x NOTEQ))
       end
   end.
-
-Definition iter: positive -> A -> option B := Fix Plt_wf iter_step.
 
 (** The [iterate] function is defined as [iter] up to
     [num_iterations] through the loop. *)
 
-Definition iterate := iter num_iterations.
+Definition iterate (s: A) : option B := iter num_iterations s (Plt_wf num_iterations).
 
 (** We now prove the invariance property [iterate_prop]. *)
 
@@ -169,23 +166,18 @@ Hypothesis step_prop:
   forall a : A, P a ->
   match step a with inl b => Q b | inr a' => P a' end.
 
-Lemma iter_prop:
-  forall n a b, P a -> iter n a = Some b -> Q b.
-Proof.
-  apply (well_founded_ind Plt_wf
-         (fun p => forall a b, P a -> iter p a = Some b -> Q b)).
-  intros. unfold iter in H1. rewrite unroll_Fix in H1. unfold iter_step in H1.
-  destruct (peq x 1). discriminate.
-  specialize (step_prop a H0).
-  destruct (step a) as [b'|a'] eqn:?.
-  inv H1. auto.
-  apply H with (Pos.pred x) a'. apply Ppred_Plt; auto. auto. auto.
-Qed.
-
 Lemma iterate_prop:
   forall a b, iterate a = Some b -> P a -> Q b.
 Proof.
-  intros. apply iter_prop with num_iterations a; assumption.
+  assert (REC: forall x a acc b, iter x a acc = Some b -> P a -> Q b).
+  { induction x using (well_founded_induction Plt_wf).
+    intros. destruct acc; simpl in *. destruct (peq x 1).
+  - discriminate.
+  - specialize (step_prop a H1). destruct (step a) as [res | a'].
+    + congruence.
+    + eapply H; eauto using Ppred_Plt.
+  }
+  intros a b. apply REC.
 Qed.
 
 End ITERATION.
@@ -202,11 +194,12 @@ End PrimIter.
   [None] means that iteration does not terminate.
   [Some b] means that iteration terminates with the result [b]. *)
 
-From Coq Require Import Classical ClassicalDescription.
-
 Module GenIter.
 
 Section ITERATION.
+
+Hypothesis EM: excluded_middle.
+Hypothesis CDD: ConstructiveDefiniteDescription.
 
 Variables A B: Type.
 Variable step: A -> B + A.
@@ -247,11 +240,11 @@ Lemma iter_either:
   (exists n, exists b, iter n a = Some b) \/
   (forall n, iter n a = None).
 Proof.
-  intro a. elim (classic (forall n, iter n a = None)); intro.
-  right; assumption.
-  left. generalize (not_all_ex_not nat (fun n => iter n a = None) H).
-  intros [n D]. exists n. generalize D.
-  case (iter n a); intros. exists b; auto. congruence.
+  intro a. destruct (EM (exists n, iter n a <> None)).
+- left. destruct H as [n D]. destruct (iter n a) as [b | ] eqn:I; try congruence.
+  exists n, b; auto.
+- right; intros. destruct (iter n a) as [b | ] eqn:I; auto.
+  elim H. exists n; congruence.
 Qed.
 
 Definition converges_to (a: A) (b: option B) : Prop :=
@@ -277,8 +270,7 @@ Lemma converges_to_unique:
   forall a b, converges_to a b -> forall b', converges_to a b' -> b = b'.
 Proof.
   intros a b [n C] b' [n' C'].
-  rewrite <- (C (max n n')). rewrite <- (C' (max n n')). auto.
-  apply Nat.le_max_r. apply Nat.le_max_l.
+  rewrite <- (C (max n n')). rewrite <- (C' (max n n')). auto. lia. lia.
 Qed.
 
 Lemma converges_to_exists_uniquely:
@@ -289,13 +281,13 @@ Proof.
 Qed.
 
 Definition iterate (a: A) : option B :=
-  proj1_sig (constructive_definite_description (converges_to a) (converges_to_exists_uniquely a)).
+  proj1_sig (CDD _ (converges_to a) (converges_to_exists_uniquely a)).
 
 Lemma converges_to_iterate:
   forall a b, converges_to a b -> iterate a = b.
 Proof.
   intros. unfold iterate.
-  destruct (constructive_definite_description (converges_to a) (converges_to_exists_uniquely a)) as [b' P].
+  destruct (CDD _ (converges_to a) (converges_to_exists_uniquely a)) as [b' P].
   simpl. apply converges_to_unique with a; auto.
 Qed.
 
@@ -303,7 +295,7 @@ Lemma iterate_converges_to:
   forall a, converges_to a (iterate a).
 Proof.
   intros. unfold iterate.
-  destruct (constructive_definite_description (converges_to a) (converges_to_exists_uniquely a)) as [b' P].
+  destruct (CDD _ (converges_to a) (converges_to_exists_uniquely a)) as [b' P].
   simpl; auto.
 Qed.
 
