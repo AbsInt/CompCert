@@ -361,7 +361,7 @@ Ltac DestructM :=
   match goal with
     [ H: exists p, _ /\ _ |- _ ] =>
       let p := fresh "p" in let M := fresh "M" in let MM := fresh "MM" in
-      destruct H as (p & M & MM); clear H
+      destruct H as (p & M & MM); try clear H
   end.
   repeat DestructM. subst tp.
   assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics p21)).
