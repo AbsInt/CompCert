@@ -10,8 +10,8 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-From Coq Require Import FunInd Zwf.
-Require Import Coqlib Maps Zbits Integers Floats Lattice.
+From Coq Require Import Zwf.
+Require Import Coqlib Iteration Maps Zbits Integers Floats Lattice.
 Require Import Compopts AST.
 Require Import Values Memory Globalenvs Builtins Events.
 Require Import Registers RTL.
@@ -3653,14 +3653,8 @@ Definition ablock_load (chunk: memory_chunk) (ab: ablock) (i: Z) : aval :=
 Definition ablock_load_anywhere (chunk: memory_chunk) (ab: ablock) : aval :=
   vnormalize chunk (Ifptr ab.(ab_summary)).
 
-Function inval_after (lo: Z) (hi: Z) (c: ZTree.t acontent) { wf (Zwf lo) hi } : ZTree.t acontent :=
-  if zle lo hi
-  then inval_after lo (hi - 1) (ZTree.remove hi c)
-  else c.
-Proof.
-  intros; red; lia.
-  apply Zwf_well_founded.
-Qed.
+Definition inval_after (lo: Z) (hi: Z) (c: ZTree.t acontent) : ZTree.t acontent :=
+  CountedLoop.up (fun i c => ZTree.remove i c) lo hi c.
 
 Definition inval_if (hi: Z) (lo: Z) (c: ZTree.t acontent) :=
   match c##lo with
@@ -3668,20 +3662,14 @@ Definition inval_if (hi: Z) (lo: Z) (c: ZTree.t acontent) :=
   | Some (ACval chunk av) => if zle (lo + size_chunk chunk) hi then c else ZTree.remove lo c
   end.
 
-Function inval_before (hi: Z) (lo: Z) (c: ZTree.t acontent) { wf (Zwf_up hi) lo } : ZTree.t acontent :=
-  if zlt lo hi
-  then inval_before hi (lo + 1) (inval_if hi lo c)
-  else c.
-Proof.
-  intros; red; lia.
-  apply Zwf_up_well_founded.
-Qed.
+Definition inval_before (hi: Z) (lo: Z) (c: ZTree.t acontent) : ZTree.t acontent :=
+  CountedLoop.up (inval_if hi) lo hi c.
 
 Definition ablock_store (chunk: memory_chunk) (ab: ablock) (i: Z) (av: aval) : ablock :=
   {| ab_contents :=
        ZTree.set i (ACval chunk av)
          (inval_before i (i - 7)
-            (inval_after (i + 1) (i + size_chunk chunk - 1) ab.(ab_contents)));
+            (inval_after (i + 1) (i + size_chunk chunk) ab.(ab_contents)));
      ab_summary :=
        vplub av ab.(ab_summary) |}.
 
@@ -3693,7 +3681,7 @@ Definition ablock_loadbytes (ab: ablock) : aptr := ab.(ab_summary).
 Definition ablock_storebytes (ab: ablock) (p: aptr) (ofs: Z) (sz: Z) :=
   {| ab_contents :=
        inval_before ofs (ofs - 7)
-         (inval_after ofs (ofs + sz - 1) ab.(ab_contents));
+         (inval_after ofs (ofs + sz) ab.(ab_contents));
      ab_summary :=
        plub p ab.(ab_summary) |}.
 
@@ -3963,34 +3951,31 @@ Proof.
   apply ablock_init_sound. eapply smatch_store; eauto.
 Qed.
 
-Remark inval_after_outside:
-  forall i lo hi c, i < lo \/ i > hi -> (inval_after lo hi c)##i = c##i.
-Proof.
-  intros until c. functional induction (inval_after lo hi c); intros.
-  rewrite IHt by lia. apply ZTree.gro. unfold ZTree.elt, ZIndexed.t; lia.
-  auto.
-Qed.
-
 Remark inval_after_contents:
   forall chunk av i lo hi c,
   (inval_after lo hi c)##i = Some (ACval chunk av) ->
-  c##i = Some (ACval chunk av) /\ (i < lo \/ i > hi).
+  c##i = Some (ACval chunk av) /\ (i < lo \/ i >= hi).
 Proof.
-  intros until c. functional induction (inval_after lo hi c); intros.
-  destruct (zeq i hi).
-  subst i. rewrite inval_after_outside in H by lia. rewrite ZTree.grs in H. discriminate.
-  exploit IHt; eauto. intros [A B]. rewrite ZTree.gro in A by auto. split. auto. lia.
-  split. auto. lia.
+  intros until c.
+  set (P := fun hi' c' =>
+    c'##i = Some (ACval chunk av) -> c##i = Some (ACval chunk av) /\ (i < lo \/ i >= hi')).
+  change (P hi (inval_after lo hi c)).
+  unfold inval_after; apply CountedLoop.up_induction; unfold P; auto.
+- intros i' c' R H. rewrite ZTree.grspec.
+  destruct (ZTree.elt_eq i i'); [congruence | intuition lia].
+- intuition lia.
 Qed.
 
 Remark inval_before_outside:
   forall i hi lo c, i < lo \/ i >= hi -> (inval_before hi lo c)##i = c##i.
 Proof.
-  intros until c. functional induction (inval_before hi lo c); intros.
-  rewrite IHt by lia. unfold inval_if. destruct (c##lo) as [[chunk av]|]; auto.
-  destruct (zle (lo + size_chunk chunk) hi); auto.
+  intros.
+  set (P := fun (j: Z) c' => c'##i = c##i).
+  change (P hi (inval_before hi lo c)).
+  unfold inval_before; apply CountedLoop.up_induction; unfold P; auto.
+  intros i' c' R E. rewrite <- E. unfold inval_if.
+  destruct (c'##i') as [[]|]; auto. destruct zle; auto. 
   apply ZTree.gro. unfold ZTree.elt, ZIndexed.t; lia.
-  auto.
 Qed.
 
 Remark inval_before_contents_1:
@@ -3998,18 +3983,25 @@ Remark inval_before_contents_1:
   lo <= i < hi -> (inval_before hi lo c)##i = Some(ACval chunk av) ->
   c##i = Some(ACval chunk av) /\ i + size_chunk chunk <= hi.
 Proof.
-  intros until c. functional induction (inval_before hi lo c); intros.
-- destruct (zeq lo i).
-+ subst i. rewrite inval_before_outside in H0 by lia.
-  unfold inval_if in H0. destruct (c##lo) as [[chunk0 v0]|] eqn:C; try congruence.
-  destruct (zle (lo + size_chunk chunk0) hi).
-  rewrite C in H0; inv H0. auto.
-  rewrite ZTree.grs in H0. congruence.
-+ exploit IHt. lia. auto. intros [A B]; split; auto.
-  unfold inval_if in A. destruct (c##lo) as [[chunk0 v0]|] eqn:C; auto.
-  destruct (zle (lo + size_chunk chunk0) hi); auto.
-  rewrite ZTree.gro in A; auto.
-- extlia.
+  intros until c.
+  set (P := fun hi' c' =>
+    c'##i = Some (ACval chunk av) ->
+    c##i = Some (ACval chunk av) /\ (lo <= i < hi' -> i + size_chunk chunk <= hi)).
+  assert (P hi (inval_before hi lo c)).
+  { unfold inval_before; apply CountedLoop.up_induction; unfold P; auto.
+  - intros lo' c' RANGE REC H.
+    assert (c'##i = Some (ACval chunk av) /\ (i = lo' -> i + size_chunk chunk <= hi)).
+    { unfold inval_if in H. destruct (c'##lo') as [[]|] eqn:C'.
+    - destruct zle.
+      + intuition congruence.
+      + rewrite ZTree.grspec in H. destruct (ZTree.elt_eq i lo'); [discriminate|intuition].
+    - intuition congruence.
+    }
+    destruct H0. apply REC in H0. destruct H0. split; auto.
+    intros. destruct (zeq i lo'); intuition lia.
+  - intros; intuition lia.
+  }
+  intros. apply H in H1. intuition auto.
 Qed.
 
 Lemma max_size_chunk: forall chunk, size_chunk chunk <= 8.
