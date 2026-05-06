@@ -16,7 +16,7 @@
 
 (** Bounded and unbounded iterators *)
 
-From Coq Require Import ClassicalFacts ChoiceFacts.
+From Coq Require Import ClassicalFacts ChoiceFacts Zwf.
 Require Import Coqlib.
 
 (** This modules defines several Coq encodings of a general "while" loop.
@@ -328,3 +328,139 @@ Qed.
 End ITERATION.
 
 End GenIter.
+
+(** * Counted loops *)
+
+Module CountedLoop.
+
+(** Counted loops are presented as folds over integer ranges.
+
+[CountedLoop.up f lo hi a] is [ a |> f lo |> f (lo+1) |> ... |> f (hi-1) ] .
+
+[CountedLoop.down f hi lo a] is [ a |> f (hi-1) |> ... |> f (lo+1) |> f lo ].
+
+*)
+
+Section COUNTED_LOOP.
+
+Context {A: Type} (f: Z -> A -> A).
+
+Remark up_aux: forall {lo hi}, lo < hi -> Zwf_up hi (Z.succ lo) lo.
+Proof. intros; red; lia. Qed.
+
+Fixpoint up_rec (lo hi: Z) (a: A) (acc: Acc (Zwf_up hi) lo) : A :=
+  match zlt lo hi with
+  | left LT => up_rec (Z.succ lo) hi (f lo a) (Acc_inv acc (up_aux LT))
+  | right GE => a
+  end.
+
+Definition up (lo hi: Z) (a: A) :=
+  up_rec lo hi a (Zwf_up_well_founded hi lo).
+
+Lemma unroll_up: forall lo hi a,
+  up lo hi a = if zlt lo hi then up (Z.succ lo) hi (f lo a) else a.
+Proof.
+  assert (EXT: forall hi lo a acc1 acc2,
+            up_rec lo hi a acc1 = up_rec lo hi a acc2).
+  { intros hi. induction lo using (well_founded_induction (Zwf_up_well_founded hi)).
+    intros. destruct acc1, acc2; simpl. destruct (zlt lo hi); auto. apply H. red; lia. }
+  intros. unfold up at 1. destruct (Zwf_up_well_founded hi lo). simpl.
+  destruct (zlt lo hi); auto. apply EXT.
+Qed.
+
+Lemma up_split: forall lo mid hi a,
+  lo <= mid <= hi -> up lo hi a = up mid hi (up lo mid a).
+Proof.
+  intros until a; intros [L H]. revert lo a L.
+  induction lo using (well_founded_induction (Zwf_up_well_founded hi)).
+  intros. rewrite (unroll_up lo mid). destruct (zlt lo mid).
+- rewrite (unroll_up lo hi), zlt_true by lia. apply H0. red; lia. lia.
+- replace mid with lo by lia. auto.
+Qed.
+
+Lemma unroll_up_rev: forall lo hi a,
+  up lo hi a = if zlt lo hi then f (Z.pred hi) (up lo (Z.pred hi) a) else a.
+Proof.
+  intros. destruct (zlt lo hi).
+- rewrite up_split with (mid := (Z.pred hi)) by lia.
+  rewrite unroll_up, zlt_true by lia. rewrite unroll_up, zlt_false by lia. auto.
+- rewrite unroll_up, zlt_false by lia. auto.
+Qed.
+
+Lemma up_induction: forall (P: Z -> A -> Prop) lo hi a,
+  (forall i a, lo <= i < hi -> P i a -> P (i + 1) (f i a)) ->
+  P (Z.min lo hi) a -> P hi (up lo hi a).
+Proof.
+  intros.
+  assert (REC: forall x b acc, lo <= x <= hi -> P x b -> P hi (up_rec x hi b acc)).
+  { induction x using (well_founded_induction (Zwf_up_well_founded hi)); intros.
+    destruct acc; simpl. destruct (zlt x hi).
+  - apply H1. red; lia. lia. apply H; auto. lia.
+  - assert (x = hi) by lia. congruence. }
+  intros. destruct (zle lo hi).
+- apply REC. lia. replace lo with (Z.min lo hi) by lia. auto.
+- rewrite unroll_up, zlt_false by lia. assert (Z.min lo hi = hi) by lia. congruence.  
+Qed.
+
+Remark down_aux: forall {lo hi}, lo < hi -> Zwf lo (Z.pred hi) hi.
+Proof. intros; red; lia. Qed.
+
+Fixpoint down_rec (hi lo: Z) (a: A) (acc: Acc (Zwf lo) hi) : A :=
+  match zlt lo hi with
+  | left LT => down_rec (Z.pred hi) lo (f (Z.pred hi) a) (Acc_inv acc (down_aux LT))
+  | right GE => a
+  end.
+
+Definition down (hi lo: Z) (a: A) :=
+  down_rec hi lo a (Zwf_well_founded lo hi).
+
+Lemma unroll_down: forall hi lo a,
+  down hi lo a = if zlt lo hi then down (Z.pred hi) lo (f (Z.pred hi) a) else a.
+Proof.
+  assert (EXT: forall lo hi a acc1 acc2,
+            down_rec hi lo a acc1 = down_rec hi lo a acc2).
+  { intros lo. induction hi using (well_founded_induction (Zwf_well_founded lo)).
+    intros. destruct acc1, acc2; simpl. destruct (zlt lo hi); auto. apply H. red; lia. }
+  intros. unfold down at 1. destruct (Zwf_well_founded lo hi). simpl.
+  destruct (zlt lo hi); auto. apply EXT.
+Qed.
+
+Lemma down_split: forall lo mid hi a,
+  lo <= mid <= hi -> down hi lo a = down mid lo (down hi mid a).
+Proof.
+  intros until a; intros [L H]. revert hi a H.
+  induction hi using (well_founded_induction (Zwf_well_founded lo)).
+  intros. rewrite (unroll_down hi mid). destruct (zlt mid hi).
+- rewrite (unroll_down hi lo), zlt_true by lia. apply H. red; lia. lia.
+- replace mid with hi by lia. auto.
+Qed.
+
+Lemma unroll_down_rev: forall hi lo a,
+  down hi lo a = if zlt lo hi then f lo (down hi (Z.succ lo) a) else a.
+Proof.
+  intros. destruct (zlt lo hi).
+- rewrite down_split with (mid := (Z.succ lo)) by lia.
+  rewrite unroll_down, zlt_true by lia. rewrite unroll_down, zlt_false by lia.
+  f_equal. lia.
+- rewrite unroll_down, zlt_false by lia. auto.
+Qed.
+
+Lemma down_induction: forall (P: Z -> A -> Prop) lo hi a,
+  (forall i a, lo <= i < hi -> P (i + 1) a -> P i (f i a)) ->
+  P (Z.max lo hi) a -> P lo (down hi lo a).
+Proof.
+  intros.
+  assert (REC: forall x b acc, lo <= x <= hi -> P x b -> P lo (down_rec x lo b acc)).
+  { induction x using (well_founded_induction (Zwf_well_founded lo)); intros.
+    destruct acc; simpl. destruct (zlt lo x).
+  - apply H1. red; lia. lia. apply H; auto. lia. replace (Z.pred x + 1) with x by lia. auto.
+  - assert (x = lo) by lia. congruence. }
+  intros. destruct (zle lo hi).
+- apply REC; auto. lia. replace hi with (Z.max lo hi) by lia. auto.
+- rewrite unroll_down, zlt_false by lia. assert (Z.max lo hi = lo) by lia. congruence.  
+Qed.
+
+End COUNTED_LOOP.
+
+End CountedLoop.
+

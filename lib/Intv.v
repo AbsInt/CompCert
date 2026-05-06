@@ -16,8 +16,8 @@
 
 (** Definitions and theorems about semi-open integer intervals *)
 
-From Coq Require Import Zwf Program.Wf Recdef.
-Require Import Coqlib.
+From Coq Require Import Zwf Program.Wf.
+Require Import Coqlib Iteration.
 
 Definition interv : Type := (Z * Z)%type.
 
@@ -174,46 +174,29 @@ Qed.
 
 (** * Enumerating the elements of an interval *)
 
-Section ELEMENTS.
-
-Variable lo: Z.
-
-Function elements_rec (hi: Z) {wf (Zwf lo) hi} : list Z :=
-  if zlt lo hi then (hi-1) :: elements_rec (hi-1) else nil.
-Proof.
-  intros. red. lia.
-  apply Zwf_well_founded.
-Qed.
-
-Lemma In_elements_rec:
-  forall hi x,
-  List.In x (elements_rec hi) <-> lo <= x < hi.
-Proof.
-  intros. functional induction (elements_rec hi).
-  simpl; split; intros.
-  destruct H. clear IHl. lia. rewrite IHl in H. clear IHl. lia.
-  destruct (zeq (hi - 1) x); auto. right. rewrite IHl. clear IHl. lia.
-  simpl; intuition auto with zarith.
-Qed.
-
-End ELEMENTS.
-
 Definition elements (i: interv) : list Z :=
-  elements_rec (fst i) (snd i).
+  CountedLoop.up List.cons (fst i) (snd i) List.nil.
 
 Lemma in_elements:
   forall x i,
   In x i -> List.In x (elements i).
 Proof.
-  intros. unfold elements. rewrite In_elements_rec. auto.
+  intros x [lo hi]. unfold In, elements. simpl.
+  induction hi using (well_founded_induction (Zwf_well_founded lo)); intros.
+  rewrite CountedLoop.unroll_up_rev. rewrite zlt_true by lia. simpl.
+  destruct (zeq (Z.pred hi) x). auto. right; apply H. red; lia. lia.
 Qed.
 
 Lemma elements_in:
   forall x i,
   List.In x (elements i) -> In x i.
 Proof.
-  unfold elements; intros.
-  rewrite In_elements_rec in H. auto.
+  intros x [lo hi]. unfold In, elements. simpl.
+  induction hi using (well_founded_induction (Zwf_well_founded lo)); intros.
+  rewrite CountedLoop.unroll_up_rev in H0. destruct (zlt lo hi); try contradiction.
+  simpl in H0; destruct H0.
+- lia.
+- exploit H; eauto. red; lia. lia.
 Qed.
 
 (** * Checking properties on all elements of an interval *)
@@ -265,39 +248,17 @@ Definition forall_dec
 
 (** * Folding a function over all elements of an interval *)
 
-Section FOLD.
-
-Variable A: Type.
-Variable f: Z -> A -> A.
-Variable lo: Z.
-Variable a: A.
-
-Function fold_rec (hi: Z) {wf (Zwf lo) hi} : A :=
-  if zlt lo hi then f (hi - 1) (fold_rec (hi - 1)) else a.
-Proof.
-  intros. red. lia.
-  apply Zwf_well_founded.
-Qed.
-
-Lemma fold_rec_elements:
-  forall hi, fold_rec hi = List.fold_right f a (elements_rec lo hi).
-Proof.
-  intros. functional induction (fold_rec hi).
-  rewrite elements_rec_equation. rewrite zlt_true; auto.
-  simpl. congruence.
-  rewrite elements_rec_equation. rewrite zlt_false; auto.
-Qed.
-
-End FOLD.
-
 Definition fold {A: Type} (f: Z -> A -> A) (a: A) (i: interv) : A :=
-  fold_rec A f (fst i) a (snd i).
+  CountedLoop.up f (fst i) (snd i) a.
 
 Lemma fold_elements:
   forall (A: Type) (f: Z -> A -> A) a i,
   fold f a i = List.fold_right f a (elements i).
 Proof.
-  intros. unfold fold, elements. apply fold_rec_elements.
+  intros A f a [lo hi]. unfold fold, elements; simpl.
+  induction hi using (well_founded_induction (Zwf_well_founded lo)); intros.
+  rewrite (CountedLoop.unroll_up_rev f), (CountedLoop.unroll_up_rev cons).
+  destruct (zlt lo hi); simpl; auto. f_equal; apply H. red; lia.
 Qed.
 
 (** Hints *)
