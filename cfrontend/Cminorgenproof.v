@@ -416,30 +416,6 @@ Proof.
   congruence.
 Qed.
 
-(** * Correspondence between global environments *)
-
-(** Global environments match if the memory injection [f] leaves unchanged
-  the references to global symbols and functions. *)
-
-Inductive match_globalenvs (f: meminj) (bound: block): Prop :=
-  | mk_match_globalenvs
-      (DOMAIN: forall b, Plt b bound -> f b = Some(b, 0))
-      (IMAGE: forall b1 b2 delta, f b1 = Some(b2, delta) -> Plt b2 bound -> b1 = b2)
-      (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> Plt b bound)
-      (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> Plt b bound)
-      (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> Plt b bound).
-
-Remark inj_preserves_globals:
-  forall f hi,
-  match_globalenvs f hi ->
-  meminj_preserves_globals ge f.
-Proof.
-  intros. inv H.
-  split. intros. apply DOMAIN. eapply SYMBOLS. eauto.
-  split. intros. apply DOMAIN. eapply VARINFOS. eauto.
-  intros. symmetry. eapply IMAGE; eauto.
-Qed.
-
 (** * Invariant on abstract call stacks  *)
 
 (** Call stacks represent abstractly the execution state of the current
@@ -471,9 +447,9 @@ Definition callstack : Type := list frame.
 Inductive match_callstack (f: meminj) (m: mem) (tm: mem):
                           callstack -> block -> block -> Prop :=
   | mcs_nil:
-      forall hi bound tbound,
-      match_globalenvs f hi ->
-      Ple hi bound -> Ple hi tbound ->
+      forall bound tbound,
+      Genv.inject f ge ->
+      Ple (Genv.genv_next ge) bound -> Ple (Genv.genv_next ge) tbound ->
       match_callstack f m tm nil bound tbound
   | mcs_cons:
       forall cenv tf e le te sp lo hi cs bound tbound
@@ -486,12 +462,12 @@ Inductive match_callstack (f: meminj) (m: mem) (tm: mem):
         (MCS: match_callstack f m tm cs lo sp),
       match_callstack f m tm (Frame cenv tf e le te sp lo hi :: cs) bound tbound.
 
-(** [match_callstack] implies [match_globalenvs]. *)
+(** [match_callstack] implies [Genv.inject]. *)
 
-Lemma match_callstack_match_globalenvs:
+Lemma match_callstack_genv_inject:
   forall f m tm cs bound tbound,
   match_callstack f m tm cs bound tbound ->
-  exists hi, match_globalenvs f hi.
+  Genv.inject f ge.
 Proof.
   induction 1; eauto.
 Qed.
@@ -509,11 +485,11 @@ Lemma match_callstack_invariant:
   match_callstack f2 m2 tm2 cs bound tbound.
 Proof.
   induction 1; intros.
-  (* base case *)
-  econstructor; eauto.
-  inv H. constructor; intros; eauto.
-  eapply IMAGE; eauto. eapply H6; eauto. extlia.
-  (* inductive case *)
+- (* base case *)
+  econstructor; eauto. destruct H as [A B]; split; intros.
++ rewrite H5 by extlia; auto.
++ apply B; auto. apply H6; auto. extlia.
+- (* inductive case *)
   assert (Ple lo hi) by (eapply me_low_high; eauto).
   econstructor; eauto.
   eapply match_temps_invariant; eauto.
@@ -631,13 +607,14 @@ Proof.
   intros until m2'.
   intros UNMAPPED OUTOFREACH INCR SEPARATED MAXPERMS.
   induction 1; intros.
-(* base case *)
-  apply mcs_nil with hi; auto.
-  inv H. constructor; auto.
-  intros. case_eq (f1 b1).
-  intros [b2' delta'] EQ. rewrite (INCR _ _ _ EQ) in H. inv H. eauto.
-  intro EQ. exploit SEPARATED; eauto. intros [A B]. elim B. red. extlia.
-(* inductive case *)
+- (* base case *)
+  apply mcs_nil; auto.
+  destruct H as [P Q]. split; intros.
++ apply INCR; auto.
++ destruct (f1 b) as [[b0 delta0] | ] eqn:EQ.
+  rewrite (INCR _ _ _ EQ) in H. inv H. eauto.
+  exploit SEPARATED; eauto. intros [A B]. elim B. red. extlia.
+- (* inductive case *)
   constructor. auto. auto.
   eapply match_temps_invariant; eauto.
   eapply match_env_invariant; eauto.
@@ -1418,10 +1395,10 @@ Proof.
   constructor. simpl. rewrite Ptrofs.add_zero_l; auto.
   congruence.
   (* global *)
-  exploit match_callstack_match_globalenvs; eauto. intros [bnd MG]. inv MG.
+  exploit Genv.find_symbol_inject; eauto using match_callstack_genv_inject. intros IMG.
   exists (Vptr b Ptrofs.zero); split.
   constructor. simpl. unfold Genv.symbol_address. 
-  rewrite symbols_preserved. rewrite H2. auto.
+  rewrite symbols_preserved, H2. auto.
   econstructor; eauto.
 Qed.
 
@@ -1600,19 +1577,6 @@ Inductive match_states: Csharpminor.state -> Cminor.state -> Prop :=
       (RESINJ: Val.inject f v tv),
       match_states (Csharpminor.Returnstate v k m)
                    (Returnstate tv tk tm).
-
-Remark val_inject_function_pointer:
-  forall bound v fd f tv,
-  Genv.find_funct ge v = Some fd ->
-  match_globalenvs f bound ->
-  Val.inject f v tv ->
-  tv = v.
-Proof.
-  intros. exploit Genv.find_funct_inv; eauto. intros [b EQ]. subst v.
-  rewrite Genv.find_funct_find_funct_ptr in H.
-  assert (f b = Some(b, 0)). inv H0. apply DOMAIN. eapply FUNCTIONS; eauto.
-  inv H1. rewrite H2 in H5; inv H5. reflexivity.
-Qed.
 
 Lemma match_call_cont:
   forall k tk cenv xenv cs,
@@ -1986,8 +1950,7 @@ Proof.
   monadInv TR.
   exploit transl_expr_correct; eauto. intros [tvf [EVAL1 VINJ1]].
   assert (tvf = vf).
-    exploit match_callstack_match_globalenvs; eauto. intros [bnd MG].
-    eapply val_inject_function_pointer; eauto.
+  { eapply Genv.find_funct_inject; eauto using match_callstack_genv_inject. }
   subst tvf.
   exploit transl_exprlist_correct; eauto.
   intros [tvargs [EVAL2 VINJ2]].
@@ -2002,9 +1965,7 @@ Proof.
   monadInv TR.
   exploit transl_exprlist_correct; eauto.
   intros [tvargs [EVAL2 VINJ2]].
-  exploit match_callstack_match_globalenvs; eauto. intros [hi' MG].
-  exploit external_call_mem_inject; eauto.
-  eapply inj_preserves_globals; eauto.
+  exploit external_call_mem_inject; eauto using match_callstack_genv_inject.
   intros [f' [vres' [tm' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR SEPARATED]]]]]]]]].
   left; econstructor; split.
   apply plus_one. econstructor. eauto.
@@ -2156,9 +2117,7 @@ Opaque PTree.set.
 
 (* external call *)
   monadInv TR.
-  exploit match_callstack_match_globalenvs; eauto. intros [hi MG].
-  exploit external_call_mem_inject; eauto.
-  eapply inj_preserves_globals; eauto.
+  exploit external_call_mem_inject; eauto using match_callstack_genv_inject.
   intros [f' [vres' [tm' [EC [VINJ [MINJ' [UNMAPPED [OUTOFREACH [INCR SEPARATED]]]]]]]]].
   left; econstructor; split.
   apply plus_one. econstructor.
@@ -2179,20 +2138,6 @@ Opaque PTree.set.
   eapply match_callstack_set_temp; eauto.
 Qed.
 
-Lemma match_globalenvs_init:
-  forall m,
-  Genv.init_mem prog = Some m ->
-  match_globalenvs (Mem.flat_inj (Mem.nextblock m)) (Mem.nextblock m).
-Proof.
-  intros. constructor.
-  intros. unfold Mem.flat_inj. apply pred_dec_true; auto.
-  intros. unfold Mem.flat_inj in H0.
-  destruct (plt b1 (Mem.nextblock m)); congruence.
-  intros. eapply Genv.find_symbol_not_fresh; eauto.
-  intros. eapply Genv.find_funct_ptr_not_fresh; eauto.
-  intros. eapply Genv.find_var_info_not_fresh; eauto.
-Qed.
-
 Lemma transl_initial_states:
   forall S, Csharpminor.initial_state prog S ->
   exists R, Cminor.initial_state tprog R /\ match_states S R.
@@ -2211,8 +2156,9 @@ Proof.
   eapply match_callstate with (f := Mem.flat_inj (Mem.nextblock m0)) (cs := @nil frame) (cenv := PTree.empty Z).
   auto.
   eapply Genv.initmem_inject; eauto.
-  apply mcs_nil with (Mem.nextblock m0). apply match_globalenvs_init; auto. extlia. extlia.
-  constructor. red; auto.
+  erewrite <- Genv.init_mem_genv_next by eauto. apply mcs_nil; auto using Genv.init_inject, Ple_refl.
+  constructor.
+  red; auto.
   constructor.
 Qed.
 

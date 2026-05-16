@@ -5037,14 +5037,12 @@ Proof.
   rewrite Z.add_0_r in H2. auto.
 Qed.
 
-Lemma inj_of_bc_preserves_globals:
-  forall bc ge, genv_match bc ge -> meminj_preserves_globals ge (inj_of_bc bc).
+Lemma inj_of_bc_inject_globals:
+  forall bc ge, genv_match bc ge -> Genv.inject (inj_of_bc bc) ge.
 Proof.
-  intros. destruct H as [A B].
-  split. intros. apply inj_of_bc_valid. rewrite A in H. congruence.
-  split. intros. apply inj_of_bc_valid. apply B.
-    rewrite Genv.find_var_info_iff in H. eapply Genv.genv_defs_range; eauto.
-  intros. exploit inj_of_bc_inv; eauto. intros (P & Q & R). auto.
+  intros. destruct H as [A B]. split; intros.
+- apply inj_of_bc_valid. apply B; auto.
+- eapply inj_of_bc_inv; eauto. 
 Qed.
 
 Lemma pmatch_inj_top:

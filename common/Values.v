@@ -2355,6 +2355,12 @@ Qed.
 
 Global Hint Resolve inject_ptrofs : core.
 
+Lemma inject_ptr_flat:
+  forall (mi: meminj) b b' ofs, mi b = Some(b', 0) -> inject mi (Vptr b ofs) (Vptr b' ofs).
+Proof.
+  intros. econstructor; eauto. rewrite Ptrofs.add_zero; auto.
+Qed.
+
 Section VAL_INJ_OPS.
 
 Variable f: meminj.

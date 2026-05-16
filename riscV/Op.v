@@ -1299,19 +1299,11 @@ Section EVAL_INJECT.
 Variable F V: Type.
 Variable genv: Genv.t F V.
 Variable f: meminj.
-Hypothesis globals: meminj_preserves_globals genv f.
+Hypothesis globals: Genv.inject f genv.
 Variable sp1: block.
 Variable sp2: block.
 Variable delta: Z.
 Hypothesis sp_inj: f sp1 = Some(sp2, delta).
-
-Remark symbol_address_inject:
-  forall id ofs, Val.inject f (Genv.symbol_address genv id ofs) (Genv.symbol_address genv id ofs).
-Proof.
-  intros. unfold Genv.symbol_address. destruct (Genv.find_symbol genv id) eqn:?; auto.
-  exploit (proj1 globals); eauto. intros.
-  econstructor; eauto. rewrite Ptrofs.add_zero; auto.
-Qed.
 
 Lemma eval_condition_inject:
   forall cond vl1 vl2 b m1 m2,
@@ -1337,8 +1329,7 @@ Lemma eval_addressing_inject:
 Proof.
   intros.
   rewrite eval_shift_stack_addressing.
-  eapply eval_addressing_inj with (sp1 := Vptr sp1 Ptrofs.zero); eauto.
-  intros. apply symbol_address_inject.
+  eapply eval_addressing_inj with (sp1 := Vptr sp1 Ptrofs.zero); eauto using Genv.symbol_address_inject.
   econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
 Qed.
 
@@ -1353,12 +1344,11 @@ Lemma eval_operation_inject:
 Proof.
   intros.
   rewrite eval_shift_stack_operation. simpl.
-  eapply eval_operation_inj with (sp1 := Vptr sp1 Ptrofs.zero) (m1 := m1); eauto.
+  eapply eval_operation_inj with (sp1 := Vptr sp1 Ptrofs.zero) (m1 := m1); eauto using Genv.symbol_address_inject.
   intros; eapply Mem.valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_val; eauto.
   intros; eapply Mem.weak_valid_pointer_inject_no_overflow; eauto.
   intros; eapply Mem.different_pointers_inject; eauto.
-  intros. apply symbol_address_inject.
   econstructor; eauto. rewrite Ptrofs.add_zero_l; auto. 
 Qed.
 

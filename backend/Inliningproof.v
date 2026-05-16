@@ -356,32 +356,18 @@ Qed.
 
 (** ** Relating global environments *)
 
-Inductive match_globalenvs (F: meminj) (bound: block): Prop :=
-  | mk_match_globalenvs
-      (DOMAIN: forall b, Plt b bound -> F b = Some(b, 0))
-      (IMAGE: forall b1 b2 delta, F b1 = Some(b2, delta) -> Plt b2 bound -> b1 = b2)
-      (SYMBOLS: forall id b, Genv.find_symbol ge id = Some b -> Plt b bound)
-      (FUNCTIONS: forall b fd, Genv.find_funct_ptr ge b = Some fd -> Plt b bound)
-      (VARINFOS: forall b gv, Genv.find_var_info ge b = Some gv -> Plt b bound).
-
 Lemma find_function_agree:
-  forall ros rs fd F ctx rs' bound,
+  forall ros rs fd F ctx rs',
   find_function ge ros rs = Some fd ->
   agree_regs F ctx rs rs' ->
-  match_globalenvs F bound ->
+  Genv.inject F ge ->
   exists cu fd',
   find_function tge (sros ctx ros) rs' = Some fd' /\ transf_fundef (funenv_program cu) fd = OK fd' /\ linkorder cu prog.
 Proof.
   intros. destruct ros as [r | id]; simpl in *.
 - (* register *)
   assert (EQ: rs'#(sreg ctx r) = rs#r).
-  { exploit Genv.find_funct_inv; eauto. intros [b EQ].
-    assert (A: Val.inject F rs#r rs'#(sreg ctx r)). eapply agree_val_reg; eauto.
-    rewrite EQ in A; inv A.
-    inv H1. rewrite DOMAIN in H5. inv H5. auto.
-    apply FUNCTIONS with fd.
-    rewrite EQ in H; rewrite Genv.find_funct_find_funct_ptr in H. auto.
-  }
+  { eapply Genv.find_funct_inject; eauto using agree_val_reg. }
   rewrite EQ. eapply functions_translated; eauto.
 - (* symbol *)
   rewrite symbols_preserved. destruct (Genv.find_symbol ge id); try discriminate.
@@ -405,8 +391,8 @@ Qed.
 (** Translation of builtin arguments. *)
 
 Lemma tr_builtin_arg:
-  forall F bound ctx rs rs' sp sp' m m',
-  match_globalenvs F bound ->
+  forall F ctx rs rs' sp sp' m m',
+  Genv.inject F ge ->
   agree_regs F ctx rs rs' ->
   F sp = Some(sp', ctx.(dstk)) ->
   Mem.inject F m m' ->
@@ -415,7 +401,12 @@ Lemma tr_builtin_arg:
   exists v', eval_builtin_arg tge (fun r => rs'#r) (Vptr sp' Ptrofs.zero) m' (sbuiltinarg ctx a) v'
           /\ Val.inject F v v'.
 Proof.
-  intros until m'; intros MG AG SP MI. induction 1; simpl.
+  intros until m'; intros MG AG SP MI.
+  assert (SYMB: forall id ofs, Val.inject F (Senv.symbol_address ge id ofs) (Senv.symbol_address tge id ofs)).
+  { intros. unfold Senv.symbol_address; simpl. rewrite symbols_preserved.
+    destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
+    eauto using Val.inject_ptr_flat, Genv.find_symbol_inject. }
+  induction 1; simpl.
 - exists rs'#(sreg ctx x); split. constructor. eapply agree_val_reg; eauto.
 - econstructor; eauto with barg.
 - econstructor; eauto with barg.
@@ -426,16 +417,8 @@ Proof.
   simpl. econstructor; eauto. rewrite Ptrofs.add_zero_l; auto.
   intros (v' & A & B). exists v'; split; auto. constructor. simpl. rewrite Ptrofs.add_zero_l; auto.
 - econstructor; split. constructor. simpl. econstructor; eauto. rewrite ! Ptrofs.add_zero_l; auto.
-- assert (Val.inject F (Senv.symbol_address ge id ofs) (Senv.symbol_address tge id ofs)).
-  { unfold Senv.symbol_address; simpl; unfold Genv.symbol_address.
-    rewrite symbols_preserved. destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
-    inv MG. econstructor. eauto. rewrite Ptrofs.add_zero; auto. }
-  exploit Mem.loadv_inject; eauto. intros (v' & A & B).
-  exists v'; eauto with barg.
-- econstructor; split. constructor.
-  unfold Senv.symbol_address; simpl; unfold Genv.symbol_address.
-  rewrite symbols_preserved. destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
-  inv MG. econstructor. eauto. rewrite Ptrofs.add_zero; auto.
+- exploit Mem.loadv_inject; eauto. intros (v' & A & B). exists v'; eauto with barg.
+- econstructor; split. constructor. auto.
 - destruct IHeval_builtin_arg1 as (v1' & A1 & B1).
   destruct IHeval_builtin_arg2 as (v2' & A2 & B2).
   econstructor; split. eauto with barg. apply Val.longofwords_inject; auto.
@@ -446,8 +429,8 @@ Proof.
 Qed.
 
 Lemma tr_builtin_args:
-  forall F bound ctx rs rs' sp sp' m m',
-  match_globalenvs F bound ->
+  forall F ctx rs rs' sp sp' m m',
+  Genv.inject F ge ->
   agree_regs F ctx rs rs' ->
   F sp = Some(sp', ctx.(dstk)) ->
   Mem.inject F m m' ->
@@ -467,9 +450,9 @@ Qed.
 
 Inductive match_stacks (F: meminj) (m m': mem):
              list stackframe -> list stackframe -> block -> Prop :=
-  | match_stacks_nil: forall bound1 bound
-        (MG: match_globalenvs F bound1)
-        (BELOW: Ple bound1 bound),
+  | match_stacks_nil: forall bound
+        (GINJ: Genv.inject F ge)
+        (BELOW: Ple (Genv.genv_next ge) bound),
       match_stacks F m m' nil nil bound
   | match_stacks_cons: forall res f sp pc rs stk f' sp' rs' stk' bound fenv ctx
         (MS: match_stacks_inside F m m' stk stk' f' ctx sp' rs')
@@ -528,28 +511,13 @@ Variables m m': mem.
 
 Lemma match_stacks_globalenvs:
   forall stk stk' bound,
-  match_stacks F m m' stk stk' bound -> exists b, match_globalenvs F b
+  match_stacks F m m' stk stk' bound -> Genv.inject F ge
 with match_stacks_inside_globalenvs:
   forall stk stk' f ctx sp rs',
-  match_stacks_inside F m m' stk stk' f ctx sp rs' -> exists b, match_globalenvs F b.
+  match_stacks_inside F m m' stk stk' f ctx sp rs' -> Genv.inject F ge.
 Proof.
   induction 1; eauto.
   induction 1; eauto.
-Qed.
-
-Lemma match_globalenvs_preserves_globals:
-  forall b, match_globalenvs F b -> meminj_preserves_globals ge F.
-Proof.
-  intros. inv H. red. split. eauto. split. eauto.
-  intros. symmetry. eapply IMAGE; eauto.
-Qed.
-
-Lemma match_stacks_inside_globals:
-  forall stk stk' f ctx sp rs',
-  match_stacks_inside F m m' stk stk' f ctx sp rs' -> meminj_preserves_globals ge F.
-Proof.
-  intros. exploit match_stacks_inside_globalenvs; eauto. intros [b A].
-  eapply match_globalenvs_preserves_globals; eauto.
 Qed.
 
 Lemma match_stacks_bound:
@@ -559,7 +527,7 @@ Lemma match_stacks_bound:
   match_stacks F m m' stk stk' bound1.
 Proof.
   intros. inv H.
-  apply match_stacks_nil with bound0. auto. eapply Ple_trans; eauto.
+  apply match_stacks_nil. auto. eapply Ple_trans; eauto.
   eapply match_stacks_cons; eauto. eapply Pos.lt_le_trans; eauto.
   eapply match_stacks_untailcall; eauto. eapply Pos.lt_le_trans; eauto.
 Qed.
@@ -600,10 +568,10 @@ with match_stacks_inside_invariant:
 Proof.
   induction 1; intros.
   (* nil *)
-  apply match_stacks_nil with (bound1 := bound1).
-  inv MG. constructor; auto.
-  intros. apply IMAGE with delta. eapply INJ; eauto. eapply Pos.lt_le_trans; eauto.
-  auto. auto.
+  apply match_stacks_nil; auto.
+  destruct GINJ as [A B]. split; intros.
+  apply INCR. apply A. extlia.
+  apply B; auto. apply INJ; auto. extlia.
   (* cons *)
   apply match_stacks_cons with (fenv := fenv) (ctx := ctx); auto.
   eapply match_stacks_inside_invariant; eauto.
@@ -773,10 +741,10 @@ with match_stacks_inside_extcall:
   match_stacks_inside F2 m2 m2' stk stk' f' ctx sp' rs'.
 Proof.
   induction 1; intros.
-  apply match_stacks_nil with bound1; auto.
-    inv MG. constructor; intros; eauto.
-    destruct (F1 b1) as [[b2' delta']|] eqn:?.
-    exploit INCR; eauto. intros EQ; rewrite H0 in EQ; inv EQ. eapply IMAGE; eauto.
+  apply match_stacks_nil; auto.
+    destruct GINJ as [P Q]. split; intros; eauto.
+    destruct (F1 b) as [[b0 delta0]|] eqn:?.
+    exploit INCR; eauto. intros EQ; rewrite H0 in EQ; inv EQ. eauto.
     exploit SEP; eauto. intros [A B]. elim B. red. extlia.
   eapply match_stacks_cons; eauto.
     eapply match_stacks_inside_extcall; eauto. extlia.
@@ -921,7 +889,7 @@ Proof.
 - (* op *)
   exploit tr_funbody_inv; eauto. intros TR; inv TR.
   exploit eval_operation_inject.
-    eapply match_stacks_inside_globals; eauto.
+    eapply match_stacks_inside_globalenvs; eauto.
     eexact SP.
     instantiate (2 := rs##args). instantiate (1 := rs'##(sregs ctx args)). eapply agree_val_regs; eauto.
     eexact MINJ. eauto.
@@ -936,7 +904,7 @@ Proof.
 - (* load *)
   exploit tr_funbody_inv; eauto. intros TR; inv TR.
   exploit eval_addressing_inject.
-    eapply match_stacks_inside_globals; eauto.
+    eapply match_stacks_inside_globalenvs; eauto.
     eexact SP.
     instantiate (2 := rs##args). instantiate (1 := rs'##(sregs ctx args)). eapply agree_val_regs; eauto.
     eauto.
@@ -953,7 +921,7 @@ Proof.
 - (* store *)
   exploit tr_funbody_inv; eauto. intros TR; inv TR.
   exploit eval_addressing_inject.
-    eapply match_stacks_inside_globals; eauto.
+    eapply match_stacks_inside_globalenvs; eauto.
     eexact SP.
     instantiate (2 := rs##args). instantiate (1 := rs'##(sregs ctx args)). eapply agree_val_regs; eauto.
     eauto.
@@ -973,8 +941,7 @@ Proof.
   intros. eapply SSZ2. eapply Mem.perm_store_2; eauto with mem.
 
 - (* call *)
-  exploit match_stacks_inside_globalenvs; eauto. intros [bound G].
-  exploit find_function_agree; eauto. intros (cu & fd' & A & B & C).
+  exploit find_function_agree; eauto using match_stacks_inside_globalenvs. intros (cu & fd' & A & B & C).
   exploit tr_funbody_inv; eauto. intros TR; inv TR.
 + (* not inlined *)
   left; econstructor; split.
@@ -994,8 +961,7 @@ Proof.
   red; intros; apply PRIV. destruct H16. lia.
 
 - (* tailcall *)
-  exploit match_stacks_inside_globalenvs; eauto. intros [bound G].
-  exploit find_function_agree; eauto. intros (cu & fd' & A & B & C).
+  exploit find_function_agree; eauto using match_stacks_inside_globalenvs. intros (cu & fd' & A & B & C).
   assert (PRIV': range_private F m' m'0 sp' (dstk ctx) f'.(fn_stacksize)).
   { eapply range_private_free_left; eauto. inv FB. rewrite <- H4. auto. }
   exploit tr_funbody_inv; eauto. intros TR; inv TR.
@@ -1050,10 +1016,8 @@ Proof.
 
 - (* builtin *)
   exploit tr_funbody_inv; eauto. intros TR; inv TR.
-  exploit match_stacks_inside_globalenvs; eauto. intros [bound MG].
-  exploit tr_builtin_args; eauto. intros (vargs' & P & Q).
-  exploit external_call_mem_inject; eauto.
-    eapply match_stacks_inside_globals; eauto.
+  exploit tr_builtin_args; eauto using match_stacks_inside_globalenvs. intros (vargs' & P & Q).
+  exploit external_call_mem_inject; eauto using match_stacks_inside_globalenvs.
   intros [F1 [v1 [m1' [A [B [C [D [E [J K]]]]]]]]].
   left; econstructor; split.
   eapply plus_one. eapply exec_Ibuiltin; eauto.
@@ -1205,9 +1169,7 @@ Proof.
   auto. auto.
 
 - (* external function *)
-  exploit match_stacks_globalenvs; eauto. intros [bound MG].
-  exploit external_call_mem_inject; eauto.
-    eapply match_globalenvs_preserves_globals; eauto.
+  exploit external_call_mem_inject; eauto using match_stacks_globalenvs.
   intros [F1 [v1 [m1' [A [B [C [D [E [J K]]]]]]]]].
   simpl in FD. inv FD.
   left; econstructor; split.
@@ -1272,14 +1234,8 @@ Proof.
     rewrite <- H3. eapply sig_function_translated; eauto.
   econstructor; eauto.
   instantiate (1 := Mem.flat_inj (Mem.nextblock m0)).
-  apply match_stacks_nil with (Mem.nextblock m0).
-  constructor; intros.
-    unfold Mem.flat_inj. apply pred_dec_true; auto.
-    unfold Mem.flat_inj in H. destruct (plt b1 (Mem.nextblock m0)); congruence.
-    eapply Genv.find_symbol_not_fresh; eauto.
-    eapply Genv.find_funct_ptr_not_fresh; eauto.
-    eapply Genv.find_var_info_not_fresh; eauto.
-    apply Ple_refl.
+  erewrite <- Genv.init_mem_genv_next by eauto.
+  apply match_stacks_nil. apply Genv.init_inject. apply Ple_refl.
   eapply Genv.initmem_inject; eauto.
 Qed.
 
