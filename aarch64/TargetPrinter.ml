@@ -308,6 +308,7 @@ module Target(System: SYSTEM): TARGET =
     | ADuxt(base, r, n) -> fprintf oc "[%a, %a, uxtw #%a]" xregsp base wreg r coqint n
     | ADadr(base, id, ofs) -> fprintf oc "[%a, %a]" xregsp base symbol_offset_low (id, ofs)
     | ADpostincr(base, n) -> fprintf oc "[%a], #%a" xregsp base coqint64 n
+    | ADpreincr(base, n) -> fprintf oc "[%a, #%a]!" xregsp base coqint64 n
 
 (* Print a shifted operand *)
     let shiftop oc = function
@@ -583,7 +584,7 @@ module Target(System: SYSTEM): TARGET =
     | Pnop ->
         fprintf oc "	nop\n"
     (* Pseudo-instructions expanded in Asmexpand *)
-    | Pallocframe(sz, linkofs) -> assert false
+    | Pallocframe(sz, linkofs, retaddrofs) -> assert false
     | Pfreeframe(sz, linkofs) -> assert false
     | Pcvtx2w rd -> assert false
     (* Pseudo-instructions not yet expanded *)
