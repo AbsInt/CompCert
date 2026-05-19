@@ -2,9 +2,8 @@
 The formally-verified C compiler.
 
 ## Overview
-The CompCert C verified compiler is a compiler for a large subset of the
-C programming language that generates code for the PowerPC, ARM, x86 and
-RISC-V processors.
+The CompCert C verified compiler is a compiler for the core C language 
+that generates code for the ARM, PowerPC, RISC-V and x86 processors.
 
 The distinguishing feature of CompCert is that it has been formally
 verified using the Coq proof assistant: the generated assembly code is
@@ -21,7 +20,7 @@ CompCert is not free software.  This non-commercial release can only
 be used for evaluation, research, educational and personal purposes.
 A commercial version of CompCert, without this restriction and with
 professional support and extra features, can be purchased from
-[AbsInt](https://www.absint.com).  See the file `LICENSE` for more
+[AbsInt](https://www.absint.com).  See the file [LICENSE](LICENSE) for more
 information.
 
 ## Copyright
