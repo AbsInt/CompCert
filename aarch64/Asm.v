@@ -136,7 +136,8 @@ Inductive addressing: Type :=
   | ADsxt (base: iregsp) (r: ireg) (n: int)          (**r base plus SIGN-EXT(reg) LSL n *)
   | ADuxt (base: iregsp) (r: ireg) (n: int)          (**r base plus ZERO-EXT(reg) LSL n *)
   | ADadr (base: iregsp) (id: ident) (ofs: ptrofs)   (**r base plus low address of [id + ofs] *)
-  | ADpostincr (base: iregsp) (n: int64).            (**r base plus offset; base is updated after *)
+  | ADpostincr (base: iregsp) (n: int64)             (**r base plus offset; base is updated after *)
+  | ADpreincr (base: iregsp) (n: int64).             (**r base plus offset; base is updated before *)
 
 Inductive shift_op: Type :=
   | SOnone
@@ -292,7 +293,7 @@ Inductive instruction: Type :=
   (** Floating-point conditional select *)
   | Pfsel (rd r1 r2: freg) (cond: testcond)
   (** Pseudo-instructions *)
-  | Pallocframe (sz: Z) (linkofs: ptrofs)                             (**r allocate new stack frame *)
+  | Pallocframe (sz: Z) (linkofs: ptrofs) (retaddrofs: ptrofs)        (**r allocate new stack frame *)
   | Pfreeframe (sz: Z) (linkofs: ptrofs)                              (**r deallocate stack frame and restore previous frame *)
   | Plabel (lbl: label)                                               (**r define a code label *)
   | Ploadsymbol (rd: ireg) (id: ident)                                (**r load the address of [id] *)
@@ -542,6 +543,7 @@ Definition eval_addressing (a: addressing) (rs: regset): val :=
   | ADuxt base r n => Val.addl rs#base (Val.shll (Val.longofintu rs#r) (Vint n))
   | ADadr base id ofs => Val.addl rs#base (symbol_low ge id ofs)
   | ADpostincr base n => Vundef (* not modeled yet *)
+  | ADpreincr base n => Vundef (* not modeled yet *)
   end.
 
 (** Auxiliaries for memory accesses *)
@@ -1063,12 +1065,16 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
         end in
       Next (nextinstr (rs#rd <- v)) m
   (** Pseudo-instructions *)
-  | Pallocframe sz pos =>
+  | Pallocframe sz linkpos retaddrpos =>
       let (m1, stk) := Mem.alloc m 0 sz in
       let sp := (Vptr stk Ptrofs.zero) in
-      match Mem.storev Mint64 m1 (Val.offset_ptr sp pos) rs#SP with
+      match Mem.storev Mint64 m1 (Val.offset_ptr sp linkpos) rs#SP with
       | None => Stuck
-      | Some m2 => Next (nextinstr (rs #X15 <- (rs#SP) #SP <- sp #X16 <- Vundef)) m2
+      | Some m2 =>
+          match Mem.storev Mint64 m2 (Val.offset_ptr sp retaddrpos) rs#RA with
+          | None => Stuck
+          | Some m3 => Next (nextinstr (rs #X15 <- (rs#SP) #SP <- sp #X16 <- Vundef)) m3
+          end
       end
   | Pfreeframe sz pos =>
       match Mem.loadv Mint64 m (Val.offset_ptr rs#SP pos) with

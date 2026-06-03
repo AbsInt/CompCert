@@ -18,6 +18,7 @@ open Asmexpandaux
 open AST
 open Camlcoq
 module Ptrofs = Integers.Ptrofs
+module I64 = Integers.Int64
 
 exception Error of string
 
@@ -38,9 +39,6 @@ let expand_loadimm32 (dst: ireg) n =
 
 let expand_addimm64 (dst: iregsp) (src: iregsp) n =
   List.iter emit (Asmgen.addimm64 dst src n [])
-
-let expand_storeptr (src: ireg) (base: iregsp) ofs =
-  List.iter emit (Asmgen.storeptr src base ofs [])
 
 (* Handling of varargs *)
 
@@ -490,7 +488,7 @@ module BRelax = Branch_relaxation (BInfo)
 
 let expand_instruction instr =
   match instr with
-  | Pallocframe (sz, ofs) ->
+  | Pallocframe (sz, linkofs, retaddrofs) ->
       emit (Pmov (RR1 X15, XSP));
       if is_current_function_variadic() && Archi.abi = Archi.AAPCS64 then begin
         let (ir, fr, _) =
@@ -501,9 +499,21 @@ let expand_instruction instr =
       end else begin
         current_function_stacksize := Z.to_int64 sz
       end;
-      expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz));
-      emit (Pcfi_adjust sz);
-      expand_storeptr X15 XSP ofs
+      assert (retaddrofs = Z.(add linkofs (of_uint 8)));
+      let sz1 = Z.(sub sz linkofs) in
+      if Z.(le sz1 (of_uint 512)) then begin
+        emit (Pstp(X15, X30, ADpreincr(XSP, I64.repr (Z.neg sz1))));
+        emit (Pcfi_adjust sz1)
+      end else begin
+        expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz1));
+        emit (Pcfi_adjust sz1);
+        emit (Pstp(X15, X30, ADimm(XSP, I64.zero)))
+      end;
+      let sz2 = Z.(sub sz sz1) in
+      if Z.(gt sz2 zero) then begin
+        expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz2));
+        emit (Pcfi_adjust sz2)
+      end
   | Pfreeframe (sz, ofs) ->
       expand_addimm64 XSP XSP (coqint_of_camlint64 !current_function_stacksize)
   | Pcvtx2w rd ->
