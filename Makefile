@@ -113,11 +113,16 @@ ifneq (,$(PROFILING))
 endif
 PROFILE_ZIP ?= true
 
-COQC="$(COQBIN)coqc" -q $(COQINCLUDES) $(COQCOPTS)
-COQDEP="$(COQBIN)coqdep" $(COQINCLUDES)
-COQDOC="$(COQBIN)coqdoc"
-COQEXEC="$(COQBIN)coqtop" $(COQINCLUDES) $(COQEXTRACTOPTS) -batch -load-vernac-source
-COQCHK="$(COQBIN)coqchk" $(COQINCLUDES)
+ifeq ($(USE_ROCQ),true)
+COQCOMMAND="$(COQBIN)rocq" $(2)
+else
+COQCOMMAND="$(COQBIN)$(1)"
+endif
+
+COQC=$(call COQCOMMAND,coqc,compile) -q $(COQINCLUDES) $(COQCOPTS)
+COQDEP=$(call COQCOMMAND,coqdep,dep) $(COQINCLUDES)
+COQEXEC=$(call COQCOMMAND,coqtop,repl) $(COQINCLUDES) $(COQEXTRACTOPTS) -batch -load-vernac-source
+COQCHK=$(call COQCOMMAND,coqchk,check) $(COQINCLUDES)
 COQ2HTML=coq2html
 MENHIR=menhir
 CP=cp
@@ -311,7 +316,7 @@ latexdoc:
 
 %.vo: %.v
 	@rm -f doc/$(*F).glob
-	@echo "COQC $*.v"
+	@echo "CROCQ $*.v"
 	@$(COQC) $*.v
 	@$(PROFILE_ZIP)
 

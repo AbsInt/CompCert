@@ -98,6 +98,7 @@ Options:
   -clightgen           Also compile and install the clightgen tool
   -install-coqdev      Also install the Coq development (implied by -clightgen)
   -ignore-coq-version  Accept to use experimental or unsupported versions of Coq
+  -ignore-rocq-version  Accept to use experimental or unsupported versions of Rocq
   -ignore-ocaml-version Accept to use experimental or unsupported versions of OCaml
 '
 
@@ -135,6 +136,8 @@ while : ; do
         clightgen=true
         install_coqdev=true;;
     -ignore-coq-version|--ignore-coq-version)
+        ignore_coq_version=true;;
+    -ignore-rocq-version|--ignore-rocq-version)
         ignore_coq_version=true;;
     -ignore-ocaml-version|--ignore-ocaml-version)
         ignore_ocaml_version=true;;
@@ -531,42 +534,59 @@ fi
 # Test Availability of Required Tools
 #
 missingtools=false
+use_rocq=true
 
+echo "Testing Rocq... " | tr -d '\n'
+rocq_ver=$("${COQBIN}"rocq --print-version 2>/dev/null | tr -d '\r' | cut -d' ' -f1)
+case "$rocq_ver" in
+  9.0*|9.1*|9.2*)
+        echo "version $rocq_ver -- good!"
+        use_rocq=true;;
+  ?*)
+        echo "version $rocq_ver -- UNSUPPORTED"
+        if $ignore_coq_version; then
+            echo "Warning: this version of Rocq is unsupported, proceed at your own risks."
+        else
+            echo "Error: CompCert requires a version of Rocq between 9.0 and 9.2"
+            missingtools=true
+        fi;;
+  "")
+        echo "not found"
+        use_rocq=false;;
+esac
+
+if ! $use_rocq; then
 echo "Testing Coq... " | tr -d '\n'
 coq_ver=$("${COQBIN}"coqc --print-version 2>/dev/null | tr -d '\r' | cut -d' ' -f1)
+
 case "$coq_ver" in
-  8.15.0|8.15.1|8.15.2|8.16.0|8.16.1|8.17.0|8.17.1|8.18.0|8.19.0|8.19.1|8.19.2|8.20.0|8.20.1|9.0.0|9.1.0|9.1.1)
+  8.15.0|8.15.1|8.15.2|8.16.0|8.16.1|8.17.0|8.17.1|8.18.0|8.19.0|8.19.1|8.19.2|8.20.0|8.20.1)
         echo "version $coq_ver -- good!";;
   ?*)
         echo "version $coq_ver -- UNSUPPORTED"
         if $ignore_coq_version; then
             echo "Warning: this version of Coq is unsupported, proceed at your own risks."
         else
-            echo "Error: CompCert requires a version of Coq between 8.15 and 9.1"
+            echo "Error: CompCert requires a version of Coq between 8.15 and 8.20.1"
             missingtools=true
         fi;;
   "")
         echo "NOT FOUND"
-        rocq_ver=$("${COQBIN}"rocq --print-version 2>/dev/null | tr -d '\r' | cut -d' ' -f1)
-        case "$rocq_ver" in
-            "") echo "Error: make sure Coq is installed.";;
-             *) echo "Rocq prover version $rocq_ver found."
-                echo "Please install the Coq wrapper for this version of Rocq.";;
-        esac
         missingtools=true;;
 esac
+fi
 
 echo "Testing OCaml... " | tr -d '\n'
 ocaml_ver=$(ocamlc -version 2>/dev/null | tr -d '\r')
 case "$ocaml_ver" in
-  4.0[5-9].*|4.1?.*)
+  4.0[5-9].*|4.1?.*|5.*)
         echo "version $ocaml_ver -- good!";;
   ?.*)
         echo "version $ocaml_ver -- UNSUPPORTED"
         if $ignore_ocaml_version; then
             echo "Warning: this version of OCaml is unsupported, proceed at your own risks."
         else
-            echo "Error: make sure OCaml version 4.05 to 4.14 is installed."
+            echo "Error: make sure OCaml version 4.05 or more recent is installed."
             missingtools=true
         fi;;
   *)
@@ -698,6 +718,7 @@ OCAML_NATIVE_COMP=$ocaml_native_comp
 OCAML_OPT_COMP=$ocaml_opt_comp
 MENHIR_DIR=$menhir_dir
 COMPFLAGS=-bin-annot
+USE_ROCQ=$use_rocq
 EOF
 
 if test "$target" != "manual"; then
