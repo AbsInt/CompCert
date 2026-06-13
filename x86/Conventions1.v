@@ -31,11 +31,11 @@ Definition is_callee_save (r: mreg) : bool :=
   match r with
   | AX | CX | DX => false
   | BX | BP => true
-  | SI | DI => negb Archi.ptr64 || Archi.win64 (**r callee-save in ELF 64 bits *)
+  | SI | DI => negb Archi.ptr64 || Archi.win64 (**r caller-save in ELF 64 bits *)
   | R8 | R9 | R10 | R11 => false
   | R12 | R13 | R14 | R15 => true
-  | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 => false
-  | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15 => Archi.win64
+  | X0 | X1 | X2 | X3 | X4 | X5 => false
+  | X6 | X7 | X8 | X9 | X10 | X11 | X12 | X13 | X14 | X15 => Archi.win64
   | FP0 => false
   end.
 
