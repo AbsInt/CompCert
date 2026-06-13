@@ -45,23 +45,23 @@ Lemma functions_translated:
   Genv.find_funct ge v = Some f ->
   exists tf,
   Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial TRANSF).
+Proof. exact (Genv.find_funct_transf_partial TRANSF). Qed.
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   exists tf,
   Genv.find_funct_ptr tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial TRANSF).
+Proof. exact (Genv.find_funct_ptr_transf_partial TRANSF). Qed.
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (Genv.find_symbol_transf_partial TRANSF).
+Proof. exact (Genv.find_symbol_transf_partial TRANSF). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_transf_partial TRANSF).
+Proof. exact (Genv.senv_transf_partial TRANSF). Qed.
 
 Lemma sig_preserved:
   forall f tf,

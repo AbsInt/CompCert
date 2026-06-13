@@ -493,7 +493,7 @@ Lemma exec_stmt_steps:
    forall f k, exists S,
    star step_fe ge (State f s k e le m) t S
    /\ outcome_state_match e le' m' f k out S.
-Proof (proj1 exec_stmt_eval_funcall_steps).
+Proof. exact (proj1 exec_stmt_eval_funcall_steps). Qed.
 
 Lemma eval_funcall_steps:
    forall m fd args t m' res,
@@ -501,7 +501,7 @@ Lemma eval_funcall_steps:
    forall k,
    is_call_cont k ->
    star step_fe ge (Callstate fd args k m) t (Returnstate res k m').
-Proof (proj2 exec_stmt_eval_funcall_steps).
+Proof. exact (proj2 exec_stmt_eval_funcall_steps). Qed.
 
 Definition order (x y: unit) := False.
 
@@ -613,7 +613,7 @@ Definition bigstep_program_diverges := bigstep_program_diverges function_entry1.
 Definition bigstep_semantics := bigstep_semantics function_entry1.
 Theorem bigstep_semantics_sound: forall prog,
   bigstep_sound (bigstep_semantics prog) (Clight.semantics1 prog).
-Proof (bigstep_semantics_sound function_entry1).
+Proof. exact (bigstep_semantics_sound function_entry1). Qed.
 
 End Clight1.
 
@@ -630,6 +630,6 @@ Definition bigstep_program_diverges := bigstep_program_diverges function_entry2.
 Definition bigstep_semantics := bigstep_semantics function_entry2.
 Theorem bigstep_semantics_sound: forall prog,
   bigstep_sound (bigstep_semantics prog) (Clight.semantics2 prog).
-Proof (bigstep_semantics_sound function_entry2).
+Proof. exact (bigstep_semantics_sound function_entry2). Qed.
 
 End Clight2.

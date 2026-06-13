@@ -1613,11 +1613,11 @@ Module NodeSetBackward <: NODE_SET.
 
   Lemma empty_spec:
     forall n, ~In n empty.
-  Proof NodeSetForward.empty_spec.
+  Proof. exact NodeSetForward.empty_spec. Qed.
 
   Lemma add_spec:
     forall n n' s, In n' (add n s) <-> n = n' \/ In n' s.
-  Proof NodeSetForward.add_spec.
+  Proof. exact NodeSetForward.add_spec. Qed.
 
   Lemma pick_none:
     forall s n, pick s = None -> ~In n s.
@@ -1640,6 +1640,6 @@ Module NodeSetBackward <: NODE_SET.
   Lemma all_nodes_spec:
     forall A (code: PTree.t A) n instr,
     code!n = Some instr -> In n (all_nodes code).
-  Proof NodeSetForward.all_nodes_spec.
+  Proof. exact NodeSetForward.all_nodes_spec. Qed.
 End NodeSetBackward.
 

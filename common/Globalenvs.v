@@ -1717,7 +1717,7 @@ Qed.
 Theorem find_def_match_2:
   forall b, option_rel (match_globdef match_fundef match_varinfo ctx)
                        (find_def (globalenv p) b) (find_def (globalenv tp) b).
-Proof (mge_defs globalenvs_match).
+Proof. exact (mge_defs globalenvs_match). Qed.
 
 Theorem find_def_match:
   forall b g,

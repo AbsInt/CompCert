@@ -747,14 +747,14 @@ Lemma eval_simple_rvalue_steps:
   forall C, context RV RV C ->
   star Csem.step ge (ExprState f (C a) k e m)
                 E0 (ExprState f (C (Eval v (typeof a))) k e m).
-Proof (proj1 eval_simple_steps).
+Proof. exact (proj1 eval_simple_steps). Qed.
 
 Lemma eval_simple_lvalue_steps:
   forall a b ofs bf, eval_simple_lvalue e m a b ofs bf ->
   forall C, context LV RV C ->
   star Csem.step ge (ExprState f (C a) k e m)
                 E0 (ExprState f (C (Eloc b ofs bf (typeof a))) k e m).
-Proof (proj2 eval_simple_steps).
+Proof. exact (proj2 eval_simple_steps). Qed.
 
 Corollary eval_simple_rvalue_safe:
   forall C a v,
@@ -2610,7 +2610,7 @@ Lemma eval_expression_to_steps:
    eval_expression e m a t m' v ->
    forall f k,
    star step ge (ExprState f a k e m) t (ExprState f (Eval v (typeof a)) k e m').
-Proof (proj1 bigstep_to_steps).
+Proof. exact (proj1 bigstep_to_steps). Qed.
 
 Lemma eval_expr_to_steps:
    forall e m K a t m' a',
@@ -2618,7 +2618,7 @@ Lemma eval_expr_to_steps:
    forall C f k, leftcontext K RV C ->
    simple a' = true /\ typeof a' = typeof a /\
    star step ge (ExprState f (C a) k e m) t (ExprState f (C a') k e m').
-Proof (proj1 (proj2 bigstep_to_steps)).
+Proof. exact (proj1 (proj2 bigstep_to_steps)). Qed.
 
 Lemma eval_exprlist_to_steps:
    forall e m al t m' al',
@@ -2627,7 +2627,7 @@ Lemma eval_exprlist_to_steps:
    simplelist al' = true /\
    star step ge (ExprState f (C (Ecall a1 (exprlist_app al2 al) ty)) k e m)
               t (ExprState f (C (Ecall a1 (exprlist_app al2 al') ty)) k e m').
-Proof (proj1 (proj2 (proj2 bigstep_to_steps))).
+Proof. exact (proj1 (proj2 (proj2 bigstep_to_steps))). Qed.
 
 Lemma exec_stmt_to_steps:
    forall e m s t m' out,
@@ -2635,7 +2635,7 @@ Lemma exec_stmt_to_steps:
    forall f k,
    exists S,
    star step ge (State f s k e m) t S /\ outcome_state_match e m' f k out S.
-Proof (proj1 (proj2 (proj2 (proj2 bigstep_to_steps)))).
+Proof. exact (proj1 (proj2 (proj2 (proj2 bigstep_to_steps)))). Qed.
 
 Lemma eval_funcall_to_steps:
   forall m fd args t m' res,
@@ -2643,7 +2643,7 @@ Lemma eval_funcall_to_steps:
   forall k,
   is_call_cont k ->
   star step ge (Callstate fd args k m) t (Returnstate res k m').
-Proof (proj2 (proj2 (proj2 (proj2 bigstep_to_steps)))).
+Proof. exact (proj2 (proj2 (proj2 (proj2 bigstep_to_steps)))). Qed.
 
 Fixpoint esize (a: expr) : nat :=
   match a with

@@ -322,7 +322,7 @@ Proof.
 Qed.
 
 Theorem eval_intoflong: unary_constructor_sound intoflong Val.loword.
-Proof eval_lowlong.
+Proof. exact eval_lowlong. Qed.
 
 Theorem eval_longofintu: unary_constructor_sound longofintu Val.longofintu.
 Proof.

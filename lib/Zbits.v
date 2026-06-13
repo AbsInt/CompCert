@@ -204,7 +204,7 @@ Definition Zshiftin (b: bool) (x: Z) : Z :=
   if b then Z.succ_double x else Z.double x.
 
 Remark Ztestbit_0: forall n, Z.testbit 0 n = false.
-Proof Z.testbit_0_l.
+Proof. exact Z.testbit_0_l. Qed.
 
 Remark Ztestbit_1: forall n, Z.testbit 1 n = zeq n 0.
 Proof.
@@ -370,7 +370,7 @@ Lemma equal_same_bits:
   forall x y,
   (forall i, 0 <= i -> Z.testbit x i = Z.testbit y i) ->
   x = y.
-Proof Z.bits_inj'.
+Proof. exact Z.bits_inj'. Qed.
 
 Lemma Z_one_complement:
   forall i, 0 <= i ->

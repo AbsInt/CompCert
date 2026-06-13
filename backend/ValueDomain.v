@@ -2127,43 +2127,43 @@ Definition shll := shift_long Int64.shl'.
 
 Lemma shll_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.shll v w) (shll x y).
-Proof (shift_long_sound Int64.shl').
+Proof. exact (shift_long_sound Int64.shl'). Qed.
 
 Definition shrl := shift_long Int64.shr'.
 
 Lemma shrl_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.shrl v w) (shrl x y).
-Proof (shift_long_sound Int64.shr').
+Proof. exact (shift_long_sound Int64.shr'). Qed.
 
 Definition shrlu := shift_long Int64.shru'.
 
 Lemma shrlu_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.shrlu v w) (shrlu x y).
-Proof (shift_long_sound Int64.shru').
+Proof. exact (shift_long_sound Int64.shru'). Qed.
 
 Definition andl := binop_long Int64.and.
 
 Lemma andl_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.andl v w) (andl x y).
-Proof (binop_long_sound Int64.and).
+Proof. exact (binop_long_sound Int64.and). Qed.
 
 Definition orl := binop_long Int64.or.
 
 Lemma orl_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.orl v w) (orl x y).
-Proof (binop_long_sound Int64.or).
+Proof. exact (binop_long_sound Int64.or). Qed.
 
 Definition xorl := binop_long Int64.xor.
 
 Lemma xorl_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.xorl v w) (xorl x y).
-Proof (binop_long_sound Int64.xor).
+Proof. exact (binop_long_sound Int64.xor). Qed.
 
 Definition notl := unop_long Int64.not.
 
 Lemma notl_sound:
   forall v x, vmatch v x -> vmatch (Val.notl v) (notl x).
-Proof (unop_long_sound Int64.not).
+Proof. exact (unop_long_sound Int64.not). Qed.
 
 Definition rotate_long (sem: int64 -> int64 -> int64) (v w: aval) :=
   match v, w with
@@ -2193,19 +2193,19 @@ Definition roll := rotate_long Int64.rol.
 
 Lemma roll_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.roll v w) (roll x y).
-Proof (rotate_long_sound Int64.rol).
+Proof. exact (rotate_long_sound Int64.rol). Qed.
 
 Definition rorl := rotate_long Int64.ror.
 
 Lemma rorl_sound:
   forall v w x y, vmatch v x -> vmatch w y -> vmatch (Val.rorl v w) (rorl x y).
-Proof (rotate_long_sound Int64.ror).
+Proof. exact (rotate_long_sound Int64.ror). Qed.
 
 Definition negl := unop_long Int64.neg.
 
 Lemma negl_sound:
   forall v x, vmatch v x -> vmatch (Val.negl v) (negl x).
-Proof (unop_long_sound Int64.neg).
+Proof. exact (unop_long_sound Int64.neg). Qed.
 
 Definition addl (x y: aval) :=
   match x, y with
@@ -2251,19 +2251,19 @@ Definition mull := binop_long Int64.mul.
 
 Lemma mull_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mull v w) (mull x y).
-Proof (binop_long_sound Int64.mul).
+Proof. exact (binop_long_sound Int64.mul). Qed.
 
 Definition mullhs := binop_long Int64.mulhs.
 
 Lemma mullhs_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mullhs v w) (mullhs x y).
-Proof (binop_long_sound Int64.mulhs).
+Proof. exact (binop_long_sound Int64.mulhs). Qed.
 
 Definition mullhu := binop_long Int64.mulhu.
 
 Lemma mullhu_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mullhu v w) (mullhu x y).
-Proof (binop_long_sound Int64.mulhu).
+Proof. exact (binop_long_sound Int64.mulhu). Qed.
 
 Definition divls (v w: aval) :=
   match w, v with
@@ -2388,73 +2388,73 @@ Definition negf := unop_float Float.neg.
 
 Lemma negf_sound:
   forall v x, vmatch v x -> vmatch (Val.negf v) (negf x).
-Proof (unop_float_sound Float.neg).
+Proof. exact (unop_float_sound Float.neg). Qed.
 
 Definition absf := unop_float Float.abs.
 
 Lemma absf_sound:
   forall v x, vmatch v x -> vmatch (Val.absf v) (absf x).
-Proof (unop_float_sound Float.abs).
+Proof. exact (unop_float_sound Float.abs). Qed.
 
 Definition addf := binop_float Float.add.
 
 Lemma addf_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.addf v w) (addf x y).
-Proof (binop_float_sound Float.add).
+Proof. exact (binop_float_sound Float.add). Qed.
 
 Definition subf := binop_float Float.sub.
 
 Lemma subf_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.subf v w) (subf x y).
-Proof (binop_float_sound Float.sub).
+Proof. exact (binop_float_sound Float.sub). Qed.
 
 Definition mulf := binop_float Float.mul.
 
 Lemma mulf_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulf v w) (mulf x y).
-Proof (binop_float_sound Float.mul).
+Proof. exact (binop_float_sound Float.mul). Qed.
 
 Definition divf := binop_float Float.div.
 
 Lemma divf_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.divf v w) (divf x y).
-Proof (binop_float_sound Float.div).
+Proof. exact (binop_float_sound Float.div). Qed.
 
 Definition negfs := unop_single Float32.neg.
 
 Lemma negfs_sound:
   forall v x, vmatch v x -> vmatch (Val.negfs v) (negfs x).
-Proof (unop_single_sound Float32.neg).
+Proof. exact (unop_single_sound Float32.neg). Qed.
 
 Definition absfs := unop_single Float32.abs.
 
 Lemma absfs_sound:
   forall v x, vmatch v x -> vmatch (Val.absfs v) (absfs x).
-Proof (unop_single_sound Float32.abs).
+Proof. exact (unop_single_sound Float32.abs). Qed.
 
 Definition addfs := binop_single Float32.add.
 
 Lemma addfs_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.addfs v w) (addfs x y).
-Proof (binop_single_sound Float32.add).
+Proof. exact (binop_single_sound Float32.add). Qed.
 
 Definition subfs := binop_single Float32.sub.
 
 Lemma subfs_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.subfs v w) (subfs x y).
-Proof (binop_single_sound Float32.sub).
+Proof. exact (binop_single_sound Float32.sub). Qed.
 
 Definition mulfs := binop_single Float32.mul.
 
 Lemma mulfs_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.mulfs v w) (mulfs x y).
-Proof (binop_single_sound Float32.mul).
+Proof. exact (binop_single_sound Float32.mul). Qed.
 
 Definition divfs := binop_single Float32.div.
 
 Lemma divfs_sound:
   forall v x w y, vmatch v x -> vmatch w y -> vmatch (Val.divfs v w) (divfs x y).
-Proof (binop_single_sound Float32.div).
+Proof. exact (binop_single_sound Float32.div). Qed.
 
 (** Conversions *)
 
@@ -5104,9 +5104,9 @@ Module AVal <: SEMILATTICE_WITH_TOP.
   Proof. intros. apply vge_top. Qed.
   Definition lub := vlub.
   Lemma ge_lub_left: forall x y, ge (lub x y) x.
-  Proof vge_lub_l.
+  Proof. exact vge_lub_l. Qed.
   Lemma ge_lub_right: forall x y, ge (lub x y) y.
-  Proof vge_lub_r.
+  Proof. exact vge_lub_r. Qed.
 End AVal.
 
 Module AE := LPMap(AVal).

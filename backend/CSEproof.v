@@ -1079,11 +1079,11 @@ Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_match TRANSF).
+Proof. exact (Genv.find_symbol_match TRANSF). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_match TRANSF).
+Proof. exact (Genv.senv_match TRANSF). Qed.
 
 Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
@@ -1091,7 +1091,7 @@ Lemma functions_translated:
   exists cu tf, Genv.find_funct tge v = Some tf
              /\ transf_fundef (prog_defmap cu) (romem_for cu) f = OK tf
              /\ linkorder cu prog.
-Proof (Genv.find_funct_match TRANSF).
+Proof. exact (Genv.find_funct_match TRANSF). Qed.
 
 Lemma funct_ptr_translated:
   forall (b: block) (f: RTL.fundef),
@@ -1099,7 +1099,7 @@ Lemma funct_ptr_translated:
   exists cu tf, Genv.find_funct_ptr tge b = Some tf
              /\ transf_fundef (prog_defmap cu) (romem_for cu) f = OK tf
              /\ linkorder cu prog.
-Proof (Genv.find_funct_ptr_match TRANSF).
+Proof. exact (Genv.find_funct_ptr_match TRANSF). Qed.
 
 Lemma sig_preserved:
   forall dm rm f tf, transf_fundef dm rm f = OK tf -> funsig tf = funsig f.

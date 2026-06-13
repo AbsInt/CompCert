@@ -100,7 +100,7 @@ Lemma star_left:
   forall ge s1 t1 s2 t2 s3 t,
   step ge s1 t1 s2 -> star ge s2 t2 s3 -> t = t1 ** t2 ->
   star ge s1 t s3.
-Proof star_step.
+Proof. exact star_step. Qed.
 
 Lemma star_right:
   forall ge s1 t1 s2 t2 s3 t,

@@ -70,7 +70,7 @@ COQCOPTS ?= \
   -w -deprecated-since-8.20 \
   -w -deprecated-from-Coq
 
-cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality
+cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality -w -deprecated-exact-proof
 MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
 
 # Flocq and Menhirlib run into other renaming issues.

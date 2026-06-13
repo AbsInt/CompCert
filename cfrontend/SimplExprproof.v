@@ -57,25 +57,25 @@ Qed.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_match (proj1 TRANSL)).
+Proof. exact (Genv.find_symbol_match (proj1 TRANSL)). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_match (proj1 TRANSL)).
+Proof. exact (Genv.senv_match (proj1 TRANSL)). Qed.
 
 Lemma function_ptr_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
   exists cu tf,
   Genv.find_funct_ptr tge b = Some tf /\ tr_fundef cu f tf /\ linkorder cu prog.
-Proof (Genv.find_funct_ptr_match (proj1 TRANSL)).
+Proof. exact (Genv.find_funct_ptr_match (proj1 TRANSL)). Qed.
 
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   exists cu tf,
   Genv.find_funct tge v = Some tf /\ tr_fundef cu f tf /\ linkorder cu prog.
-Proof (Genv.find_funct_match (proj1 TRANSL)).
+Proof. exact (Genv.find_funct_match (proj1 TRANSL)). Qed.
 
 Lemma type_of_fundef_preserved:
   forall cu f tf, tr_fundef cu f tf ->
@@ -196,12 +196,12 @@ Qed.
 Lemma tr_simple_expr_nil:
   forall le dst r sl a tmps, tr_expr ce le dst r sl a tmps ->
   dst = For_val \/ dst = For_effects -> simple r = true -> sl = nil.
-Proof (proj1 tr_simple_nil).
+Proof. exact (proj1 tr_simple_nil). Qed.
 
 Lemma tr_simple_exprlist_nil:
   forall le rl sl al tmps, tr_exprlist ce le rl sl al tmps ->
   simplelist rl = true -> sl = nil.
-Proof (proj2 tr_simple_nil).
+Proof. exact (proj2 tr_simple_nil). Qed.
 
 (** Translation of [deref_loc] and [assign_loc] operations. *)
 

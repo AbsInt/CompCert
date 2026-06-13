@@ -269,22 +269,22 @@ Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (tunnel_fundef f).
-Proof (Genv.find_funct_transf TRANSL).
+Proof. exact (Genv.find_funct_transf TRANSL). Qed.
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   Genv.find_funct_ptr tge v = Some (tunnel_fundef f).
-Proof (Genv.find_funct_ptr_transf TRANSL).
+Proof. exact (Genv.find_funct_ptr_transf TRANSL). Qed.
 
 Lemma symbols_preserved:
   forall id,
   Genv.find_symbol tge id = Genv.find_symbol ge id.
-Proof (Genv.find_symbol_transf TRANSL).
+Proof. exact (Genv.find_symbol_transf TRANSL). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_transf TRANSL).
+Proof. exact (Genv.senv_transf TRANSL). Qed.
 
 Lemma sig_preserved:
   forall f, funsig (tunnel_fundef f) = funsig f.

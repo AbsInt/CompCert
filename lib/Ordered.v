@@ -31,15 +31,15 @@ Definition eq (x y: t) := x = y.
 Definition lt := Plt.
 
 Lemma eq_refl : forall x : t, eq x x.
-Proof (@eq_refl t).
+Proof. exact (@eq_refl t). Qed.
 Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-Proof (@eq_sym t).
+Proof. exact (@eq_sym t). Qed.
 Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-Proof (@eq_trans t).
+Proof. exact (@eq_trans t). Qed.
 Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
-Proof Plt_trans.
+Proof. exact Plt_trans. Qed.
 Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
-Proof Plt_ne.
+Proof. exact Plt_ne. Qed.
 Lemma compare : forall x y : t, Compare lt eq x y.
 Proof.
   intros. destruct (Pos.compare x y) as [] eqn:E.
@@ -61,13 +61,13 @@ Definition eq (x y: t) := x = y.
 Definition lt := Z.lt.
 
 Lemma eq_refl : forall x : t, eq x x.
-Proof (@eq_refl t).
+Proof. exact (@eq_refl t). Qed.
 Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-Proof (@eq_sym t).
+Proof. exact (@eq_sym t). Qed.
 Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-Proof (@eq_trans t).
+Proof. exact (@eq_trans t). Qed.
 Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
-Proof Z.lt_trans.
+Proof. exact Z.lt_trans. Qed.
 Lemma lt_not_eq : forall x y : t, lt x y -> ~ eq x y.
 Proof. unfold lt, eq, t; intros. lia. Qed.
 Lemma compare : forall x y : t, Compare lt eq x y.
@@ -91,11 +91,11 @@ Definition eq (x y: t) := x = y.
 Definition lt (x y: t) := Int.unsigned x < Int.unsigned y.
 
 Lemma eq_refl : forall x : t, eq x x.
-Proof (@eq_refl t).
+Proof. exact (@eq_refl t). Qed.
 Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-Proof (@eq_sym t).
+Proof. exact (@eq_sym t). Qed.
 Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-Proof (@eq_trans t).
+Proof. exact (@eq_trans t). Qed.
 Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
 Proof.
   unfold lt; intros. lia.
@@ -129,11 +129,11 @@ Definition eq (x y: t) := x = y.
 Definition lt (x y: t) := Plt (A.index x) (A.index y).
 
 Lemma eq_refl : forall x : t, eq x x.
-Proof (@eq_refl t).
+Proof. exact (@eq_refl t). Qed.
 Lemma eq_sym : forall x y : t, eq x y -> eq y x.
-Proof (@eq_sym t).
+Proof. exact (@eq_sym t). Qed.
 Lemma eq_trans : forall x y z : t, eq x y -> eq y z -> eq x z.
-Proof (@eq_trans t).
+Proof. exact (@eq_trans t). Qed.
 
 Lemma lt_trans : forall x y z : t, lt x y -> lt y z -> lt x z.
 Proof.

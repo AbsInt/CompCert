@@ -101,7 +101,7 @@ Lemma Eapp_assoc: forall t1 t2 t3, (t1 ** t2) ** t3 = t1 ** (t2 ** t3).
 Proof. intros. unfold Eapp, trace. apply app_ass. Qed.
 
 Lemma Eapp_E0_inv: forall t1 t2, t1 ** t2 = E0 -> t1 = E0 /\ t2 = E0.
-Proof (@app_eq_nil event).
+Proof. exact (@app_eq_nil event). Qed.
 
 Lemma E0_left_inf: forall T, E0 *** T = T.
 Proof. auto. Qed.
