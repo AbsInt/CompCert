@@ -44,6 +44,7 @@ Proof.
   elim H. apply H0; auto.
 Qed.
 
+Create HintDb va.
 Global Hint Extern 2 (_ = _) => congruence : va.
 Global Hint Extern 2 (_ <> _) => congruence : va.
 Global Hint Extern 2 (_ < _) => extlia : va.

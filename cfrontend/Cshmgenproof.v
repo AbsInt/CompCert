@@ -262,6 +262,7 @@ Proof.
   destruct sg; econstructor; eauto.
 Qed.
 
+Create HintDb cshm.
 Hint Resolve make_intconst_correct make_floatconst_correct make_longconst_correct
              make_singleconst_correct make_singleoffloat_correct make_floatofsingle_correct
              make_floatofint_correct: cshm.

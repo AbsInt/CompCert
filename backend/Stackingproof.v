@@ -596,6 +596,7 @@ Proof.
   auto. constructor; auto using agree_reg.
 Qed.
 
+Create HintDb stacking.
 Hint Resolve agree_reg agree_reglist: stacking.
 
 (** Preservation under assignments of machine registers. *)

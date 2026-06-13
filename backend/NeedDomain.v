@@ -85,6 +85,7 @@ Proof.
   intros. simpl in H. auto.
 Qed.
 
+Create HintDb na.
 Global Hint Resolve vagree_same vagree_lessdef lessdef_vagree: na.
 
 Inductive vagree_list: list val -> list val -> list nval -> Prop :=

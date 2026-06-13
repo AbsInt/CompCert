@@ -201,6 +201,7 @@ Proof.
   apply A. rewrite PTree.gso by congruence. auto.
 Qed.
 
+Create HintDb ty.
 Global Hint Resolve set_incr: ty.
 
 Lemma set_sound:

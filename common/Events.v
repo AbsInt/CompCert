@@ -1705,6 +1705,7 @@ Qed.
 
 End EVAL_BUILTIN_ARG.
 
+Create HintDb barg.
 Global Hint Constructors eval_builtin_arg: barg.
 
 Fixpoint builtin_arg_depends_on_memory {A: Type} (ba: builtin_arg A) : bool :=

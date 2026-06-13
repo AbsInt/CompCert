@@ -19,6 +19,8 @@ Require Import AST Values.
 Require Archi.
 Require Export Machregs.
 
+Create HintDb locs.
+
 (** * Representation of locations *)
 
 (** A location is either a processor register or (an abstract designation of)

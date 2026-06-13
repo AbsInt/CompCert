@@ -20,6 +20,9 @@ From Coq Require Import Eqdep_dec Zquot Zwf.
 Require Import Coqlib Zbits.
 Require Archi.
 
+Create HintDb ints.
+Create HintDb ptrofs.
+
 (** Backwards compatibility for Hint Rewrite locality attributes. *)
 Set Warnings "-unsupported-attributes".
 

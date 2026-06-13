@@ -128,6 +128,7 @@ Ltac monadInv H :=
 
 (** * Monotonicity properties of the state *)
 
+Create HintDb rtlg.
 Global Hint Resolve state_incr_refl: rtlg.
 
 Lemma instr_at_incr:

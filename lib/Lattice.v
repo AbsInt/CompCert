@@ -188,6 +188,7 @@ Proof.
   auto.
 Qed.
 
+Create HintDb combine.
 Local Hint Resolve opt_beq_correct opt_eq_refl opt_eq_sym : combine.
 
 (** A [combine] operation over the type [PTree.t L.t] that attempts

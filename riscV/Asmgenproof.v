@@ -281,15 +281,7 @@ Opaque Int.eq.
 - destruct (SelectOp.symbol_is_relocatable id && negb (Ptrofs.eq ofs Ptrofs.zero)).
 + eapply tail_nolabel_trans; [|apply addptrofs_label]. TailNoLabel.
 + TailNoLabel. 
-- apply opimm32_label; intros; exact I.
-- apply opimm32_label; intros; exact I.
-- apply opimm32_label; intros; exact I.
-- apply opimm32_label; intros; exact I.
 - destruct (Int.eq n Int.zero); TailNoLabel.
-- apply opimm64_label; intros; exact I.
-- apply opimm64_label; intros; exact I.
-- apply opimm64_label; intros; exact I.
-- apply opimm64_label; intros; exact I.
 - destruct (Int.eq n Int.zero); TailNoLabel.
 - eapply transl_cond_op_label; eauto.
 - eapply tail_nolabel_trans; eauto using transl_cond_op_label; TailNoLabel.

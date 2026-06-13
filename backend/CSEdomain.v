@@ -117,6 +117,7 @@ Record wf_numbering (n: numbering) : Prop := {
       In r (PMap.get v n.(num_val)) -> PTree.get r n.(num_reg) = Some v
 }.
 
+Create HintDb cse.
 Global Hint Resolve wf_num_eqs wf_num_reg wf_num_val: cse.
 
 (** Satisfiability of numberings.  A numbering holds in a concrete

@@ -57,6 +57,7 @@ Inductive perm_order: permission -> permission -> Prop :=
   | perm_W_R:   perm_order Writable Readable
   | perm_any_N: forall p, perm_order p Nonempty.
 
+Create HintDb mem.
 Global Hint Constructors perm_order: mem.
 
 Lemma perm_order_trans:

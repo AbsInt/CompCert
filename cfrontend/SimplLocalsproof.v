@@ -580,6 +580,7 @@ Proof.
   intros; red; intros. eapply VSet.empty_1; eauto.
 Qed.
 
+Create HintDb compat.
 Hint Resolve compat_cenv_union_l compat_cenv_union_r compat_cenv_empty: compat.
 
 (** Allocation and initialization of parameters *)

@@ -459,6 +459,7 @@ Inductive final_state: state -> int -> Prop :=
 Definition semantics (p: program) :=
   Semantics step (initial_state p) final_state (Genv.globalenv p).
 
+Create HintDb evalexpr.
 Global Hint Constructors eval_expr eval_exprlist eval_condexpr: evalexpr.
 
 (** * Lifting of let-bound variables *)
