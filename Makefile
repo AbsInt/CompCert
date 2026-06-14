@@ -51,24 +51,45 @@ endif
 # unused-pattern-matching-variable:
 #    warning introduced in 8.13
 #    the code rewrite that avoids the warning is not desirable
+# deprecated-since-8.19
+# deprecated-since-8.20
+# deprecated-reference-since-9.0
+# deprecated-reference-since-9.1
+#    renamings performed in Coq's standard library;
+#    using the new names would break compatibility with earlier Coq versions.
+# deprecated-from-Coq
+#    Rocq wants "From Stdlib Require" while Coq wants "From Coq Require".
+# register-all
+#    Rocq 9.2 warns on inductive datatypes that recurse through list or prod
+# notation-for-abbreviation
+#    The warning and the `Abbreviation` keyword needed to fix it
+#    were both introduced in Rocq 9.2.
+# implicit-create-rewrite-hint-db
+#    The warning and the `Create Rewrite Hintdb` command needed to fix it
+#    were both introduced in Rocq 9.2.
+# deprecated-end-tac
+#    Warning introduced in Rocq 9.2, should go away in later Rocq versions
+COQCOPTS ?= \
+  -w -unused-pattern-matching-variable \
+  -w -deprecated-since-8.19 \
+  -w -deprecated-since-8.20 \
+  -w -deprecated-reference-since-9.0 \
+  -w -deprecated-reference-since-9.1 \
+  -w -deprecated-from-Coq \
+  -w -register-all \
+  -w -notation-for-abbreviation \
+  -w -implicit-create-rewrite-hint-db \
+  -w -deprecated-end-tac
+
 # undeclared-scope:
 #    warning introduced in 8.12, addressed in the main CompCert files
 #    triggered by MenhirLib, to be solved upstream
 # deprecated-instance-without-locality:
 #    warning introduced in 8.14
 #    triggered by Menhir-generated files, to be solved upstream in Menhir
-# deprecated-since-8.19
-# deprecated-since-8.20
-#    renamings performed in Coq's standard library;
-#    using the new names would break compatibility with earlier Coq versions.
-# deprecated-from-Coq
-#    Rocq wants "From Stdlib Require" while Coq wants "From Coq Require".
-
-COQCOPTS ?= \
-  -w -unused-pattern-matching-variable \
-  -w -deprecated-since-8.19 \
-  -w -deprecated-since-8.20 \
-  -w -deprecated-from-Coq
+# deprecated-exact-proof:
+#    warning introduced in 9.2
+#    triggered by Menhir-generated files, to be solved upstream in Menhir
 
 cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality -w -deprecated-exact-proof
 MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
@@ -76,8 +97,11 @@ MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
 # Flocq and Menhirlib run into other renaming issues.
 # These warnings can only be addressed upstream.
 
-flocq/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition -w -deprecated-since-9.0
-MenhirLib/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition -w -deprecated-since-9.0
+flocq/%.vo MenhirLib/%.vo: COQCOPTS+=\
+  -w -deprecated-syntactic-definition \
+  -w -deprecated-since-9.0 \
+  -w -deprecated-since-9.1 \
+  -w -deprecated-since-9.2
 
 # For the extraction phase, we silence other warnings:
 # change-dir-deprecated:
