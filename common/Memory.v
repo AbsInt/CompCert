@@ -3465,8 +3465,7 @@ Theorem aligned_area_inject:
 Proof.
   intros.
   assert (P: al > 0) by lia.
-  assert (Q: Z.abs al <= Z.abs sz). apply Zdivide_bounds; auto. lia.
-  rewrite Z.abs_eq in Q; try lia. rewrite Z.abs_eq in Q; try lia.
+  assert (Q: al <= sz) by (apply Z.divide_pos_le; auto; lia).
   assert (A: (min_safe_alignment sz | delta)).
   { destruct H. destruct mi_inj0. eapply mi_align0; eauto with mem. }
   assert (B: min_safe_alignment al = al).
