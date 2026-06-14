@@ -81,9 +81,6 @@ COQCOPTS ?= \
   -w -implicit-create-rewrite-hint-db \
   -w -deprecated-end-tac
 
-# undeclared-scope:
-#    warning introduced in 8.12, addressed in the main CompCert files
-#    triggered by MenhirLib, to be solved upstream
 # deprecated-instance-without-locality:
 #    warning introduced in 8.14
 #    triggered by Menhir-generated files, to be solved upstream in Menhir
@@ -92,7 +89,6 @@ COQCOPTS ?= \
 #    triggered by Menhir-generated files, to be solved upstream in Menhir
 
 cparser/Parser.vo: COQCOPTS += -w -deprecated-instance-without-locality -w -deprecated-exact-proof
-MenhirLib/Interpreter.vo: COQCOPTS += -w -undeclared-scope
 
 # Flocq and Menhirlib run into other renaming issues.
 # These warnings can only be addressed upstream.
