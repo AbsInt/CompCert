@@ -141,6 +141,12 @@ Ltac EvalOp :=
   | _ => idtac
   end.
 
+Ltac UseUndef :=
+  match goal with
+  | [ H: ?x = Vundef |- Val.lessdef ?x ?y ] => rewrite H; auto
+  | _ => idtac
+  end.
+
 Lemma eval_splitlong:
   forall le a f v sem,
   (forall le a b x y,
@@ -157,14 +163,14 @@ Proof.
 - InvEval; subst.
   exploit EXEC. eexact H2. eexact H3. intros [v' [A B]].
   exists v'; split. auto.
-  destruct v1; simpl in *; try (rewrite UNDEF; auto).
-  destruct v0; simpl in *; try (rewrite UNDEF; auto).
+  destruct v1; simpl in *; UseUndef.
+  destruct v0; simpl in *; UseUndef.
   erewrite B; eauto.
 - exploit (EXEC (v :: le) (Eop Ohighlong (Eletvar 0 ::: Enil)) (Eop Olowlong (Eletvar 0 ::: Enil))).
   EvalOp. EvalOp.
   intros [v' [A B]].
   exists v'; split. econstructor; eauto.
-  destruct v; try (rewrite UNDEF; auto). erewrite B; simpl; eauto. rewrite Int64.ofwords_recompose. auto.
+  destruct v; UseUndef. erewrite B; simpl; eauto. rewrite Int64.ofwords_recompose. auto.
 Qed.
 
 Lemma eval_splitlong_strict:
@@ -205,10 +211,10 @@ Proof.
 - InvEval; subst.
   exploit (EXEC le h1 l1 h2 l2); eauto. intros [v [A B]].
   exists v; split; auto.
-  destruct v1; simpl in *; try (rewrite UNDEF; auto).
-  destruct v0; try (rewrite UNDEF; auto).
-  destruct v2; simpl in *; try (rewrite UNDEF; auto).
-  destruct v3; try (rewrite UNDEF; auto).
+  destruct v1; simpl in *; UseUndef.
+  destruct v0; UseUndef.
+  destruct v2; simpl in *; UseUndef.
+  destruct v3; UseUndef.
   erewrite B; eauto.
 - InvEval; subst.
   exploit (EXEC (vb :: le) (lift h1) (lift l1)
@@ -217,9 +223,9 @@ Proof.
   intros [v [A B]].
   exists v; split.
   econstructor; eauto.
-  destruct v1; simpl in *; try (rewrite UNDEF; auto).
-  destruct v0; try (rewrite UNDEF; auto).
-  destruct vb; try (rewrite UNDEF; auto).
+  destruct v1; simpl in *; UseUndef.
+  destruct v0; UseUndef.
+  destruct vb; UseUndef.
   erewrite B; simpl; eauto. rewrite Int64.ofwords_recompose. auto.
 - InvEval; subst.
   exploit (EXEC (va :: le)
@@ -229,9 +235,9 @@ Proof.
   intros [v [A B]].
   exists v; split.
   econstructor; eauto.
-  destruct va; try (rewrite UNDEF; auto).
-  destruct v1; simpl in *; try (rewrite UNDEF; auto).
-  destruct v0; try (rewrite UNDEF; auto).
+  destruct va; UseUndef.
+  destruct v1; simpl in *; UseUndef.
+  destruct v0; UseUndef.
   erewrite B; simpl; eauto. rewrite Int64.ofwords_recompose. auto.
 - exploit (EXEC (vb :: va :: le)
                 (Eop Ohighlong (Eletvar 1 ::: Enil)) (Eop Olowlong (Eletvar 1 ::: Enil))
@@ -239,7 +245,7 @@ Proof.
   EvalOp. EvalOp. EvalOp. EvalOp.
   intros [v [A B]].
   exists v; split. EvalOp.
-  destruct va; try (rewrite UNDEF; auto); destruct vb; try (rewrite UNDEF; auto).
+  destruct va; UseUndef; destruct vb; UseUndef.
   erewrite B; simpl; eauto. rewrite ! Int64.ofwords_recompose; auto.
 Qed.
 
