@@ -1482,6 +1482,7 @@ Lemma cast_bool_bool_val:
   forall v t m,
   sem_cast v t (Tint IBool Signed noattr) m =
   match bool_val v t m with None => None | Some b => Some(Val.of_bool b) end.
+Proof.
   intros.
   assert (A: classify_bool t =
     match t with

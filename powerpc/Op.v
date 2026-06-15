@@ -171,6 +171,7 @@ Proof.
 Defined.
 
 Definition beq_operation: forall (x y: operation), bool.
+Proof.
   generalize Int.eq_dec Int64.eq_dec Ptrofs.eq_dec ident_eq Float.eq_dec Float32.eq_dec typ_eq eq_condition; boolean_equality.
 Defined.
 
