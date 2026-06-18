@@ -79,7 +79,13 @@ Proof.
   intros. apply data_diff; auto with asmgen.
 Qed.
 
-Global Hint Resolve preg_of_not_SP preg_of_not_PC: asmgen.
+Lemma preg_of_not_RA:
+  forall r, preg_of r <> RA.
+Proof.
+  intros. unfold preg_of; destruct r; simpl; congruence.
+Qed.
+
+Global Hint Resolve preg_of_not_SP preg_of_not_PC preg_of_not_RA: asmgen.
 
 Lemma nextinstr_pc:
   forall rs, (nextinstr rs)#PC = Val.offset_ptr rs#PC Ptrofs.one.
@@ -136,6 +142,14 @@ Proof.
   auto.
 Qed.
 
+Lemma preg_of_notin: forall r rl,
+  (forall mr, r <> preg_of mr) -> preg_notin r rl.
+Proof.
+  intros. apply preg_notin_charact. auto.
+Qed.
+
+Global Hint Resolve preg_of_notin: asmgen.
+
 Lemma undef_regs_other_2:
   forall r rl rs,
   preg_notin r rl ->
@@ -191,15 +205,25 @@ Proof.
   intros. rewrite <- (freg_of_eq _ _ H0). eapply preg_val; eauto.
 Qed.
 
+Lemma agree_exten_1:
+  forall ms sp rs rs',
+  agree ms sp rs ->
+  (forall mr, rs'#(preg_of mr) = rs#(preg_of mr)) ->
+  rs'#SP = rs#SP ->
+  agree ms sp rs'.
+Proof.
+  intros. destruct H. split; auto.
+- congruence.
+- intros. rewrite H0. auto.
+Qed.
+
 Lemma agree_exten:
   forall ms sp rs rs',
   agree ms sp rs ->
   (forall r, data_preg r = true -> rs'#r = rs#r) ->
   agree ms sp rs'.
 Proof.
-  intros. destruct H. split; auto.
-  rewrite H0; auto. auto.
-  intros. rewrite H0; auto. apply preg_of_data.
+  intros. apply agree_exten_1 with rs; auto with asmgen.
 Qed.
 
 (** Preservation of register agreement under various assignments. *)
@@ -235,6 +259,17 @@ Lemma agree_set_other:
 Proof.
   intros. apply agree_exten with rs. auto.
   intros. apply Pregmap.gso. congruence.
+Qed.
+
+Lemma agree_set_other_1:
+  forall ms sp rs (r: preg) v,
+  agree ms sp rs ->
+  r <> SP -> (forall mr, r <> preg_of mr) ->
+  agree ms sp (rs#r <- v).
+Proof.
+  intros. apply agree_exten_1 with rs. auto.
+  intros. apply Pregmap.gso. auto.
+  apply Pregmap.gso. auto.
 Qed.
 
 Lemma agree_nextinstr:
@@ -439,15 +474,23 @@ Proof.
   apply Val.loword_lessdef; auto.
 Qed.
 
+Lemma set_res_other_1:
+  forall r res v rs,
+  (forall mr, r <> preg_of mr) ->
+  set_res (map_builtin_res preg_of res) v rs r = rs r.
+Proof.
+  induction res; simpl; intros.
+- apply Pregmap.gso; auto.
+- auto.
+- rewrite IHres2, IHres1; auto.
+Qed.
+
 Lemma set_res_other:
   forall r res v rs,
   data_preg r = false ->
   set_res (map_builtin_res preg_of res) v rs r = rs r.
 Proof.
-  induction res; simpl; intros.
-- apply Pregmap.gso. red; intros; subst r. rewrite preg_of_data in H; discriminate.
-- auto.
-- rewrite IHres2, IHres1; auto.
+  intros. apply set_res_other_1. intros. symmetry. auto with asmgen.
 Qed.
 
 (** * Correspondence between Mach code and Asm code *)

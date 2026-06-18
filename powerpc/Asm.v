@@ -1295,7 +1295,7 @@ Qed.
 Definition data_preg (r: preg) : bool :=
   match r with
   | IR GPR0 => false
-  | PC => false    | LR => false    | CTR => false
+  | PC => false    | CTR => false
   | CR0_0 => false | CR0_1 => false | CR0_2 => false | CR0_3 => false
   | CARRY => false
   | _ => true

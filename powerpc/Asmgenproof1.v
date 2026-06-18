@@ -113,47 +113,6 @@ Qed.
 
 (** * Useful properties of registers *)
 
-(** [important_preg] extends [data_preg] by tracking the LR register as well.
-    It is used to state that a code sequence modifies no data registers
-    and does not modify LR either. *)
-
-Definition important_preg (r: preg) : bool :=
-  match r with
-  | IR GPR0 => false
-  | PC => false    | CTR => false
-  | CR0_0 => false | CR0_1 => false | CR0_2 => false | CR0_3 => false
-  | CARRY => false
-  | _ => true
-  end.
-
-Lemma important_diff:
-  forall r r',
-  important_preg r = true -> important_preg r' = false -> r <> r'.
-Proof.
-  congruence.
-Qed.
-Global Hint Resolve important_diff: asmgen.
-
-Lemma important_data_preg_1:
-  forall r, data_preg r = true -> important_preg r = true.    
-Proof.
-  destruct r; simpl; auto; discriminate.
-Qed.
-
-Lemma important_data_preg_2:
-  forall r, important_preg r = false -> data_preg r = false.
-Proof.
-  intros. destruct (data_preg r) eqn:E; auto. apply important_data_preg_1 in E. congruence.
-Qed.  
-
-Global Hint Resolve important_data_preg_1 important_data_preg_2: asmgen.
-
-Lemma nextinstr_inv2:
-  forall r rs, important_preg r = true -> (nextinstr rs)#r = rs#r.
-Proof.
-  intros. apply nextinstr_inv. red; intro; subst; discriminate.
-Qed.
-
 (** Useful properties of the GPR0 registers. *)
 
 Lemma gpr_or_zero_not_zero:
@@ -194,27 +153,10 @@ Proof.
 Qed.
 Global Hint Resolve ireg_of_not_GPR0': asmgen.
 
-(** Useful properties of the LR register *)
-
-Lemma preg_of_not_LR:
-  forall r, LR <> preg_of r.
-Proof.
-  intros. auto using not_eq_sym with asmgen.
-Qed.
-
-Lemma preg_notin_LR:
-  forall rl, preg_notin LR rl.
-Proof.
-  intros. rewrite preg_notin_charact. intros. apply preg_of_not_LR. 
-Qed.
-
-Global Hint Resolve preg_of_not_LR preg_notin_LR: asmgen.
-      
 (** Useful simplification tactic *)
 
 Ltac Simplif :=
   ((rewrite nextinstr_inv by eauto with asmgen)
-  || (rewrite nextinstr_inv2 by eauto with asmgen)
   || (rewrite Pregmap.gss)
   || (rewrite nextinstr_pc)
   || (rewrite Pregmap.gso by eauto with asmgen)); auto with asmgen.
@@ -387,7 +329,7 @@ Lemma andimm_base_correct:
      exec_straight ge fn (andimm_base r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = v
   /\ rs'#CR0_2 = Val.cmp Ceq v Vzero
-  /\ forall r', important_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
+  /\ forall r', data_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
 Proof.
   intros. unfold andimm_base.
   case (Int.eq (high_u n) Int.zero).
@@ -432,7 +374,7 @@ Lemma andimm_correct:
   exists rs',
      exec_straight ge fn (andimm r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = Val.and rs#r2 (Vint n)
-  /\ forall r', important_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
+  /\ forall r', data_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
 Proof.
   intros. unfold andimm. destruct (is_rlw_mask n).
   (* turned into rlw *)
@@ -512,7 +454,7 @@ Lemma rolm_correct:
   exists rs',
      exec_straight ge fn (rolm r1 r2 amount mask k) rs m  k rs' m
   /\ rs'#r1 = Val.rolm rs#r2 amount mask
-  /\ forall r', important_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
+  /\ forall r', data_preg r' = true -> r' <> r1 -> rs'#r' = rs#r'.
 Proof.
   intros. unfold rolm. destruct (is_rlw_mask mask).
   (* rlwinm *)
@@ -742,7 +684,7 @@ Lemma andimm64_base_correct:
   exists rs',
      exec_straight ge fn (andimm64_base r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = Val.andl rs#r2 (Vlong n)
-  /\ forall r': preg, r' <> r1 -> r' <> GPR12 -> important_preg r' = true  -> rs'#r' = rs#r'.
+  /\ forall r': preg, r' <> r1 -> r' <> GPR12 -> data_preg r' = true  -> rs'#r' = rs#r'.
 Proof.
   intros. unfold andimm64_base, opimm64. destruct (Int64.eq n (low64_u n)); [|destruct (ireg_eq r2 GPR12)].
 - (* andi *)
@@ -768,7 +710,7 @@ Lemma andimm64_correct:
   exists rs',
      exec_straight ge fn (andimm64 r1 r2 n k) rs m  k rs' m
   /\ rs'#r1 = Val.andl rs#r2 (Vlong n)
-  /\ forall r': preg, r' <> r1 -> r' <> GPR12 -> important_preg r' = true  -> rs'#r' = rs#r'.
+  /\ forall r': preg, r' <> r1 -> r' <> GPR12 -> data_preg r' = true  -> rs'#r' = rs#r'.
 Proof.
   intros. unfold andimm64. destruct (is_rldl_mask n || is_rldr_mask n).
 - econstructor; split. eapply exec_straight_one. simpl; reflexivity. reflexivity.
@@ -785,7 +727,7 @@ Lemma rolm64_correct:
   exists rs',
      exec_straight ge fn (rolm64 r1 r2 amount mask k) rs m  k rs' m
   /\ rs'#r1 = Val.rolml rs#r2 amount mask
-  /\ forall r': preg, r' <> r1 -> r' <> GPR12 -> important_preg r' = true  -> rs'#r' = rs#r'.
+  /\ forall r': preg, r' <> r1 -> r' <> GPR12 -> data_preg r' = true  -> rs'#r' = rs#r'.
 Proof.
   intros. unfold rolm64.
   destruct orb.
@@ -986,7 +928,7 @@ Lemma transl_cond_correct_1:
        (if snd (crbit_for_cond cond)
         then Val.of_optbool (eval_condition cond (map rs (map preg_of args)) m)
         else Val.notbool (Val.of_optbool (eval_condition cond (map rs (map preg_of args)) m)))
-  /\ forall r, important_preg r = true -> rs'#r = rs#r.
+  /\ forall r, data_preg r = true -> rs'#r = rs#r.
 Proof.
   intros.
 Opaque Int.eq.
@@ -1126,7 +1068,7 @@ Lemma transl_cond_correct_2:
        (if snd (crbit_for_cond cond)
         then Val.of_bool b
         else Val.notbool (Val.of_bool b))
-  /\ forall r, important_preg r = true -> rs'#r = rs#r.
+  /\ forall r, data_preg r = true -> rs'#r = rs#r.
 Proof.
   intros.
   replace (Val.of_bool b)
@@ -1154,8 +1096,7 @@ Proof.
     eapply eval_condition_lessdef. eapply preg_vals; eauto. eauto. eauto.
   intros [rs' [A [B C]]].
   exists rs'; split. eauto. split. auto.
-  apply agree_undef_regs with rs; auto. intros r D E.
-  apply C. apply important_data_preg_1; auto.
+  apply agree_undef_regs with rs; auto.
 Qed.
 
 (** Translation of condition operators *)
@@ -1212,7 +1153,7 @@ Lemma transl_cond_op_correct:
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ rs'#(preg_of r) = Val.of_optbool (eval_condition cond (map rs (map preg_of args)) m)
-  /\ forall r', important_preg r' = true -> preg_notin r' (destroyed_by_cond cond) ->  r' <> preg_of r -> rs'#r' = rs#r'.
+  /\ forall r', data_preg r' = true -> preg_notin r' (destroyed_by_cond cond) ->  r' <> preg_of r -> rs'#r' = rs#r'.
 Proof.
   intros until args. unfold transl_cond_op.
   destruct (classify_condition cond args); intros; monadInv H; simpl;
@@ -1266,11 +1207,11 @@ Qed.
 Lemma transl_select_op_correct:
   forall cond args ty r1 r2 rd k rs m c,
   transl_select_op cond args r1 r2 rd k = OK c ->
-  important_preg rd = true -> important_preg r1 = true -> important_preg r2 = true ->
+  data_preg rd = true -> data_preg r1 = true -> data_preg r2 = true ->
   exists rs',
   exec_straight ge fn c rs m k rs' m
   /\ Val.lessdef (Val.select (eval_condition cond (map rs (map preg_of args)) m) rs#r1 rs#r2 ty) rs'#rd
-  /\ forall r, important_preg r = true  -> r <> rd -> rs'#r = rs#r.
+  /\ forall r, data_preg r = true  -> r <> rd -> rs'#r = rs#r.
 Proof.
   intros until c.  intros TR IMP1 IMP2 IMP3.
   unfold transl_select_op in TR.
@@ -1297,11 +1238,11 @@ Qed.
 Lemma transl_fselect_op_correct:
   forall cond args ty r1 r2 rd k rs m c,
   transl_fselect_op cond args r1 r2 rd k = OK c ->
-  important_preg rd = true -> important_preg r1 = true -> important_preg r2 = true ->
+  data_preg rd = true -> data_preg r1 = true -> data_preg r2 = true ->
   exists rs',
   exec_straight ge fn c rs m k rs' m
   /\ Val.lessdef (Val.select (eval_condition cond (map rs (map preg_of args)) m) rs#r1 rs#r2 ty) rs'#rd
-  /\ forall r, important_preg r = true  -> r <> rd -> rs'#r = rs#r.
+  /\ forall r, data_preg r = true  -> r <> rd -> rs'#r = rs#r.
 Proof.
   intros until c.  intros TR IMP1 IMP2 IMP3.
   unfold transl_fselect_op in TR.
@@ -1337,7 +1278,7 @@ Lemma transl_op_correct_aux:
   exists rs',
      exec_straight ge fn c rs m k rs' m
   /\ Val.lessdef v rs'#(preg_of res)
-  /\ forall r, important_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
+  /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
 Proof.
   assert (SAME: forall v1 v2, v1 = v2 -> Val.lessdef v2 v1). { intros; subst; auto. }
 Opaque Int.eq.
@@ -1508,12 +1449,10 @@ Opaque Val.add.
 - destruct (transl_cond_op_correct c0 args res k rs m c) as [rs' [A [B C]]]; auto.
   exists rs'; auto with asmgen.
   (* Osel *)
-- assert (X: forall mr r, ireg_of mr = OK r -> important_preg r = true).
-  { intros. apply ireg_of_eq in H0. apply important_data_preg_1. rewrite <- H0.
-    auto with asmgen. }
-  assert (Y: forall mr r, freg_of mr = OK r -> important_preg r = true).
-  { intros. apply freg_of_eq in H0. apply important_data_preg_1. rewrite <- H0.
-    auto with asmgen. }
+- assert (X: forall mr r, ireg_of mr = OK r -> data_preg r = true).
+  { intros. apply ireg_of_eq in H0. rewrite <- H0; apply preg_of_data. }
+  assert (Y: forall mr r, freg_of mr = OK r -> data_preg r = true).
+  { intros. apply freg_of_eq in H0. rewrite <- H0; apply preg_of_data. }
   destruct (preg_of res) eqn:RES; monadInv H; rewrite <- RES.
   + rewrite (ireg_of_eq _ _ EQ), (ireg_of_eq _ _ EQ0), (ireg_of_eq _ _ EQ1) in *.
     destruct (transl_select_op_correct _ _ t _ _ _ _ rs m _ EQ3) as (rs' & A & B & C); eauto.
@@ -1530,7 +1469,7 @@ Lemma transl_op_correct:
   exists rs',
      exec_straight ge fn c rs m' k rs' m'
   /\ agree (Regmap.set res v (Mach.undef_regs (destroyed_by_op op) ms)) sp rs'
-  /\ forall r, important_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
+  /\ forall r, data_preg r = true -> r <> preg_of res -> preg_notin r (destroyed_by_op op) -> rs' r = rs r.
 Proof.
   intros.
   exploit eval_operation_lessdef. eapply preg_vals; eauto. eauto. eauto.
@@ -1912,7 +1851,7 @@ Proof.
     simpl. change (rs2#GPR1) with (rs#GPR1). rewrite <- (sp_val _ _ _ AG). simpl. 
     rewrite LP'. rewrite FREE'. reflexivity.
   split. unfold rs3. apply agree_nextinstr. apply agree_change_sp with (Vptr stk soff). 
-    apply agree_nextinstr. apply agree_set_other; auto. 
+    apply agree_nextinstr. apply agree_set_other_1; auto with asmgen. 
     apply agree_nextinstr. apply agree_set_other; auto. 
     eapply parent_sp_def; eauto.
   split. auto.

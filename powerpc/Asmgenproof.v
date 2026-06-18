@@ -710,7 +710,10 @@ Opaque loadind.
   econstructor; eauto.
   econstructor; eauto.
   eapply agree_sp_def; eauto.
-  simpl. eapply agree_exten; eauto. intros. Simpl.
+  simpl. apply agree_set_other; auto with asmgen.
+  apply agree_set_other_1; auto with asmgen.
+  apply agree_nextinstr.
+  apply agree_set_other; auto with asmgen.
   Simpl. rewrite <- H2. auto.
 + (* Direct call *)
   generalize (code_tail_next_int _ _ _ _ NOOV H6). intro CT1.
@@ -724,7 +727,8 @@ Opaque loadind.
   econstructor; eauto.
   econstructor; eauto.
   eapply agree_sp_def; eauto.
-  simpl. eapply agree_exten; eauto. intros. Simpl.
+  simpl. apply agree_set_other; auto with asmgen.
+  apply agree_set_other_1; auto with asmgen.
   Simpl. rewrite <- H2. auto.
 
 - (* Mtailcall *)
@@ -802,7 +806,7 @@ Opaque loadind.
   eapply agree_undef_regs; eauto.
   intros. simpl. rewrite undef_regs_other_2; auto. apply Pregmap.gso. auto with asmgen.
   congruence.
-  intros. Simpl. rewrite set_res_other by auto.
+  intros. Simpl. rewrite set_res_other_1 by auto with asmgen.
   simpl. rewrite undef_regs_other_2; auto with asmgen.
 
 - (* Mgoto *)
