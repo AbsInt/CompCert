@@ -1612,11 +1612,11 @@ let elab_init loc env root ty_root ie =
    the initialization state [zi].  [first] is true if we are at the
    beginning of a braced initializer.  Returns the final initializer. *)
 
-let rec elab_list zi il first =
+let rec elab_list env zi il first =
   match il with
   | [] ->
       (* All initialization items consumed. *)
-      I.to_init zi
+      (I.to_init zi, env)
   | (desig, item) :: il' ->
       if desig = [] then begin
         match (if first then I.first env zi else I.next zi)
@@ -1624,19 +1624,19 @@ let rec elab_list zi il first =
         | I.NotFound ->
             warning loc Unnamed "excess elements in initializer for %s"
                         (I.name zi);
-            I.to_init zi
+            (I.to_init zi, env)
         | I.OK zi' ->
-            elab_item zi' item il'
+            elab_item env zi' item il'
         | I.Unsupported ->
             error loc "unsupported reinitialization of %s that was previously initialized as a whole" (I.name zi);
             raise Exit
       end else
-        elab_item (elab_designator loc env (I.to_top zi) desig) item il'
+        elab_item env (elab_designator loc env (I.to_top zi) desig) item il'
 
 (* Perform the initialization described by [item] for the current
    subobject of state [zi].  Continue initializing with the list [il]. *)
 
-and elab_item zi item il =
+and elab_item env zi item il =
   let ty = I.typeof zi in
   match item, unroll env ty with
   (* Special case char array = "string literal"
@@ -1650,47 +1650,47 @@ and elab_item zi item il =
       | CStr s, TInt((IChar | ISChar | IUChar), _) ->
           if not (I.index_below (Int64.of_int(String.length s - 1)) sz) then
             warning loc Unnamed "initializer string for array of chars %s is too long" (I.name zi);
-          elab_list (I.set zi (init_char_array_string sz s)) il false
+          elab_list env (I.set zi (init_char_array_string sz s)) il false
       | CStr _, _ ->
           error loc "initialization of an array of non-char elements with a string literal";
-          elab_list zi il false
+          elab_list env zi il false
       | CWStr(s, ik), TInt(_, _) when compatible_types AttrIgnoreTop env ty_elt (TInt(ik, [])) ->
           if not (I.index_below (Int64.of_int(List.length s - 1)) sz) then
             warning loc Unnamed "initializer string for array of wide chars %s is too long" (I.name zi);
-          elab_list (I.set zi (init_int_array_wstring sz s)) il false
+          elab_list env (I.set zi (init_int_array_wstring sz s)) il false
       | CWStr _, _ ->
           error loc "type mismatch between array destination and wide string literal";
-          elab_list zi il false
+          elab_list env zi il false
       | _ -> assert false
       end
   (* Brace-enclosed compound initializer *)
   | COMPOUND_INIT il', _ ->
       (* Process the brace-enclosed stuff, obtaining its initializer *)
-      let ini' = elab_list (I.top env (I.name zi) ty) il' true in
+      let (ini', env') = elab_list env (I.top env (I.name zi) ty) il' true in
       (* Initialize current subobject with this state, and continue *)
-      elab_list (I.set zi ini') il false
+      elab_list env' (I.set zi ini') il false
   (* Single expression *)
   | SINGLE_INIT a, _ ->
-      let a',_ = !elab_expr_f loc env a in
-      elab_single zi a' il
+      let (a', env') = !elab_expr_f loc env a in
+      elab_single env' zi a' il
   (* No initializer: can this happen? *)
   | NO_INIT, _ ->
-      elab_list zi il false
+      elab_list env zi il false
 
 (* Perform initialization by a single expression [a] for the current
    subobject of state [zi],  Continue initializing with the list [il']. *)
 
-and elab_single zi a il =
+and elab_single env zi a il =
   let ty = I.typeof zi in
   match unroll env ty with
   | TInt _ | TEnum _ | TFloat _ | TPtr _ ->
       (* This is a scalar: do direct initialization and continue *)
       check_init_type loc env a ty;
-      elab_list (I.set zi (Init_single a)) il false
+      elab_list env (I.set zi (Init_single a)) il false
   | TStruct _ | TUnion _ when compatible_types AttrIgnoreTop env ty a.etyp ->
       (* This is a composite that can be initialized directly
          from the expression: do as above *)
-      elab_list (I.set zi (Init_single a)) il false
+      elab_list env (I.set zi (Init_single a)) il false
   | TStruct _ | TUnion _ | TArray _ ->
       (* This is an aggregate.
          At top, explicit { } are required. *)
@@ -1701,7 +1701,7 @@ and elab_single zi a il =
       (* Otherwise we need to drill into the aggregate, recursively *)
       begin match I.first env zi with
       | I.OK zi' ->
-          elab_single zi' a il
+          elab_single env zi' a il
       | I.NotFound ->
           error loc "initializer for aggregate %s with no elements requires explicit braces"
                     (I.name zi);
@@ -1723,7 +1723,7 @@ if is_function_type env ty_root then begin
   raise Exit
 end;
 try
-  elab_item (I.top env root ty_root) ie []
+  elab_item env (I.top env root ty_root) ie []
 with No_default_init ->
   error loc "variable has incomplete type %a" (print_typ env) ty_root;
   raise Exit
@@ -1755,9 +1755,9 @@ let fixup_typ loc env ty init =
 let elab_initializer loc env root ty ie =
   match elab_initial loc env root ty ie with
   | None ->
-      (ty, None)
-  | Some init ->
-      (fixup_typ loc env ty init, Some init)
+      (ty, None, env)
+  | Some (init, env') ->
+      (fixup_typ loc env' ty init, Some init, env')
 
 
 (* Contexts for elaborating statements and expressions *)
@@ -2074,8 +2074,8 @@ let elab_expr ctx loc env a =
       if not (is_array_type env ty) && incomplete_type env ty then
         fatal_error "ill-formed compound literal with incomplete type %a" (print_typ env) ty;
       begin match elab_initializer loc env "<compound literal>" ty ie with
-      | (ty', Some i) -> { edesc = ECompound(ty', i); etyp = ty' },env
-      | (ty', None)   -> fatal_error "ill-formed compound literal"
+      | (ty', Some i, env') -> { edesc = ECompound(ty', i); etyp = ty' }, env'
+      | (ty', None, _)      -> fatal_error "ill-formed compound literal"
       end
 
 (* 6.5.3 Unary expressions *)
@@ -2660,9 +2660,9 @@ let enter_decdef local nonstatic_inline loc sto (decls, env) (s, ty, init) =
       fatal_error loc "variable '%s' has incomplete type %a" s (print_typ env) ty;
   end;
   (* process the initializer *)
-  let (ty', init') = elab_initializer loc env1 s ty init in
+  let (ty', init', env2) = elab_initializer loc env1 s ty init in
   (* update environment with refined type *)
-  let env2 = Env.add_ident env1 id sto' ty' in
+  let env3 = Env.add_ident env2 id sto' ty' in
   (* check for incomplete type *)
   if not isfun && wrap incomplete_type loc env ty' then
     if not local && sto' = Storage_static then begin
@@ -2679,17 +2679,17 @@ let enter_decdef local nonstatic_inline loc sto (decls, env) (s, ty, init) =
     warning loc Static_in_inline "non-constant static local variable '%s' in inline function may be different in different files" s;
   if local && not isfun && sto' <> Storage_extern && sto' <> Storage_static then
     (* Local definition *)
-    ((sto', id, ty', init') :: decls, env2)
+    ((sto', id, ty', init') :: decls, env3)
   else begin
     (* Global definition *)
-    emit_elab ~linkage env2 loc (Gdecl(sto', id, ty', init'));
+    emit_elab ~linkage env3 loc (Gdecl(sto', id, ty', init'));
     (* Make sure the initializer is constant. *)
     begin match init' with
-      | Some i when not (Ceval.is_constant_init env2 i) ->
+      | Some i when not (Ceval.is_constant_init env3 i) ->
         error loc "initializer is not a compile-time constant"
       | _ -> ()
     end;
-    (decls, env2)
+    (decls, env3)
   end
 
 (* Processing of K&R-style function definitions.  Synopsis:
@@ -3140,7 +3140,6 @@ let rec elab_stmt env ctx s =
       { sdesc = Slabeled(Scase(a', n), s1); sloc = elab_loc loc },env
 
   | DEFAULT(s1, loc) ->
-      (*- #Link_to E_COMPCERT_TR_Robustness_ELAB_141 *)
       if ctx.ctx_in_switch = None then
         error loc "'case' statement not in switch statement";
       let s1,env = elab_stmt env ctx s1 in
