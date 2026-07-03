@@ -609,6 +609,8 @@ let sizeof_layout_struct env members ma =
                          (record_field m.fld_name pos :: accu)
                          rem
           | Some width ->
+              (* bit fields must be naturally aligned *)
+              assert (alignas_attribute (attributes_of_type env m.fld_typ) = 0);
               (* curr = beginning of storage unit, in bits
                  next = one past end of storage unit, in bits *)
               let curr = pos / (a * 8) * (a * 8) in
