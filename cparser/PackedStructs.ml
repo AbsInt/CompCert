@@ -74,11 +74,13 @@ let transf_field_decl mfa swapped loc env struct_id f =
   end;
   (* Reduce alignment if requested *)
   if mfa = 0 then f else begin
-    if f.fld_bitfield <> None then
+    if f.fld_bitfield <> None then begin
       error loc "bit fields in packed structs are not supported";
-    let al = safe_alignof loc env f.fld_typ in
-    { f with fld_typ =
-         change_attributes_type env (set_alignas_attr (min mfa al)) f.fld_typ }
+      f
+    end else
+      let al = safe_alignof loc env f.fld_typ in
+      { f with fld_typ =
+          change_attributes_type env (set_alignas_attr (min mfa al)) f.fld_typ }
   end
 
 (* Rewriting struct declarations *)
