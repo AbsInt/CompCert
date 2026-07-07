@@ -1086,7 +1086,7 @@ and elab_field_group env = function
             error loc
               "the type of bit-field '%a' must be an integer type no bigger than 'int'" pp_field id;
             None,env
-          end else if has_std_alignas env' ty then begin
+          end else if alignas_attribute (attributes_of_type env' ty) > 0 then begin
             error loc "alignment specified for bit-field '%a'" pp_field id;
             None, env
           end else begin
