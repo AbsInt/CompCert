@@ -289,16 +289,27 @@ let print_inline_asm print_preg oc txt sg args res =
   List.iter print_fragment (Str.full_split re_asm_param_1 txt);
   fprintf oc "\n"
 
+(** This is [String.exists] in OCaml 4.13 and up.  Temporarily included here
+    to support older OCaml versions. *)
+
+let string_exists predicate s =
+  let len = String.length s in
+  let rec exists i =
+    if i >= len then false else
+    if predicate s.[i] then true else
+    exists (i + 1)
+  in exists 0
+
 (** Print command-line argument, with quoting if needed.
     We quote using double quotes if the argument contains whitespace,
-    control characters, or double quotes. *)
-
-let re_unquoted = Str.regexp "[^ \x00-\x1F\"]*$"
+    control characters (incl. newline and tabs), or double quotes. *)
 
 let quote_argument s =
-  if Str.string_match re_unquoted s 0
-  then s
-  else "\"" ^ String.escaped s ^ "\""
+  if string_exists
+    (function '\x00'..'\x1F' | ' ' | '"' -> true | _ -> false)
+    s
+  then "\"" ^ String.escaped s ^ "\""
+  else s
 
 (** Print CompCert version and command-line as asm comment *)
 
