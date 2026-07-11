@@ -322,10 +322,10 @@ module DwarfPrinter(Target: DWARF_TARGET):
 
     let print_string oc c = function
       | Simple_string s ->
-          fprintf oc "	.asciz		%S%a\n" s print_comment c
+          fprintf oc "	.asciz		%s%a\n" (quote_string s) print_comment c
       | Offset_string (o,s) ->
-        let c = sprintf "%s %s" c s in
-        print_loc_ref oc c o
+          let c = sprintf "%s %s" c (quote_string s) in
+          print_loc_ref oc c o
 
     let print_uleb128 oc c d =
       fprintf oc "	.uleb128	%d%a\n" d print_comment c
@@ -693,7 +693,7 @@ module DwarfPrinter(Target: DWARF_TARGET):
         let s = List.sort (fun (a,_) (b,_) -> compare a b) entries.string_table in
         List.iter (fun (id,s) ->
           print_label oc (loc_to_label id);
-          fprintf oc "	.asciz		%S\n" s) s)
+          fprintf oc "	.asciz		%s\n" (quote_string s)) s)
 
 
     (* Print the debug info and abbrev section *)

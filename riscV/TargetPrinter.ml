@@ -543,7 +543,7 @@ module Target : TARGET =
            | EF_annot(kind,txt, targs) ->
              begin match (P.to_int kind) with
                | 1 -> let annot = annot_text preg_annot "x2" txt args  in
-                 fprintf oc "%s annotation: %S\n" comment annot
+                 fprintf oc "%s annotation: %s\n" comment (quote_string annot)
                | 2 -> let lbl = new_label () in
                  fprintf oc "%a:\n" label lbl;
                  add_ais_annot lbl preg_annot "x2" txt args
