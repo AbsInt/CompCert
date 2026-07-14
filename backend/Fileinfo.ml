@@ -12,6 +12,7 @@
 (* *********************************************************************)
 
 open Printf
+open PrintAsmaux
 
 (* Printing annotations in asm syntax *)
 
@@ -47,7 +48,7 @@ let print_file oc file =
     Hashtbl.find filename_info file
   with Not_found ->
     let (filenum, filebuf as res) = enter_filename file in
-    fprintf oc "	.file	%d %S\n" filenum file;
+    fprintf oc "	.file	%d %s\n" filenum (quote_string file);
     res
 
 let print_file_line oc pref file line =
@@ -70,7 +71,7 @@ let print_file_line_d2 oc pref file line =
       with Not_found ->
         enter_filename file in
     if file <> !last_file then begin
-      fprintf oc "	.d2file	%S\n" file;
+      fprintf oc "	.d2file	%s\n" (quote_string file);
       last_file := file
     end;
     fprintf oc "	.d2line	%d\n" line;

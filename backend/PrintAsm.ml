@@ -180,7 +180,7 @@ module Printer(Target:TARGET) =
             print_addr oc Target.label lbl
           | AisAnnot.Symbol symb ->
             print_addr oc Target.symbol symb
-          | AisAnnot.String a -> fprintf oc "	.ascii %S\n" a in
+          | AisAnnot.String a -> fprintf oc "	.ascii %s\n" (quote_string a) in
         let annot oc str =
           List.iter (annot_part oc) str
         in
