@@ -289,6 +289,27 @@ let print_inline_asm print_preg oc txt sg args res =
   List.iter print_fragment (Str.full_split re_asm_param_1 txt);
   fprintf oc "\n"
 
+(** Quote the given string, using C string literal syntax.
+    The resulting string is enclosed in double quotes.
+    Double quotes and backslash are backslash-escaped.
+    Newline and tabs are written as [\n] and [\t].
+    Other control characters are octal-encoded. *)
+
+let quote_string s =
+  let b = Buffer.create (String.length s + 10) in
+  Buffer.add_char b '"';
+  String.iter
+    (fun c ->
+      match c with
+      | '"' | '\\'       -> Buffer.add_char b '\\'; Buffer.add_char b c
+      | '\n'             -> Buffer.add_string b "\\n"
+      | '\t'             -> Buffer.add_string b "\\t"
+      | '\x00' .. '\x1F' -> Printf.bprintf b "\\%03o" (Char.code c)
+      | _                -> Buffer.add_char b c)
+    s;
+  Buffer.add_char b '"';
+  Buffer.contents b
+
 (** This is [String.exists] in OCaml 4.13 and up.  Temporarily included here
     to support older OCaml versions. *)
 
@@ -299,24 +320,6 @@ let string_exists predicate s =
     if predicate s.[i] then true else
     exists (i + 1)
   in exists 0
-
-(** Quote the given string, using C string literal syntax.
-    The resulting string is enclosed in double quotes.
-    Double quotes and backslash are backslash-quoted.
-    Control characters (incl. newline and tabs) are octal-encoded. *)
-
-let quote_string s =
-  let b = Buffer.create (String.length s + 10) in
-  Buffer.add_char b '"';
-  String.iter
-    (fun c ->
-      match c with
-      | '"' | '\\' -> Buffer.add_char b '\\'; Buffer.add_char b c
-      | '\x00' .. '\x1F' -> Printf.bprintf b "\\%03o" (Char.code c)
-      | _ -> Buffer.add_char b c)
-    s;
-  Buffer.add_char b '"';
-  Buffer.contents b
 
 (** Print command-line argument, with quoting if needed.
     We quote using double quotes if the argument contains whitespace,
