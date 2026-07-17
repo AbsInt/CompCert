@@ -599,7 +599,7 @@ Proof.
   rewrite Z.div_add by lia. lia.
 Qed.
 
-(** * Definitions and theorems on the data types [option], [sum] and [list] *)
+(** * Definitions and theorems on the data types [option], [sum], and [prod] *)
 
 Set Implicit Arguments.
 
@@ -631,6 +631,14 @@ Definition sum_left_map (A B C: Type) (f: A -> B) (x: A + C) : B + C :=
   | inl y => inl C (f y)
   | inr z => inr B z
   end.
+
+(** Notations for pair projections [fst], [snd] *)
+
+Declare Scope pair_scope.
+Notation "s #1" := (fst s) (at level 1, format "s '#1'") : pair_scope.
+Notation "s #2" := (snd s) (at level 1, format "s '#2'") : pair_scope.
+
+(** * Definitions and theorems on the data type [list] *)
 
 (** Properties of [List.nth] (n-th element of a list). *)
 
