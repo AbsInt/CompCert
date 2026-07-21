@@ -39,9 +39,6 @@ Require Import Axioms Coqlib Errors Maps AST Linking.
 Require Import Integers Floats Values Memory.
 Require Archi.
 
-Declare Scope pair_scope.
-Notation "s #1" := (fst s) (at level 9, format "s '#1'") : pair_scope.
-Notation "s #2" := (snd s) (at level 9, format "s '#2'") : pair_scope.
 Local Open Scope pair_scope.
 Local Open Scope error_monad_scope.
 
@@ -1717,7 +1714,7 @@ Qed.
 Theorem find_def_match_2:
   forall b, option_rel (match_globdef match_fundef match_varinfo ctx)
                        (find_def (globalenv p) b) (find_def (globalenv tp) b).
-Proof (mge_defs globalenvs_match).
+Proof. exact (mge_defs globalenvs_match). Qed.
 
 Theorem find_def_match:
   forall b g,

@@ -596,6 +596,7 @@ Proof.
   auto. constructor; auto using agree_reg.
 Qed.
 
+Create HintDb stacking.
 Hint Resolve agree_reg agree_reglist: stacking.
 
 (** Preservation under assignments of machine registers. *)
@@ -1570,25 +1571,25 @@ Qed.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_match TRANSF).
+Proof. exact (Genv.find_symbol_match TRANSF). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_match TRANSF).
+Proof. exact (Genv.senv_match TRANSF). Qed.
 
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   exists tf,
   Genv.find_funct tge v = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_transf_partial TRANSF).
+Proof. exact (Genv.find_funct_transf_partial TRANSF). Qed.
 
 Lemma function_ptr_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
   Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial TRANSF).
+Proof. exact (Genv.find_funct_ptr_transf_partial TRANSF). Qed.
 
 Lemma sig_preserved:
   forall f tf, transf_fundef f = OK tf -> Mach.funsig tf = Linear.funsig f.

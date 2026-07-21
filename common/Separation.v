@@ -261,7 +261,7 @@ Qed.
 
 Lemma sep_proj2:
   forall P Q m, m |= P ** Q -> m |= Q.
-Proof sep_drop.
+Proof. exact sep_drop. Qed.
 
 Definition sep_pick1 := sep_proj1.
 

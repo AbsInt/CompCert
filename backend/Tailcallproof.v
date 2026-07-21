@@ -219,23 +219,23 @@ Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_transf TRANSL).
+Proof. exact (Genv.find_symbol_transf TRANSL). Qed.
 
 Lemma functions_translated:
   forall (v: val) (f: RTL.fundef),
   Genv.find_funct ge v = Some f ->
   Genv.find_funct tge v = Some (transf_fundef f).
-Proof (Genv.find_funct_transf TRANSL).
+Proof. exact (Genv.find_funct_transf TRANSL). Qed.
 
 Lemma funct_ptr_translated:
   forall (b: block) (f: RTL.fundef),
   Genv.find_funct_ptr ge b = Some f ->
   Genv.find_funct_ptr tge b = Some (transf_fundef f).
-Proof (Genv.find_funct_ptr_transf TRANSL).
+Proof. exact (Genv.find_funct_ptr_transf TRANSL). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_transf TRANSL).
+Proof. exact (Genv.senv_transf TRANSL). Qed.
 
 Lemma sig_preserved:
   forall f, funsig (transf_fundef f) = funsig f.

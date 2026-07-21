@@ -654,6 +654,7 @@ Proof.
   elim (Plt_strict id). apply Plt_Ple_trans with (gen_next g2); auto.
 Qed.
 
+Create HintDb gensym.
 Hint Resolve gensym_within within_widen contained_widen
              contained_cons contained_app contained_disjoint
              contained_notin contained_nil

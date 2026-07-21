@@ -26,21 +26,21 @@ From Coq Require ClassicalFacts FunctionalExtensionality.
 Lemma functional_extensionality_dep:
   forall {A: Type} {B : A -> Type} (f g : forall x : A, B x),
   (forall x, f x = g x) -> f = g.
-Proof @FunctionalExtensionality.functional_extensionality_dep.
+Proof. exact @FunctionalExtensionality.functional_extensionality_dep. Qed.
 
 (** and, as a corollary, functional extensionality for non-dependent functions:
 *)
 
 Lemma functional_extensionality:
   forall {A B: Type} (f g : A -> B), (forall x, f x = g x) -> f = g.
-Proof @FunctionalExtensionality.functional_extensionality.
+Proof. exact @FunctionalExtensionality.functional_extensionality. Qed.
 
 (** For compatibility with earlier developments, [extensionality]
   is an alias for [functional_extensionality]. *)
 
 Lemma extensionality:
   forall {A B: Type} (f g : A -> B),  (forall x, f x = g x) -> f = g.
-Proof @functional_extensionality.
+Proof. exact @functional_extensionality. Qed.
 
 (** * Proof irrelevance *)
 

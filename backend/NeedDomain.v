@@ -85,6 +85,7 @@ Proof.
   intros. simpl in H. auto.
 Qed.
 
+Create HintDb na.
 Global Hint Resolve vagree_same vagree_lessdef lessdef_vagree: na.
 
 Inductive vagree_list: list val -> list val -> list nval -> Prop :=
@@ -753,19 +754,19 @@ Lemma and_sound:
   forall v1 w1 v2 w2 x,
   vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
   vagree (Val.and v1 v2) (Val.and w1 w2) x.
-Proof (vagree_bitwise_binop Int.and (iagree_bitwise_binop andb Int.and Int.bits_and)).
+Proof. exact (vagree_bitwise_binop Int.and (iagree_bitwise_binop andb Int.and Int.bits_and)). Qed.
 
 Lemma or_sound:
   forall v1 w1 v2 w2 x,
   vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
   vagree (Val.or v1 v2) (Val.or w1 w2) x.
-Proof (vagree_bitwise_binop Int.or (iagree_bitwise_binop orb Int.or Int.bits_or)).
+Proof. exact (vagree_bitwise_binop Int.or (iagree_bitwise_binop orb Int.or Int.bits_or)). Qed.
 
 Lemma xor_sound:
   forall v1 w1 v2 w2 x,
   vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
   vagree (Val.xor v1 v2) (Val.xor w1 w2) x.
-Proof (vagree_bitwise_binop Int.xor (iagree_bitwise_binop xorb Int.xor Int.bits_xor)).
+Proof. exact (vagree_bitwise_binop Int.xor (iagree_bitwise_binop xorb Int.xor Int.bits_xor)). Qed.
 
 Lemma notint_sound:
   forall v w x,
@@ -797,19 +798,19 @@ Lemma andl_sound:
   forall v1 w1 v2 w2 x,
   vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
   vagree (Val.andl v1 v2) (Val.andl w1 w2) x.
-Proof (vagree_bitwise64_binop Int64.and (lagree_bitwise_binop andb Int64.and Int64.bits_and)).
+Proof. exact (vagree_bitwise64_binop Int64.and (lagree_bitwise_binop andb Int64.and Int64.bits_and)). Qed.
 
 Lemma orl_sound:
   forall v1 w1 v2 w2 x,
   vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
   vagree (Val.orl v1 v2) (Val.orl w1 w2) x.
-Proof (vagree_bitwise64_binop Int64.or (lagree_bitwise_binop orb Int64.or Int64.bits_or)).
+Proof. exact (vagree_bitwise64_binop Int64.or (lagree_bitwise_binop orb Int64.or Int64.bits_or)). Qed.
 
 Lemma xorl_sound:
   forall v1 w1 v2 w2 x,
   vagree v1 w1 (bitwise x) -> vagree v2 w2 (bitwise x) ->
   vagree (Val.xorl v1 v2) (Val.xorl w1 w2) x.
-Proof (vagree_bitwise64_binop Int64.xor (lagree_bitwise_binop xorb Int64.xor Int64.bits_xor)).
+Proof. exact (vagree_bitwise64_binop Int64.xor (lagree_bitwise_binop xorb Int64.xor Int64.bits_xor)). Qed.
 
 Lemma notl_sound:
   forall v w x,
@@ -1825,9 +1826,9 @@ Module NVal <: SEMILATTICE.
   Proof. intros. constructor. Qed.
   Definition lub := nlub.
   Lemma ge_lub_left: forall x y, ge (lub x y) x.
-  Proof nge_lub_l.
+  Proof. exact nge_lub_l. Qed.
   Lemma ge_lub_right: forall x y, ge (lub x y) y.
-  Proof nge_lub_r.
+  Proof. exact nge_lub_r. Qed.
 End NVal.
 
 Module NE := LPMap1(NVal).

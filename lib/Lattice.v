@@ -188,6 +188,7 @@ Proof.
   auto.
 Qed.
 
+Create HintDb combine.
 Local Hint Resolve opt_beq_correct opt_eq_refl opt_eq_sym : combine.
 
 (** A [combine] operation over the type [PTree.t L.t] that attempts
@@ -746,7 +747,7 @@ Definition eq_trans: forall x y z, eq x y -> eq y z -> eq x z := (@eq_trans t).
 Definition beq : t -> t -> bool := eqb.
 
 Lemma beq_correct: forall x y, beq x y = true -> eq x y.
-Proof eqb_prop.
+Proof. exact eqb_prop. Qed.
 
 Definition ge (x y: t) : Prop := x = y \/ x = true.
 

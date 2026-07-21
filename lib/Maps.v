@@ -763,7 +763,7 @@ Module PTree <: TREE.
 
   Lemma prev_involutive i :
     prev (prev i) = i.
-  Proof (prev_append_prev i xH).
+  Proof. exact (prev_append_prev i xH). Qed.
 
   Lemma prev_append_inj i j j' :
     prev_append i j = prev_append i j' -> j = j'.

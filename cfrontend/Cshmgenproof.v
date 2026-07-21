@@ -262,6 +262,7 @@ Proof.
   destruct sg; econstructor; eauto.
 Qed.
 
+Create HintDb cshm.
 Hint Resolve make_intconst_correct make_floatconst_correct make_longconst_correct
              make_singleconst_correct make_singleoffloat_correct make_floatofsingle_correct
              make_floatofint_correct: cshm.
@@ -1067,23 +1068,23 @@ Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall s, Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_match TRANSL).
+Proof. exact (Genv.find_symbol_match TRANSL). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_match TRANSL).
+Proof. exact (Genv.senv_match TRANSL). Qed.
 
 Lemma function_ptr_translated:
   forall v f,
   Genv.find_funct_ptr ge v = Some f ->
   exists cu tf, Genv.find_funct_ptr tge v = Some tf /\ match_fundef cu f tf /\ linkorder cu prog.
-Proof (Genv.find_funct_ptr_match TRANSL).
+Proof. exact (Genv.find_funct_ptr_match TRANSL). Qed.
 
 Lemma functions_translated:
   forall v f,
   Genv.find_funct ge v = Some f ->
   exists cu tf, Genv.find_funct tge v = Some tf /\ match_fundef cu f tf /\ linkorder cu prog.
-Proof (Genv.find_funct_match TRANSL).
+Proof. exact (Genv.find_funct_match TRANSL). Qed.
 
 (** * Matching between environments *)
 
@@ -1363,14 +1364,14 @@ Lemma transl_expr_correct:
    Clight.eval_expr ge e le m a v ->
    forall ta, transl_expr cunit.(prog_comp_env) a = OK ta ->
    Csharpminor.eval_expr tge te le m ta v.
-Proof (proj1 transl_expr_lvalue_correct).
+Proof. exact (proj1 transl_expr_lvalue_correct). Qed.
 
 Lemma transl_lvalue_correct:
    forall a b ofs bf,
    Clight.eval_lvalue ge e le m a b ofs bf ->
    forall ta bf', transl_lvalue cunit.(prog_comp_env) a = OK (ta, bf') ->
    bf = bf' /\ Csharpminor.eval_expr tge te le m ta (Vptr b ofs).
-Proof (proj2 transl_expr_lvalue_correct).
+Proof. exact (proj2 transl_expr_lvalue_correct). Qed.
 
 Lemma transl_arglist_correct:
   forall al tyl vl,

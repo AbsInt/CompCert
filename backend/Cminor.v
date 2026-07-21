@@ -1152,7 +1152,7 @@ Lemma eval_funcall_steps:
    is_call_cont k ->
    star step ge (Callstate fd args k m)
               t (Returnstate res k m').
-Proof (proj1 eval_funcall_exec_stmt_steps).
+Proof. exact (proj1 eval_funcall_exec_stmt_steps). Qed.
 
 Lemma exec_stmt_steps:
    forall f sp e m s t e' m' out,
@@ -1161,7 +1161,7 @@ Lemma exec_stmt_steps:
    exists S,
    star step ge (State f s k sp e m) t S
    /\ outcome_state_match sp e' m' f k out S.
-Proof (proj2 eval_funcall_exec_stmt_steps).
+Proof. exact (proj2 eval_funcall_exec_stmt_steps). Qed.
 
 Lemma evalinf_funcall_forever:
   forall m fd args T k,

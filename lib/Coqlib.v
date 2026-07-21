@@ -116,7 +116,7 @@ Global Hint Resolve Plt_ne: coqlib.
 
 Lemma Plt_trans:
   forall (x y z: positive), Plt x y -> Plt y z -> Plt x z.
-Proof (Pos.lt_trans).
+Proof. exact (Pos.lt_trans). Qed.
 
 Lemma Plt_succ:
   forall (x: positive), Plt x (Pos.succ x).
@@ -151,13 +151,13 @@ Global Opaque plt.
 Definition Ple: positive -> positive -> Prop := Pos.le.
 
 Lemma Ple_refl: forall (p: positive), Ple p p.
-Proof (Pos.le_refl).
+Proof. exact (Pos.le_refl). Qed.
 
 Lemma Ple_trans: forall (p q r: positive), Ple p q -> Ple q r -> Ple p r.
-Proof (Pos.le_trans).
+Proof. exact (Pos.le_trans). Qed.
 
 Lemma Plt_Ple: forall (p q: positive), Plt p q -> Ple p q.
-Proof (Pos.lt_le_incl).
+Proof. exact (Pos.lt_le_incl). Qed.
 
 Lemma Ple_succ: forall (p: positive), Ple p (Pos.succ p).
 Proof.
@@ -166,10 +166,10 @@ Qed.
 
 Lemma Plt_Ple_trans:
   forall (p q r: positive), Plt p q -> Ple q r -> Plt p r.
-Proof (Pos.lt_le_trans).
+Proof. exact (Pos.lt_le_trans). Qed.
 
 Lemma Plt_strict: forall p, ~ Plt p p.
-Proof (Pos.lt_irrefl).
+Proof. exact (Pos.lt_irrefl). Qed.
 
 Global Hint Resolve Ple_refl Plt_Ple Ple_succ Plt_strict: coqlib.
 
@@ -599,7 +599,7 @@ Proof.
   rewrite Z.div_add by lia. lia.
 Qed.
 
-(** * Definitions and theorems on the data types [option], [sum] and [list] *)
+(** * Definitions and theorems on the data types [option], [sum], and [prod] *)
 
 Set Implicit Arguments.
 
@@ -631,6 +631,14 @@ Definition sum_left_map (A B C: Type) (f: A -> B) (x: A + C) : B + C :=
   | inl y => inl C (f y)
   | inr z => inr B z
   end.
+
+(** Notations for pair projections [fst], [snd] *)
+
+Declare Scope pair_scope.
+Notation "s #1" := (fst s) (at level 1, format "s '#1'") : pair_scope.
+Notation "s #2" := (snd s) (at level 1, format "s '#2'") : pair_scope.
+
+(** * Definitions and theorems on the data type [list] *)
 
 (** Properties of [List.nth] (n-th element of a list). *)
 

@@ -538,6 +538,7 @@ Inductive wt_program : program -> Prop :=
          wt_fundef p.(prog_comp_env) e fd) ->
       wt_program p.
 
+Create HintDb ty.
 Global Hint Constructors wt_val wt_rvalue wt_lvalue wt_stmt wt_lblstmts: ty.
 Global Hint Extern 1 (wt_int _ _ _) => exact I: ty.
 Global Hint Extern 1 (wt_int _ _ _) => reflexivity: ty.

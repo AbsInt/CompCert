@@ -31,6 +31,7 @@ Require Import Conventions.
 
 (** * Processor registers and register states *)
 
+Create HintDb asmgen.
 Global Hint Extern 2 (_ <> _) => congruence: asmgen.
 
 Lemma ireg_of_eq:
@@ -746,6 +747,7 @@ Qed.
 Definition nolabel (i: instruction) :=
   match i with Plabel _ => False | _ => True end.
 
+Create HintDb labels.
 Global Hint Extern 1 (nolabel _) => exact I : labels.
 
 Lemma tail_nolabel_cons:

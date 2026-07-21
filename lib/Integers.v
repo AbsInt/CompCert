@@ -20,6 +20,9 @@ From Coq Require Import Eqdep_dec Zquot Zwf.
 Require Import Coqlib Zbits.
 Require Archi.
 
+Create HintDb ints.
+Create HintDb ptrofs.
+
 (** Backwards compatibility for Hint Rewrite locality attributes. *)
 Set Warnings "-unsupported-attributes".
 
@@ -116,7 +119,7 @@ Definition Z_mod_modulus (x: Z) : Z :=
 
 Lemma Z_mod_modulus_range:
   forall x, 0 <= Z_mod_modulus x < modulus.
-Proof (Z_mod_two_p_range wordsize).
+Proof. exact (Z_mod_two_p_range wordsize). Qed.
 
 Lemma Z_mod_modulus_range':
   forall x, -1 < Z_mod_modulus x < modulus.
@@ -126,7 +129,7 @@ Qed.
 
 Lemma Z_mod_modulus_eq:
   forall x, Z_mod_modulus x = x mod modulus.
-Proof (Z_mod_two_p_eq wordsize).
+Proof. exact (Z_mod_two_p_eq wordsize). Qed.
 
 (** The [unsigned] and [signed] functions return the Coq integer corresponding
   to the given machine integer, interpreted as unsigned or signed
@@ -403,59 +406,59 @@ Qed.
 Definition eqm := eqmod modulus.
 
 Lemma eqm_refl: forall x, eqm x x.
-Proof (eqmod_refl modulus).
+Proof. exact (eqmod_refl modulus). Qed.
 Global Hint Resolve eqm_refl: ints.
 
 Lemma eqm_refl2:
   forall x y, x = y -> eqm x y.
-Proof (eqmod_refl2 modulus).
+Proof. exact (eqmod_refl2 modulus). Qed.
 Global Hint Resolve eqm_refl2: ints.
 
 Lemma eqm_sym: forall x y, eqm x y -> eqm y x.
-Proof (eqmod_sym modulus).
+Proof. exact (eqmod_sym modulus). Qed.
 Global Hint Resolve eqm_sym: ints.
 
 Lemma eqm_trans: forall x y z, eqm x y -> eqm y z -> eqm x z.
-Proof (eqmod_trans modulus).
+Proof. exact (eqmod_trans modulus). Qed.
 Global Hint Resolve eqm_trans: ints.
 
 Lemma eqm_small_eq:
   forall x y, eqm x y -> 0 <= x < modulus -> 0 <= y < modulus -> x = y.
-Proof (eqmod_small_eq modulus).
+Proof. exact (eqmod_small_eq modulus). Qed.
 Global Hint Resolve eqm_small_eq: ints.
 
 Lemma eqm_add:
   forall a b c d, eqm a b -> eqm c d -> eqm (a + c) (b + d).
-Proof (eqmod_add modulus).
+Proof. exact (eqmod_add modulus). Qed.
 Global Hint Resolve eqm_add: ints.
 
 Lemma eqm_neg:
   forall x y, eqm x y -> eqm (-x) (-y).
-Proof (eqmod_neg modulus).
+Proof. exact (eqmod_neg modulus). Qed.
 Global Hint Resolve eqm_neg: ints.
 
 Lemma eqm_sub:
   forall a b c d, eqm a b -> eqm c d -> eqm (a - c) (b - d).
-Proof (eqmod_sub modulus).
+Proof. exact (eqmod_sub modulus). Qed.
 Global Hint Resolve eqm_sub: ints.
 
 Lemma eqm_mult:
   forall a b c d, eqm a c -> eqm b d -> eqm (a * b) (c * d).
-Proof (eqmod_mult modulus).
+Proof. exact (eqmod_mult modulus). Qed.
 Global Hint Resolve eqm_mult: ints.
 
 Lemma eqm_same_bits:
   forall x y,
   (forall i, 0 <= i < zwordsize -> Z.testbit x i = Z.testbit y i) ->
   eqm x y.
-Proof (eqmod_same_bits wordsize).
+Proof. exact (eqmod_same_bits wordsize). Qed.
 
 Lemma same_bits_eqm:
   forall x y i,
   eqm x y ->
   0 <= i < zwordsize ->
   Z.testbit x i = Z.testbit y i.
-Proof (same_bits_eqmod wordsize).
+Proof. exact (same_bits_eqmod wordsize). Qed.
 
 (** ** Properties of the coercions between [Z] and [int] *)
 

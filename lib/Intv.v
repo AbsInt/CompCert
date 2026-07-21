@@ -263,6 +263,8 @@ Qed.
 
 (** Hints *)
 
+Create HintDb intv.
+
 Global Hint Resolve
   notin_range range_notin
   is_notempty empty_notin in_notempty

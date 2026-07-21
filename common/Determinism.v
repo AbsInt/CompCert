@@ -504,8 +504,6 @@ Section WORLD_SEM.
 Variable L: semantics.
 Variable initial_world: world.
 
-Notation "s #1" := (fst s) (at level 9, format "s '#1'") : pair_scope.
-Notation "s #2" := (snd s) (at level 9, format "s '#2'") : pair_scope.
 Local Open Scope pair_scope.
 
 Definition world_sem : semantics := @Semantics_gen

@@ -37,18 +37,18 @@ Let tge := Genv.globalenv tprog.
 
 Lemma symbols_preserved:
   forall (s: ident), Genv.find_symbol tge s = Genv.find_symbol ge s.
-Proof (Genv.find_symbol_match TRANSF).
+Proof. exact (Genv.find_symbol_match TRANSF). Qed.
 
 Lemma senv_preserved:
   Senv.equiv ge tge.
-Proof (Genv.senv_match TRANSF).
+Proof. exact (Genv.senv_match TRANSF). Qed.
 
 Lemma functions_translated:
   forall b f,
   Genv.find_funct_ptr ge b = Some f ->
   exists tf,
   Genv.find_funct_ptr tge b = Some tf /\ transf_fundef f = OK tf.
-Proof (Genv.find_funct_ptr_transf_partial TRANSF).
+Proof. exact (Genv.find_funct_ptr_transf_partial TRANSF). Qed.
 
 Lemma functions_transl:
   forall fb f tf,
@@ -281,15 +281,7 @@ Opaque Int.eq.
 - destruct (SelectOp.symbol_is_relocatable id && negb (Ptrofs.eq ofs Ptrofs.zero)).
 + eapply tail_nolabel_trans; [|apply addptrofs_label]. TailNoLabel.
 + TailNoLabel. 
-- apply opimm32_label; intros; exact I.
-- apply opimm32_label; intros; exact I.
-- apply opimm32_label; intros; exact I.
-- apply opimm32_label; intros; exact I.
 - destruct (Int.eq n Int.zero); TailNoLabel.
-- apply opimm64_label; intros; exact I.
-- apply opimm64_label; intros; exact I.
-- apply opimm64_label; intros; exact I.
-- apply opimm64_label; intros; exact I.
 - destruct (Int.eq n Int.zero); TailNoLabel.
 - eapply transl_cond_op_label; eauto.
 - eapply tail_nolabel_trans; eauto using transl_cond_op_label; TailNoLabel.

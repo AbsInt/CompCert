@@ -99,7 +99,7 @@ Definition env := reg -> val.
 Lemma env_ext:
   forall (e1 e2: env),
   (forall r, e1 r = e2 r) -> e1 = e2.
-Proof (@extensionality reg val).
+Proof. exact (@extensionality reg val). Qed.
 
 (** The main operation over environments is update: it assigns
   a value [v] to a register [r] and preserves the values of other
