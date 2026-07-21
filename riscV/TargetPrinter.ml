@@ -26,6 +26,31 @@ open AisAnnot
 open PrintAsmaux
 open Fileinfo
 
+let int_reg_name = function
+                 | X1  -> "x1"  | X2  -> "x2"  | X3  -> "x3"
+  | X4  -> "x4"  | X5  -> "x5"  | X6  -> "x6"  | X7  -> "x7"
+  | X8  -> "x8"  | X9  -> "x9"  | X10 -> "x10" | X11 -> "x11"
+  | X12 -> "x12" | X13 -> "x13" | X14 -> "x14" | X15 -> "x15"
+  | X16 -> "x16" | X17 -> "x17" | X18 -> "x18" | X19 -> "x19"
+  | X20 -> "x20" | X21 -> "x21" | X22 -> "x22" | X23 -> "x23"
+  | X24 -> "x24" | X25 -> "x25" | X26 -> "x26" | X27 -> "x27"
+  | X28 -> "x28" | X29 -> "x29" | X30 -> "x30" | X31 -> "x31"
+
+let float_reg_name = function
+  | F0  -> "f0"  | F1  -> "f1"  | F2  -> "f2"  | F3  -> "f3"
+  | F4  -> "f4"  | F5  -> "f5"  | F6  -> "f6"  | F7  -> "f7"
+  | F8  -> "f8"  | F9  -> "f9"  | F10 -> "f10" | F11 -> "f11"
+  | F12 -> "f12" | F13 -> "f13" | F14 -> "f14" | F15 -> "f15"
+  | F16 -> "f16" | F17 -> "f17" | F18 -> "f18" | F19 -> "f19"
+  | F20 -> "f20" | F21 -> "f21" | F22 -> "f22" | F23 -> "f23"
+  | F24 -> "f24" | F25 -> "f25" | F26 -> "f26" | F27 -> "f27"
+  | F28 -> "f28" | F29 -> "f29" | F30 -> "f30" | F31 -> "f31"
+
+let preg_annot = function
+  | IR r -> int_reg_name r
+  | FR r -> float_reg_name r
+  | _ -> assert false
+
 (* Module containing the printing functions *)
 
 module Target : TARGET =
@@ -41,26 +66,6 @@ module Target : TARGET =
 
     let print_label oc lbl = label oc (transl_label lbl)
 
-    let int_reg_name = function
-                     | X1  -> "x1"  | X2  -> "x2"  | X3  -> "x3"
-      | X4  -> "x4"  | X5  -> "x5"  | X6  -> "x6"  | X7  -> "x7"
-      | X8  -> "x8"  | X9  -> "x9"  | X10 -> "x10" | X11 -> "x11"
-      | X12 -> "x12" | X13 -> "x13" | X14 -> "x14" | X15 -> "x15"
-      | X16 -> "x16" | X17 -> "x17" | X18 -> "x18" | X19 -> "x19"
-      | X20 -> "x20" | X21 -> "x21" | X22 -> "x22" | X23 -> "x23"
-      | X24 -> "x24" | X25 -> "x25" | X26 -> "x26" | X27 -> "x27"
-      | X28 -> "x28" | X29 -> "x29" | X30 -> "x30" | X31 -> "x31"
-
-    let float_reg_name = function
-      | F0  -> "f0"  | F1  -> "f1"  | F2  -> "f2"  | F3  -> "f3"
-      | F4  -> "f4"  | F5  -> "f5"  | F6  -> "f6"  | F7  -> "f7"
-      | F8  -> "f8"  | F9  -> "f9"  | F10 -> "f10" | F11 -> "f11"
-      | F12 -> "f12" | F13 -> "f13" | F14 -> "f14" | F15 -> "f15"
-      | F16 -> "f16" | F17 -> "f17" | F18 -> "f18" | F19 -> "f19"
-      | F20 -> "f20" | F21 -> "f21" | F22 -> "f22" | F23 -> "f23"
-      | F24 -> "f24" | F25 -> "f25" | F26 -> "f26" | F27 -> "f27"
-      | F28 -> "f28" | F29 -> "f29" | F30 -> "f30" | F31 -> "f31"
-
     let ireg oc r = output_string oc (int_reg_name r)
     let freg oc r = output_string oc (float_reg_name r)
 
@@ -72,11 +77,6 @@ module Target : TARGET =
       | IR r -> ireg oc r
       | FR r -> freg oc r
       | _    -> assert false
-
-    let preg_annot = function
-      | IR r -> int_reg_name r
-      | FR r -> float_reg_name r
-      | _ -> assert false
 
 (* Names of sections *)
 
