@@ -19,3 +19,5 @@ val unknown_attrs_program: C.program -> unit
 val unused_variables: C.program -> unit
 
 val non_linear_conditional : C.program -> unit
+
+val abi_conformance : C.program -> unit

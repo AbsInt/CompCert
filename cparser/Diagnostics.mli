@@ -59,6 +59,7 @@ type warning_type =
   | Non_linear_cond_expr           (** condition that cannot be linearized *)
   | Invalid_UTF8                   (** invalid UTF-8 encoding *)
   | Dollar_in_identifier           (** '$' sign in identifier *)
+  | ABI_conformance                (** ABI violations such as incompatible calling conventions *)
   | Unknown_warning                (** unknown warning in '-W' option *)
 
 val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
@@ -67,9 +68,13 @@ val warning  : (string * int) -> warning_type -> ('a, Format.formatter, unit, un
     and warning key for [w] *)
 
 val error : (string * int) -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
-(** [error (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as error according to
-    the format string [fmt] and outputs the result on [stderr] with additional file [f] and column [c]
-    and warning key for [w]. *)
+(** [error (f,c) fmt arg1 ... argN] formats the arguments [arg1] to [argN] as error according to
+    the format string [fmt] and outputs the result on [stderr] with additional file [f] and column [c]. *)
+
+val info : (string * int) -> ('a, Format.formatter, unit, unit, unit, unit) format6 -> 'a
+(** [info (f,c) fmt arg1 ... argN] formats the arguments [arg1] to [argN]
+    as informative messages according to the format string [fmt] and
+    outputs the result on [stderr] with additional file [f] and column [c]. *)
 
 val fatal_error : (string * int) -> ('a, Format.formatter, unit, unit, unit, 'b) format6 -> 'a
 (** [fatal_error (f,c) w fmt arg1 ... argN] formats the arguments [arg1] to [argN] as error according to

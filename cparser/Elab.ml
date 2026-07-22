@@ -3357,4 +3357,5 @@ let elab_file prog =
   Checks.unused_variables p;
   Checks.unknown_attrs_program p;
   Checks.non_linear_conditional p;
+  Checks.abi_conformance p;
   p

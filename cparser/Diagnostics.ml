@@ -112,6 +112,7 @@ type warning_type =
   | Non_linear_cond_expr
   | Invalid_UTF8
   | Dollar_in_identifier
+  | ABI_conformance
   | Unknown_warning
 
 (* List of all warnings with default status.
@@ -151,6 +152,7 @@ let all_warnings =
     (Non_linear_cond_expr, false);
     (Invalid_UTF8, true);
     (Dollar_in_identifier, false);
+    (ABI_conformance, false);
     (Unknown_warning, true)
   ]
 
@@ -196,6 +198,7 @@ let string_of_warning = function
   | Non_linear_cond_expr -> "non-linear-cond-expr"
   | Invalid_UTF8 -> "invalid-utf8"
   | Dollar_in_identifier -> "dollar-in-identifier-extension"
+  | ABI_conformance -> "abi"
   | Unknown_warning -> "unknown-warning-option"
 
 (* Activate the given warning *)
@@ -285,6 +288,10 @@ let rc fmt =
 let mc fmt  =
   cprintf fmt "\x1b[35;1m"
 
+(* BLUE *)
+let blc fmt  =
+  cprintf fmt "\x1b[34;1m"
+
 (* Print key (if available) and flush the formatter *)
 let pp_key key fmt =
   let key = match key with
@@ -351,6 +358,10 @@ let error loc fmt =
     fatal_error None loc fmt
   else
     error None loc fmt
+
+let info loc fmt =
+  kfprintf (pp_key None)
+    err_formatter ("%a%tinfo:%t " ^^ fmt) pp_loc loc blc rsc
 
 let fatal_error loc fmt =
   fatal_error None loc fmt

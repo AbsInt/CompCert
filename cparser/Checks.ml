@@ -82,6 +82,11 @@ let fold_over_decl ~(expr: 'a -> exp -> 'a) (a: 'a) loc (sto, id, ty, init) : 'a
   | Some i -> fold_over_init ~expr a i
   | None -> a
 
+let iter_over_decl ~(expr: exp -> unit) loc (sto, id, ty, init) : unit =
+  match init with
+  | Some i -> iter_over_init ~expr i
+  | None -> ()
+
 let traverse_program
     ?(decl = fun env loc d -> ())
     ?(fundef = fun env loc fd -> ())
@@ -376,3 +381,220 @@ let non_linear_conditional p =
       ~fundef:fundef
       p
   end
+
+(** ** Warn for ABI incompatibilities, esp. nonstandard calling conventions *)
+
+module ABI_compat = struct
+
+(** ABI-dependent checks for function parameters *)
+
+type checker = {
+  incompatible_argument: typ -> bool;
+  add_argument: typ -> unit
+}
+
+let aarch64_macOS_checker () =
+  let num_int = ref 0 in   (* number of integer arguments already seen *)
+  { incompatible_argument =
+      (* incompatibility for integers of size 1 or 2 passed on stack *)
+      (function
+        | TInt(ik, _) -> !num_int >= 8 && sizeof_ikind ik < 4
+        | _ -> false);
+    add_argument =
+      (function
+        | TInt _ | TEnum _ -> incr num_int
+        | _ -> ()) }
+
+let arm_hf_checker () =
+  let num_f32 = ref 0     (* number of single FP arguments already seen *)
+  and num_f64 = ref 0 in  (* number of double FP arguments already seen *)
+  { incompatible_argument =
+      (* incompatibility for float arguments that the ABI would pass
+         in a single FP register and that CompCert passes on stack *)
+      (function
+        | TFloat((FFloat16|FFloat), _) -> !num_f32 + !num_f64 >= 8 && !num_f32 > 0
+        | _ -> false);
+    add_argument =
+      (function
+        | TFloat((FFloat16|FFloat), _) -> incr num_f32
+        | TFloat((FDouble|FLongDouble), _) -> incr num_f64
+        | _ -> ()) }
+
+let default_checker () =
+  { incompatible_argument = (fun _ -> false);
+    add_argument = (fun _ -> ()) }
+
+let argument_checker =
+  match Configuration.arch, Configuration.abi with
+  | "aarch64", "apple" -> aarch64_macOS_checker
+  | "arm", "hardfloat" -> arm_hf_checker
+  | _, _               -> default_checker
+
+(** CompCert uses pass-by-copy-out for returning structs from functions.
+    Some ABIs do the same, except for small structs, which are returned
+    in registers.  The following quantity is the largest size (in bytes)
+    of a struct that is not returned by copy-out. *)
+
+let max_size_struct_return_by_value =
+  match Configuration.arch, Configuration.model with
+  | "arm", _ -> 4
+  | "x86", "32" -> 0      (* always returned by copy-out *)
+  | "powerpc", _ -> 8
+  | "riscV", "32" -> 8    (* 2 * XLEN *)
+  | "riscV", "64" -> 16   (* 2 * XLEN *)
+  | _, _ -> max_int       (* don't know, or doesn't fit the CompCert model at all *)
+
+(** [long double] types are compatible only if the ABI says they are represented
+    like [double].  If the [-flongdouble] option is not given, an error
+    will be raised in [C2C], so let's not warn.
+
+    Likewise, if the [-fstruct-passing] option is off, we don't warn
+    for structs passed by value, since an error will be raised in [C2C].
+*)
+
+let float_incompatible fk =
+  fk = FLongDouble
+  && !Clflags.option_flongdouble
+  && sizeof_fkind FLongDouble <> sizeof_fkind FDouble
+
+let result_type_incompatible env tres =
+  match unroll env tres with
+  | TFloat(fk, _) -> float_incompatible fk
+  | TStruct _ | TUnion _ when !Clflags.option_fstruct_passing ->
+      begin match sizeof env tres with
+      | Some sz  -> sz <= max_size_struct_return_by_value
+      | None -> true
+      end
+  | _ -> false
+
+let argument_type_incompatible env st targ =
+  st.incompatible_argument targ ||
+  begin match unroll env targ with
+  | TFloat(fk, _) -> float_incompatible fk
+  | TStruct _ | TUnion _ -> !Clflags.option_fstruct_passing
+  | _ -> false
+  end
+
+(** Recording and explaining incompatibilities *)
+
+type incompatibility =
+  | Result of typ
+  | Argument of int * ident * typ
+
+let print_incompatibilities loc incomps =
+  List.iter
+    (function
+      | Result ty ->
+          info loc "incompatible result of type %a" Cprint.typ ty
+      | Argument(pos, id, ty) ->
+          if id.name = "" then
+            info loc "incompatible argument #%d of type %a" pos Cprint.typ ty
+          else
+            info loc "incompatible argument '%s' of type %a" id.name Cprint.typ ty)
+    incomps
+
+(** Check a function type.  Return a list of incompatibilities.
+    This list is empty if the function is ABI compatible. *)
+
+let check_function_type env tres targs =
+  let incomp = ref [] in
+  let add_incomp reason = incomp := reason :: !incomp in
+  (* Check the result type *)
+  if result_type_incompatible env tres then
+    add_incomp (Result tres);
+  (* Check the argument types *)
+  let rec check_args pos st = function
+    | [] -> ()
+    | (id, targ) :: targs ->
+        if argument_type_incompatible env st targ then
+          add_incomp (Argument(pos, id, targ));
+        st.add_argument (unroll env targ);
+        check_args (pos + 1) st targs
+  in
+  begin match targs with
+  | None -> ()
+  | Some targs -> check_args 1 (argument_checker()) targs
+  end;
+  !incomp
+
+let rec check_type env ty =
+  match unroll env ty with
+  | TFun(tres, targs, _, _) -> check_function_type env tres targs
+  | TPtr(t, _) -> check_type env t
+  | _ -> []
+
+(** Traversal of an expression, with special treatment for variables
+    and for calls to known functions. *)
+
+let iter_over_expr ~(var : ident -> typ -> unit)
+                   ~(call: ident -> typ -> unit) : exp -> unit =
+  let rec iter e =
+    match e.edesc with
+    | EConst _ | ESizeof _ | EAlignof _ -> ()
+    | EVar id -> var id e.etyp
+    | EUnop(op, e1) -> iter e1
+    | EBinop(op, e1, e2, ty) -> iter e1; iter e2
+    | EConditional(e1, e2, e3) -> iter e1; iter e2; iter e3
+    | ECast(ty, e1) -> iter e1
+    | ECall(e1, el) ->
+        begin match e1.edesc with
+        | EVar id -> call id e1.etyp
+        | _ -> iter e1
+        end;
+        List.iter iter el
+    | ECompound(ty, il) ->
+        iter_over_init ~expr:iter il
+  in iter
+
+(** Check the functions used in an expression *)
+
+let check_expr defined_in_compunit env loc e =
+  let var id ty =
+    let incomps = check_type env ty in
+    if incomps <> [] then begin
+      warning loc ABI_conformance "ABI incompatibility. The function '%s' can only be called from CompCert-compiled code." id.name;
+      print_incompatibilities loc incomps
+    end
+  and call id ty =
+    if not (IdentSet.mem id defined_in_compunit) then begin
+      let incomps = check_type env ty in
+      if incomps <> [] then begin
+        warning loc ABI_conformance "ABI incompatibility if the called function '%s' is not compiled by CompCert." id.name;
+        print_incompatibilities loc incomps
+      end
+   end in
+  iter_over_expr ~var ~call e
+
+let check_decl defined_in_compunit env loc d =
+  iter_over_decl ~expr:(check_expr defined_in_compunit env loc) loc d
+
+(** Check a function definition *)
+
+let check_fundef defined_in_compunit env loc f =
+  let incomps = check_function_type env f.fd_ret (Some f.fd_params) in
+  if incomps <> [] then begin
+    warning loc ABI_conformance "ABI incompatibility. The function '%s' can only be called from CompCert-compiled code." f.fd_name.name;
+    print_incompatibilities loc incomps
+  end;
+  iter_over_stmt_loc
+    ~expr: (check_expr defined_in_compunit env)
+    ~decl: (check_decl defined_in_compunit env)
+    f.fd_body
+
+(** Check a program *)
+
+let check_program p =
+  let defined_in_compunit =
+    List.fold_left
+      (fun def g ->
+        match g.gdesc with
+        | Gfundef f -> IdentSet.add f.fd_name def
+        | _ -> def)
+      IdentSet.empty p in
+  traverse_program ~fundef:(check_fundef defined_in_compunit) p
+
+end
+
+let abi_conformance p =
+  if active_warning ABI_conformance then ABI_compat.check_program p
+
