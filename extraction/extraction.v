@@ -27,6 +27,8 @@ Require Initializers.
 (* Standard lib *)
 From Coq Require Import ExtrOcamlBasic ExtrOcamlNativeString.
 
+Set Extraction Prefix "Coq".  (* TODO: handle and remove when requiring Rocq >= 9.4 *)
+
 (* Coqlib *)
 Extract Inlined Constant Coqlib.proj_sumbool => "(fun x -> x)".
 
