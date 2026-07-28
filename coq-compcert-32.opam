@@ -1,0 +1,57 @@
+opam-version: "2.0"
+authors: "Xavier Leroy <xavier.leroy@inria.fr>"
+maintainer: "Jacques-Henri Jourdan <jacques-Henri.jourdan@normalesup.org>"
+homepage: "http://compcert.inria.fr/"
+dev-repo: "git+https://github.com/AbsInt/CompCert.git"
+bug-reports: "https://github.com/AbsInt/CompCert/issues"
+license: "INRIA Non-Commercial License Agreement"
+available: os != "macos"
+build: [
+  ["./configure"
+  "ia32-linux" {os = "linux"}
+  "ia32-cygwin" {os = "cygwin"}
+  # This is for building a MinGW CompCert with cygwin host and cygwin target
+  "ia32-cygwin" {os = "win32" & os-distribution = "cygwinports"}
+  # This is for building a 32 bit CompCert on 64 bit MinGW with cygwin build host
+  "-toolprefix"     {os = "win32" & os-distribution = "cygwinports" & arch = "x86_64"}
+  "i686-pc-cygwin-" {os = "win32" & os-distribution = "cygwinports" & arch = "x86_64"}
+  # The 32 bit CompCert is a variant which is installed in a non standard folder
+  "-prefix" "%{prefix}%/variants/compcert32"
+  "-install-coqdev"
+  "-clightgen"
+  "-use-external-Flocq"
+  "-use-external-MenhirLib"
+  "-coqdevdir" "%{lib}%/coq-variant/compcert32/compcert"
+  "-ignore-coq-version"]
+  [make "-j%{jobs}%" {ocaml:version >= "4.06"}]
+]
+install: [
+  [make "install"]
+]
+depends: [
+  "coq" {>= "8.8" | = "dev"}
+  "menhir" {>= "20190626" | = "dev"}
+  "ocaml" {>= "4.05.0"}
+  "coq-flocq" {>= "3.1.0" & < "4.0.0"} | "coq-flocq3" {= "dev"}
+  "coq-menhirlib" {>= "20190626" | = "dev"}
+]
+synopsis: "The CompCert C compiler (32 bit)"
+description: "This package installs the 32 bit version of CompCert.
+For coexistence with the 64 bit version, the files are installed in:
+%{prefix}%/variants/compcert32/bin  (ccomp and clightgen binaries)
+%{prefix}%/variants/compcert32/lib/compcert  (C library)
+%{lib}%/coq-variant/compcert32/compcert (Coq library)
+Please note that the coq module path is compcert and not compcert32,
+so the files cannot be directly Required as compcert32.
+Instead -Q or -R options must be used to bind the compcert32 folder
+to the module path compcert. This is more convenient if one development
+supports both 32 and 64 bit versions. Otherwise all files would have to
+be duplicated with module paths compcert and compcert32.
+Please also note that the binary folder is usually not in the path."
+tags: [
+  "category:Computer Science/Semantics and Compilation/Compilation"
+  "category:Computer Science/Semantics and Compilation/Semantics"
+  "keyword:C"
+  "keyword:compiler"
+  "logpath:compcert32"
+]
