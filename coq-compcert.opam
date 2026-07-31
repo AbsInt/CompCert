@@ -1,0 +1,44 @@
+opam-version: "2.0"
+authors: "Xavier Leroy <xavier.leroy@inria.fr>"
+maintainer: "Jacques-Henri Jourdan <jacques-Henri.jourdan@normalesup.org>"
+homepage: "http://compcert.inria.fr/"
+dev-repo: "git+https://github.com/AbsInt/CompCert.git"
+bug-reports: "https://github.com/AbsInt/CompCert/issues"
+license: "INRIA Non-Commercial License Agreement"
+build: [
+  ["./configure"
+  "amd64-linux" {os = "linux"}
+  "amd64-macosx" {os = "macos"}
+  "amd64-cygwin" {os = "cygwin"}
+  # This is for building a MinGW CompCert with cygwin host and cygwin target
+  "amd64-cygwin" {os = "win32" & os-distribution = "cygwinports"}
+  # This is for building a 64 bit CompCert on 32 bit MinGW with cygwin build host
+  "-toolprefix"        {os = "win32" & os-distribution = "cygwinports" & arch = "i686"}
+  "x86_64-pc-cygwin-"  {os = "win32" & os-distribution = "cygwinports" & arch = "i686"}
+  "-prefix" "%{prefix}%"
+  "-install-coqdev"
+  "-clightgen"
+  "-use-external-Flocq"
+  "-use-external-MenhirLib"
+  "-coqdevdir" "%{lib}%/coq/user-contrib/compcert"
+  "-ignore-coq-version"]
+  [make "-j%{jobs}%" {ocaml:version >= "4.06"}]
+]
+install: [
+  [make "install"]
+]
+depends: [
+  "coq" {>= "8.8.0" | = "dev"}
+  "menhir" {>= "20190626" & <= "20250912" | = "dev"}
+  "ocaml" {>= "4.05.0"}
+  "coq-flocq" {>= "4.0.0" | = "dev"}
+  "coq-menhirlib" {>= "20190626" | = "dev"}
+]
+synopsis: "The CompCert C compiler (64 bit)"
+tags: [
+  "category:Computer Science/Semantics and Compilation/Compilation"
+  "category:Computer Science/Semantics and Compilation/Semantics"
+  "keyword:C"
+  "keyword:compiler"
+  "logpath:compcert"
+]
