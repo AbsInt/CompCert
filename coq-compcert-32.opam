@@ -32,7 +32,7 @@ depends: [
   "coq" {>= "8.8" | = "dev"}
   "menhir" {>= "20190626" | = "dev"}
   "ocaml" {>= "4.05.0"}
-  "coq-flocq" {>= "3.1.0" & < "4.0.0"} | "coq-flocq3" {= "dev"}
+  "coq-flocq" {>= "4.0.0" | = "dev"}
   "coq-menhirlib" {>= "20190626" | = "dev"}
 ]
 synopsis: "The CompCert C compiler (32 bit)"
