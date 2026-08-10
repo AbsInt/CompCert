@@ -68,7 +68,7 @@ endif
 #    The warning and the `Create Rewrite Hintdb` command needed to fix it
 #    were both introduced in Rocq 9.2.
 # deprecated-end-tac
-#    Warning introduced in Rocq 9.2, should go away in later Rocq versions
+#    Warning introduced in Rocq 9.2, removed in Rocq 9.3
 COQCOPTS ?= \
   -w -unused-pattern-matching-variable \
   -w -deprecated-since-8.19 \
@@ -82,7 +82,7 @@ COQCOPTS ?= \
   -w -deprecated-end-tac
 
 # deprecated-instance-without-locality:
-#    warning introduced in 8.14
+#    warning introduced in 8.14, removed in 8.18
 #    triggered by Menhir-generated files, to be solved upstream in Menhir
 # deprecated-exact-proof:
 #    warning introduced in 9.2
