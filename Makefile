@@ -282,7 +282,7 @@ extraction: extraction/STAMP
 
 extraction/STAMP: $(FILES:.v=.vo) extraction/extraction.v $(ARCH)/extractionMachdep.v
 	rm -f extraction/*.ml extraction/*.mli
-	$(COQEXEC) extraction/extraction.v
+	$(COQEXEC) ./extraction/extraction.v
 	@if grep 'AXIOM TO BE REALIZED' extraction/*.ml; then \
             echo "An error occured during extraction to OCaml code."; \
             echo "Check the versions of Flocq and MenhirLib used."; \
