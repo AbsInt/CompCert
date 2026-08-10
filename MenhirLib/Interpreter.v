@@ -174,6 +174,7 @@ Fixpoint pop (symbols_to_pop:list symbol) {A:Type} (stk:stack) :
   thunkP (prefix symbols_to_pop (symb_stack_of_stack stk)) ->
   forall (action:arrows_right A (map symbol_semantic_type symbols_to_pop)),
     stack * A.
+Proof.
 unshelve refine
   (match symbols_to_pop
       return
@@ -191,7 +192,6 @@ unshelve refine
          | [] => fun Hp => False_rect _ _
        end Hp
    end).
-Proof.
   - simpl in Hp. clear -Hp. abstract (intros _ ; specialize (Hp I); now inversion Hp).
   - clear -Hp. abstract (specialize (Hp I); now inversion Hp).
   - simpl in Hp. clear -Hp. abstract (intros _ ; specialize (Hp I); now inversion Hp).
@@ -288,6 +288,7 @@ Definition reduce_step stk prod (buffer : buffer)
         (Hval : thunkP (valid_for_reduce (state_of_stack stk) prod))
         (Hi : thunkP (stack_invariant stk))
   : step_result.
+Proof.
 refine
   ((let '(stk', sem) as ss := pop (prod_rhs_rev prod) stk _ (prod_action prod)
       return thunkP (state_valid_after_pop (state_of_stack (fst ss)) _
@@ -308,7 +309,6 @@ refine
       Accept_sr sem buffer
     end (fun _ => _))
    (fun _ => pop_state_valid _ _ _ _ _ _ _)).
-Proof.
   - clear -Hi Hval.
     abstract (intros _; destruct Hi=>//; eapply prefix_trans; [by apply Hval|eassumption]).
   - clear -Hval.
@@ -434,12 +434,12 @@ Global Arguments parse_result _ : clear implicits.
 
 Definition parse (buffer : buffer) (log_n_steps : nat):
   parse_result (symbol_semantic_type (NT (start_nt init))).
+Proof.
 refine (match proj1_sig (parse_fix [] buffer log_n_steps _) with
         | Fail_sr_full st tok => Fail_pr_full st tok
         | Accept_sr sem buffer' => Parsed_pr sem buffer'
         | Progress_sr _ _ => Timeout_pr
         end).
-Proof.
   abstract (repeat constructor; intros; by destruct singleton_state_pred).
 Defined.
 
