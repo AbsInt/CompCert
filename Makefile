@@ -86,10 +86,14 @@ MenhirLib/%.vo: COQCOPTS+=-w -deprecated-syntactic-definition -w -deprecated-sin
 #    warning introduced in 8.20, no alternative before 8.20
 # deprecated-from-Coq:
 #    see above
+# unknown-option:
+#    the "Set Extraction Prefix" command was introduced in 9.4
+
 COQEXTRACTOPTS ?= \
   -w -change-dir-deprecated \
   -w -extraction-default-directory \
-  -w -deprecated-from-Coq
+  -w -deprecated-from-Coq  \
+  -w -unknown-option
 
 ifneq ($(INSTALL_COQDEV),true)
 # Disable costly generation of .cmx files, which are not used locally
