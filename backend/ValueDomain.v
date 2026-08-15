@@ -5035,6 +5035,9 @@ Proof.
 - (* perm inv *)
   intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
   rewrite Z.add_0_r in H2. auto.
+- (* metadata *)
+  intros. exploit inj_of_bc_inv; eauto. intros (A & B & C); subst.
+  auto.
 Qed.
 
 Lemma inj_of_bc_preserves_globals:

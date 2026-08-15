@@ -3138,7 +3138,10 @@ Qed.
 - distinct blocks in [m1] are mapped to non-overlapping sub-blocks in [m2];
 - the sizes of [m2]'s blocks are representable with unsigned machine integers;
 - pointers that could be represented using unsigned machine integers remain
-  representable after the injection.
+  representable after the injection;
+- "metadata" (data stored at negative offsets within a block, making it
+  inaccessible to user code) is not revealed (at positive offsets) after
+  the injection.
 *)
 
 Record inject' (f: meminj) (m1 m2: mem) : Prop :=
@@ -3160,7 +3163,12 @@ Record inject' (f: meminj) (m1 m2: mem) : Prop :=
       forall b1 ofs b2 delta k p,
       f b1 = Some(b2, delta) ->
       perm m2 b2 (ofs + delta) k p ->
-      perm m1 b1 ofs k p \/ ~perm m1 b1 ofs Max Nonempty
+      perm m1 b1 ofs k p \/ ~perm m1 b1 ofs Max Nonempty;
+    mi_metadata: forall b b' delta ofs,
+      f b = Some(b', delta) ->
+      perm m1 b ofs Max Nonempty ->
+      ofs < 0 ->
+      delta = 0
   }.
 Definition inject := inject'.
 
@@ -3529,20 +3537,22 @@ Proof.
   intros. inversion H.
   exploit store_mapped_inj; eauto. intros [n2 [STORE MI]].
   exists n2; split. eauto. constructor.
-(* inj *)
+- (* inj *)
   auto.
-(* freeblocks *)
+- (* freeblocks *)
   eauto with mem.
-(* mappedblocks *)
+- (* mappedblocks *)
   eauto with mem.
-(* no overlap *)
+- (* no overlap *)
   red; intros. eauto with mem.
-(* representable *)
+- (* representable *)
   intros. eapply mi_representable; try eassumption.
   destruct H4; eauto with mem.
-(* perm inv *)
+- (* perm inv *)
   intros. exploit mi_perm_inv0; eauto using perm_store_2.
   intuition eauto using perm_store_1, perm_store_2.
+- (* metadata *)
+  intros. eauto using perm_store_2.
 Qed.
 
 Theorem store_unmapped_inject:
@@ -3554,20 +3564,22 @@ Theorem store_unmapped_inject:
 Proof.
   intros. inversion H.
   constructor.
-(* inj *)
+- (* inj *)
   eapply store_unmapped_inj; eauto.
-(* freeblocks *)
+- (* freeblocks *)
   eauto with mem.
-(* mappedblocks *)
+- (* mappedblocks *)
   eauto with mem.
-(* no overlap *)
+- (* no overlap *)
   red; intros. eauto with mem.
-(* representable *)
+- (* representable *)
   intros. eapply mi_representable; try eassumption.
   destruct H3; eauto with mem.
-(* perm inv *)
+- (* perm inv *)
   intros. exploit mi_perm_inv0; eauto using perm_store_2.
   intuition eauto using perm_store_1, perm_store_2.
+- (* metadata *)
+  intros. eauto using perm_store_2.
 Qed.
 
 Theorem store_outside_inject:
@@ -3581,17 +3593,19 @@ Theorem store_outside_inject:
   inject f m1 m2'.
 Proof.
   intros. inversion H. constructor.
-(* inj *)
+- (* inj *)
   eapply store_outside_inj; eauto.
-(* freeblocks *)
+- (* freeblocks *)
   auto.
-(* mappedblocks *)
+- (* mappedblocks *)
   eauto with mem.
-(* no overlap *)
+- (* no overlap *)
   auto.
-(* representable *)
+- (* representable *)
   eauto with mem.
-(* perm inv *)
+- (* perm inv *)
+  intros. eauto using perm_store_2.
+- (* metadata *)
   intros. eauto using perm_store_2.
 Qed.
 
@@ -3627,20 +3641,22 @@ Proof.
   intros. inversion H.
   exploit storebytes_mapped_inj; eauto. intros [n2 [STORE MI]].
   exists n2; split. eauto. constructor.
-(* inj *)
+- (* inj *)
   auto.
-(* freeblocks *)
+- (* freeblocks *)
   intros. apply mi_freeblocks0. red; intros; elim H3; eapply storebytes_valid_block_1; eauto.
-(* mappedblocks *)
+- (* mappedblocks *)
   intros. eapply storebytes_valid_block_1; eauto.
-(* no overlap *)
+- (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto; eapply perm_storebytes_2; eauto.
-(* representable *)
+- (* representable *)
   intros. eapply mi_representable0; eauto.
   destruct H4; eauto using perm_storebytes_2.
-(* perm inv *)
+- (* perm inv *)
   intros. exploit mi_perm_inv0; eauto using perm_storebytes_2.
   intuition eauto using perm_storebytes_1, perm_storebytes_2.
+- (* metadata *)
+  intros. eauto using perm_storebytes_2.
 Qed.
 
 Theorem storebytes_unmapped_inject:
@@ -3652,20 +3668,22 @@ Theorem storebytes_unmapped_inject:
 Proof.
   intros. inversion H.
   constructor.
-(* inj *)
+- (* inj *)
   eapply storebytes_unmapped_inj; eauto.
-(* freeblocks *)
+- (* freeblocks *)
   intros. apply mi_freeblocks0. red; intros; elim H2; eapply storebytes_valid_block_1; eauto.
-(* mappedblocks *)
+- (* mappedblocks *)
   eauto with mem.
-(* no overlap *)
+- (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto; eapply perm_storebytes_2; eauto.
-(* representable *)
+- (* representable *)
   intros. eapply mi_representable0; eauto.
   destruct H3; eauto using perm_storebytes_2.
-(* perm inv *)
+- (* perm inv *)
   intros. exploit mi_perm_inv0; eauto.
   intuition eauto using perm_storebytes_1, perm_storebytes_2.
+- (* metadata *)
+  intros. eauto using perm_storebytes_2.
 Qed.
 
 Theorem storebytes_outside_inject:
@@ -3679,18 +3697,20 @@ Theorem storebytes_outside_inject:
   inject f m1 m2'.
 Proof.
   intros. inversion H. constructor.
-(* inj *)
+- (* inj *)
   eapply storebytes_outside_inj; eauto.
-(* freeblocks *)
+- (* freeblocks *)
   auto.
-(* mappedblocks *)
+- (* mappedblocks *)
   intros. eapply storebytes_valid_block_1; eauto.
-(* no overlap *)
+- (* no overlap *)
   auto.
-(* representable *)
+- (* representable *)
   auto.
-(* perm inv *)
+- (* perm inv *)
   intros. eapply mi_perm_inv0; eauto using perm_storebytes_2.
+- (* metadata *)
+  intros. eauto using perm_storebytes_2.
 Qed.
 
 Theorem storebytes_empty_inject:
@@ -3701,20 +3721,22 @@ Theorem storebytes_empty_inject:
   inject f m1' m2'.
 Proof.
   intros. inversion H. constructor; intros.
-(* inj *)
+- (* inj *)
   eapply storebytes_empty_inj; eauto.
-(* freeblocks *)
+- (* freeblocks *)
   intros. apply mi_freeblocks0. red; intros; elim H2; eapply storebytes_valid_block_1; eauto.
-(* mappedblocks *)
+- (* mappedblocks *)
   intros. eapply storebytes_valid_block_1; eauto.
-(* no overlap *)
+- (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto; eapply perm_storebytes_2; eauto.
-(* representable *)
+- (* representable *)
   intros. eapply mi_representable0; eauto.
   destruct H3; eauto using perm_storebytes_2.
-(* perm inv *)
+- (* perm inv *)
   intros. exploit mi_perm_inv0; eauto using perm_storebytes_2.
   intuition eauto using perm_storebytes_1, perm_storebytes_2.
+- (* metadata *)
+  intros. eauto using perm_storebytes_2.
 Qed.
 
 (* Preservation of allocations *)
@@ -3727,20 +3749,22 @@ Theorem alloc_right_inject:
 Proof.
   intros. injection H0. intros NEXT MEM.
   inversion H. constructor.
-(* inj *)
+- (* inj *)
   eapply alloc_right_inj; eauto.
-(* freeblocks *)
+- (* freeblocks *)
   auto.
-(* mappedblocks *)
+- (* mappedblocks *)
   eauto with mem.
-(* no overlap *)
+- (* no overlap *)
   auto.
-(* representable *)
+- (* representable *)
   auto.
-(* perm inv *)
+- (* perm inv *)
   intros. eapply perm_alloc_inv in H2; eauto. destruct (eq_block b0 b2).
   subst b0. eelim fresh_block_alloc; eauto.
   eapply mi_perm_inv0; eauto.
+- (* metadata *)
+  auto.
 Qed.
 
 Theorem alloc_left_unmapped_inject:
@@ -3765,34 +3789,37 @@ Proof.
     unfold f'; intros. destruct (eq_block b0 b1). congruence. eauto.
     unfold f'; intros. destruct (eq_block b0 b1). congruence.
     apply memval_inject_incr with f; auto.
-  exists f'; split. constructor.
-(* inj *)
+  exists f'; split; [constructor|split; [|split]].
+- (* inj *)
   eapply alloc_left_unmapped_inj; eauto. unfold f'; apply dec_eq_true.
-(* freeblocks *)
+- (* freeblocks *)
   intros. unfold f'. destruct (eq_block b b1). auto.
   apply mi_freeblocks0. red; intro; elim H3. eauto with mem.
-(* mappedblocks *)
+- (* mappedblocks *)
   unfold f'; intros. destruct (eq_block b b1). congruence. eauto.
-(* no overlap *)
+- (* no overlap *)
   unfold f'; red; intros.
   destruct (eq_block b0 b1); destruct (eq_block b2 b1); try congruence.
   eapply mi_no_overlap0. eexact H3. eauto. eauto.
   exploit perm_alloc_inv. eauto. eexact H6. rewrite dec_eq_false; auto.
   exploit perm_alloc_inv. eauto. eexact H7. rewrite dec_eq_false; auto.
-(* representable *)
+- (* representable *)
   unfold f'; intros.
   destruct (eq_block b b1); try discriminate.
   eapply mi_representable0; try eassumption.
   destruct H4; eauto using perm_alloc_4.
-(* perm inv *)
+- (* perm inv *)
   intros. unfold f' in H3; destruct (eq_block b0 b1); try discriminate.
   exploit mi_perm_inv0; eauto.
   intuition eauto using perm_alloc_1, perm_alloc_4.
-(* incr *)
-  split. auto.
-(* image *)
-  split. unfold f'; apply dec_eq_true.
-(* incr *)
+- (* metadata *)
+  intros. unfold f' in H3; destruct (eq_block b b1); try discriminate.
+  eauto using perm_alloc_4.
+- (* incr *)
+  auto.
+- (* image *)
+  unfold f'; apply dec_eq_true.
+- (* incr *)
   intros; unfold f'; apply dec_eq_false; auto.
 Qed.
 
@@ -3802,6 +3829,7 @@ Theorem alloc_left_mapped_inject:
   alloc m1 lo hi = (m1', b1) ->
   valid_block m2 b2 ->
   0 <= delta <= Ptrofs.max_unsigned ->
+  delta = 0 \/ 0 <= lo ->
   (forall ofs k p, perm m2 b2 ofs k p -> delta = 0 \/ 0 <= ofs < Ptrofs.max_unsigned) ->
   (forall ofs k p, lo <= ofs < hi -> perm m2 b2 (ofs + delta) k p) ->
   inj_offset_aligned delta (hi-lo) ->
@@ -3815,7 +3843,8 @@ Theorem alloc_left_mapped_inject:
   /\ f' b1 = Some(b2, delta)
   /\ (forall b, b <> b1 -> f' b = f b).
 Proof.
-  intros. inversion H.
+  intros until delta; intros INJ ALLOC VALID RANGE1 RANGE2 RANGE3 PERM ALIGN SEP.
+  inversion INJ.
   set (f' := fun b => if eq_block b b1 then Some(b2, delta) else f b).
   assert (inject_incr f f').
   { red; unfold f'; intros. destruct (eq_block b b1). subst b.
@@ -3824,66 +3853,70 @@ Proof.
   assert (mem_inj f' m1 m2).
   { inversion mi_inj0; constructor; eauto with mem.
   + unfold f'; intros. destruct (eq_block b0 b1).
-      inversion H8. subst b0 b3 delta0.
-      elim (fresh_block_alloc _ _ _ _ _ H0). eauto with mem.
+      inversion H0. subst b0 b3 delta0.
+      elim (fresh_block_alloc _ _ _ _ _ ALLOC). eauto with mem.
       eauto.
   + unfold f'; intros. destruct (eq_block b0 b1).
-      inversion H8. subst b0 b3 delta0.
-      elim (fresh_block_alloc _ _ _ _ _ H0).
-      eapply perm_valid_block with (ofs := ofs). apply H10. lia.
+      inversion H0. subst b0 b3 delta0.
+      elim (fresh_block_alloc _ _ _ _ _ ALLOC).
+      eapply perm_valid_block with (ofs := ofs). apply H2. lia.
       eauto.
   + unfold f'; intros. destruct (eq_block b0 b1).
-      inversion H8. subst b0 b3 delta0.
-      elim (fresh_block_alloc _ _ _ _ _ H0). eauto with mem.
+      inversion H0. subst b0 b3 delta0.
+      elim (fresh_block_alloc _ _ _ _ _ ALLOC). eauto with mem.
       apply memval_inject_incr with f; auto.
   }
-  exists f'. split. constructor.
-(* inj *)
+  exists f'; split; [constructor|split; [|split]].
+- (* inj *)
   eapply alloc_left_mapped_inj; eauto. unfold f'; apply dec_eq_true.
-(* freeblocks *)
+- (* freeblocks *)
   unfold f'; intros. destruct (eq_block b b1). subst b.
-  elim H9. eauto with mem.
+  elim H1. eauto with mem.
   eauto with mem.
-(* mappedblocks *)
+- (* mappedblocks *)
   unfold f'; intros. destruct (eq_block b b1). congruence. eauto.
-(* overlap *)
+- (* overlap *)
   unfold f'; red; intros.
-  exploit perm_alloc_inv. eauto. eexact H12. intros P1.
-  exploit perm_alloc_inv. eauto. eexact H13. intros P2.
+  exploit perm_alloc_inv. eauto. eexact H4. intros P1.
+  exploit perm_alloc_inv. eauto. eexact H5. intros P2.
   destruct (eq_block b0 b1); destruct (eq_block b3 b1).
   congruence.
-  inversion H10; subst b0 b1' delta1.
+  inversion H2; subst b0 b1' delta1.
     destruct (eq_block b2 b2'); auto. subst b2'. right; red; intros.
-    eapply H6; eauto. lia.
-  inversion H11; subst b3 b2' delta2.
+    eapply SEP; eauto. lia.
+  inversion H3; subst b3 b2' delta2.
     destruct (eq_block b1' b2); auto. subst b1'. right; red; intros.
-    eapply H6; eauto. lia.
+    eapply SEP; eauto. lia.
   eauto.
-(* representable *)
+- (* representable *)
   unfold f'; intros.
   destruct (eq_block b b1).
-   subst. injection H9; intros; subst b' delta0. destruct H10.
-    exploit perm_alloc_inv; eauto; rewrite dec_eq_true; intro.
-    exploit H3. apply H4 with (k := Max) (p := Nonempty); eauto.
-    generalize (Ptrofs.unsigned_range_2 ofs). lia.
-   exploit perm_alloc_inv; eauto; rewrite dec_eq_true; intro.
-   exploit H3. apply H4 with (k := Max) (p := Nonempty); eauto.
-   generalize (Ptrofs.unsigned_range_2 ofs). lia.
-  eapply mi_representable0; try eassumption.
-  destruct H10; eauto using perm_alloc_4.
-(* perm inv *)
-  intros. unfold f' in H9; destruct (eq_block b0 b1).
-  inversion H9; clear H9; subst b0 b3 delta0.
-  assert (EITHER: lo <= ofs < hi \/ ~(lo <= ofs < hi)) by lia.
-  destruct EITHER.
-  left. apply perm_implies with Freeable; auto with mem. eapply perm_alloc_2; eauto.
-  right; intros A. eapply perm_alloc_inv in A; eauto. rewrite dec_eq_true in A. tauto.
-  exploit mi_perm_inv0; eauto. intuition eauto using perm_alloc_1, perm_alloc_4.
-(* incr *)
-  split. auto.
-(* image of b1 *)
-  split. unfold f'; apply dec_eq_true.
-(* image of others *)
+  + subst. injection H1; intros; subst b' delta0. destruct H2.
+    * exploit perm_alloc_inv; eauto; rewrite dec_eq_true; intro.
+      exploit RANGE3. apply PERM with (k := Max) (p := Nonempty); eauto.
+      generalize (Ptrofs.unsigned_range_2 ofs). lia.
+    * exploit perm_alloc_inv; eauto; rewrite dec_eq_true; intro.
+      exploit RANGE3. apply PERM with (k := Max) (p := Nonempty); eauto.
+      generalize (Ptrofs.unsigned_range_2 ofs). lia.
+  + eapply mi_representable0; try eassumption.
+    destruct H2; eauto using perm_alloc_4.
+- (* perm inv *)
+  intros. unfold f' in H1; destruct (eq_block b0 b1).
+  + inversion H1; clear H1; subst b0 b3 delta0.
+    assert (EITHER: lo <= ofs < hi \/ ~(lo <= ofs < hi)) by lia.
+    destruct EITHER.
+    * left. apply perm_implies with Freeable; auto with mem. eapply perm_alloc_2; eauto.
+    * right; intros A. eapply perm_alloc_inv in A; eauto. rewrite dec_eq_true in A. tauto.
+  + exploit mi_perm_inv0; eauto. intuition eauto using perm_alloc_1, perm_alloc_4.
+- (* metadata *)
+  intros. unfold f' in H1; destruct (eq_block b b1).
+  + inv H1. rename delta0 into delta. eapply perm_alloc_3 in H2; eauto. lia.
+  + eauto using perm_alloc_4.
+- (* incr *)
+  auto.
+- (* image of b1 *)
+  unfold f'; apply dec_eq_true.
+- (* image of others *)
   intros. unfold f'; apply dec_eq_false; auto.
 Qed.
 
@@ -3900,12 +3933,13 @@ Theorem alloc_parallel_inject:
   /\ (forall b, b <> b1 -> f' b = f b).
 Proof.
   intros.
-  case_eq (alloc m2 lo2 hi2). intros m2' b2 ALLOC.
+  destruct (alloc m2 lo2 hi2) as [m2' b2] eqn:ALLOC.
   exploit alloc_left_mapped_inject.
   eapply alloc_right_inject; eauto.
   eauto.
   instantiate (1 := b2). eauto with mem.
   instantiate (1 := 0). unfold Ptrofs.max_unsigned. generalize Ptrofs.modulus_pos; lia.
+  auto.
   auto.
   intros. apply perm_implies with Freeable; auto with mem.
   eapply perm_alloc_2; eauto. lia.
@@ -3924,21 +3958,23 @@ Lemma free_left_inject:
   inject f m1' m2.
 Proof.
   intros. inversion H. constructor.
-(* inj *)
+- (* inj *)
   eapply free_left_inj; eauto.
-(* freeblocks *)
+- (* freeblocks *)
   eauto with mem.
-(* mappedblocks *)
+- (* mappedblocks *)
   auto.
-(* no overlap *)
+- (* no overlap *)
   red; intros. eauto with mem.
-(* representable *)
+- (* representable *)
   intros. eapply mi_representable0; try eassumption.
   destruct H2; eauto with mem.
-(* perm inv *)
+- (* perm inv *)
   intros. exploit mi_perm_inv0; eauto. intuition eauto using perm_free_3.
   eapply perm_free_inv in H4; eauto. destruct H4 as [[A B] | A]; auto.
   subst b1. right; eapply perm_free_2; eauto.
+- (* metadata *)
+  intros. eauto using perm_free_3.
 Qed.
 
 Lemma free_list_left_inject:
@@ -3964,17 +4000,19 @@ Lemma free_right_inject:
   inject f m1 m2'.
 Proof.
   intros. inversion H. constructor.
-(* inj *)
+- (* inj *)
   eapply free_right_inj; eauto.
-(* freeblocks *)
+- (* freeblocks *)
   auto.
-(* mappedblocks *)
+- (* mappedblocks *)
   eauto with mem.
-(* no overlap *)
+- (* no overlap *)
   auto.
-(* representable *)
+- (* representable *)
   auto.
-(* perm inv *)
+- (* perm inv *)
+  intros. eauto using perm_free_3.
+- (* metadata *)
   intros. eauto using perm_free_3.
 Qed.
 
@@ -4088,16 +4126,16 @@ Theorem inject_compose:
 Proof.
   unfold compose_meminj; intros.
   inv H; inv H0. constructor.
-(* inj *)
+- (* inj *)
   eapply mem_inj_compose; eauto.
-(* unmapped *)
+- (* unmapped *)
   intros. erewrite mi_freeblocks0; eauto.
-(* mapped *)
+- (* mapped *)
   intros.
   destruct (f b) as [[b1 delta1] |] eqn:?; try discriminate.
   destruct (f' b1) as [[b2 delta2] |] eqn:?; inv H.
   eauto.
-(* no overlap *)
+- (* no overlap *)
   red; intros.
   destruct (f b1) as [[b1x delta1x] |] eqn:?; try discriminate.
   destruct (f' b1x) as [[b1y delta1y] |] eqn:?; inv H0.
@@ -4111,7 +4149,7 @@ Proof.
     eapply perm_inj. eauto. eexact H2. eauto.
     eapply perm_inj. eauto. eexact H3. eauto.
   intuition lia.
-(* representable *)
+- (* representable *)
   intros.
   destruct (f b) as [[b1 delta1] |] eqn:?; try discriminate.
   destruct (f' b1) as [[b2 delta2] |] eqn:?; inv H.
@@ -4125,7 +4163,7 @@ Proof.
     ((Ptrofs.unsigned ofs - 1) + delta1) by lia.
   destruct H0; eauto using perm_inj.
   rewrite H. lia.
-(* perm inv *)
+- (* perm inv *)
   intros.
   destruct (f b1) as [[b' delta'] |] eqn:?; try discriminate.
   destruct (f' b') as [[b'' delta''] |] eqn:?; try discriminate.
@@ -4134,6 +4172,15 @@ Proof.
   exploit mi_perm_inv1; eauto. intros [A|A].
   eapply mi_perm_inv0; eauto.
   right; red; intros. elim A. eapply perm_inj; eauto.
+- (* metadata *)
+  intros.
+  destruct (f b) as [[b1 delta1] |] eqn:?; try discriminate.
+  destruct (f' b1) as [[b2 delta2] |] eqn:?; try discriminate.
+  inversion H; clear H; subst b2 delta.
+  assert (delta1 = 0) by eauto.
+  eapply perm_inj in H0; eauto. subst delta1. rewrite Z.add_0_r in H0. 
+  assert (delta2 = 0) by eauto.
+  lia.
 Qed.
 
 Lemma val_lessdef_inject_compose:
@@ -4155,23 +4202,25 @@ Lemma extends_inject_compose:
   extends m1 m2 -> inject f m2 m3 -> inject f m1 m3.
 Proof.
   intros. inversion H; inv H0. constructor; intros.
-(* inj *)
+- (* inj *)
   replace f with (compose_meminj inject_id f). eapply mem_inj_compose; eauto.
   apply extensionality; intros. unfold compose_meminj, inject_id.
   destruct (f x) as [[y delta] | ]; auto.
-(* unmapped *)
+- (* unmapped *)
   eapply mi_freeblocks0. erewrite <- valid_block_extends; eauto.
-(* mapped *)
+- (* mapped *)
   eauto.
-(* no overlap *)
+- (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto; eapply perm_extends; eauto.
-(* representable *)
+- (* representable *)
   eapply mi_representable0; eauto.
   destruct H1; eauto using perm_extends.
-(* perm inv *)
+- (* perm inv *)
   exploit mi_perm_inv0; eauto. intros [A|A].
   eapply mext_perm_inv0; eauto.
   right; red; intros; elim A. eapply perm_extends; eauto.
+- (* metadata *)
+  eauto using perm_extends.
 Qed.
 
 Lemma inject_extends_compose:
@@ -4179,22 +4228,24 @@ Lemma inject_extends_compose:
   inject f m1 m2 -> extends m2 m3 -> inject f m1 m3.
 Proof.
   intros. inv H; inversion H0. constructor; intros.
-(* inj *)
+- (* inj *)
   replace f with (compose_meminj f inject_id). eapply mem_inj_compose; eauto.
   apply extensionality; intros. unfold compose_meminj, inject_id.
   destruct (f x) as [[y delta] | ]; auto. decEq. decEq. lia.
-(* unmapped *)
+- (* unmapped *)
   eauto.
-(* mapped *)
+- (* mapped *)
   erewrite <- valid_block_extends; eauto.
-(* no overlap *)
+- (* no overlap *)
   red; intros. eapply mi_no_overlap0; eauto.
-(* representable *)
+- (* representable *)
   eapply mi_representable0; eauto.
-(* perm inv *)
+- (* perm inv *)
   exploit mext_perm_inv0; eauto. intros [A|A].
   eapply mi_perm_inv0; eauto.
   right; red; intros; elim A. eapply perm_inj; eauto.
+- (* metadata *)
+  eauto.
 Qed.
 
 Lemma extends_extends_compose:
@@ -4202,13 +4253,13 @@ Lemma extends_extends_compose:
   extends m1 m2 -> extends m2 m3 -> extends m1 m3.
 Proof.
   intros. inversion H; subst; inv H0; constructor; intros.
-  (* nextblock *)
+- (* nextblock *)
   congruence.
-  (* meminj *)
+- (* meminj *)
   replace inject_id with (compose_meminj inject_id inject_id).
   eapply mem_inj_compose; eauto.
   apply extensionality; intros. unfold compose_meminj, inject_id. auto.
-  (* perm inv *)
+- (* perm inv *)
   exploit mext_perm_inv1; eauto. intros [A|A].
   eapply mext_perm_inv0; eauto.
   right; red; intros; elim A. eapply perm_extends; eauto.
@@ -4235,35 +4286,39 @@ Theorem neutral_inject:
   forall m, inject_neutral (nextblock m) m -> inject (flat_inj (nextblock m)) m m.
 Proof.
   intros. constructor.
-(* meminj *)
+- (* meminj *)
   auto.
-(* freeblocks *)
+- (* freeblocks *)
   unfold flat_inj, valid_block; intros.
   apply pred_dec_false. auto.
-(* mappedblocks *)
+- (* mappedblocks *)
   unfold flat_inj, valid_block; intros.
   destruct (plt b (nextblock m)); inversion H0; subst. auto.
-(* no overlap *)
+- (* no overlap *)
   apply flat_inj_no_overlap.
-(* range *)
+- (* range *)
   unfold flat_inj; intros.
   destruct (plt b (nextblock m)); inv H0. generalize (Ptrofs.unsigned_range_2 ofs); lia.
-(* perm inv *)
+- (* perm inv *)
   unfold flat_inj; intros.
   destruct (plt b1 (nextblock m)); inv H0.
   rewrite Z.add_0_r in H1; auto.
+- (* metadata *)
+  unfold flat_inj; intros.
+  destruct (plt b (nextblock m)); inv H0.
+  auto.
 Qed.
 
 Theorem empty_inject_neutral:
   forall thr, inject_neutral thr empty.
 Proof.
   intros; red; constructor.
-(* perm *)
+- (* perm *)
   unfold flat_inj; intros. destruct (plt b1 thr); inv H.
   replace (ofs + 0) with ofs by lia; auto.
-(* align *)
+- (* align *)
   unfold flat_inj; intros. destruct (plt b1 thr); inv H. apply Z.divide_0_r.
-(* mem_contents *)
+- (* mem_contents *)
   intros; simpl. rewrite ! PMap.gi. rewrite ! ZMap.gi. constructor.
 Qed.
 

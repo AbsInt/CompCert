@@ -817,24 +817,23 @@ Lemma match_callstack_alloc_variables_rec:
 Proof.
   intros until cs; intros VALID REPRES STKSIZE STKPERMS.
   induction 1; intros f1 NOREPET COMPAT SEP1 SEP2 UNBOUND MCS MINJ.
-  (* base case *)
+- (* base case *)
   simpl in MCS. exists f1; auto.
-  (* inductive case *)
+- (* inductive case *)
   simpl in NOREPET. inv NOREPET.
-(* exploit Mem.alloc_result; eauto. intros RES.
-  exploit Mem.nextblock_alloc; eauto. intros NB.*)
   exploit (COMPAT id sz). auto with coqlib. intros [ofs [CENV [ALIGNED [LOB HIB]]]].
   exploit Mem.alloc_left_mapped_inject.
     eexact MINJ.
     eexact H.
     eexact VALID.
-    instantiate (1 := ofs). zify. lia.
+    instantiate (1 := ofs). lia.
+    right; lia.
     intros. exploit STKSIZE; eauto. lia.
-    intros. apply STKPERMS. zify. lia.
+    intros. apply STKPERMS. lia.
     replace (sz - 0) with sz by lia. auto.
     intros. eapply SEP2. eauto with coqlib. eexact CENV. eauto. eauto. lia.
-  intros [f2 [A [B [C D]]]].
-  exploit (IHalloc_variables f2); eauto.
+  intros (f2 & A & B & C & D).
+  eapply (IHalloc_variables f2); eauto.
     red; intros. eapply COMPAT. auto with coqlib.
     red; intros. eapply SEP1; eauto with coqlib.
     red; intros. exploit Mem.perm_alloc_inv; eauto. destruct (eq_block b b1); intros P.
