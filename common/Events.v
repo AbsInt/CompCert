@@ -1060,10 +1060,10 @@ Qed.
 
 Inductive extcall_free_sem (ge: Senv.t):
               list val -> mem -> trace -> val -> mem -> Prop :=
-  | extcall_free_sem_ptr: forall b lo sz m m',
-      Mem.load Mptr m b (Ptrofs.unsigned lo - size_chunk Mptr) = Some (Vptrofs sz) ->
-      Mem.free m b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) = Some m' ->
-      extcall_free_sem ge (Vptr b lo :: nil) m E0 Vundef m'
+  | extcall_free_sem_ptr: forall b sz m m',
+      Mem.load Mptr m b (- size_chunk Mptr) = Some (Vptrofs sz) ->
+      Mem.free m b (- size_chunk Mptr) (Ptrofs.unsigned sz) = Some m' ->
+      extcall_free_sem ge (Vptr b Ptrofs.zero :: nil) m E0 Vundef m'
   | extcall_free_sem_null: forall m,
       extcall_free_sem ge (Vnullptr :: nil) m E0 Vundef m.
 
@@ -1115,25 +1115,22 @@ Proof.
   assert (v' = Vptrofs sz).
   { unfold Vptrofs in *; destruct Archi.ptr64; inv B; auto. }
   subst v'.
-  assert (P: Mem.range_perm m1 b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz) Cur Freeable).
-    eapply Mem.free_range_perm; eauto.
-  assert (EQ: Ptrofs.unsigned (Ptrofs.add lo (Ptrofs.repr delta)) = Ptrofs.unsigned lo + delta).
-  { eapply Mem.address_inject_gen with (p := Freeable); eauto.
-    right. apply P.
-    generalize (size_chunk_pos Mptr), (Ptrofs.unsigned_range sz); lia. }
+  assert (delta = 0).
+  { eapply Mem.mi_metadata; eauto.
+    instantiate (1 := - size_chunk Mptr). eauto with mem.
+    generalize (size_chunk_pos Mptr). lia. }
+  subst delta.
   exploit Mem.free_parallel_inject; eauto. intros (m2' & C & D).
+  rewrite ! Z.add_0_r in *.
   exists f, Vundef, m2'; split.
-  apply extcall_free_sem_ptr with (sz := sz) (m' := m2').
-    rewrite EQ. rewrite <- A. f_equal. lia.
-    auto. auto.
-    rewrite ! EQ. rewrite <- C. f_equal; lia.
+  apply extcall_free_sem_ptr with (sz := sz) (m' := m2'); auto.
   split. auto.
   split. auto.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_unmapped. intros; congruence.
   split. eapply Mem.free_unchanged_on; eauto. unfold loc_out_of_reach.
     intros. red; intros. eelim H2; eauto.
     apply Mem.perm_cur_max. apply Mem.perm_implies with Freeable; auto with mem.
-    apply P. lia.
+    eapply Mem.free_range_perm; eauto. lia.
   split. auto.
   red; intros. congruence.
 + inv H2. inv H6. replace v' with Vnullptr.
