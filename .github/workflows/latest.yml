@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'master'
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -19,7 +20,7 @@ jobs:
       opamroot: /home/rocq/.opam
       configopts: -ignore-coq-version
     container:
-      image: rocq/rocq-prover:9.2.0
+      image: rocq/rocq-prover:latest
       options: --user root
     steps:
       - name: Checkout
