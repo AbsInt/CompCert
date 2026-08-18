@@ -490,7 +490,7 @@ Lemma set_res_other:
   data_preg r = false ->
   set_res (map_builtin_res preg_of res) v rs r = rs r.
 Proof.
-  intros. apply set_res_other_1. intros. symmetry. auto with asmgen.
+  intros. apply set_res_other_1. intros. apply not_eq_sym. auto with asmgen.
 Qed.
 
 (** * Correspondence between Mach code and Asm code *)
