@@ -1742,15 +1742,15 @@ Qed.
 
 Section EVAL_BUILTIN_ARG_PRESERVED.
 
-Variables A F1 V1 F2 V2: Type.
-Variable ge1: Genv.t F1 V1.
-Variable ge2: Genv.t F2 V2.
+Variable A: Type.
+Variable ge1: Senv.t.
+Variable ge2: Senv.t.
 Variable e: A -> val.
 Variable sp: val.
 Variable m: mem.
 
 Hypothesis symbols_preserved:
-  forall id, Genv.find_symbol ge2 id = Genv.find_symbol ge1 id.
+  forall id, Senv.find_symbol ge2 id = Senv.find_symbol ge1 id.
 
 Lemma eval_builtin_arg_preserved:
   forall a v, eval_builtin_arg ge1 e sp m a v -> eval_builtin_arg ge2 e sp m a v.
