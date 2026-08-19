@@ -35,8 +35,12 @@ val add_interf: graph -> var -> var -> unit
 (* Add a preference between two variables. *)
 val add_pref: graph -> var -> var -> unit
 
-(* Color the graph.  Return an assignment of locations to variables. *)
-val coloring: graph -> (var -> loc)
+(* Color the graph.  Return an assignment of locations to variables.
+   [~coalescing] sets the coalescing mode: 
+   - [`Prudent] to perform only coalescings that cannot cause spilling;
+   - [`Aggressive] to force coalescing whenever semantically sound. *)
+
+val coloring: coalescing:[`Prudent|`Aggressive] -> graph -> (var -> loc)
 
 (* Auxiliaries to deal with register classes *)
 val class_of_type: AST.typ -> int
