@@ -444,30 +444,18 @@ End EVENTVAL_INV.
 
 Section EVENTVAL_INJECT.
 
-Variable f: block -> option (block * Z).
+Variable f: meminj.
 Variable ge1 ge2: Senv.t.
-
-Definition symbols_inject : Prop :=
-   (forall id, Senv.public_symbol ge2 id = Senv.public_symbol ge1 id)
-/\ (forall id b1 b2 delta,
-     f b1 = Some(b2, delta) -> Senv.find_symbol ge1 id = Some b1 ->
-     delta = 0 /\ Senv.find_symbol ge2 id = Some b2)
-/\ (forall id b1,
-     Senv.public_symbol ge1 id = true -> Senv.find_symbol ge1 id = Some b1 ->
-     exists b2, f b1 = Some(b2, 0) /\ Senv.find_symbol ge2 id = Some b2)
-/\ (forall b1 b2 delta,
-     f b1 = Some(b2, delta) ->
-     Senv.block_is_volatile ge2 b2 = Senv.block_is_volatile ge1 b1).
-
-Hypothesis symb_inj: symbols_inject.
+Hypothesis symb_inj: Senv.inject f ge1 ge2.
 
 Lemma eventval_match_inject:
   forall ev ty v1 v2,
   eventval_match ge1 ev ty v1 -> Val.inject f v1 v2 -> eventval_match ge2 ev ty v2.
 Proof.
   intros. inv H; inv H0; try constructor; auto.
-  destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b3 [EQ FS]]. rewrite H4 in EQ; inv EQ.
-  rewrite Ptrofs.add_zero. constructor; auto. rewrite A; auto.
+  exploit Senv.find_public_symbol_inject; eauto. intros [b3 [EQ FS]].
+  rewrite H4 in EQ; inv EQ. rewrite Ptrofs.add_zero.
+  constructor; auto. rewrite (Senv.public_symbol_inject symb_inj); auto.
 Qed.
 
 Lemma eventval_match_inject_2:
@@ -476,8 +464,9 @@ Lemma eventval_match_inject_2:
   exists v2, eventval_match ge2 ev ty v2 /\ Val.inject f v1 v2.
 Proof.
   intros. inv H; try (econstructor; split; eauto; constructor; fail).
-  destruct symb_inj as (A & B & C & D). exploit C; eauto. intros [b2 [EQ FS]].
-  exists (Vptr b2 ofs); split. econstructor; eauto.
+  exploit Senv.find_public_symbol_inject; eauto. intros [b2 [EQ FS]].
+  exists (Vptr b2 ofs); split. 
+  econstructor; eauto. rewrite (Senv.public_symbol_inject symb_inj); auto.
   econstructor; eauto. rewrite Ptrofs.add_zero; auto.
 Qed.
 
@@ -673,7 +662,7 @@ Record extcall_properties (sem: extcall_sem) (sg: signature) : Prop :=
   in the following sense. *)
   ec_mem_inject:
     forall ge1 ge2 vargs m1 t vres m2 f m1' vargs',
-    symbols_inject f ge1 ge2 ->
+    Senv.inject f ge1 ge2 ->
     sem ge1 vargs m1 t vres m2 ->
     Mem.inject f m1 m1' ->
     Val.inject_list f vargs vargs' ->
@@ -738,26 +727,26 @@ Qed.
 
 Lemma volatile_load_inject:
   forall ge1 ge2 f chunk m b ofs t v b' ofs' m',
-  symbols_inject f ge1 ge2 ->
+  Senv.inject f ge1 ge2 ->
   volatile_load ge1 chunk m b ofs t v ->
   Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
   Mem.inject f m m' ->
   exists v', volatile_load ge2 chunk m' b' ofs' t v' /\ Val.inject f v v'.
 Proof.
-  intros until m'; intros SI VL VI MI. generalize SI; intros (A & B & C & D).
+  intros until m'; intros SI VL VI MI.
   inv VL.
 - (* volatile load *)
-  inv VI. exploit B; eauto. intros [U V]. subst delta.
+  inv VI. exploit Senv.find_symbol_inject; eauto. intros [U V]. subst delta.
   exploit eventval_match_inject_2; eauto. intros (v2 & X & Y).
   rewrite Ptrofs.add_zero. exists (Val.load_result chunk v2); split.
   constructor; auto.
-  erewrite D; eauto.
+  erewrite Senv.block_is_volatile_inject; eauto.
   apply Val.load_result_inject. auto.
 - (* normal load *)
   exploit Mem.loadv_inject; eauto. intros (v2 & X & Y).
   exists v2; split; auto.
   constructor; auto.
-  inv VI. erewrite D; eauto.
+  inv VI. erewrite Senv.block_is_volatile_inject; eauto.
 Qed.
 
 Lemma volatile_load_receptive:
@@ -889,7 +878,7 @@ Qed.
 
 Lemma volatile_store_inject:
   forall ge1 ge2 f chunk m1 b ofs v t m2 m1' b' ofs' v',
-  symbols_inject f ge1 ge2 ->
+  Senv.inject f ge1 ge2 ->
   volatile_store ge1 chunk m1 b ofs v t m2 ->
   Val.inject f (Vptr b ofs) (Vptr b' ofs') ->
   Val.inject f v v' ->
@@ -901,20 +890,19 @@ Lemma volatile_store_inject:
     /\ Mem.unchanged_on (loc_out_of_reach f m1) m1' m2'.
 Proof.
   intros until v'; intros SI VS AI VI MI.
-  generalize SI; intros (P & Q & R & S).
   inv VS.
 - (* volatile store *)
-  inv AI. exploit Q; eauto. intros [A B]. subst delta.
+  inv AI. exploit Senv.find_symbol_inject; eauto. intros [A B]. subst delta.
   rewrite Ptrofs.add_zero. exists m1'; split.
-  constructor; auto. erewrite S; eauto.
+  constructor; auto. erewrite Senv.block_is_volatile_inject; eauto.
   eapply eventval_match_inject; eauto. apply Val.load_result_inject. auto.
   intuition auto with mem.
 - (* normal store *)
   inversion AI; subst.
   exploit Mem.storev_mapped_inject; eauto. intros [m2' [A B]].
   exists m2'; intuition auto.
-+ constructor; auto. erewrite S; eauto.
-+ eapply Mem.storev_unchanged_on; eauto.
+  constructor; auto. erewrite Senv.block_is_volatile_inject; eauto.
+  eapply Mem.storev_unchanged_on; eauto.
   unfold loc_unmapped; intros. inv AI; congruence.
 + eapply Mem.storev_unchanged_on; eauto.
   unfold loc_out_of_reach; intros. red; intros.
@@ -1595,14 +1583,9 @@ Qed.
 
 (** Special case of [external_call_mem_inject_gen] (for backward compatibility) *)
 
-Definition meminj_preserves_globals (F V: Type) (ge: Genv.t F V) (f: block -> option (block * Z)) : Prop :=
-     (forall id b, Genv.find_symbol ge id = Some b -> f b = Some(b, 0))
-  /\ (forall b gv, Genv.find_var_info ge b = Some gv -> f b = Some(b, 0))
-  /\ (forall b1 b2 delta gv, Genv.find_var_info ge b2 = Some gv -> f b1 = Some(b2, delta) -> b2 = b1).
-
 Lemma external_call_mem_inject:
   forall ef F V (ge: Genv.t F V) vargs m1 t vres m2 f m1' vargs',
-  meminj_preserves_globals ge f ->
+  Genv.inject f ge ->
   external_call ef ge vargs m1 t vres m2 ->
   Mem.inject f m1 m1' ->
   Val.inject_list f vargs vargs' ->
@@ -1615,16 +1598,7 @@ Lemma external_call_mem_inject:
     /\ inject_incr f f'
     /\ inject_separated f f' m1 m1'.
 Proof.
-  intros. destruct H as (A & B & C). eapply external_call_mem_inject_gen with (ge1 := ge); eauto.
-  repeat split; intros.
-  + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
-  + simpl in H3. exploit A; eauto. intros EQ; rewrite EQ in H; inv H. auto.
-  + simpl in H3. exists b1; split; eauto.
-  + simpl; unfold Genv.block_is_volatile.
-    destruct (Genv.find_var_info ge b1) as [gv1|] eqn:V1.
-    * exploit B; eauto. intros EQ; rewrite EQ in H; inv H. rewrite V1; auto.
-    * destruct (Genv.find_var_info ge b2) as [gv2|] eqn:V2; auto.
-      exploit C; eauto. intros EQ; subst b2. congruence.
+  intros. eapply external_call_mem_inject_gen with (ge1 := ge); eauto using Genv.senv_inject.
 Qed.
 
 (** Corollaries of [external_call_determ]. *)

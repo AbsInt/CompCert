@@ -1610,14 +1610,13 @@ Lemma find_function_translated:
   /\ Genv.find_funct_ptr tge bf = Some tf
   /\ transf_fundef f = OK tf.
 Proof.
-  intros until f; intros AG [bound [_ [?????]]] FF.
+  intros until f; intros AG [BOUND GINJ] FF.
   destruct ros; simpl in FF.
-- exploit Genv.find_funct_inv; eauto. intros [b EQ]. rewrite EQ in FF.
+- exploit Genv.find_funct_inject; eauto. intros EQ.
+  exploit Genv.find_funct_inv; eauto. intros [b EQ']. rewrite EQ' in FF.
   rewrite Genv.find_funct_find_funct_ptr in FF.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
-  exists b; exists tf; split; auto. simpl.
-  generalize (AG m0). rewrite EQ. intro INJ. inv INJ.
-  rewrite DOMAIN in H2. inv H2. simpl. auto. eapply FUNCTIONS; eauto.
+  exists b; exists tf; split; auto. simpl. rewrite EQ, EQ'. auto.
 - destruct (Genv.find_symbol ge i) as [b|] eqn:?; try discriminate.
   exploit function_ptr_translated; eauto. intros [tf [A B]].
   exists b; exists tf; split; auto. simpl.
@@ -1734,11 +1733,8 @@ Lemma transl_builtin_arg_correct:
   /\ Val.inject j v v'.
 Proof.
   assert (SYMB: forall id ofs, Val.inject j (Senv.symbol_address ge id ofs) (Senv.symbol_address ge id ofs)).
-  { assert (G: meminj_preserves_globals ge j).
-    { eapply globalenv_inject_preserves_globals. eapply sep_proj2. eapply sep_proj2. eexact SEP. }
-    intros; unfold Senv.symbol_address; simpl; unfold Genv.symbol_address.
-    destruct (Genv.find_symbol ge id) eqn:FS; auto.
-    destruct G. econstructor. eauto. rewrite Ptrofs.add_zero; auto. }
+  { intros. apply Genv.symbol_address_inject.
+    eapply globalenv_inject_preserves_globals. eapply sep_proj2. eapply sep_proj2. eexact SEP. }
 Local Opaque fe.
   induction 1; simpl; intros VALID BOUNDS.
 - assert (loc_valid f x = true) by auto.
@@ -2171,13 +2167,8 @@ Proof.
   red; simpl; auto.
   simpl. rewrite sep_pure. split; auto. split;[|split].
   eapply Genv.initmem_inject; eauto.
-  simpl. exists (Mem.nextblock m0); split. apply Ple_refl.
-  unfold j, Mem.flat_inj; constructor; intros.
-    apply pred_dec_true; auto.
-    destruct (plt b1 (Mem.nextblock m0)); congruence.
-    change (Mem.valid_block m0 b0). eapply Genv.find_symbol_not_fresh; eauto.
-    change (Mem.valid_block m0 b0). eapply Genv.find_funct_ptr_not_fresh; eauto.
-    change (Mem.valid_block m0 b0). eapply Genv.find_var_info_not_fresh; eauto.
+  simpl. unfold j. erewrite <- Genv.init_mem_genv_next by eauto. 
+  auto using Genv.init_inject, Ple_refl.
   red; simpl; tauto.
 Qed.
 

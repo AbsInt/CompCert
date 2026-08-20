@@ -129,6 +129,22 @@ Definition equiv (se1 se2: t) : Prop :=
   /\ (forall id, public_symbol se2 id = public_symbol se1 id)
   /\ (forall b, block_is_volatile se2 b = block_is_volatile se1 b).
 
+(** Compatibility with a memory injection.  *)
+
+Record inject (f: meminj) (se1 se2: t) : Prop := {
+  public_symbol_inject: forall id,
+    Senv.public_symbol se2 id = Senv.public_symbol se1 id;
+  find_symbol_inject: forall id b1 b2 delta,
+     f b1 = Some(b2, delta) -> Senv.find_symbol se1 id = Some b1 ->
+     delta = 0 /\ Senv.find_symbol se2 id = Some b2;
+  find_public_symbol_inject: forall id b1,
+     Senv.public_symbol se1 id = true -> Senv.find_symbol se1 id = Some b1 ->
+     exists b2, f b1 = Some(b2, 0) /\ Senv.find_symbol se2 id = Some b2;
+  block_is_volatile_inject: forall b1 b2 delta,
+     f b1 = Some(b2, delta) ->
+     Senv.block_is_volatile se2 b2 = Senv.block_is_volatile se1 b1
+}.
+
 End Senv.
 
 Module Genv.
@@ -605,6 +621,78 @@ Definition to_senv (ge: t) : Senv.t :=
     (public_symbol_exists ge)
     ge.(genv_symb_range)
     (block_is_volatile_below ge).
+
+(** ** Compatibility with memory injections *)
+
+Definition inject (f: meminj) (ge: t) : Prop :=
+     (forall b, Plt b ge.(genv_next) -> f b = Some(b, 0))
+  /\ (forall b b' delta,
+        f b = Some(b', delta) -> Plt b' ge.(genv_next) -> b' = b /\ delta = 0).
+
+Lemma senv_inject: forall f ge,
+  inject f ge -> Senv.inject f (to_senv ge) (to_senv ge).
+Proof.
+  intros f ge [A B]. constructor; intros.
+- auto.
+- assert (f b1 = Some(b1, 0)). { apply ge.(genv_symb_range) in H0. auto. }
+  rewrite H in H1; inv H1. auto.
+- exists b1; split. 
+  apply ge.(genv_symb_range) in H0. auto.
+  auto.
+- simpl. destruct (block_is_volatile ge b1) eqn:V1; [ | destruct (block_is_volatile ge b2) eqn:V2 ]; auto.
+  + assert (f b1 = Some(b1, 0)). { apply block_is_volatile_below in V1. auto. }
+    congruence.
+  + exploit B; eauto using block_is_volatile_below.
+    intros [C D]. congruence.
+Qed.
+
+Lemma find_symbol_inject: forall f ge id b,
+  inject f ge -> find_symbol ge id = Some b -> f b = Some(b, 0).
+Proof.
+  intros until b; intros [A B] FIND.
+  apply ge.(genv_symb_range) in FIND. auto.
+Qed.
+
+Lemma symbol_address_inject: forall f ge id ofs,
+  inject f ge ->
+  Val.inject f (symbol_address ge id ofs) (symbol_address ge id ofs).
+Proof.
+  unfold symbol_address; intros. destruct (find_symbol ge id) eqn:FIND; auto.
+  econstructor. eapply find_symbol_inject; eauto. rewrite Ptrofs.add_zero; auto.
+Qed.
+
+Lemma find_funct_ptr_inject: forall f ge b fd,
+  inject f ge -> find_funct_ptr ge b = Some fd -> f b = Some(b, 0).
+Proof.
+  intros until fd; intros [A B] FIND. unfold find_funct_ptr, find_def in FIND.
+  destruct (ge.(genv_defs)!b) as [gd|] eqn: FIND'; try discriminate.
+  apply ge.(genv_defs_range) in FIND'. auto.
+Qed.
+
+Lemma find_funct_inject: forall f ge v v' fd,
+  inject f ge -> find_funct ge v = Some fd -> Val.inject f v v' -> v' = v.
+Proof.
+  intros. exploit find_funct_inv; eauto. intros (b & EQ). subst v.
+  rewrite find_funct_find_funct_ptr in H0.
+  exploit find_funct_ptr_inject; eauto. intros EQ'.
+  inv H1. rewrite EQ' in H4; inv H4. reflexivity.
+Qed.
+
+Lemma find_var_info_inject: forall f ge b vi,
+  inject f ge -> find_var_info ge b = Some vi -> f b = Some(b, 0).
+Proof.
+  intros until vi; intros [A B] FIND. unfold find_var_info, find_def in FIND.
+  destruct (ge.(genv_defs)!b) as [gd|] eqn: FIND'; try discriminate.
+  apply ge.(genv_defs_range) in FIND'. auto.
+Qed.
+
+Lemma init_inject: forall ge,
+  inject (Mem.flat_inj ge.(genv_next)) ge.
+Proof.
+  unfold Mem.flat_inj; intros; split; intros.
+- apply pred_dec_true; auto.
+- destruct plt in H; inv H. auto.
+Qed.
 
 (** * Construction of the initial memory state *)
 
@@ -1447,6 +1535,13 @@ Proof.
   intros. exploit find_symbol_not_fresh; eauto.
   apply Mem.empty_inject_neutral.
   apply Ple_refl.
+Qed.
+
+Theorem initmem_inject_genv: forall p m,
+  init_mem p = Some m ->
+  inject (Mem.flat_inj (Mem.nextblock m)) (globalenv p).
+Proof.
+  intros. apply init_mem_genv_next in H. rewrite <- H. apply init_inject.
 Qed.
 
 (** ** Sufficient and necessary conditions for the initial memory to exist. *)
