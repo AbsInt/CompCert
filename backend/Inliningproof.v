@@ -1177,6 +1177,8 @@ Proof.
     instantiate (1 := sp'). auto.
     (* offset is representable *)
     instantiate (1 := dstk ctx). generalize (Z.le_max_r (fn_stacksize f) 0). lia.
+    (* negative offsets are not revealed *)
+    right; lia.
     (* size of target block is representable *)
     intros. right. exploit SSZ2; eauto with mem. inv FB; lia.
     (* we have full permissions on sp' at and above dstk ctx *)

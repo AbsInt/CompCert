@@ -505,18 +505,17 @@ Definition do_ef_free
        (w: world) (vargs: list val) (m: mem) : option (world * trace * val * mem) :=
   match vargs with
   | Vptr b lo :: nil =>
-      do vsz <- Mem.load Mptr m b (Ptrofs.unsigned lo - size_chunk Mptr);
+      check (Ptrofs.eq_dec lo Ptrofs.zero);
+      do vsz <- Mem.load Mptr m b (- size_chunk Mptr);
       do sz <- do_alloc_size vsz;
-      do m' <- Mem.free m b (Ptrofs.unsigned lo - size_chunk Mptr) (Ptrofs.unsigned lo + Ptrofs.unsigned sz);
+      do m' <- Mem.free m b (- size_chunk Mptr) (Ptrofs.unsigned sz);
       Some(w, E0, Vundef, m')
   | Vint n :: nil =>
-      if Int.eq_dec n Int.zero && negb Archi.ptr64
-      then Some(w, E0, Vundef, m)
-      else None
+      check (Int.eq_dec n Int.zero && negb Archi.ptr64);
+      Some(w, E0, Vundef, m)
   | Vlong n :: nil =>
-      if Int64.eq_dec n Int64.zero && Archi.ptr64
-      then Some(w, E0, Vundef, m)
-      else None
+      check (Int64.eq_dec n Int64.zero && Archi.ptr64);
+      Some(w, E0, Vundef, m)
   | _ => None
   end.
 
@@ -628,7 +627,7 @@ Proof with try congruence.
   replace (Vlong Int64.zero) with Vnullptr. split; constructor.
   unfold Vnullptr; rewrite H0; auto.
 + destruct vargs... mydestr.
-  split. apply SIZE in Heqo0. econstructor; eauto. congruence.
+  split. apply SIZE in Heqo0. subst v. econstructor; eauto.
   constructor.
 - (* EF_memcpy *)
   unfold do_ef_memcpy. destruct vargs... destruct v... destruct vargs...
@@ -685,7 +684,7 @@ Proof.
   inv H0. erewrite SIZE by eauto. rewrite H1, H2. auto.
 - (* EF_free *)
   inv H; unfold do_ef_free.
-+ inv H0. rewrite H1. erewrite SIZE by eauto. rewrite H2. auto.
++ inv H0. rewrite dec_eq_true. rewrite H1. erewrite SIZE by eauto. rewrite H2. auto.
 + inv H0. unfold Vnullptr; destruct Archi.ptr64; auto.
 - (* EF_memcpy *)
   inv H; unfold do_ef_memcpy.

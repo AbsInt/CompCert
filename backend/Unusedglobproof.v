@@ -1196,6 +1196,7 @@ Proof.
   apply Q2 in H0. destruct H0. subst.
   left. apply Mem.perm_cur. eapply Mem.perm_implies; eauto.
   apply P1. lia.
+- apply init_meminj_invert in H. tauto.
 Qed.
 
 End INIT_MEM.
