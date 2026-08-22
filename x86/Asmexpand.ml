@@ -163,15 +163,18 @@ let expand_builtin_memcpy_big sz src dst =
   if src <> BA (IR RSI) then emit_lea RSI (addressing_of_builtin_arg src);
   if dst <> BA (IR RDI) then emit_lea RDI (addressing_of_builtin_arg dst);
   if Archi.ptr64 then begin
-    assert (Z.lt sz (Z.shl _1z 64));
-    emit (Pmovq_ri (RCX, Z.div sz _4z))
+    (* Recent x86-64 processors optimize [rep movsb] specially *)
+    assert Z.(lt sz (shl _1z 64));
+    emit (Pmovq_ri (RCX, sz));
+    emit Prep_movsb
   end else begin
-    assert (Z.lt sz (Z.shl _1z 32));
-    emit (Pmovl_ri (RCX, Z.div sz _4z))
-  end;
-  emit Prep_movsl;
-  if Z.(ge (modulo sz _4z) _2z) then emit Pmovsw;
-  if Z.(ge (modulo sz _2z) _1z) then emit Pmovsb
+    (* For older processors, [rep movsl] is better *)
+    assert Z.(lt sz (Z.shl _1z 32));
+    emit (Pmovl_ri (RCX, Z.div sz _4z));
+    emit Prep_movsl;
+    if Z.(ge (modulo sz _4z) _2z) then emit Pmovsw;
+    if Z.(ge (modulo sz _2z) _1z) then emit Pmovsb
+  end
 
 let expand_builtin_memcpy sz al args =
   let (dst, src) = match args with [d; s] -> (d, s) | _ -> assert false in
