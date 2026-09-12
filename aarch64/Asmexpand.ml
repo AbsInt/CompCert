@@ -37,6 +37,9 @@ let _m1 = Z.of_sint (-1)
 let expand_loadimm32 (dst: ireg) n =
   List.iter emit (Asmgen.loadimm32 dst n [])
 
+let expand_loadimm64 (dst: ireg) n =
+  List.iter emit (Asmgen.loadimm64 dst n [])
+
 let expand_addimm64 (dst: iregsp) (src: iregsp) n =
   List.iter emit (Asmgen.addimm64 dst src n [])
 
@@ -229,39 +232,39 @@ let memcpy_big_arg arg tmp =
   | _ -> assert false
 
 let expand_builtin_memcpy_big sz al src dst =
-  assert (sz >= 16);
+  assert Z.(ge sz _16 && lt sz (shl _1 64));
   memcpy_big_arg src X30;
   memcpy_big_arg dst X14;
   let lbl = new_label () in
-  expand_loadimm32 X15 (Z.of_uint (sz / 16));
+  expand_loadimm64 X15 (Z.div sz _16);
   emit (Plabel lbl);
   emit (Pldp(X16, X17, ADpostincr(RR1 X30, _16)));
   emit (Pstp(X16, X17, ADpostincr(RR1 X14, _16)));
   emit (Psubimm(W, RR1 X15, RR1 X15, _1));
   emit (Pcbnz(W, X15, lbl));
-  if sz mod 16 >= 8 then begin
+  if Z.(ge (modulo sz _16) _8) then begin
     emit (Pldrx(X16, ADpostincr(RR1 X30, _8)));
     emit (Pstrx(X16, ADpostincr(RR1 X14, _8)))
   end;
-  if sz mod 8 >= 4 then begin
+  if Z.(ge (modulo sz _8) _4) then begin
     emit (Pldrw(X16, ADpostincr(RR1 X30, _4)));
     emit (Pstrw(X16, ADpostincr(RR1 X14, _4)))
   end;
-  if sz mod 4 >= 2 then begin
+  if Z.(ge (modulo sz _4) _2) then begin
     emit (Pldrh(W, X16, ADpostincr(RR1 X30, _2)));
     emit (Pstrh(X16, ADpostincr(RR1 X14, _2)))
   end;
-  if sz mod 2 >= 1 then begin
+  if Z.(ge (modulo sz _2) _1) then begin
     emit (Pldrb(W, X16, ADpostincr(RR1 X30, _1)));
     emit (Pstrb(X16, ADpostincr(RR1 X14, _1)))
   end
 
-let expand_builtin_memcpy  sz al args =
+let expand_builtin_memcpy sz al args =
   let (dst, src) =
     match args with [d; s] -> (d, s) | _ -> assert false in
-  if sz < 64
-  then expand_builtin_memcpy_small sz al src dst
-  else expand_builtin_memcpy_big sz al src dst
+  if Z.(lt sz (of_sint 64))
+  then expand_builtin_memcpy_small (Z.to_int sz) (Z.to_int al) src dst
+  else expand_builtin_memcpy_big sz (Z.to_int al) src dst
 
 (* Handling of volatile reads and writes *)
 
@@ -530,7 +533,7 @@ let expand_instruction instr =
      | EF_annot_val (kind,txt,targ) ->
         expand_annot_val kind txt targ args res
      | EF_memcpy(sz, al) ->
-        expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
+        expand_builtin_memcpy sz al args
      | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
         emit instr
      | _ ->
