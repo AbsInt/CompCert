@@ -1,4 +1,4 @@
-# Release 3.18
+# Release 3.18, 2026-08-31
 
 Code generation and optimization:
 - Branch relaxation implemented for AArch64 and revised for PowerPC.
@@ -36,7 +36,7 @@ Rocq/Coq development:
 - Support Rocq 9.2.
 - If Rocq is installed, call the `rocq` command directly instead of
   going through the `coq*` compatibility wrappers (#587)
-- Cleaned-up the Rocq code to address Rocq 9.2 warnings (#587)
+- Updated the Rocq code to address most Rocq 9.2 warnings (#587)
 - Update to Flocq 4.2.2.
 - OCaml 5 is now officially supported.
 
