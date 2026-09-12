@@ -99,6 +99,8 @@ let () =
     (* We can ignore the __extension__ GCC keyword. *)
     ignored_keywords := SSet.add "__extension__" !ignored_keywords
 
+let supported_pragma : (string -> bool) ref = ref (fun _ -> false)
+
 let init_ctx = SSet.of_list (List.map fst CBuiltins.builtins.C.builtin_typedefs)
 
 let types_context : SSet.t ref = ref init_ctx
@@ -528,7 +530,14 @@ and hash = parse
     "pragma"
     whitespace_char_no_newline +
     ([^ '\n']* as s) '\n'
-      { new_line lexbuf; PRAGMA (s, currentLoc lexbuf) }
+      { if !supported_pragma s then begin
+          new_line lexbuf;
+          PRAGMA (s, currentLoc lexbuf)
+        end else begin
+          warning lexbuf Diagnostics.Unknown_pragmas "unknown pragma ignored";
+          new_line lexbuf;
+          initial_linebegin lexbuf
+        end }
   | [^ '\n']* '\n'
       { warning lexbuf Diagnostics.Unnamed "unrecognized '#' line";
         new_line lexbuf; initial_linebegin lexbuf }
