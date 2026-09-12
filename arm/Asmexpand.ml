@@ -131,20 +131,20 @@ let memcpy_big_arg arg tmp =
       assert false
 
 let expand_builtin_memcpy_big sz al src dst =
-  assert (sz >= al);
-  assert (sz mod al = 0);
+  assert Z.(eq (modulo sz (of_uint al)) _0);
+  assert Z.(gt sz _0 && lt sz (shl _1 32));
   let (s, d) =
     if dst <> BA (IR IR2) then (IR2, IR3) else (IR3, IR2) in
   memcpy_big_arg src s;
   memcpy_big_arg dst d;
   let (load, store, chunksize) =
     if al >= 4 then
-      (Pldr_p (IR12,s,SOimm _4), Pstr_p (IR12,d,SOimm _4) , 4)
+      (Pldr_p (IR12,s,SOimm _4), Pstr_p (IR12,d,SOimm _4) , _4)
     else if al = 2 then
-       (Pldrh_p (IR12,s,SOimm _2), Pstrh_p (IR12,d,SOimm _2), 2)
+       (Pldrh_p (IR12,s,SOimm _2), Pstrh_p (IR12,d,SOimm _2), _2)
     else
-       (Pldrb_p (IR12,s,SOimm _1), Pstrb_p (IR12,d,SOimm _1), 1) in
-  expand_movimm IR14 (coqint_of_camlint (Int32.of_int (sz / chunksize)));
+       (Pldrb_p (IR12,s,SOimm _1), Pstrb_p (IR12,d,SOimm _1), _1) in
+  expand_movimm IR14 Z.(div sz chunksize);
   let lbl = new_label () in
   emit (Plabel lbl);
   emit load;
@@ -152,12 +152,12 @@ let expand_builtin_memcpy_big sz al src dst =
   emit store;
   emit (Pbne lbl)
 
-let expand_builtin_memcpy  sz al args =
+let expand_builtin_memcpy sz al args =
   let (dst, src) =
     match args with [d; s] -> (d, s) | _ -> assert false in
-  if sz <= 32
-  then expand_builtin_memcpy_small sz al src dst
-  else expand_builtin_memcpy_big sz al src dst
+  if Z.(le sz _32)
+  then expand_builtin_memcpy_small (Z.to_int sz) (Z.to_int al) src dst
+  else expand_builtin_memcpy_big sz (Z.to_int al) src dst
 
 (* Handling of volatile reads and writes *)
 
@@ -623,8 +623,7 @@ let expand_instruction instr =
 	   | EF_annot_val (kind,txt,targ) ->
 	      expand_annot_val kind txt targ args res
 	   | EF_memcpy(sz, al) ->
-	      expand_builtin_memcpy (Int32.to_int (camlint_of_coqint sz))
-		(Int32.to_int (camlint_of_coqint al)) args
+              expand_builtin_memcpy sz al args
 	   | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
               emit instr
 	   | _ ->
