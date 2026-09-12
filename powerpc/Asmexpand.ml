@@ -152,9 +152,9 @@ let memcpy_big_arg arg tmp =
   | _ ->
       assert false
 
-let expand_builtin_memcpy_big sz al src dst =
-  assert (sz >= 4);
-  emit_loadimm GPR0 (Z.of_uint (sz / 4));
+let expand_builtin_memcpy_big sz src dst =
+  assert Z.(ge sz _4 && lt sz (shl _1 32));
+  emit_loadimm GPR0 (Z.div sz _4);
   emit (Pmtctr GPR0);
   let (s, d) =
     if dst <> BA (IR GPR11) then (GPR11, GPR12) else (GPR12, GPR11) in
@@ -166,7 +166,7 @@ let expand_builtin_memcpy_big sz al src dst =
   emit (Pstwu(GPR0, Cint _4, d));
   emit (Pbdnz lbl);
   (* s and d lag behind by 4 bytes *)
-  match sz land 3 with
+  match Z.(to_int (modulo sz _4)) with
   | 1 -> emit (Plbz(GPR0, Cint _4, s));
          emit (Pstb(GPR0, Cint _4, d))
   | 2 -> emit (Plhz(GPR0, Cint _4, s));
@@ -180,11 +180,14 @@ let expand_builtin_memcpy_big sz al src dst =
 let expand_builtin_memcpy sz al args =
   let (dst, src) =
     match args with [d; s] -> (d, s) | _ -> assert false in
-  if sz <= (if !Clflags.option_ffpu && al >= 4
-            then if !Clflags.option_Osize then 35 else 51
-	    else if !Clflags.option_Osize then 19 else 27)
-  then expand_builtin_memcpy_small sz al src dst
-  else expand_builtin_memcpy_big sz al src dst
+  let al = Z.to_int al in
+  let threshold =
+    if !Clflags.option_ffpu && al >= 4
+    then if !Clflags.option_Osize then 35 else 51
+    else if !Clflags.option_Osize then 19 else 27 in
+  if Z.(le sz (of_uint threshold))
+  then expand_builtin_memcpy_small (Z.to_int sz) al src dst
+  else expand_builtin_memcpy_big sz src dst
 
 (* Handling of volatile reads and writes *)
 
@@ -988,7 +991,7 @@ let expand_instruction instr =
       | EF_vstore chunk ->
           expand_builtin_vstore chunk args
       | EF_memcpy(sz, al) ->
-          expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
+          expand_builtin_memcpy sz al args
       | EF_annot_val(kind,txt, targ) ->
           expand_annot_val kind txt targ args res
       | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
