@@ -586,14 +586,14 @@ Proof.
 Qed.
 
 Lemma globals_symbols_inject:
-  forall j, meminj_preserves_globals j -> symbols_inject j ge tge.
+  forall j, meminj_preserves_globals j -> Senv.inject j ge tge.
 Proof.
   intros.
   assert (E1: Genv.genv_public ge = p.(prog_public)).
   { apply Genv.globalenv_public. }
   assert (E2: Genv.genv_public tge = p.(prog_public)).
   { unfold tge; rewrite Genv.globalenv_public. eapply match_prog_public; eauto. }
-  split; [|split;[|split]]; intros.
+  constructor; intros.
   + simpl; unfold Genv.public_symbol; rewrite E1, E2.
     destruct (Genv.find_symbol tge id) as [b'|] eqn:TFS.
     exploit symbols_inject_3; eauto. intros (b & FS & INJ). rewrite FS. auto.
@@ -628,7 +628,7 @@ Lemma symbol_address_inject:
 Proof.
   intros. unfold Genv.symbol_address. destruct (Genv.find_symbol ge id) as [b|] eqn:FS; auto.
   exploit symbols_inject_2; eauto. intros (b' & TFS & INJ). rewrite TFS.
-  econstructor; eauto. rewrite Ptrofs.add_zero; auto.
+  eapply Val.inject_ptr_flat; eauto.
 Qed.
 
 (** Semantic preservation *)
