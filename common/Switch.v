@@ -84,28 +84,35 @@ Section JUMP_TABLE.
 Variable dfl: nat.
 Variable max: Z.
 
-Function jump_table (min: Z) (l: list (Z * nat))
-                    {wf (Zwf_up (max + 1)) min} : list nat :=
-  if zle min max then
-    match l with
-    | nil => dfl :: jump_table (min + 1) nil
-    | (k, d) :: l' =>
-        if zeq k min
-        then d :: jump_table (min + 1) l'
-        else dfl :: jump_table (min + 1) l
-    end
-  else nil.
+Remark jump_table_aux: forall min,
+  min <= max ->
+  Zwf_up (max + 1) (min + 1) min.
 Proof.
-- intros; red; lia.
-- intros; red; lia.
-- intros; red; lia.
-- apply Zwf_up_well_founded.
-Defined.
+  intros; red; lia.
+Qed.
+
+Fixpoint jump_table_rec (min: Z) (l: table)
+                        (acc: Acc (Zwf_up (max + 1)) min) : list nat :=
+  match zle min max with
+  | left LE =>
+      let acc' := Acc_inv acc (jump_table_aux min LE) in
+      match l with
+      | nil => dfl :: jump_table_rec (min + 1) nil acc'
+      | (k, d) :: l' =>
+          if zeq k min
+          then d :: jump_table_rec (min + 1) l' acc'
+          else dfl :: jump_table_rec (min + 1) l acc'
+      end
+  | right _ => nil
+  end.
 
 End JUMP_TABLE.
 
+Definition jump_table (dfl: nat) (min max: Z) (tbl: table) : list nat :=
+  jump_table_rec dfl max min tbl (Zwf_up_well_founded (max + 1) min).
+
 Definition compile_jumptable (dfl: nat) (tbl: table) (min max: Z) :=
-  CTjumptable min (max - min + 1) (jump_table dfl max min tbl) (CTaction dfl).
+  CTjumptable min (max - min + 1) (jump_table dfl min max tbl) (CTaction dfl).
 
 (** *** Compile a multi-way branch as a binary decision tree *)
 
@@ -491,43 +498,43 @@ Qed.
 (** Correctness of compilation to a jump table. *)
 
 Lemma nth_jump_table:
-  forall max n min dfl l,
+  forall dfl min max l n,
   sorted l ->
   (forall k d, In (k, d) l -> min <= k <= max) ->
   min <= n <= max ->
-  list_nth_z (jump_table dfl max min l) (n - min) = Some (switch_target n dfl l).
+  list_nth_z (jump_table dfl min max l) (n - min) = Some (switch_target n dfl l).
 Proof.
-  intros until l.
-  functional induction (jump_table dfl max min l); intros SS R1 R2.
-- simpl list_nth_z. destruct (zeq (n - min) 0); auto.
+  intros until n. unfold jump_table. generalize (Zwf_up_well_founded (max + 1) min).
+  revert min l. induction min using (well_founded_induction (Zwf_up_well_founded (max + 1))).
+  intros l acc SS R1 R2. destruct acc; simpl.
+  destruct (zle min max).
+- inv SS.
++ simpl list_nth_z. destruct (zeq (n - min) 0); auto.
   replace (Z.pred (n - min)) with (n - (min + 1)) by lia.
-  apply IHl0. auto. simpl; tauto. lia.
-- simpl. inv SS. destruct (zeq (n - min) 0).
-+ replace n with min by lia. rewrite zeq_true. auto.
-+ rewrite zeq_false by lia.
-  replace (Z.pred (n - min)) with (n - (min + 1)) by lia.
-  apply IHl0. auto. 
-  intros. 
-  assert (min <= k <= max) by eauto with coqlib.
-  assert (min < k) by eauto.
-  lia.
-  lia.
-- simpl list_nth_z. destruct (zeq (n - min) 0).
-+ inv SS. rewrite switch_target_outside; auto.
-  intros. 
-  replace n with min by lia.
-  assert (min <= k <= max) by eauto with coqlib. 
-  simpl in H. destruct H. inv H. lia. 
-  exploit H3; eauto. lia.
-+ replace (Z.pred (n - min)) with (n - (min + 1)) by lia.
-  apply IHl0. auto. 
-  intros. exploit R1; eauto. intros.
-  simpl in H; destruct H.
-  inv H. lia.
-  inv SS. apply H5 in H. 
-  assert (min <= k <= max) by eauto with coqlib.
-  lia.
-  lia.
+  apply H.
+  ** auto using jump_table_aux.
+  ** constructor.
+  ** simpl; tauto.
+  ** lia.
++ assert (R3: min <= k <= max) by eauto with coqlib.
+  destruct (zeq k min); simpl; destruct (zeq (n - min) 0).
+* replace n with k by lia. rewrite zeq_true; auto.
+* rewrite zeq_false by lia. replace (Z.pred (n - min)) with (n - (min + 1)) by lia.
+  apply H.
+  ** auto using jump_table_aux.
+  ** auto.
+  ** intros. assert (min <= k0 <= max) by eauto with coqlib. assert (k < k0) by eauto with coqlib. lia.
+  ** lia.
+* rewrite zeq_false by lia. rewrite switch_target_outside; auto.
+  intros. assert (k < k0) by eauto with coqlib. lia.
+* replace (Z.pred (n - min)) with (n - (min + 1)) by lia.
+  apply H.
+  ** auto using jump_table_aux.
+  ** constructor; auto.
+  ** intros. assert (min <= k0 <= max) by eauto with coqlib. destruct H2.
+     *** inv H2. lia.
+     *** assert (k < k0) by eauto with coqlib. lia.
+  ** lia.
 - lia.
 Qed.
 
