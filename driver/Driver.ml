@@ -211,7 +211,7 @@ Code generation options: (use -fno-<opt> to turn off -f<opt>)
   -falign-functions <n>  Set alignment (in bytes) of function entry points
   -falign-branch-targets <n>  Set alignment (in bytes) of branch targets
   -falign-cond-branches <n>  Set alignment (in bytes) of conditional branches
-  -fcommon       Put uninitialized globals in the common section [on].
+  -fcommon       Put uninitialized globals in the common section [off].
 |} ^
  target_help ^
  toolchain_help ^
