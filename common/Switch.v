@@ -169,8 +169,8 @@ Proof.
 Qed.
 
 Lemma split_in_half_length':
-  forall a1 a2 al,
-  let l := a1 :: a2 :: al in
+  forall l,
+  (length l >= 2)%nat ->
   (  0 < length (fst (split_in_half l)) < length l
   /\ 0 < length (snd (split_in_half l)) < length l)%nat.
 Proof.
@@ -180,7 +180,7 @@ Proof.
   assert (L: (length l1 + length l2 = length l)%nat).
   { rewrite <- app_length. unfold l1, l2; rewrite split_in_half_eq; auto. }
   specialize (split_in_half_length l). fold l1; fold l2.
-  unfold l in *. simpl length in *. lia.
+  lia.
 Qed.
 
 End LIST_SPLIT.
@@ -189,26 +189,40 @@ End LIST_SPLIT.
     of binary search.  The base cases are branches with one, two, or three
     branches, which are compiled to the minimal number of equality tests. *)
 
-Definition compile_tree_1 (dfl: nat) (k1: Z) (a1: nat) (min max: Z) : comptree :=
-  if zeq max min then
-    CTaction a1
-  else
-    CTifeq k1 a1 (CTaction dfl).
+Definition compile_tree_base (dfl: nat) (tbl: table) (min max: Z) : option comptree :=
+  match tbl with
+  | nil =>
+      Some (CTaction dfl)
+  | (k1, a1) :: nil =>
+      Some (if zeq max min then
+              CTaction a1
+            else
+              CTifeq k1 a1 (CTaction dfl))
+  | (k1, a1) :: (k2, a2) :: nil =>
+      Some (CTifeq k1 a1
+              (if zeq (max - min) 1 then
+                CTaction a2
+               else
+                CTifeq k2 a2 (CTaction dfl)))
+  | (k1, a1) :: (k2, a2) :: (k3, a3) :: nil =>
+      Some(CTifeq k1 a1
+              (CTifeq k2 a2
+                (if zeq (max - min) 2 then
+                   CTaction a3
+                 else
+                   CTifeq k3 a3 (CTaction dfl))))
+  | _ => None
+  end.
 
-Definition compile_tree_2 (dfl: nat) (k1: Z) (a1: nat) (k2: Z) (a2: nat) (min max: Z) : comptree :=
-  CTifeq k1 a1
-    (if zeq (max - min) 1 then
-      CTaction a2
-     else
-      CTifeq k2 a2 (CTaction dfl)).
-
-Definition compile_tree_3 (dfl: nat) (k1: Z) (a1: nat) (k2: Z) (a2: nat) (k3: Z) (a3: nat) (min max: Z) : comptree :=
-  CTifeq k1 a1
-    (CTifeq k2 a2
-      (if zeq (max - min) 2 then
-         CTaction a3
-       else
-         CTifeq k3 a3 (CTaction dfl))).
+Remark compile_tree_base_length: forall dfl tbl min max,
+  compile_tree_base dfl tbl min max = None ->
+  (length tbl >= 2)%nat.
+Proof.
+  intros.
+  destruct tbl as [ | [k1 a1] tbl ]; try discriminate.
+  destruct tbl as [ | [k2 a2] tbl ]; try discriminate.
+  simpl; lia.
+Qed.
 
 Definition first_key (tbl: table) : Z :=
   match tbl with
@@ -218,15 +232,9 @@ Definition first_key (tbl: table) : Z :=
 
 Function compile_tree (dfl: nat) (tbl: table) (min max: Z)
                       { measure length tbl } : comptree :=
-  match tbl with
-  | nil => CTaction dfl
-  | (k1, a1) :: nil =>
-       compile_tree_1 dfl k1 a1 min max
-  | (k1, a1) :: (k2, a2) :: nil =>
-       compile_tree_2 dfl k1 a1 k2 a2 min max
-  | (k1, a1) :: (k2, a2) :: (k3, a3) :: nil =>
-       compile_tree_3 dfl k1 a1 k2 a2 k3 a3 min max
-  | _ =>
+  match compile_tree_base dfl tbl min max with
+  | Some ct => ct
+  | None =>
      let (tbl1, tbl2) := split_in_half tbl in
      let pivot := first_key tbl2 in
      CTiflt pivot (compile_tree dfl tbl1 min (pivot - 1))
@@ -234,11 +242,13 @@ Function compile_tree (dfl: nat) (tbl: table) (min max: Z)
   end.
 Proof.
 - intros.
-  destruct (split_in_half_length' (k1, a1) (k2, a2) ((k3, a3) :: p2 :: l2)) as [P Q].
-  rewrite teq6 in Q; tauto.
+  destruct (split_in_half_length' tbl) as [P Q].
+  eapply compile_tree_base_length; eauto.
+  rewrite teq0 in Q; tauto.
 - intros.
-  destruct (split_in_half_length' (k1, a1) (k2, a2) ((k3, a3) :: p2 :: l2)) as [P Q].
-  rewrite teq6 in P; tauto.
+  destruct (split_in_half_length' tbl) as [P Q].
+  eapply compile_tree_base_length; eauto.
+  rewrite teq0 in P; tauto.
 Defined.
 
 (** *** Normalization and compilation to a decision tree *)
@@ -565,59 +575,35 @@ Qed.
 
 (** Correctness of compilation to a decision tree *)
 
-Lemma compile_tree_1_correct:
-  forall dfl k1 a1 min max n,
-  (forall k a, In (k, a) ((k1, a1) :: nil) -> min <= k <= max) ->
+Lemma compile_tree_base_correct: forall dfl tbl min max ct n,
+  compile_tree_base dfl tbl min max = Some ct ->
+  sorted tbl ->
+  (forall k a, In (k, a) tbl -> min <= k <= max) ->
   min <= n <= max ->
-  comptree_match n (compile_tree_1 dfl k1 a1 min max) =
-  Some (switch_target n dfl ((k1, a1) :: nil)).
+  comptree_match n ct = Some (switch_target n dfl tbl).
 Proof.
-  unfold compile_tree_1; intros.
-  assert (min <= k1 <= max) by eauto with coqlib.
-  destruct (zeq max min); simpl.
-  replace n with k1 by lia. rewrite zeq_true; auto.
-  destruct (zeq n k1); auto.
-Qed.
-
-Lemma compile_tree_2_correct:
-  forall dfl k1 a1 k2 a2 min max n,
-  sorted ((k1, a1) :: (k2, a2) :: nil) ->
-  (forall k a, In (k, a) ((k1, a1) :: (k2, a2) :: nil) -> min <= k <= max) ->
-  min <= n <= max ->
-  comptree_match n (compile_tree_2 dfl k1 a1 k2 a2 min max) =
-  Some (switch_target n dfl ((k1, a1) :: (k2, a2) :: nil)).
-Proof.
-  intros. inv H.
-  assert (min <= k1 <= max) by eauto with coqlib.
-  assert (min <= k2 <= max) by eauto with coqlib.
-  assert (k1 < k2) by eauto with coqlib.
-  unfold compile_tree_2; simpl.
-  destruct (zeq n k1). auto.
-  destruct (zeq (max - min) 1).
-  replace n with k2 by lia. rewrite zeq_true; auto.
-  simpl. destruct (zeq n k2); auto.
-Qed.
-
-Lemma compile_tree_3_correct:
-  forall dfl k1 a1 k2 a2 k3 a3 min max n,
-  sorted ((k1, a1) :: (k2, a2) :: (k3, a3) :: nil) ->
-  (forall k a, In (k, a) ((k1, a1) :: (k2, a2) :: (k3, a3) :: nil) -> min <= k <= max) ->
-  min <= n <= max ->
-  comptree_match n (compile_tree_3 dfl k1 a1 k2 a2 k3 a3 min max) =
-  Some (switch_target n dfl ((k1, a1) :: (k2, a2) :: (k3, a3) :: nil)).
-Proof.
-  intros. inv H. inv H4.
-  assert (min <= k1 <= max) by eauto with coqlib.
-  assert (min <= k2 <= max) by eauto with coqlib.
-  assert (min <= k3 <= max) by eauto with coqlib.
-  assert (k1 < k2) by eauto with coqlib.
-  assert (k2 < k3) by eauto with coqlib.
-  unfold compile_tree_3; simpl.
-  destruct (zeq n k1). auto.
-  destruct (zeq n k2). auto.
-  destruct (zeq (max - min) 2).
-  replace n with k3 by lia. rewrite zeq_true; auto.
-  simpl. destruct (zeq n k3); auto.
+  intros until n; intros CT SR KR NR. unfold compile_tree_base in CT.
+  inv SR.
+  { inv CT. reflexivity. }
+  rename k into k1.
+  assert (R1: min <= k1 <= max) by eauto with coqlib.
+  inv H.
+  { inv CT. destruct (zeq max min); simpl.
+    + destruct (zeq n k1); f_equal; lia.
+    + destruct (zeq n k1); auto. }
+  rename k into k2.
+  assert (R2: min <= k2 <= max) by eauto with coqlib.
+  assert (K12: k1 < k2) by eauto with coqlib.
+  inv H1.
+  { inv CT. simpl. destruct (zeq n k1); auto.
+    destruct (zeq (max - min) 1); simpl; destruct (zeq n k2); f_equal; lia. }
+  rename k into k3.
+  assert (R3: min <= k3 <= max) by eauto with coqlib.
+  assert (K23: k2 < k3) by eauto with coqlib.
+  inv H.
+  { inv CT. simpl. destruct (zeq n k1); auto. destruct (zeq n k2); auto.
+    destruct (zeq (max - min) 2); simpl; destruct (zeq n k3); f_equal; lia. }
+  discriminate CT.
 Qed.
 
 Lemma compile_tree_correct:
@@ -628,25 +614,18 @@ Lemma compile_tree_correct:
   comptree_match n (compile_tree dfl tbl min max) = Some(switch_target n dfl tbl).
 Proof.
   intros until max. functional induction (compile_tree dfl tbl min max); intros SS R1 R2.
-- (* empty *)
-  simpl. auto.
-- (* one case *)
-  apply compile_tree_1_correct; auto.
-- (* two cases *)
-  apply compile_tree_2_correct; auto.
-- (* three cases *)
-  apply compile_tree_3_correct; auto.
-- (* N cases *)
+- (* base case *)
+  eapply compile_tree_base_correct; eauto.
+- (* recursive case *)
   set (pivot := first_key tbl2) in *.
   assert (TBL2: tbl2 <> nil).
-  { destruct tbl as [ | [k1 a1] tbl]; try contradiction.
-    destruct tbl as [ | [k2 a2] tbl]; try contradiction.
-    destruct (split_in_half_length' (k1,a1) (k2,a2) tbl) as [P Q].
-    rewrite e0 in Q. destruct tbl2; simpl in Q. lia. congruence. }
+  { destruct (split_in_half_length' tbl) as [P Q].
+    eapply compile_tree_base_length; eauto.
+    rewrite e0 in Q.
+    intro EQ; subst tbl2; simpl in Q; lia. }
   assert (A: exists apivot tbl3, tbl2 = (pivot, apivot) :: tbl3).
   { destruct tbl2 as [ | [k a] tbl3]. congruence. unfold pivot; simpl. exists a, tbl3; auto. }
-  destruct A as (apivot & tbl3 & EQ2).   
-  clear y.
+  destruct A as (apivot & tbl3 & EQ2).
   generalize (split_in_half_eq tbl). rewrite e0; simpl. intros EQ.
   destruct (sorted_app_inv tbl1 tbl2) as (SS1 & SS2 & SEP).
   rewrite EQ; auto.
@@ -673,20 +652,31 @@ Proof.
     intros. apply R11 in H0. lia.
 Qed.
 
+Lemma compile_tree_base_wf:
+  forall dfl tbl min max ct,
+  compile_tree_base dfl tbl min max = Some ct ->
+  (forall k a, In (k, a) tbl -> 0 <= k < modulus) ->
+  wf_comptree ct.
+Proof.
+  intros until ct; intros CT RANGE.
+  destruct tbl as [ | [k1 a1] [ | [k2 a2] [ | [k3 a3] [ | ? ?]]]]; simpl in CT; inv CT.
+- constructor.
+- destruct (zeq max min); eauto using wf_comptree with coqlib.
+- constructor. eauto with coqlib.
+  destruct (zeq (max - min) 1); eauto using wf_comptree with coqlib.
+- constructor. eauto with coqlib.
+  constructor. eauto with coqlib.
+  destruct (zeq (max - min) 2); eauto using wf_comptree with coqlib.
+Qed.
+
 Lemma compile_tree_wf:
   forall dfl tbl min max,
   (forall k a, In (k, a) tbl -> 0 <= k < modulus) ->
   wf_comptree (compile_tree dfl tbl min max).
 Proof.
   intros until max.  functional induction (compile_tree dfl tbl min max); intros R.
-- constructor.
-- unfold compile_tree_1. destruct (zeq max min); eauto using wf_comptree with coqlib.
-- unfold compile_tree_2. constructor. eauto with coqlib.
-  destruct (zeq (max - min) 1); eauto using wf_comptree with coqlib.
-- unfold compile_tree_3. constructor. eauto with coqlib.
-  constructor. eauto with coqlib.
-  destruct (zeq (max - min) 2); eauto using wf_comptree with coqlib.
-- clear y. generalize (split_in_half_eq tbl). rewrite e0; simpl. intros EQ.
+- eapply compile_tree_base_wf; eauto.
+- generalize (split_in_half_eq tbl). rewrite e0; simpl. intros EQ.
   constructor.
   destruct tbl2 as [ | [key2 act2] tbl2 ]; simpl. lia.
   apply R with act2. rewrite <- EQ; apply in_or_app; auto with coqlib.
