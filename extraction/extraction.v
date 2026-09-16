@@ -60,7 +60,6 @@ Extract Constant Iteration.GenIter.iterate =>
 
 (* Selection *)
 
-Extract Constant Selection.compile_switch => "Switchaux.compile_switch".
 Extract Constant Selection.if_conversion_heuristic => "Selectionaux.if_conversion_heuristic".
 
 (* RTLgen *)

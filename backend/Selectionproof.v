@@ -522,17 +522,20 @@ Proof.
 Qed.
 
 Lemma sel_switch_correct:
-  forall dfl cases arg sp e m varg i t le,
-  validate_switch modulus dfl cases t = true ->
+  forall dfl cases arg sp e m varg i le,
   eval_expr tge sp e m le arg varg ->
   R i varg ->
   0 <= i < modulus ->
+  Int.modulus <= modulus ->
   eval_exitexpr tge sp e m le
-     (XElet arg (sel_switch make_cmp_eq make_cmp_ltu make_sub make_to_int O t))
+     (XElet arg (sel_switch make_cmp_eq make_cmp_ltu make_sub make_to_int O
+                   (compile_switch modulus dfl cases)))
      (switch_target i dfl cases).
 Proof.
-  intros. exploit validate_switch_correct; eauto. lia. intros [A B].
-  econstructor. eauto. eapply sel_switch_correct_rec; eauto.
+  intros. econstructor. eauto.
+  eapply sel_switch_correct_rec; eauto.
+  apply compile_switch_wf; lia. 
+  apply compile_switch_correct; auto.
 Qed.
 
 End SEL_SWITCH.
@@ -550,10 +553,11 @@ Proof.
 Defined.
 
 Lemma sel_switch_int_correct:
-  forall dfl cases arg sp e m i t le,
-  validate_switch Int.modulus dfl cases t = true ->
+  forall dfl cases arg sp e m i le,
   eval_expr tge sp e m le arg (Vint i) ->
-  eval_exitexpr tge sp e m le (XElet arg (sel_switch_int O t)) (switch_target (Int.unsigned i) dfl cases).
+  eval_exitexpr tge sp e m le
+    (XElet arg (sel_switch_int O (compile_switch Int.modulus dfl cases)))
+    (switch_target (Int.unsigned i) dfl cases).
 Proof.
   assert (INTCONST: forall n sp e m le,
             eval_expr tge sp e m le (Eop (Ointconst n) Enil) (Vint n)).
@@ -567,7 +571,7 @@ Proof.
   rewrite Int.unsigned_repr. unfold proj_sumbool; rewrite zeq_true; auto.
   unfold Int.max_unsigned; lia.
   unfold proj_sumbool; rewrite zeq_false; auto.
-  red; intros; elim H1. rewrite <- (Int.repr_unsigned n0). congruence.
+  red; intros; elim H0. rewrite <- (Int.repr_unsigned n0). congruence.
 - intros until n; intros EVAL R RANGE.
   exploit eval_compu. eexact EVAL. apply (INTCONST (Int.repr n)).
   instantiate (1 := Clt). intros (vb & A & B).
@@ -587,13 +591,15 @@ Proof.
   inv R. rewrite Z.mod_small by (apply Int.unsigned_range). constructor.
 - constructor.
 - apply Int.unsigned_range.
+- lia.
 Qed.
 
 Lemma sel_switch_long_correct:
-  forall dfl cases arg sp e m i t le,
-  validate_switch Int64.modulus dfl cases t = true ->
+  forall dfl cases arg sp e m i le,
   eval_expr tge sp e m le arg (Vlong i) ->
-  eval_exitexpr tge sp e m le (XElet arg (sel_switch_long O t)) (switch_target (Int64.unsigned i) dfl cases).
+  eval_exitexpr tge sp e m le
+    (XElet arg (sel_switch_long O (compile_switch Int64.modulus dfl cases)))
+    (switch_target (Int64.unsigned i) dfl cases).
 Proof.
   intros. eapply sel_switch_correct with (R := Rlong); eauto.
 - intros until n; intros EVAL R RANGE.
@@ -623,6 +629,7 @@ Proof.
   unfold Int64.loword. apply Int.unsigned_repr_eq.
 - constructor.
 - apply Int64.unsigned_range.
+- compute; congruence.
 Qed.
 
 End SEL_SWITCH_INT.
@@ -1243,11 +1250,7 @@ Proof.
 - (* block *)
   apply (IHs kont). constructor; auto. auto.
 - (* switch *)
-  destruct b.
-  destruct (validate_switch Int64.modulus n l (compile_switch Int64.modulus n l)); inv SE.
-  simpl; auto.
-  destruct (validate_switch Int.modulus n l (compile_switch Int.modulus n l)); inv SE.
-  simpl; auto.
+  destruct b; inv SE; simpl; auto.
 - (* return *)
   destruct o; inv SE; simpl; auto.
 - (* label *)
@@ -1375,16 +1378,12 @@ Proof.
   eapply match_state with (kont := Sskip); eauto.
   inv H.
 - (* Sswitch *)
-  inv H0; simpl in TS.
-+ set (ct := compile_switch Int.modulus default cases) in *.
-  destruct (validate_switch Int.modulus default cases ct) eqn:VALID; inv TS.
-  exploit sel_expr_correct; eauto. intros [v' [A B]]. inv B.
+  inv H0; simpl in TS; inv TS.
++ exploit sel_expr_correct; eauto. intros [v' [A B]]. inv B.
   left; econstructor; split.
   apply plus_one; econstructor. eapply sel_switch_int_correct; eauto.
   eapply match_state with (kont := Sskip); eauto.
-+ set (ct := compile_switch Int64.modulus default cases) in *.
-  destruct (validate_switch Int64.modulus default cases ct) eqn:VALID; inv TS.
-  exploit sel_expr_correct; eauto. intros [v' [A B]]. inv B.
++ exploit sel_expr_correct; eauto. intros [v' [A B]]. inv B.
   left; econstructor; split.
   apply plus_one; econstructor. eapply sel_switch_long_correct; eauto.
   eapply match_state with (kont := Sskip); eauto.

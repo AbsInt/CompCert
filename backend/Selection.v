@@ -287,8 +287,6 @@ Definition sel_builtin (optid: option ident) (ef: external_function)
 
 (** Conversion of Cminor [switch] statements to decision trees. *)
 
-Parameter compile_switch: Z -> nat -> table -> comptree.
-
 Section SEL_SWITCH.
 
 Variable make_cmp_eq: expr -> Z -> expr.
@@ -443,14 +441,10 @@ Fixpoint sel_stmt (ki: known_idents) (env: typenv) (s: Cminor.stmt) (k: stmt): r
   | Cminor.Sexit n => OK (Sexit n)
   | Cminor.Sswitch false e cases dfl =>
       let t := compile_switch Int.modulus dfl cases in
-      if validate_switch Int.modulus dfl cases t
-      then OK (Sswitch (XElet (sel_expr e) (sel_switch_int O t)))
-      else Error (msg "Selection: bad switch (int)")
+      OK (Sswitch (XElet (sel_expr e) (sel_switch_int O t)))
   | Cminor.Sswitch true e cases dfl =>
       let t := compile_switch Int64.modulus dfl cases in
-      if validate_switch Int64.modulus dfl cases t
-      then OK (Sswitch (XElet (sel_expr e) (sel_switch_long O t)))
-      else Error (msg "Selection: bad switch (long)")
+      OK (Sswitch (XElet (sel_expr e) (sel_switch_long O t)))
   | Cminor.Sreturn None => OK (Sreturn None)
   | Cminor.Sreturn (Some e) => OK (Sreturn (Some (sel_expr e)))
   | Cminor.Slabel lbl body =>
