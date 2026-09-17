@@ -343,8 +343,10 @@ let make_builtin_memcpy args =
         error "alignment argument of '__builtin_memcpy_aligned' must be a power of 2";
       if not (Z.eq (Z.modulo sz1 al1) Z.zero) then
         error "alignment argument of '__builtin_memcpy_aligned' must be a divisor of the size";
+      (* Clamp alignment to 8, the largest alignment supported by CompCert *)
+      let al2 = Z.min al1 (Z.of_uint 8) in
       (* Issue #28: must decay array types to pointer types *)
-      Ebuiltin(AST.EF_memcpy(sz1, al1),
+      Ebuiltin(AST.EF_memcpy(sz1, al2),
                [typeconv(typeof dst); typeconv(typeof src)],
                Econs(dst, Econs(src, Enil)), Tvoid)
   | _ ->

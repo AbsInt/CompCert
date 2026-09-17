@@ -181,6 +181,9 @@ module Z = struct
   let compare x y = match Z.compare x y with Lt -> -1 | Eq -> 0 | Gt -> 1
   let max = Z.max
   let min = Z.min
+  let logor = Z.coq_lor
+  let logand = Z.coq_land
+  let logxor = Z.coq_lxor
 
   let to_int = function
   | Z0 -> 0
@@ -254,6 +257,9 @@ module Z = struct
 
   let is_power2 x =
     gt x zero && eq (Z.coq_land x (pred x)) zero
+
+  let shl x n = Z.shiftl x (of_uint n)
+  let shr x n = Z.shiftr x (of_uint n)
 
   let (+) = add
   let (-) = sub

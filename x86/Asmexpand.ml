@@ -131,10 +131,10 @@ let addressing_of_builtin_arg = function
 
 (* Handling of memcpy *)
 
-(* Unaligned memory accesses are quite fast on IA32, so use large
+(* Unaligned memory accesses are quite fast on x86, so use large
    memory accesses regardless of alignment. *)
 
-let expand_builtin_memcpy_small sz al src dst =
+let expand_builtin_memcpy_small sz src dst =
   let rec copy src dst sz =
     if sz >= 8 && Archi.ptr64 then begin
 	emit (Pmovq_rm (RCX, src));
@@ -159,20 +159,28 @@ let expand_builtin_memcpy_small sz al src dst =
       end in
   copy (addressing_of_builtin_arg src) (addressing_of_builtin_arg dst) sz
 
-let expand_builtin_memcpy_big sz al src dst =
+let expand_builtin_memcpy_big sz src dst =
   if src <> BA (IR RSI) then emit_lea RSI (addressing_of_builtin_arg src);
   if dst <> BA (IR RDI) then emit_lea RDI (addressing_of_builtin_arg dst);
-  (* TODO: movsq? *)
-  emit (Pmovl_ri (RCX,coqint_of_camlint (Int32.of_int (sz / 4))));
-  emit Prep_movsl;
-  if sz mod 4 >= 2 then emit Pmovsw;
-  if sz mod 2 >= 1 then emit Pmovsb
+  if Archi.ptr64 then begin
+    (* Recent x86-64 processors optimize [rep movsb] specially *)
+    assert Z.(lt sz (shl _1z 64));
+    emit (Pmovq_ri (RCX, sz));
+    emit Prep_movsb
+  end else begin
+    (* For older processors, [rep movsl] is better *)
+    assert Z.(lt sz (Z.shl _1z 32));
+    emit (Pmovl_ri (RCX, Z.div sz _4z));
+    emit Prep_movsl;
+    if Z.(ge (modulo sz _4z) _2z) then emit Pmovsw;
+    if Z.(ge (modulo sz _2z) _1z) then emit Pmovsb
+  end
 
 let expand_builtin_memcpy sz al args =
   let (dst, src) = match args with [d; s] -> (d, s) | _ -> assert false in
-  if sz <= 32
-  then expand_builtin_memcpy_small sz al src dst
-  else expand_builtin_memcpy_big sz al src dst
+  if Z.(le sz (of_sint 32))
+  then expand_builtin_memcpy_small (Z.to_int sz) src dst
+  else expand_builtin_memcpy_big sz src dst
 
 (* Handling of volatile reads and writes *)
 
@@ -603,7 +611,7 @@ let expand_instruction instr =
        | EF_vstore chunk ->
           expand_builtin_vstore chunk args
        | EF_memcpy(sz, al) ->
-          expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
+          expand_builtin_memcpy sz al args
        | EF_annot_val(kind,txt, targ) ->
           expand_annot_val kind txt targ args res
        | EF_annot _ | EF_debug _ | EF_inline_asm _ ->

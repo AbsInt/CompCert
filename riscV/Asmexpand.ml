@@ -46,6 +46,8 @@ let align n a = (n + a - 1) land (-a)
 
 let expand_loadimm32 dst n =
   List.iter emit (Asmgen.loadimm32 dst n [])
+let expand_loadimm64 dst n =
+  List.iter emit (Asmgen.loadimm64 dst n [])
 let expand_addptrofs dst src n =
   List.iter emit (Asmgen.addptrofs dst src n [])
 let expand_storeind_ptr src base ofs =
@@ -216,8 +218,8 @@ let memcpy_big_arg sz arg tmp =
       assert false
 
 let expand_builtin_memcpy_big sz al src dst =
-  assert (sz >= al);
-  assert (sz mod al = 0);
+  assert Z.(eq (modulo sz (of_uint al)) _0);
+  assert (Z.gt sz _0 && Z.lt sz (Z.shl _1 (wordsize * 8)));
   let (s, d) =
     if dst <> BA (IR X5) then (X5, X6) else (X6, X5) in
   memcpy_big_arg sz src s;
@@ -225,32 +227,31 @@ let expand_builtin_memcpy_big sz al src dst =
   (* Use X7 as loop count, X31 and F0 as ld/st temporaries. *)
   let (load, store, chunksize) =
     if Archi.ptr64 && al >= 8 then
-      (Pld (X31, s, Ofsimm _0), Psd (X31, d, Ofsimm _0), 8)
+      (Pld (X31, s, Ofsimm _0), Psd (X31, d, Ofsimm _0), _8)
     else if !Clflags.option_ffpu && al >= 8 then
-      (Pfld (F0, s, Ofsimm _0), Pfsd (F0, d, Ofsimm _0), 8)
+      (Pfld (F0, s, Ofsimm _0), Pfsd (F0, d, Ofsimm _0), _8)
     else if al >= 4 then
-      (Plw (X31, s, Ofsimm _0), Psw (X31, d, Ofsimm _0), 4)
+      (Plw (X31, s, Ofsimm _0), Psw (X31, d, Ofsimm _0), _4)
     else if al = 2 then
-      (Plh (X31, s, Ofsimm _0), Psh (X31, d, Ofsimm _0), 2)
+      (Plh (X31, s, Ofsimm _0), Psh (X31, d, Ofsimm _0), _2)
     else
-      (Plb (X31, s, Ofsimm _0), Psb (X31, d, Ofsimm _0), 1) in
-  expand_loadimm32 X7 (Z.of_uint (sz / chunksize));
-  let delta = Z.of_uint chunksize in
+      (Plb (X31, s, Ofsimm _0), Psb (X31, d, Ofsimm _0), _1) in
+  expand_loadimm64 X7 Z.(div sz chunksize);
   let lbl = new_label () in
   emit (Plabel lbl);
   emit load;
-  expand_addptrofs s s delta;
+  expand_addptrofs s s chunksize;
   emit (Paddiw(X7, X X7, _m1));
   emit store;
-  expand_addptrofs d d delta;
+  expand_addptrofs d d chunksize;
   emit (Pbnew (X X7, X0, lbl))
 
-let expand_builtin_memcpy  sz al args =
+let expand_builtin_memcpy sz al args =
   let (dst, src) =
     match args with [d; s] -> (d, s) | _ -> assert false in
-  if sz <= 32
-  then expand_builtin_memcpy_small sz al src dst
-  else expand_builtin_memcpy_big sz al src dst
+  if Z.(le sz (of_uint 32))
+  then expand_builtin_memcpy_small (Z.to_int sz) (Z.to_int al) src dst
+  else expand_builtin_memcpy_big sz (Z.to_int al) src dst
 
 (* Handling of volatile reads and writes *)
 
@@ -773,7 +774,7 @@ let expand_instruction instr =
      | EF_annot_val (kind,txt,targ) ->
         expand_annot_val kind txt targ args res
      | EF_memcpy(sz, al) ->
-        expand_builtin_memcpy (Z.to_int sz) (Z.to_int al) args
+        expand_builtin_memcpy sz al args
      | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
         emit instr
      | _ ->

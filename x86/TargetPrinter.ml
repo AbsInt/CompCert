@@ -845,6 +845,8 @@ module Target(System: SYSTEM):TARGET =
           fprintf oc "	movw	%a, %a\n" addressing a ireg16 rd
       | Pnop ->
           fprintf oc "	nop\n"
+      | Prep_movsb ->
+	 fprintf oc "	rep	movsb\n"
       | Prep_movsl ->
 	 fprintf oc "	rep	movsl\n"
       | Psbbl_rr (res,a1) ->
