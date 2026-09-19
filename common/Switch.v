@@ -18,7 +18,7 @@
     to comparison trees. *)
 
 From Coq Require Import EqNat.
-Require Import Coqlib Maps Integers Values.
+Require Import Coqlib Zbits Maps Integers Values.
 
 (** A multi-way branch is composed of a list of (key, action) pairs,
   plus a default action.  *)
@@ -121,7 +121,7 @@ Fixpoint validate_jumptable (cases: ZMap.t nat)
   match tbl with
   | nil => true
   | act :: rem =>
-      Nat.eqb act (ZMap.get n cases)
+      Nat.eqb act (ZMap.get (n mod modulus) cases)
       && validate_jumptable cases rem (Z.succ n)
   end.
 
@@ -157,7 +157,7 @@ Fixpoint validate (default: nat) (cases: table) (t: comptree)
       let tbl_len := list_length_z tbl in
       zle 0 ofs && zlt ofs modulus &&
       zle 0 sz && zlt sz modulus &&
-      zle (ofs + sz) modulus && zle sz tbl_len && zlt sz Int.modulus &&
+      zle sz tbl_len && zlt sz Int.modulus &&
       match split_between default ofs sz cases with
       | (inside, outside) =>
           validate_jumptable inside tbl ofs
@@ -264,7 +264,7 @@ Lemma validate_jumptable_correct_rec:
   forall cases tbl base v,
   validate_jumptable cases tbl base = true ->
   0 <= v < list_length_z tbl ->
-  list_nth_z tbl v = Some(ZMap.get (base + v) cases).
+  list_nth_z tbl v = Some(ZMap.get ((base + v) mod modulus) cases).
 Proof.
   induction tbl; simpl; intros.
 - unfold list_length_z in H0. simpl in H0. extlia.
@@ -279,18 +279,16 @@ Lemma validate_jumptable_correct:
   forall cases tbl ofs v sz,
   validate_jumptable cases tbl ofs = true ->
   (v - ofs) mod modulus < sz ->
-  0 <= sz -> 0 <= ofs -> ofs + sz <= modulus ->
   0 <= v < modulus ->
   sz <= list_length_z tbl ->
   list_nth_z tbl ((v - ofs) mod modulus) = Some(ZMap.get v cases).
 Proof.
   intros.
   rewrite (validate_jumptable_correct_rec cases tbl ofs); auto.
-- f_equal. f_equal. rewrite Z.mod_small. lia.
-  destruct (zle ofs v). lia.
-  assert (M: ((v - ofs) + 1 * modulus) mod modulus = (v - ofs) + modulus).
-  { rewrite Z.mod_small. lia. lia. }
-  rewrite Z_mod_plus in M by auto. rewrite M in H0. lia.
+- f_equal. f_equal. rewrite <- (Z.mod_small v modulus) at 2 by lia.
+  apply eqmod_mod_eq; auto.
+  replace v with (ofs + (v - ofs)) at 2 by lia.
+  auto using eqmod_add, eqmod_sym, eqmod_mod, eqmod_refl.
 - generalize (Z_mod_lt (v - ofs) modulus modulus_pos). lia.
 Qed.
 
