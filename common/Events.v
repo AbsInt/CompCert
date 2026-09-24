@@ -1788,3 +1788,21 @@ Qed.
 
 End EVAL_BUILTIN_ARG_LESSDEF.
 
+(** * Backward compatibility *)
+
+Definition meminj_preserves_globals_deprecated (F V: Type) (ge: Genv.t F V) (f: block -> option (block * Z)) : Prop :=
+     (forall id b, Genv.find_symbol ge id = Some b -> f b = Some(b, 0))
+  /\ (forall b gv, Genv.find_var_info ge b = Some gv -> f b = Some(b, 0))
+  /\ (forall b1 b2 delta gv, Genv.find_var_info ge b2 = Some gv -> f b1 = Some(b2, delta) -> b2 = b1).
+
+Lemma genv_inject_meminj_preserves_globals: forall (F V: Type) (ge: Genv.t F V) f,
+  Genv.inject f ge  -> meminj_preserves_globals_deprecated ge f.
+Proof.
+  intros; repeat split; eauto using Genv.find_symbol_inject, Genv.find_var_info_inject.
+  destruct H as [P Q].
+  intros. rewrite Genv.find_var_info_iff in H.
+  eapply Q; eauto using Genv.genv_defs_range.
+Qed.
+
+#[deprecated(since = "CompCert 3.19")]
+Notation meminj_preserves_globals := meminj_preserves_globals_deprecated.
