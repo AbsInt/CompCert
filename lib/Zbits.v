@@ -1185,3 +1185,33 @@ Proof.
     rewrite Z.quot_div_nonneg by lia. lia. }
   lia.
 Qed.
+
+(** ** Alignment on a power of two *)
+
+(** A faster version of [align n amount] when [amount] is known to be
+    a power of two. *)
+
+Definition align_pow2 (n: Z) (amount: Z) :=
+  let a := Z.pred amount in Z.ldiff (n + a) a.
+
+Lemma align_pow2_spec: forall n p,
+  0 <= p ->
+  align_pow2 n (2^p) = align n (2^p).
+Proof.
+  unfold align_pow2, align; intros.
+  set (a := 2^p).
+  replace (n + a - 1) with (n + Z.pred a) by lia.
+  set (b := Z.pred a).
+  assert (B: b = Z.ones p) by (symmetry; apply Z.ones_equiv).
+  rewrite B at 2. rewrite Z.ldiff_ones_r by lia.
+  rewrite Z.shiftl_mul_pow2, Z.shiftr_div_pow2 by lia.
+  reflexivity.
+Qed.
+
+Lemma align_pow2_eq: forall n amount,
+  (exists p, amount = two_power_nat p) ->
+  align_pow2 n amount = align n amount.
+Proof.
+  intros n amount [p EQ]. rewrite EQ, two_power_nat_equiv.
+  apply align_pow2_spec; lia.
+Qed.
