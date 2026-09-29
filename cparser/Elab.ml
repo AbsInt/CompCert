@@ -985,7 +985,7 @@ and elab_parameter env (PARAM (spec, id, decl, attr, loc)) =
   let (sto, inl, noret, tydef, bty, env1) = elab_specifier loc env spec in
   if tydef then
     error loc "'typedef' used in function parameter";
-  let ((ty, _), _) = elab_type_declarator ~param:true loc env1 bty decl in
+  let ((ty, _), env1) = elab_type_declarator ~param:true loc env1 bty decl in
   let ty = add_attributes_type (elab_attributes env attr) ty in
   if sto <> Storage_default && sto <> Storage_register then
     error loc                               (* NB: 'auto' not allowed *)
