@@ -1250,18 +1250,18 @@ and elab_struct_or_union only kind loc tag optmembers attrs env =
 (* Elaboration of an enum item.  C99 section 6.7.2.2 *)
 
 and elab_enum_item env ((s, exp), loc) nextval =
-  let (v, exp') =
+  let (v, exp', env) =
     match exp with
     | None ->
-        (nextval, None)
+        (nextval, None, env)
     | Some exp ->
         let exp',env = !elab_expr_f loc env exp in
         match Ceval.integer_expr env exp' with
-        | Some n -> (n, Some exp')
+        | Some n -> (n, Some exp', env)
         | None ->
             error loc
               "value of enumerator '%s' is not an integer constant" s;
-            (nextval, Some exp') in
+            (nextval, Some exp', env) in
   if redef Env.lookup_ident env s then
     error loc "'%s' redeclared as different kind of symbol" s;
   if redef Env.lookup_typedef env s then
