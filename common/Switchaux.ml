@@ -23,7 +23,7 @@ module ZSet = Set.Make(Z)
 
 let normalize_table tbl =
   let rec norm keys accu = function
-  | [] -> (accu, keys)
+  | [] -> accu
   | (key, act) :: rem ->
       if ZSet.mem key keys
       then norm keys accu rem
@@ -66,17 +66,18 @@ let compile_switch_as_tree modulus default tbl =
               build mid hi pivot maxval)
   in build 0 (Array.length sw) Z.zero modulus
 
-let compile_switch_as_jumptable default cases minkey maxkey =
-  let tblsize = 1 + Z.to_int (Z.sub maxkey minkey) in
-  assert (tblsize >= 0 && tblsize <= Sys.max_array_length);
-  let tbl = Array.make tblsize default in
+let compile_switch_as_jumptable modulus default cases minkey maxkey =
+  let size = Z.(add (sub maxkey minkey) one) in
+  assert (Z.gt size Z.zero && Z.le size (Z.of_uint Sys.max_array_length));
+  let tbl = Array.make (Z.to_int size) default in
   List.iter
     (fun (key, act) ->
-       let pos = Z.to_int (Z.sub key minkey) in
-       tbl.(pos) <- act)
+       let pos = Z.(modulo (sub key minkey) modulus) in
+       assert (Z.ge pos Z.zero && Z.lt pos size);
+       tbl.(Z.to_int pos) <- act)
     cases;
-  CTjumptable(minkey,
-              Z.of_uint tblsize,
+  CTjumptable(Z.modulo minkey modulus,
+              size,
               Array.to_list tbl,
               CTaction default)
 
@@ -89,13 +90,23 @@ let dense_enough (numcases: int) (minkey: Z.t) (maxkey: Z.t) =
   && Z.le table_size tree_size
   && Z.lt span (Z.of_uint Sys.max_array_length)
 
+let signed_min_max_key modulus tbl =
+  let half_modulus = Z.(shr modulus 1) in
+  let signed n =
+    if Z.lt n half_modulus then n else Z.sub n modulus in
+  let rec min_max lo hi = function
+    | [] -> (lo, hi)
+    | (key, _) :: tbl ->
+        let skey = signed key in
+        min_max (Z.min skey lo) (Z.max skey hi) tbl in
+  min_max (Z.pred half_modulus) (Z.neg half_modulus) tbl
+
 let compile_switch modulus default table =
-  let (tbl, keys) = normalize_table table in
-  if ZSet.is_empty keys then CTaction default else begin
-    let minkey = ZSet.min_elt keys
-    and maxkey = ZSet.max_elt keys in
+  let tbl = normalize_table table in
+  if tbl = [] then CTaction default else begin
+    let (minkey, maxkey) = signed_min_max_key modulus tbl in
     if dense_enough (List.length tbl) minkey maxkey
-    then compile_switch_as_jumptable default tbl minkey maxkey
+    then compile_switch_as_jumptable modulus default tbl minkey maxkey
     else compile_switch_as_tree modulus default tbl
   end
 
