@@ -911,10 +911,10 @@ and elab_type_declarator ?(fundef = false) ?(param = false) loc env ty = functio
         else if d <> Cabs.JUSTBASE then
           error loc "'static' used in non-outermost array type derivation"
       end;
-      let sz' =
+      let sz', env =
         match sz with
         | None ->
-            None
+            None, env
         | Some sz ->
             let expr,env = (!elab_expr_f loc env sz) in
             match Ceval.integer_expr env expr  with
@@ -923,10 +923,10 @@ and elab_type_declarator ?(fundef = false) ?(param = false) loc env ty = functio
                 if n = 0L then warning loc Zero_length_array
                     "zero size arrays are an extension";
                 if not (Cutil.valid_array_size env ty n) then error loc "size of array is too large";
-                Some n
+                Some n, env
             | None ->
                 error loc "size of array is not a compile-time constant";
-                Some 1L in (* produces better error messages later *)
+                Some 1L, env in (* produces better error messages later *)
        elab_type_declarator ~fundef ~param loc env (TArray(ty, sz', a)) d
   | Cabs.PTR(cv_specs, d) ->
       let (ty, a) = get_nontype_attrs env ty in
