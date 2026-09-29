@@ -87,8 +87,14 @@ let process_pragma name =
   | _ ->
       false
 
+let supported_pragma name =
+  match Tokenize.string name with
+  | ("section" | "use_section" | "reserve_register") :: _ -> true
+  | _ -> false
+
 let reset () =
   reserved_registers := []
 
 let initialize () =
+  Lexer.supported_pragma := supported_pragma;
   C2C.process_pragma_hook := process_pragma
