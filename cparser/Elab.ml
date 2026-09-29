@@ -495,7 +495,7 @@ let elab_simple_string loc enc chars =
 
 let elab_static_assert env exp loc_exp msg loc_msg loc =
   let (exp, env) = !elab_expr_f loc_exp env exp in
-  match Ceval.integer_expr env exp  with
+  begin match Ceval.integer_expr env exp  with
   | None ->
       error loc_exp "expression in static assertion is not an integer constant"
   | Some n ->
@@ -507,6 +507,8 @@ let elab_static_assert env exp loc_exp msg loc_msg loc =
               (* This can happen with a wide string literal *)
               error loc "static assertion failed (cannot display associated message)"
       end
+  end;
+  env
 
 
 (** * Elaboration of type expressions, type specifiers, name declarations *)
@@ -1113,7 +1115,7 @@ and elab_field_group env = function
   (mmap2_filter elab_bitfield env' fieldlist names)
 
 | Field_group_static_assert(exp, loc_exp, msg, loc_msg, loc) ->
-    elab_static_assert env exp loc_exp msg loc_msg loc;
+    let env = elab_static_assert env exp loc_exp msg loc_msg loc in
     ([], env)
   
 (* Elaboration of a struct or union. C99 section 6.7.2.1 *)
@@ -3028,7 +3030,7 @@ let elab_definition (for_loop: bool) (local: bool) (nonstatic_inline: bool)
 
   (* static assertion *)
   | STATIC_ASSERT(exp, loc_exp, msg, loc_msg, loc) ->
-      elab_static_assert env exp loc_exp msg loc_msg loc;
+      let env = elab_static_assert env exp loc_exp msg loc_msg loc in
       ([], env)
 
 (* Extended asm *)
