@@ -1577,7 +1577,7 @@ end
 let rec elab_designator loc env zi desig =
   match desig with
   | [] ->
-      zi
+      zi, env
   | INFIELD_INIT name :: desig' ->
       begin match I.member env zi name with
       | I.OK zi' ->
@@ -1633,7 +1633,8 @@ let rec elab_list env zi il first =
             error loc "unsupported reinitialization of %s that was previously initialized as a whole" (I.name zi);
             raise Exit
       end else
-        elab_item env (elab_designator loc env (I.to_top zi) desig) item il'
+        let (desig, env) = elab_designator loc env (I.to_top zi) desig in
+        elab_item env desig item il'
 
 (* Perform the initialization described by [item] for the current
    subobject of state [zi].  Continue initializing with the list [il]. *)
