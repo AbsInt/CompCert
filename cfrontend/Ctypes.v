@@ -16,7 +16,7 @@
 
 (** Type expressions for the Compcert C and Clight languages *)
 
-Require Import Axioms Coqlib Maps Errors.
+Require Import Axioms Coqlib Zbits Maps Errors.
 Require Import AST Linking.
 Require Archi.
 
@@ -467,11 +467,11 @@ Definition bitalignof_intsize (sz: intsize) : Z :=
 Definition next_field (pos: Z) (m: member) : Z :=
   match m with
   | Member_plain _ t =>
-      align pos (bitalignof t) + bitsizeof t
+      align_pow2 pos (bitalignof t) + bitsizeof t
   | Member_bitfield _ sz _ _ w _ =>
       let s := bitalignof_intsize sz in
       if zle w 0 then
-        align pos s
+        align_pow2 pos s
       else
         let curr := floor pos s in
         let next := curr + s in
@@ -481,7 +481,7 @@ Definition next_field (pos: Z) (m: member) : Z :=
 Definition layout_field (pos: Z) (m: member) : res (Z * bitfield) :=
   match m with
   | Member_plain _ t =>
-      OK (align pos (bitalignof t) / 8, Full)
+      OK (Z.shiftr (align_pow2 pos (bitalignof t)) 3, Full)
   | Member_bitfield _ sz sg _ w _ =>
       if zle w 0 then Error (msg "accessing zero-width bitfield")
       else if zlt (bitsize_intsize sz) w then Error (msg "bitfield too wide")
@@ -490,9 +490,9 @@ Definition layout_field (pos: Z) (m: member) : res (Z * bitfield) :=
         let start := floor pos s in
         let next := start + s in
         if zle (pos + w) next then
-          OK (start / 8, Bits sz sg (pos - start) w)
+          OK (Z.shiftr start 3, Bits sz sg (pos - start) w)
         else
-          OK (next / 8, Bits sz sg 0 w)
+          OK (Z.shiftr next 3, Bits sz sg 0 w)
   end.
 
 (** Some properties *)
@@ -503,18 +503,33 @@ Proof.
   destruct sz; simpl; lia.
 Qed.
 
+Lemma bitalignof_intsize_two_p:
+  forall sz, exists p, bitalignof_intsize sz = two_power_nat p.
+Proof.
+  destruct sz; solve [ exists 3%nat; auto | exists 4%nat; auto | exists 5%nat; auto ].
+Qed.
+
+Lemma bitalignof_two_p:
+  forall t, exists p, bitalignof t = two_power_nat p.
+Proof.
+  intros. unfold bitalignof. destruct (alignof_two_p env t) as [p EQ].
+  exists (3 + p)%nat. simpl. rewrite EQ. rewrite ! two_power_nat_S. lia.
+Qed.
+
 Lemma next_field_incr:
   forall pos m, pos <= next_field pos m.
 Proof.
   intros. unfold next_field. destruct m.
-- set (al := bitalignof t).
+- rewrite align_pow2_eq by auto using bitalignof_two_p.
+  set (al := bitalignof t).
   assert (A: al > 0).
   { unfold al, bitalignof. generalize (alignof_pos env t). lia. }
   assert (pos <= align pos al) by (apply align_le; auto).
   assert (bitsizeof t >= 0).
   { unfold bitsizeof. generalize (sizeof_pos env t). lia. } 
   lia.
-- set (s := bitalignof_intsize sz).
+- rewrite align_pow2_eq by auto using bitalignof_intsize_two_p.
+  set (s := bitalignof_intsize sz).
   assert (A: s > 0) by (apply bitalignof_intsize_pos).
   destruct (zle width 0).
 + apply align_le; auto.
@@ -535,7 +550,8 @@ Lemma layout_field_range: forall pos m ofs bf,
   /\ layout_start ofs bf + layout_width (type_member m) bf <= next_field pos m.
 Proof.
   intros until bf; intros L. unfold layout_start, layout_width. destruct m; simpl in L.
-- inv L. simpl.
+- inv L. simpl. rewrite align_pow2_eq by auto using bitalignof_two_p.
+  rewrite Z.shiftr_div_pow2 by lia. change (2^3) with 8. 
   set (al := bitalignof t).
   set (q := align pos al).
   assert (A: al > 0).
@@ -547,7 +563,8 @@ Proof.
   assert (E: q / 8 * 8 = q).
   { destruct D as (n & E). rewrite E. rewrite Z.div_mul by lia. auto. }
   rewrite E. lia.
-- unfold next_field.
+- rewrite ! Z.shiftr_div_pow2 in L by lia. change (2^3) with 8 in L. 
+  unfold next_field.
   destruct (zle width 0); try discriminate.
   destruct (zlt (bitsize_intsize sz) width); try discriminate.
   set (s := bitalignof_intsize sz) in *.
@@ -576,11 +593,12 @@ Lemma layout_field_alignment: forall pos m ofs bf,
   (layout_alignment (type_member m) bf | ofs).
 Proof.
   intros until bf; intros L. destruct m; simpl in L.
-- inv L; simpl. 
+- inv L; simpl. rewrite align_pow2_eq by auto using bitalignof_two_p. 
   set (q := align pos (bitalignof t)).
   assert (A: (bitalignof t | q)).
   { apply align_divides. unfold bitalignof. generalize (alignof_pos env t). lia. }
-  destruct A as [n E]. exists n. rewrite E. unfold bitalignof. rewrite Z.mul_assoc, Z.div_mul by lia. auto.
+  destruct A as [n E]. exists n. rewrite E. unfold bitalignof. 
+  rewrite Z.shiftr_div_pow2, Z.mul_assoc, Z.div_mul by lia. auto.
 - destruct (zle width 0); try discriminate.
   destruct (zlt (bitsize_intsize sz) width); try discriminate.
   set (s := bitalignof_intsize sz) in *.
@@ -592,7 +610,7 @@ Proof.
   assert (E: forall n, (s | n) -> (s / 8 | n / 8)).
   { intros. destruct H as [n1 E1], D as [n2 E2]. rewrite E1, E2.
     rewrite Z.mul_assoc, ! Z.div_mul by lia. exists n1; auto. }
-  destruct (zle (pos + width) (p + s)); inv L; simpl; fold s.
+  destruct (zle (pos + width) (p + s)); inv L; simpl; fold s; rewrite Z.shiftr_div_pow2 by lia.
   + apply E. auto.
   + apply E. apply Z.divide_add_r; auto using Z.divide_refl.
 Qed.
@@ -624,7 +642,7 @@ Fixpoint bitsizeof_struct (env: composite_env) (cur: Z) (ms: members) : Z :=
   | m :: ms => bitsizeof_struct env (next_field env cur m) ms
   end.
 
-Definition bytes_of_bits (n: Z) := (n + 7) / 8.
+Definition bytes_of_bits (n: Z) := Z.shiftr (n + 7) 3.
 
 Definition sizeof_struct (env: composite_env) (m: members) : Z :=
   bytes_of_bits (bitsizeof_struct env 0 m).
@@ -762,7 +780,7 @@ Proof.
   intros. exploit field_offset_in_range_gen; eauto. 
   unfold layout_start, layout_width, bitsizeof, sizeof_struct. intros [A B].
   assert (C: forall x y, x * 8 <= y -> x <= bytes_of_bits y).
-  { unfold bytes_of_bits; intros. 
+  { unfold bytes_of_bits; intros. rewrite Z.shiftr_div_pow2 by lia. change (2^3) with 8.
     assert (P: 8 > 0) by lia.
     generalize (Z_div_mod_eq (y + 7) 8 P) (Z_mod_lt (y + 7) 8 P).
     lia. }
@@ -857,8 +875,9 @@ Proof.
 - destruct (ident_eq id (name_member m)).
   + inv H0. set (ty := type_member m) in *.
     destruct m; simpl in H.
-    * inv H. unfold layout_start, layout_width. 
-      rewrite align_same. change (0 / 8) with 0. unfold bitsizeof. lia.
+    * inv H. unfold layout_start, layout_width. rewrite align_pow2_eq by auto using bitalignof_two_p.
+      rewrite ! Z.shiftr_div_pow2 by lia. 
+      rewrite align_same. change (0 / 2^3) with 0. unfold bitsizeof. lia.
       unfold bitalignof. generalize (alignof_pos env t). lia.
       apply Z.divide_0_r.
     * destruct (zle width 0); try discriminate.
@@ -866,6 +885,7 @@ Proof.
       assert (A: bitsize_intsize sz <= bitalignof_intsize sz <= sizeof env ty * 8).
       { unfold ty, type_member; destruct sz; simpl; lia. }
       rewrite zle_true in H by lia. inv H.
+      rewrite ! Z.shiftr_div_pow2 by lia. change (2^3) with 8.
       unfold layout_start, layout_width.
       unfold floor; rewrite Z.div_0_l by lia.
       lia.
@@ -1128,7 +1148,8 @@ Proof.
   intros. destruct su; simpl.
 - unfold sizeof_struct, bytes_of_bits.
   assert (0 <= bitsizeof_struct env 0 m) by apply bitsizeof_struct_incr.
-  change 0 with (0 / 8) at 1. apply Z.div_le_mono; lia.
+  rewrite Z.shiftr_div_pow2 by lia.
+  change 0 with (0 / 2^ 3) at 1. apply Z.div_le_mono; lia.
 - apply sizeof_union_pos.
 Qed.
 
