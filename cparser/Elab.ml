@@ -272,6 +272,9 @@ let enter_or_refine_function loc env id sto ty =
 let elab_expr_f : (Cabs.loc -> Env.t -> Cabs.expression -> C.exp * Env.t) ref
   = ref (fun _ _ _ -> assert false)
 
+let elab_attrib_expr_f : (Cabs.loc -> Env.t -> Cabs.expression -> C.exp) ref
+  = ref (fun _ _ _ -> assert false)
+
 let elab_funbody_f : (C.typ -> bool -> bool -> Env.t -> statement -> C.stmt) ref
   = ref (fun _ _ _ _ _ -> assert false)
 
@@ -528,7 +531,7 @@ let elab_attr_arg loc env a =
         AIdent s
       end
   | _ ->
-      let b,env = !elab_expr_f loc env a in
+      let b = !elab_attrib_expr_f loc env a in
       match Ceval.constant_expr env b.etyp b with
       | Some(CInt(n, _, _)) -> AInt n
       | Some(CStr s) -> AString s
@@ -2572,8 +2575,19 @@ let elab_expr ctx loc env a =
 
   in elab env a
 
+(* Expressions that appear as arguments to attributes are elaborated
+   in the [ctx_constexp] context, and must not define new structs or unions. *)
+
+let elab_attrib_expr loc env a =
+  let (b, env') = elab_expr ctx_constexp loc env a in
+  if env' != env then
+    fatal_error loc "cannot define new types within attributes";
+  b
+
 (* Filling in forward declaration *)
-let _ = elab_expr_f := (elab_expr ctx_constexp)
+let _ =
+  elab_expr_f := elab_expr ctx_constexp;
+  elab_attrib_expr_f := elab_attrib_expr
 
 let elab_opt_expr ctx loc env = function
   | None -> None,env
