@@ -86,3 +86,10 @@ val initial_identifiers: unit -> C.ident list
 val initial_declarations: unit -> C.globdecl list
 val set_builtins: C.builtins -> unit
 val is_builtin : string -> bool
+
+(* Comparing two environments.  One of the environments is assumed
+   to have been obtained from the other environment by a sequence
+   of zero, one or several [add_*] operations. *)
+
+val same_types: t -> t -> bool
+val same_named_types: t -> t -> bool

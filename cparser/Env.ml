@@ -53,6 +53,15 @@ module IdentMap = struct
   let add id data m =
     let l = try StringMap.find id.name m with Not_found -> [] in
     StringMap.add id.name ((id, data) :: l) m
+
+  (* Comparison *)
+  let compare m1 m2 =
+    if m1 == m2 then 0 else StringMap.compare Stdlib.compare m1 m2
+
+  let compare_named m1 m2 =
+    if m1 == m2 then 0 else
+      StringMap.compare Stdlib.compare
+                        (StringMap.remove "" m1) (StringMap.remove "" m2)
 end
 
 let gensym = ref 0
@@ -319,6 +328,18 @@ let set_builtins blt =
 
 let is_builtin name =
   ident_is_bound !Init.env name
+
+(* Do two environments define the same struct/union/enum types? *)
+
+let same_types env1 env2 =
+  env1 == env2
+  || (IdentMap.compare env1.env_tag env2.env_tag = 0
+      && IdentMap.compare env1.env_enum env2.env_enum = 0)
+
+let same_named_types env1 env2 =
+  env1 == env2
+  || (IdentMap.compare_named env1.env_tag env2.env_tag = 0
+      && IdentMap.compare_named env1.env_enum env2.env_enum = 0)
 
 (* Error reporting *)
 

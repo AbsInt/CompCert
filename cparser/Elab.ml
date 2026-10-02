@@ -2580,7 +2580,7 @@ let elab_expr ctx loc env a =
 
 let elab_attrib_expr loc env a =
   let (b, env') = elab_expr ctx_constexp loc env a in
-  if env' != env then
+  if not (Env.same_types env' env) then
     fatal_error loc "cannot define new types within attributes";
   b
 
