@@ -167,7 +167,7 @@ let offset_in_range chunk ofs =
   match chunk with
   | Mint8signed | Mint16signed | Mint16unsigned  ->
     Int.eq (Asmgen.mk_immed_mem_small ofs) ofs
-  | Mint8unsigned | Mint32 ->
+  | Mbool | Mint8unsigned | Mint32 ->
     Int.eq (Asmgen.mk_immed_mem_word ofs) ofs
   | Mfloat32 | Mfloat64 ->
     Int.eq (Asmgen.mk_immed_mem_float ofs) ofs
