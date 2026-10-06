@@ -1000,7 +1000,8 @@ let rec convertExpr env e =
                                 (convertExpr env arg2) (convertExpr env arg3))
 
   | C.ECall({edesc = C.EVar {name = "__builtin_expect"}}, [arg1; arg2]) ->
-      convertExpr env arg1
+      ewrap (Ctyping.ecast (convertTyp env (C.TInt(C.ILong, [])))
+                           (convertExpr env arg1))
 
   | C.ECall({edesc = C.EVar {name = "printf"}}, args)
     when !Clflags.option_interp ->
