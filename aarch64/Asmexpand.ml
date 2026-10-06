@@ -434,7 +434,7 @@ module BInfo: BRANCH_INFORMATION = struct
 
   let instr_size = function
     | Pfmovimmd _ | Pfmovimms _ -> 8
-    | Ploadsymbol _ -> 2
+    | Ploadsymbol _ -> 12
     | Pbtbl(_, tbl) -> 12 + 4 * List.length tbl
     | Plabel _ | Pcfi_adjust _ | Pcfi_rel_offset _ -> 0
     | Pbuiltin(ef, _, _) -> builtin_size ef
