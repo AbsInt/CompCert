@@ -499,6 +499,13 @@ Proof.
   apply eqmod_refl. red; exists (-1); ring.
 Qed.
 
+Lemma samerepr_eqm: forall x y, repr x = repr y -> eqm x y.
+Proof.
+  intros.
+  assert (eqm (unsigned (repr x)) (unsigned (repr y))) by (rewrite H; auto with ints).
+  eauto with ints.
+Qed.
+
 Theorem unsigned_range:
   forall i, 0 <= unsigned i < modulus.
 Proof.
@@ -771,6 +778,11 @@ Proof.
   intros; unfold neg. apply eqm_samerepr. auto with ints.
 Qed.
 
+Theorem neg_signed: forall x, neg x = repr (- signed x).
+Proof.
+  intros. rewrite <- (repr_signed x) at 1. apply neg_repr.
+Qed.
+
 Theorem neg_zero: neg zero = zero.
 Proof.
   unfold neg. rewrite unsigned_zero. auto.
@@ -846,6 +858,16 @@ Theorem sub_signed:
 Proof.
   intros. unfold sub. apply eqm_samerepr.
   apply eqm_sub; apply eqm_sym; apply eqm_signed_unsigned.
+Qed.
+
+Theorem sub_is_zero:
+  forall x y, sub x y = zero -> x = y.
+Proof.
+  intros. apply samerepr_eqm in H.
+  rewrite <- (repr_unsigned x), <- (repr_unsigned y). apply eqm_samerepr.
+  replace (unsigned y) with (0 + unsigned y) by lia.
+  replace (unsigned x) with  ((unsigned x - unsigned y) + unsigned y) by lia.
+  auto with ints.
 Qed.
 
 Theorem unsigned_sub_borrow:
