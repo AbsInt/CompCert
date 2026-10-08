@@ -456,13 +456,24 @@ Definition exec_store (chunk: memory_chunk) (addr: val) (r: preg)
   | Some m' => Next (nextinstr rs) m'
   end.
 
-(** Comparisons. *)
+(** Integer comparisons. Sets the flags as per the result of [v1 - v2].
+    The flags must be correct if [v1] is a pointer and [v2] an integer,
+    or [v1] and [v2] are pointers. *)
 
 Definition compare_int (rs: regset) (v1 v2: val) (m: mem) :=
   rs#CN <- (Val.negative (Val.sub v1 v2))
     #CZ <- (Val.cmpu (Mem.valid_pointer m) Ceq v1 v2)
     #CC <- (Val.cmpu (Mem.valid_pointer m) Cge v1 v2)
     #CV <- (Val.sub_overflow v1 v2).
+
+(** Integer comparison with negation.  Sets the flags as per the result
+    of [v1 + v2].  The flags are defined only if [v1] and [v2] are integers. *)
+
+Definition compare_neg_int (rs: regset) (v1 v2: val) (m: mem) :=
+  rs#CN <- (Val.negative (Val.add v1 v2))
+    #CZ <- (Val.cmp Ceq (Val.add v1 v2) Vzero)
+    #CC <- (Val.add_carry v1 v2 Vzero)
+    #CV <- (Val.add_overflow v1 v2).
 
 (** Semantics of [fcmp] instructions:
 <<
@@ -613,7 +624,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pcmp r1 so =>
       Next (nextinstr (compare_int rs rs#r1 (eval_shift_op so rs) m)) m
   | Pcmn r1 so =>
-      Next (nextinstr (compare_int rs rs#r1 (Val.neg (eval_shift_op so rs)) m)) m
+      Next (nextinstr (compare_neg_int rs rs#r1 (eval_shift_op so rs) m)) m
   | Peor r1 r2 so =>
       Next (nextinstr_nf (rs#r1 <- (Val.xor rs#r2 (eval_shift_op so rs)))) m
   | Pldr r1 r2 sa =>
