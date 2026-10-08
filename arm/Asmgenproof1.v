@@ -679,52 +679,6 @@ Proof.
   repeat Simplif.
 Qed.
 
-Lemma int_signed_eq:
-  forall x y, Int.eq x y = zeq (Int.signed x) (Int.signed y).
-Proof.
-  intros. unfold Int.eq. unfold proj_sumbool.
-  destruct (zeq (Int.unsigned x) (Int.unsigned y));
-  destruct (zeq (Int.signed x) (Int.signed y)); auto.
-  elim n. unfold Int.signed. rewrite e; auto.
-  elim n. apply Int.eqm_small_eq; auto with ints.
-  eapply Int.eqm_trans. apply Int.eqm_sym. apply Int.eqm_signed_unsigned.
-  rewrite e. apply Int.eqm_signed_unsigned.
-Qed.
-
-Lemma int_not_lt:
-  forall x y, negb (Int.lt y x) = (Int.lt x y || Int.eq x y).
-Proof.
-  intros. unfold Int.lt. rewrite int_signed_eq. unfold proj_sumbool.
-  destruct (zlt (Int.signed y) (Int.signed x)).
-  rewrite zlt_false. rewrite zeq_false. auto. lia. lia.
-  destruct (zeq (Int.signed x) (Int.signed y)).
-  rewrite zlt_false. auto. lia.
-  rewrite zlt_true. auto. lia.
-Qed.
-
-Lemma int_lt_not:
-  forall x y, Int.lt y x = negb (Int.lt x y) && negb (Int.eq x y).
-Proof.
-  intros. rewrite <- negb_orb. rewrite <- int_not_lt. rewrite negb_involutive. auto.
-Qed.
-
-Lemma int_not_ltu:
-  forall x y, negb (Int.ltu y x) = (Int.ltu x y || Int.eq x y).
-Proof.
-  intros. unfold Int.ltu, Int.eq.
-  destruct (zlt (Int.unsigned y) (Int.unsigned x)).
-  rewrite zlt_false. rewrite zeq_false. auto. lia. lia.
-  destruct (zeq (Int.unsigned x) (Int.unsigned y)).
-  rewrite zlt_false. auto. lia.
-  rewrite zlt_true. auto. lia.
-Qed.
-
-Lemma int_ltu_not:
-  forall x y, Int.ltu y x = negb (Int.ltu x y) && negb (Int.eq x y).
-Proof.
-  intros. rewrite <- negb_orb. rewrite <- int_not_ltu. rewrite negb_involutive. auto.
-Qed.
-
 Lemma cond_for_signed_cmp_correct:
   forall c v1 v2 rs m b,
   Val.cmp_bool c v1 v2 = Some b ->
@@ -742,8 +696,8 @@ Proof.
   destruct (Int.eq i i0); auto.
   destruct (Int.eq i i0); auto.
   destruct (Int.lt i i0); auto.
-  rewrite int_not_lt. destruct (Int.lt i i0); simpl; destruct (Int.eq i i0); auto.
-  rewrite (int_lt_not i i0). destruct (Int.lt i i0); destruct (Int.eq i i0); reflexivity.
+  rewrite Int.not_lt. destruct (Int.lt i i0); simpl; destruct (Int.eq i i0); auto.
+  rewrite (Int.lt_not i i0). destruct (Int.lt i i0); destruct (Int.eq i i0); reflexivity.
   destruct (Int.lt i i0); reflexivity.
 Qed.
 
@@ -763,8 +717,8 @@ Proof.
   destruct (Int.eq i i0); reflexivity.
   destruct (Int.eq i i0); auto.
   destruct (Int.ltu i i0); auto.
-  rewrite (int_not_ltu i i0).  destruct (Int.ltu i i0); destruct (Int.eq i i0); auto.
-  rewrite (int_ltu_not i i0). destruct (Int.ltu i i0); destruct (Int.eq i i0); reflexivity.
+  rewrite (Int.not_ltu i i0).  destruct (Int.ltu i i0); destruct (Int.eq i i0); auto.
+  rewrite (Int.ltu_not i i0). destruct (Int.ltu i i0); destruct (Int.eq i i0); reflexivity.
   destruct (Int.ltu i i0); reflexivity.
 (* int ptr *)
   destruct (Int.eq i Int.zero &&
@@ -795,6 +749,41 @@ Proof.
   destruct (Mem.valid_pointer m b0 (Ptrofs.unsigned i) &&
             Mem.valid_pointer m b1 (Ptrofs.unsigned i0)); try discriminate.
   destruct c; simpl in *; inv H1; reflexivity.
+Qed.
+
+Lemma compare_neg_int_same: forall rs v n m,
+  n <> Int.zero -> n <> Int.repr Int.min_signed ->
+  compare_neg_int rs v (Vint (Int.neg n)) m = compare_int rs v (Vint n) m.
+Proof.
+  intros. unfold compare_int, compare_neg_int.
+  assert (Z: Int.unsigned n <> 0).
+  { red; intros; elim H. rewrite <- (Int.repr_unsigned n), H1. auto. }
+  assert (Y: Int.signed n <> Int.min_signed).
+  { red; intros; elim H0. rewrite <- (Int.repr_signed n), H1. auto. }
+  assert (A: Int.signed (Int.neg n) = - Int.signed n).
+  { rewrite Int.neg_signed. apply Int.signed_repr. generalize (Int.signed_range n).
+    unfold Int.min_signed, Int.max_signed in *. lia. }
+  assert (B: Int.unsigned (Int.neg n) = Int.modulus - Int.unsigned n).
+  { apply Int.eqm_small_eq. 
+  - apply Int.eqm_unsigned_repr_l. replace (- Int.unsigned n) with (0 - Int.unsigned n) by lia.
+    apply Int.eqm_sub; auto with ints.
+  - apply Int.unsigned_range.
+  - generalize (Int.unsigned_range n); lia. }
+  f_equal; [| f_equal; [| f_equal; [| f_equal]]].
+- destruct v; simpl; auto. unfold Int.add_overflow, Int.sub_overflow.
+  rewrite A, Int.signed_zero.
+  replace (Int.signed i + - Int.signed n + 0) with (Int.signed i - Int.signed n - 0) by lia.
+  reflexivity.
+- unfold Val.cmpu, Val.cmpu_bool; destruct v; simpl; auto.
+  + unfold Int.add_carry, Int.cmpu, Int.ltu. rewrite B, Int.unsigned_zero.
+    destruct zlt; [rewrite zlt_true by lia | rewrite zlt_false by lia]; reflexivity.
+  + rewrite Int.eq_false by auto. reflexivity.
+- rewrite <- Val.sub_add_opp. unfold Val.cmpu, Val.cmpu_bool, Val.cmp, Val.cmp_bool; destruct v; simpl; auto.
+  + generalize (Int.eq_spec i n); destruct (Int.eq i n); intros.
+    * subst i. rewrite Int.sub_idem. reflexivity.
+    * rewrite Int.eq_false; auto. red; intros; elim H1. apply Int.sub_is_zero; auto.
+  + rewrite Int.eq_false by auto. reflexivity.
+- rewrite Val.sub_add_opp. auto.
 Qed.
 
 Lemma compare_float_spec:
@@ -1064,17 +1053,21 @@ Proof.
   split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
   apply compare_int_inv.
 - (* Ccompimm *)
-  destruct (is_immed_arith i).
+  destruct (is_immed_arith i) eqn:IMM.
   econstructor.
   split. apply exec_straight_one. simpl. eauto. auto.
   split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
   apply compare_int_inv.
   destruct (is_immed_arith (Int.neg i)).
+  assert (i <> Int.zero).
+  { red; intros; subst i. unfold is_immed_arith in IMM; destruct (thumb tt); discriminate. } 
+  assert (i <> Int.repr Int.min_signed).
+  { red; intros; subst i. unfold is_immed_arith in IMM; destruct (thumb tt); discriminate. }
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
+  split. apply exec_straight_one. simpl. rewrite compare_neg_int_same by auto. eauto. auto.
   split. destruct (Val.cmp_bool c0 (rs x) (Vint i)) eqn:CMP; auto.
-  split; apply cond_for_signed_cmp_correct; rewrite Int.neg_involutive; auto.
+  split; apply cond_for_signed_cmp_correct; auto.
   rewrite Val.negate_cmp_bool, CMP; auto.
   apply compare_int_inv.
   exploit (loadimm_correct IR14). intros [rs' [P [Q R]]].
@@ -1086,17 +1079,21 @@ Proof.
   split; apply cond_for_signed_cmp_correct; auto. rewrite Val.negate_cmp_bool, CMP; auto.
   intros. rewrite compare_int_inv by auto. auto with asmgen.
 - (* Ccompuimm *)
-  destruct (is_immed_arith i).
+  destruct (is_immed_arith i) eqn:IMM.
   econstructor.
   split. apply exec_straight_one. simpl. eauto. auto.
   split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) eqn:CMP; auto.
   split; apply cond_for_unsigned_cmp_correct; auto. rewrite Val.negate_cmpu_bool, CMP; auto.
   apply compare_int_inv.
   destruct (is_immed_arith (Int.neg i)).
+  assert (i <> Int.zero).
+  { red; intros; subst i. unfold is_immed_arith in IMM; destruct (thumb tt); discriminate. } 
+  assert (i <> Int.repr Int.min_signed).
+  { red; intros; subst i. unfold is_immed_arith in IMM; destruct (thumb tt); discriminate. }
   econstructor.
-  split. apply exec_straight_one. simpl. eauto. auto.
+  split. apply exec_straight_one. simpl. rewrite compare_neg_int_same by auto. eauto. auto.
   split. destruct (Val.cmpu_bool (Mem.valid_pointer m) c0 (rs x) (Vint i)) eqn:CMP; auto.
-  split; apply cond_for_unsigned_cmp_correct; rewrite Int.neg_involutive; auto.
+  split; apply cond_for_unsigned_cmp_correct; auto.
   rewrite Val.negate_cmpu_bool, CMP; auto.
   apply compare_int_inv.
   exploit (loadimm_correct IR14). intros [rs' [P [Q R]]].
