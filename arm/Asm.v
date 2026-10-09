@@ -663,10 +663,10 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
                     Next (nextinstr (rs#rd <- v)) m
                  else
                     let rs := undef_regs
-                       (IR IR0 :: IR IR1 :: IR IR2 :: IR IR3 :: IR IR12
+                       (IR IR0 :: IR IR1 :: IR IR2 :: IR IR3 :: IR IR12 :: IR IR14
                         :: FR FR0 :: FR FR1 :: FR FR2 :: FR FR3
                         :: FR FR4 :: FR FR5 :: FR FR6 :: FR FR7 :: nil) rs in
-                    Next (nextinstr (rs#rd <- v)) m
+                    Next (nextinstr_nf (rs#rd <- v)) m
       | None => Stuck
       end
   | Psbfx r1 r2 lsb sz =>
@@ -682,10 +682,10 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
                     Next (nextinstr (rs#rd <- v)) m
                  else
                     let rs := undef_regs
-                       (IR IR0 :: IR IR1 :: IR IR2 :: IR IR3 :: IR IR12
+                       (IR IR0 :: IR IR1 :: IR IR2 :: IR IR3 :: IR IR12 :: IR IR14
                         :: FR FR0 :: FR FR1 :: FR FR2 :: FR FR3
                         :: FR FR4 :: FR FR5 :: FR FR6 :: FR FR7 :: nil) rs in
-                    Next (nextinstr (rs#rd <- v)) m
+                    Next (nextinstr_nf (rs#rd <- v)) m
       | None => Stuck
       end
   | Pumull rdl rdh r1 r2 =>
