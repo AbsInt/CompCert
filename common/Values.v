@@ -770,6 +770,12 @@ Definition addl_carry (v1 v2 cin: val): val :=
   | _, _, _ => Vundef
   end.
 
+Definition addl_overflow (v1 v2: val) : val :=
+  match v1, v2 with
+  | Vlong n1, Vlong n2 => Vint (Int.repr (Int64.unsigned (Int64.add_overflow n1 n2 Int64.zero)))
+  | _, _ => Vundef
+  end.
+
 Definition subl_overflow (v1 v2: val) : val :=
   match v1, v2 with
   | Vlong n1, Vlong n2 => Vint (Int.repr (Int64.unsigned (Int64.sub_overflow n1 n2 Int64.zero)))
