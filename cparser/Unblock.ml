@@ -22,9 +22,11 @@
 open C
 open Cutil
 
-(* Convert an initializer to a list of assignment expressions. *)
+(* Convert an initializer to a list of assignment expressions.
+   Used for compound literals, where initialization is embedded in an
+   expression at the appropriate sequence point. *)
 
-let rec local_initializer env path init k =
+let rec local_initializer_expr env path init k =
   match init with
   | Init_single e ->
       { edesc = EBinop(Oassign, path, e, path.etyp); etyp = path.etyp } :: k
@@ -42,7 +44,7 @@ let rec local_initializer env path init k =
             match il with
             | [] -> (default_init env ty_elt, [])
             | i1 :: il' -> (i1, il') in
-          local_initializer env
+          local_initializer_expr env
             { edesc = EBinop(Oindex, path, intconst pos IInt, TPtr(ty_elt, []));
               etyp = ty_elt }
             i1
@@ -51,26 +53,91 @@ let rec local_initializer env path init k =
       array_init 0L il
   | Init_struct(id, fil) ->
       let field_init (fld, i) k =
-        local_initializer env
+        local_initializer_expr env
           { edesc = EUnop(Odot fld.fld_name, path); etyp = fld.fld_typ }
           i k in
       List.fold_right field_init fil k
   | Init_union(id, fld, i) ->
-      local_initializer env
+      local_initializer_expr env
         { edesc = EUnop(Odot fld.fld_name, path); etyp = fld.fld_typ }
         i k
-
-(* Prepend assignments to the given statement. *)
-
-let add_inits_stmt loc inits s =
-  List.fold_right
-    (fun e s -> sseq loc {sdesc = Sdo e; sloc = loc} s)
-    inits s
 
 (* Record new variables to be locally or globally defined *)
 
 let local_variables = ref ([]: decl list)
 let global_variables = ref ([]: decl list)
+
+let new_local name ty =
+  let id = Env.fresh_ident name in
+  local_variables :=
+    (Storage_default, id, ty, None) :: !local_variables;
+  { edesc = EVar id; etyp = ty }
+
+(* Convert a declaration initializer to assignment statements.  The explicitly
+   supplied outer array prefix is traversed directly.  A nonempty implicit
+   array tail is initialized by a typed counted loop, so the generated AST
+   does not grow with the number of omitted elements. *)
+
+let rec local_initializer_stmt env loc path init k =
+  match init with
+  | Init_single e ->
+      sseq loc (sassign loc path e) k
+  | Init_array il ->
+      let (ty_elt, sz) =
+        match unroll env path.etyp with
+        | TArray(ty_elt, Some sz, _) -> (ty_elt, sz)
+        (* We accept empty array initializer for flexible array members, which
+           has size zero *)
+        | TArray(ty_elt, None, _) when il = [] -> (ty_elt, 0L)
+        | _ ->
+            Diagnostics.fatal_error Diagnostics.no_loc
+              "wrong type for array initializer" in
+      let array_elt index =
+        { edesc = EBinop(Oindex, path, index, TPtr(ty_elt, []));
+          etyp = ty_elt } in
+      let array_default_init pos =
+        let index_kind = size_t_ikind () in
+        let index_type = TInt(index_kind, []) in
+        let index = new_local "__init_index" index_type in
+        let init_index = sassign loc index (intconst pos index_kind) in
+        let test_index =
+          { edesc = EBinop(Olt, index, intconst sz index_kind, index_type);
+            etyp = TInt(IInt, []) } in
+        let incr_index =
+          { sdesc = Sdo { edesc = EUnop(Opreincr, index);
+                          etyp = index_type };
+            sloc = loc } in
+        let body =
+          local_initializer_stmt env loc
+            (array_elt index)
+            (default_init env ty_elt)
+            sskip in
+        let loop =
+          { sdesc = Sfor(init_index, test_index, incr_index, body);
+            sloc = loc } in
+        sseq loc loop k in
+      let rec array_init pos il =
+        if pos >= sz then k else begin
+          match il with
+          | i1 :: il' ->
+              local_initializer_stmt env loc
+                (array_elt (intconst pos IInt))
+                i1
+                (array_init (Int64.succ pos) il')
+          | [] ->
+              array_default_init pos
+        end in
+      array_init 0L il
+  | Init_struct(id, fil) ->
+      let field_init (fld, i) k =
+        local_initializer_stmt env loc
+          { edesc = EUnop(Odot fld.fld_name, path); etyp = fld.fld_typ }
+          i k in
+      List.fold_right field_init fil k
+  | Init_union(id, fld, i) ->
+      local_initializer_stmt env loc
+        { edesc = EUnop(Odot fld.fld_name, path); etyp = fld.fld_typ }
+        i k
 
 (* Note: "const int x = y - 1;" is legal, but we turn it into
    "const int x; x = y - 1;", which is not.  Therefore, remove
@@ -94,7 +161,7 @@ let process_compound_literal islocal env ty init =
     let e = {edesc = EVar id; etyp = ty'} in
     local_variables :=
       (Storage_default, id, ty', None) :: !local_variables;
-    (local_initializer env e init [], e)
+    (local_initializer_expr env e init [], e)
   end else begin
     global_variables :=
       (Storage_static, id, ty, Some init) :: !global_variables;
@@ -253,8 +320,8 @@ let process_decl loc env ctx (sto, id, ty, optinit) k =
       k
   | Some init ->
       let init' = expand_init true env init in
-      let l = local_initializer env { edesc = EVar id; etyp = ty' } init' [] in
-      add_inits_stmt loc l k
+      local_initializer_stmt env loc
+        { edesc = EVar id; etyp = ty' } init' k
 
 (* Simplification of blocks within a statement *)
 
