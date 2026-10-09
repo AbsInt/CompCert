@@ -837,6 +837,39 @@ Proof.
 - destruct (Int.ltu i i0); auto.
 Qed.
 
+Lemma compare_neg_int_same: forall rs v n m,
+  n <> Int.zero -> n <> Int.repr Int.min_signed ->
+  compare_neg_int rs v (Vint (Int.neg n)) m = compare_int rs v (Vint n) m.
+Proof.
+  intros. unfold compare_int, compare_neg_int.
+  assert (Z: Int.unsigned n <> 0).
+  { red; intros; elim H. rewrite <- (Int.repr_unsigned n), H1. auto. }
+  assert (Y: Int.signed n <> Int.min_signed).
+  { red; intros; elim H0. rewrite <- (Int.repr_signed n), H1. auto. }
+  assert (A: Int.signed (Int.neg n) = - Int.signed n).
+  { rewrite Int.neg_signed. apply Int.signed_repr. generalize (Int.signed_range n).
+    unfold Int.min_signed, Int.max_signed in *. lia. }
+  assert (B: Int.unsigned (Int.neg n) = Int.modulus - Int.unsigned n).
+  { apply Int.eqm_small_eq. 
+  - apply Int.eqm_unsigned_repr_l. replace (- Int.unsigned n) with (0 - Int.unsigned n) by lia.
+    apply Int.eqm_sub; auto with ints.
+  - apply Int.unsigned_range.
+  - generalize (Int.unsigned_range n); lia. }
+  f_equal; [| f_equal; [| f_equal; [| f_equal]]].
+- destruct v; simpl; auto. unfold Int.add_overflow, Int.sub_overflow.
+  rewrite A, Int.signed_zero.
+  replace (Int.signed i + - Int.signed n + 0) with (Int.signed i - Int.signed n - 0) by lia.
+  reflexivity.
+- unfold Val.cmpu, Val.cmpu_bool; destruct v; simpl; auto.
+  unfold Int.add_carry, Int.cmpu, Int.ltu. rewrite B, Int.unsigned_zero.
+  destruct zlt; [rewrite zlt_true by lia | rewrite zlt_false by lia]; reflexivity.
+- rewrite <- Val.sub_add_opp. unfold Val.cmpu, Val.cmpu_bool, Val.cmp, Val.cmp_bool; destruct v; simpl; auto.
+  generalize (Int.eq_spec i n); destruct (Int.eq i n); intros.
+  * subst i. rewrite Int.sub_idem. reflexivity.
+  * rewrite Int.eq_false; auto. red; intros; elim H1. apply Int.sub_is_zero; auto.
+- rewrite Val.sub_add_opp. auto.
+Qed.
+
 Lemma compare_long_spec: forall rs v1 v2 m,
   let rs' := compare_long rs v1 v2 m in
      rs'#CN = (Val.negativel (Val.subl v1 v2))
@@ -930,6 +963,41 @@ Proof.
 + destruct (Mem.valid_pointer m b0 (Ptrofs.unsigned i) &&
             Mem.valid_pointer m b1 (Ptrofs.unsigned i0)); try discriminate.
   destruct c; simpl in H; inv H; reflexivity.
+Qed.
+
+Lemma compare_neg_long_same: forall rs v n m,
+  n <> Int64.zero -> n <> Int64.repr Int64.min_signed ->
+  compare_neg_long rs v (Vlong (Int64.neg n)) m = compare_long rs v (Vlong n) m.
+Proof.
+  intros. unfold compare_long, compare_neg_long.
+  assert (Z: Int64.unsigned n <> 0).
+  { red; intros; elim H. rewrite <- (Int64.repr_unsigned n), H1. auto. }
+  assert (Y: Int64.signed n <> Int64.min_signed).
+  { red; intros; elim H0. rewrite <- (Int64.repr_signed n), H1. auto. }
+  assert (A: Int64.signed (Int64.neg n) = - Int64.signed n).
+  { rewrite Int64.neg_signed. apply Int64.signed_repr. generalize (Int64.signed_range n).
+    unfold Int64.min_signed, Int64.max_signed in *. lia. }
+  assert (B: Int64.unsigned (Int64.neg n) = Int64.modulus - Int64.unsigned n).
+  { apply Int64.eqm_small_eq. 
+  - apply Int64.eqm_unsigned_repr_l. replace (- Int64.unsigned n) with (0 - Int64.unsigned n) by lia.
+    apply Int64.eqm_sub; auto with ints.
+  - apply Int64.unsigned_range.
+  - generalize (Int64.unsigned_range n); lia. }
+  f_equal; [| f_equal; [| f_equal; [| f_equal]]].
+- destruct v; simpl; auto. unfold Int64.add_overflow, Int64.sub_overflow.
+  rewrite A, Int64.signed_zero.
+  replace (Int64.signed i + - Int64.signed n + 0) with (Int64.signed i - Int64.signed n - 0) by lia.
+  reflexivity.
+- unfold Val.cmplu, Val.cmplu_bool; destruct v; simpl; auto.
+  + unfold Int64.add_carry, Int64.cmpu, Int64.ltu. rewrite B, Int64.unsigned_zero.
+    destruct zlt; [rewrite zlt_true by lia | rewrite zlt_false by lia]; reflexivity.
+  + rewrite Int64.eq_false by auto. reflexivity.
+- rewrite <- Val.subl_addl_opp. unfold Val.cmplu, Val.cmplu_bool, Val.cmpl, Val.cmpl_bool; destruct v; simpl; auto.
+  + generalize (Int64.eq_spec i n); destruct (Int64.eq i n); intros.
+    * subst i. rewrite Int64.sub_idem. reflexivity.
+    * rewrite Int64.eq_false; auto. red; intros; elim H1. apply Int64.sub_is_zero; auto.
+  + rewrite Int64.eq_false by auto. reflexivity.
+- rewrite Val.subl_addl_opp. auto.
 Qed.
 
 Lemma compare_float_spec: forall rs f1 f2,
@@ -1060,12 +1128,14 @@ Proof.
   split; intros. apply eval_testcond_compare_uint; auto. 
   destruct r; reflexivity || discriminate.
 - (* Ccompimm *)
-  destruct (is_arith_imm32 n); [|destruct (is_arith_imm32 (Int.neg n))].
+  destruct (is_arith_imm32 n) eqn:IMM; [|destruct (is_arith_imm32 (Int.neg n)) eqn:IMM2].
 + econstructor; split. apply exec_straight_one. simpl; eauto. auto.
   split; intros. rewrite Int.repr_unsigned. apply eval_testcond_compare_sint; auto. 
   destruct r; reflexivity || discriminate.
 + econstructor; split.
-  apply exec_straight_one. simpl. rewrite Int.repr_unsigned, Int.neg_involutive. eauto. auto.
+  assert (n <> Int.zero) by (red; intros; subst n; discriminate IMM).
+  assert (n <> Int.repr Int.min_signed) by (red; intros; subst n; discriminate IMM2).
+  apply exec_straight_one. simpl. rewrite Int.repr_unsigned, compare_neg_int_same by auto. eauto. auto.
   split; intros. apply eval_testcond_compare_sint; auto. 
   destruct r; reflexivity || discriminate.
 + exploit (exec_loadimm32 X16 n). intros (rs' & A & B & C).
@@ -1075,12 +1145,14 @@ Proof.
   split; intros. apply eval_testcond_compare_sint; auto. 
   transitivity (rs' r). destruct r; reflexivity || discriminate. auto with asmgen.
 - (* Ccompuimm *)
-  destruct (is_arith_imm32 n); [|destruct (is_arith_imm32 (Int.neg n))].
+  destruct (is_arith_imm32 n) eqn:IMM; [|destruct (is_arith_imm32 (Int.neg n)) eqn:IMM2].
 + econstructor; split. apply exec_straight_one. simpl; eauto. auto.
   split; intros. rewrite Int.repr_unsigned. apply eval_testcond_compare_uint; auto. 
   destruct r; reflexivity || discriminate.
 + econstructor; split.
-  apply exec_straight_one. simpl. rewrite Int.repr_unsigned, Int.neg_involutive. eauto. auto.
+  assert (n <> Int.zero) by (red; intros; subst n; discriminate IMM).
+  assert (n <> Int.repr Int.min_signed) by (red; intros; subst n; discriminate IMM2).
+  apply exec_straight_one. simpl. rewrite Int.repr_unsigned, compare_neg_int_same by auto. eauto. auto.
   split; intros. apply eval_testcond_compare_uint; auto. 
   destruct r; reflexivity || discriminate.
 + exploit (exec_loadimm32 X16 n). intros (rs' & A & B & C).
@@ -1128,12 +1200,14 @@ Proof.
   split; intros. apply eval_testcond_compare_ulong; auto. 
   destruct r; reflexivity || discriminate.
 - (* Ccomplimm *)
-  destruct (is_arith_imm64 n); [|destruct (is_arith_imm64 (Int64.neg n))].
+  destruct (is_arith_imm64 n) eqn:IMM; [|destruct (is_arith_imm64 (Int64.neg n)) eqn:IMM2].
 + econstructor; split. apply exec_straight_one. simpl; eauto. auto.
   split; intros. rewrite Int64.repr_unsigned. apply eval_testcond_compare_slong; auto. 
   destruct r; reflexivity || discriminate.
 + econstructor; split.
-  apply exec_straight_one. simpl. rewrite Int64.repr_unsigned, Int64.neg_involutive. eauto. auto.
+  assert (n <> Int64.zero) by (red; intros; subst n; discriminate IMM).
+  assert (n <> Int64.repr Int64.min_signed) by (red; intros; subst n; discriminate IMM2).
+  apply exec_straight_one. simpl. rewrite Int64.repr_unsigned, compare_neg_long_same by auto. eauto. auto.
   split; intros. apply eval_testcond_compare_slong; auto. 
   destruct r; reflexivity || discriminate.
 + exploit (exec_loadimm64 X16 n). intros (rs' & A & B & C).
@@ -1143,12 +1217,14 @@ Proof.
   split; intros. apply eval_testcond_compare_slong; auto. 
   transitivity (rs' r). destruct r; reflexivity || discriminate. auto with asmgen.
 - (* Ccompluimm *)
-  destruct (is_arith_imm64 n); [|destruct (is_arith_imm64 (Int64.neg n))].
+  destruct (is_arith_imm64 n) eqn:IMM; [|destruct (is_arith_imm64 (Int64.neg n)) eqn:IMM2].
 + econstructor; split. apply exec_straight_one. simpl; eauto. auto.
   split; intros. rewrite Int64.repr_unsigned. apply eval_testcond_compare_ulong; auto. 
   destruct r; reflexivity || discriminate.
 + econstructor; split.
-  apply exec_straight_one. simpl. rewrite Int64.repr_unsigned, Int64.neg_involutive. eauto. auto.
+  assert (n <> Int64.zero) by (red; intros; subst n; discriminate IMM).
+  assert (n <> Int64.repr Int64.min_signed) by (red; intros; subst n; discriminate IMM2).
+  apply exec_straight_one. simpl. rewrite Int64.repr_unsigned, compare_neg_long_same by auto. eauto. auto.
   split; intros. apply eval_testcond_compare_ulong; auto. 
   destruct r; reflexivity || discriminate.
 + exploit (exec_loadimm64 X16 n). intros (rs' & A & B & C).

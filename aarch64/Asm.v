@@ -563,7 +563,9 @@ Definition exec_store (chunk: memory_chunk)
   | Some m' => Next (nextinstr rs) m'
   end.
 
-(** Comparisons *)
+(** Integer comparisons. Sets the flags as per the result of [v1 - v2].
+    The flags must be correct if [v1] is a pointer and [v2] an integer,
+    or [v1] and [v2] are pointers. *)
 
 Definition compare_int (rs: regset) (v1 v2: val) (m: mem) :=
   rs#CN <- (Val.negative (Val.sub v1 v2))
@@ -576,6 +578,21 @@ Definition compare_long (rs: regset) (v1 v2: val) (m: mem) :=
     #CZ <- (Val.maketotal (Val.cmplu (Mem.valid_pointer m) Ceq v1 v2))
     #CC <- (Val.maketotal (Val.cmplu (Mem.valid_pointer m) Cge v1 v2))
     #CV <- (Val.subl_overflow v1 v2).
+
+(** Integer comparison with negation.  Sets the flags as per the result
+    of [v1 + v2].  The flags are defined only if [v1] and [v2] are integers. *)
+
+Definition compare_neg_int (rs: regset) (v1 v2: val) (m: mem) :=
+  rs#CN <- (Val.negative (Val.add v1 v2))
+    #CZ <- (Val.cmp Ceq (Val.add v1 v2) Vzero)
+    #CC <- (Val.add_carry v1 v2 Vzero)
+    #CV <- (Val.add_overflow v1 v2).
+
+Definition compare_neg_long (rs: regset) (v1 v2: val) (m: mem) :=
+  rs#CN <- (Val.negativel (Val.addl v1 v2))
+    #CZ <- (Val.maketotal (Val.cmpl Ceq (Val.addl v1 v2) (Vlong Int64.zero)))
+    #CC <- (Val.loword (Val.addl_carry v1 v2 (Vlong Int64.zero)))
+    #CV <- (Val.addl_overflow v1 v2).
 
 (** Semantics of [fcmp] instructions:
 <<
@@ -788,9 +805,9 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Pcmpimm X r1 n =>
       Next (nextinstr (compare_long rs rs#r1 (Vlong (Int64.repr n)) m)) m
   | Pcmnimm W r1 n =>
-      Next (nextinstr (compare_int rs rs#r1 (Vint (Int.neg (Int.repr n))) m)) m
+      Next (nextinstr (compare_neg_int rs rs#r1 (Vint (Int.repr n)) m)) m
   | Pcmnimm X r1 n =>
-      Next (nextinstr (compare_long rs rs#r1 (Vlong (Int64.neg (Int64.repr n))) m)) m
+      Next (nextinstr (compare_neg_long rs rs#r1 (Vlong (Int64.repr n)) m)) m
   (** Move integer register *)
   | Pmov rd r1 =>
       Next (nextinstr (rs#rd <- (rs#r1))) m
