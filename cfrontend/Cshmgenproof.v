@@ -414,6 +414,38 @@ Proof.
   destruct (ident_eq id1 id2); inv H1; auto.
 Qed.
 
+Lemma is_longofint_correct:
+  forall e le m a a1 v ty b,
+  is_longofint a = Some a1 ->
+  eval_expr ge e le m a v ->
+  bool_val v ty m = Some b ->
+  classify_bool ty = bool_case_l ->
+  exists v1, eval_expr ge e le m a1 v1 /\ bool_val v1 type_int32s m = Some b.
+Proof.
+  intros.
+  unfold bool_val in H1; rewrite H2 in H1.
+  unfold is_longofint in H; inv H0; try discriminate.
+  destruct op; inv H; inv H4.
+- (* longofint *)
+  destruct v1; simpl in H1; inv H1.
+  exists (Vint i); split; auto. unfold bool_val; simpl.
+  predSpec Int.eq Int.eq_spec i Int.zero.
+  + subst i; reflexivity.
+  + rewrite Int64.eq_false. auto. red; intros. elim H.
+    rewrite <- (Int.repr_signed i). apply Int.eqm_samerepr.
+    apply Zbits.eqmod_divides with Int64.modulus. apply Int64.samerepr_eqm; auto.
+    exists Int.modulus; reflexivity.
+- (* longofuint *)
+  destruct v1; simpl in H1; inv H1.
+  exists (Vint i); split; auto. unfold bool_val; simpl.
+  predSpec Int.eq Int.eq_spec i Int.zero.
+  + subst i; reflexivity.
+  + rewrite Int64.eq_false. auto. red; intros. elim H.
+    rewrite <- (Int.repr_unsigned i). apply Int.eqm_samerepr.
+    apply Zbits.eqmod_divides with Int64.modulus. apply Int64.samerepr_eqm; auto.
+    exists Int.modulus; reflexivity.
+Qed.
+
 Lemma make_boolean_correct:
  forall e le m a v ty b,
   eval_expr ge e le m a v ->
@@ -422,29 +454,50 @@ Lemma make_boolean_correct:
     eval_expr ge e le m (make_boolean a ty) vb
     /\ Val.bool_of_val vb b.
 Proof.
-  intros. unfold make_boolean. unfold bool_val in H0.
-  destruct (classify_bool ty); destruct v; InvEval.
+  intros e le m.
+  assert (INTCASE: forall a v ty b,
+    eval_expr ge e le m a v ->
+    bool_val v ty m = Some b ->
+    classify_bool ty = bool_case_i ->
+    exists vb, eval_expr ge e le m (make_cmpu_ne_zero a) vb /\ Val.bool_of_val vb b).
+  { intros. unfold bool_val in H0; rewrite H1 in H0.
+    destruct v; InvEval.
+  - (* int *)
+    econstructor; split. apply make_cmpu_ne_zero_correct with (n := i); auto.
+    destruct (Int.eq i Int.zero); simpl; constructor.
+  - (* ptr 32 *)
+    exists Vone; split. eapply make_cmpu_ne_zero_correct_ptr; eauto. constructor.
+  }
+  intros. generalize H0; unfold make_boolean, bool_val;  destruct (classify_bool ty) eqn:CB; intros.
 - (* int *)
-  econstructor; split. apply make_cmpu_ne_zero_correct with (n := i); auto.
-  destruct (Int.eq i Int.zero); simpl; constructor.
-- (* ptr 32 bits *)
-  exists Vone; split. eapply make_cmpu_ne_zero_correct_ptr; eauto. constructor.
+  eapply INTCASE; eauto.
 - (* long *)
-  econstructor; split. econstructor; eauto with cshm. simpl. unfold Val.cmplu. simpl. eauto.
-  destruct (Int64.eq i Int64.zero); simpl; constructor.
-- (* ptr 64 bits *)
-  exists Vone; split.
-  econstructor; eauto with cshm. simpl. unfold Val.cmplu, Val.cmplu_bool.
-  unfold Mem.weak_valid_pointer in Heqb0. rewrite Heqb0, Heqb1, Int64.eq_true. reflexivity.
-  constructor.
+  destruct (is_longofint a) as [a1 | ] eqn:OPT.
+  + (* converted from an integer *)
+    exploit is_longofint_correct; eauto. intros (v1 & EV & BV).
+    eapply INTCASE; eauto.
+  + (* general case *)
+    destruct v; InvEval.
+    * (* int64 value *)
+      econstructor; split. econstructor; eauto with cshm. simpl. unfold Val.cmplu. simpl. eauto.
+      destruct (Int64.eq i Int64.zero); simpl; constructor.
+    * (* ptr64 value *)
+      exists Vone; split.
+      econstructor; eauto with cshm. simpl. unfold Val.cmplu, Val.cmplu_bool.
+      unfold Mem.weak_valid_pointer in Heqb0. rewrite Heqb0, Heqb1, Int64.eq_true. reflexivity.
+      constructor.
 - (* float *)
+  destruct v; InvEval. 
   econstructor; split. econstructor; eauto with cshm. simpl. eauto.
   unfold Val.cmpf, Val.cmpf_bool. simpl. rewrite <- Float.cmp_ne_eq.
   destruct (Float.cmp Cne f Float.zero); constructor.
 - (* single *)
+  destruct v; InvEval. 
   econstructor; split. econstructor; eauto with cshm. simpl. eauto.
   unfold Val.cmpfs, Val.cmpfs_bool. simpl. rewrite <- Float32.cmp_ne_eq.
   destruct (Float32.cmp Cne f Float32.zero); constructor.
+- (* error *)
+  discriminate.
 Qed.
 
 Lemma make_neg_correct:

@@ -178,12 +178,22 @@ Definition make_cast (from to: type) (e: expr) :=
 (** [make_boolean e ty] returns a Csharpminor expression that evaluates
    to the boolean value of [e].  *)
 
+Definition is_longofint (e: expr) : option expr :=
+  match e with
+  | Eunop (Olongofint | Olongofintu) e => Some e
+  | _ => None
+  end.
+
 Definition make_boolean (e: expr) (ty: type) :=
   match classify_bool ty with
   | bool_case_i => make_cmpu_ne_zero e
   | bool_case_f => Ebinop (Ocmpf Cne) e (make_floatconst Float.zero)
   | bool_case_s => Ebinop (Ocmpfs Cne) e (make_singleconst Float32.zero)
-  | bool_case_l => Ebinop (Ocmplu Cne) e (make_longconst Int64.zero)
+  | bool_case_l => 
+      match is_longofint e with
+      | Some e1 => make_cmpu_ne_zero e1
+      | _ => Ebinop (Ocmplu Cne) e (make_longconst Int64.zero)
+      end
   | bool_default => e   (**r should not happen *)
   end.
 
