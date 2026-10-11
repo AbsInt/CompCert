@@ -852,7 +852,7 @@ Proof.
   assert (B: Int.unsigned (Int.neg n) = Int.modulus - Int.unsigned n).
   { apply Int.eqm_small_eq. 
   - apply Int.eqm_unsigned_repr_l. replace (- Int.unsigned n) with (0 - Int.unsigned n) by lia.
-    apply Int.eqm_sub; auto with ints.
+    apply Int.eqm_sub. exists (-1); reflexivity. auto with ints.
   - apply Int.unsigned_range.
   - generalize (Int.unsigned_range n); lia. }
   f_equal; [| f_equal; [| f_equal; [| f_equal]]].
@@ -980,7 +980,7 @@ Proof.
   assert (B: Int64.unsigned (Int64.neg n) = Int64.modulus - Int64.unsigned n).
   { apply Int64.eqm_small_eq. 
   - apply Int64.eqm_unsigned_repr_l. replace (- Int64.unsigned n) with (0 - Int64.unsigned n) by lia.
-    apply Int64.eqm_sub; auto with ints.
+    apply Int64.eqm_sub. exists (-1); reflexivity. auto with ints.
   - apply Int64.unsigned_range.
   - generalize (Int64.unsigned_range n); lia. }
   f_equal; [| f_equal; [| f_equal; [| f_equal]]].

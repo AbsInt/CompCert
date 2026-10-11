@@ -766,7 +766,7 @@ Proof.
   assert (B: Int.unsigned (Int.neg n) = Int.modulus - Int.unsigned n).
   { apply Int.eqm_small_eq. 
   - apply Int.eqm_unsigned_repr_l. replace (- Int.unsigned n) with (0 - Int.unsigned n) by lia.
-    apply Int.eqm_sub; auto with ints.
+    apply Int.eqm_sub. exists (-1); auto. auto with ints.
   - apply Int.unsigned_range.
   - generalize (Int.unsigned_range n); lia. }
   f_equal; [| f_equal; [| f_equal; [| f_equal]]].
