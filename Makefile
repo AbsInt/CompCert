@@ -478,7 +478,7 @@ ALL_BUILDS=$(patsubst %, build/%, $(ALL_ARCHES))
 
 setup-build: FORCE
 	rm -rf build
-	@if [ ! -d .git ]; then echo "build-setup is only available for git checkouts"; exit 2; fi
+	@if [ ! git status >/dev/null 2>&1 ]; then echo "setup-build is only available for git checkouts"; exit 2; fi
 	@for a in $(ALL_ARCHES); do \
            echo "Setting up build/$$a"; \
            tools/linkhier build/$$a; \
