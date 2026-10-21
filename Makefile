@@ -71,6 +71,8 @@ endif
 #    were both introduced in Rocq 9.2.
 # deprecated-end-tac
 #    Warning introduced in Rocq 9.2, removed in Rocq 9.3
+# Old IfThen Without Bool Coercion
+#    to handle when requiring Rocq 9.4
 COQCOPTS ?= \
   -w -unused-pattern-matching-variable \
   -w -deprecated-since-8.19 \
@@ -84,6 +86,8 @@ COQCOPTS ?= \
   -w -notation-for-abbreviation \
   -w -implicit-create-rewrite-hint-db \
   -w -deprecated-end-tac
+COQCOPTS += \
+  -set "Old IfThen Without Bool Coercion"
 
 # deprecated-instance-without-locality:
 #    warning introduced in 8.14, removed in 8.18
