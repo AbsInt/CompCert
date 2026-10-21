@@ -332,7 +332,10 @@ let cmdline_actions =
       [ Exact "-marm", Ignore ] (* Thumb needs ARMv6T2 or ARMv7 *)
     else
       [ Exact "-mthumb", Set option_mthumb;
-        Exact "-marm", Unset option_mthumb;] @
+        Exact "-marm", Unit (fun () ->
+            if Configuration.model = "armv7m" then
+              fatal_error no_loc "architecture 'armv7m' does not support 'ARM' execution mode";
+            option_mthumb := false);] @
       (if Configuration.model <> "armv6t2" then
         [Exact "-midiv", Set option_midiv;]
        else [])
