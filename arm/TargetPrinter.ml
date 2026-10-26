@@ -584,6 +584,12 @@ struct
       (match Configuration.abi with
        | "hardfloat" -> 1
        | _ -> 0);
+    fprintf oc "	.eabi_attribute Tag_ABI_FP_denormal, 1\n";     (* allow subnormal numbers *)
+    fprintf oc "	.eabi_attribute Tag_ABI_FP_number_model, 3\n"; (* uses all the IEEE econdings *)
+    fprintf oc "	.eabi_attribute Tag_ABI_align_needed, 1\n";    (* calls depend on alignment *)
+    fprintf oc "	.eabi_attribute Tag_ABI_align_preserved, 1\n"; (* calls preserve alignment *)
+    fprintf oc "	.eabi_attribute Tag_ABI_enum_size, 2\n";       (* enums are 32-bit *)
+    fprintf oc "	.eabi_attribute Tag_ABI_PCS_wchar_t, 4\n";     (* size of wchar_t is 4 *)
     (* We must print that we use the idiv arch extension if we are either:
        * armv7a and the midiv option is set
        * armv7r and the midiv option is set but we are not in thumb mode *)
