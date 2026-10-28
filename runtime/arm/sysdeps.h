@@ -99,6 +99,17 @@ f:
         .arch   armv7
 #endif
 	.fpu	vfpv2
+#if defined (ABI_hardfloat)
+	.eabi_attribute Tag_ABI_VFP_args, 1
+#else
+	.eabi_attribute Tag_ABI_VFP_args, 0
+#endif
+	.eabi_attribute Tag_ABI_FP_denormal, 1
+	.eabi_attribute Tag_ABI_FP_number_model, 3
+	.eabi_attribute Tag_ABI_align_needed, 1
+	.eabi_attribute Tag_ABI_align_preserved, 1
+	.eabi_attribute Tag_ABI_enum_size, 2
+	.eabi_attribute Tag_ABI_PCS_wchar_t, 4
 
 
 
