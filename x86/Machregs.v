@@ -169,7 +169,7 @@ Definition destroyed_by_builtin (ef: external_function): list mreg :=
   match ef with
   | EF_memcpy sz al =>
       if zle sz 32 then CX :: X7 :: nil else CX :: SI :: DI :: nil
-  | EF_vstore (Mint8unsigned|Mint8signed) =>
+  | EF_vstore (Mbool | Mint8unsigned | Mint8signed) =>
       if Archi.ptr64 then nil else AX :: CX :: nil
   | EF_builtin name sg =>
       if string_dec name "__builtin_va_start" then AX :: nil
