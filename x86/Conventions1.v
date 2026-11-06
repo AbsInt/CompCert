@@ -452,7 +452,7 @@ Qed.
 
 (** ** Normalization of function results and parameters *)
 
-(** In the x86 ABI, a return value of type "char" is returned in
+(** In the x86 ABI, a return value of type "char" or "_Bool" is returned in
     register AL, leaving the top 24 bits of EAX unspecified.
     Likewise, a return value of type "short" is returned in register
     AH, leaving the top 16 bits of EAX unspecified.  Hence, return
@@ -460,7 +460,7 @@ Qed.
 
 Definition return_value_needs_normalization (t: xtype) : bool :=
   match t with
-  | Xint8signed | Xint8unsigned | Xint16signed | Xint16unsigned => true
+  | Xbool | Xint8signed | Xint8unsigned | Xint16signed | Xint16unsigned => true
   | _ => false
   end.
 
