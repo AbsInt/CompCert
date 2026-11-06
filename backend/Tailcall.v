@@ -83,6 +83,7 @@ Definition transf_instr (f: function) (pc: node) (instr: instruction) :=
       if is_return niter f s res
       && tailcall_is_possible sig
       && xtype_eq sig.(sig_res) f.(fn_sig).(sig_res)
+      && bool_dec sig.(sig_cc).(cc_structret) f.(fn_sig).(sig_cc).(cc_structret)
       then Itailcall sig ros args
       else instr
   | _ => instr
