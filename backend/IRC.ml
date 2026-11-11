@@ -669,7 +669,7 @@ let combine g u v =
 
 (* Attempt coalescing *)
 
-let coalesce g =
+let coalesce forced_coalescing g =
   let m = DLinkMove.pick g.worklistMoves in
   let x = getAlias m.src and y = getAlias m.dst in
   let (u, v) = if y.nstate = Colored then (y, x) else (x, y) in
@@ -681,7 +681,7 @@ let coalesce g =
     DLinkMove.insert m g.constrainedMoves;
     addWorkList g u;
     addWorkList g v
-  end else if canCoalesce g u v then begin
+  end else if forced_coalescing || canCoalesce g u v then begin
     DLinkMove.insert m g.coalescedMoves;
     combine g u v;
     addWorkList g u
@@ -758,16 +758,16 @@ let selectSpill g =
 
 (* Produce the order of nodes that we'll use for coloring *)
 
-let rec nodeOrder g stack =
+let rec nodeOrder forced g stack =
   (*i checkInvariants g; *)
   if DLinkNode.notempty g.simplifyWorklist then
-    (let n = simplify g in nodeOrder g (n :: stack))
+    (let n = simplify g in nodeOrder forced g (n :: stack))
   else if DLinkMove.notempty g.worklistMoves then
-    (coalesce g; nodeOrder g stack)
+    (coalesce forced g; nodeOrder forced g stack)
   else if DLinkNode.notempty g.freezeWorklist then
-    (freeze g; nodeOrder g stack)
+    (freeze g; nodeOrder forced g stack)
   else if DLinkNode.notempty g.spillWorklist then
-    (let n = selectSpill g in nodeOrder g (n :: stack))
+    (let n = selectSpill g in nodeOrder forced g (n :: stack))
   else
     stack
 
@@ -921,7 +921,8 @@ let add_interf g v1 v2 =
 let add_pref g v1 v2 =
   let n1 = nodeOfVar g v1 in let n2 = nodeOfVar g v2 in addMovePref g n1 n2
 
-let coloring g =
+let coloring ~coalescing g =
+  let forced = match coalescing with `Aggressive -> true | `Prudent -> false in
   initialNodePartition g;
-  List.iter (assign_color g) (nodeOrder g []);
+  List.iter (assign_color g) (nodeOrder forced g []);
   location_of_var g  (* total function var -> location *)

@@ -733,7 +733,7 @@ let rec add_interfs_block g blk live =
       add_interfs_instr g instr live';
       live_before instr live'
 
-let find_coloring f liveness =
+let find_coloring ~coalescing f liveness =
   (*type_function f;  (* for debugging *)*)
   let g = IRC.init (spill_costs f) in
   PTree.fold
@@ -742,7 +742,7 @@ let find_coloring f liveness =
   add_interfs_destroyed g
     (transfer_live f f.fn_entrypoint (PMap.get f.fn_entrypoint liveness))
     destroyed_at_function_entry;
-  IRC.coloring g
+  IRC.coloring ~coalescing g
 
 
 (*********** Determination of variables that need spill code insertion *****)
@@ -1153,9 +1153,18 @@ let transl_function fn alloc =
 exception Timeout
 
 let rec first_round f liveness =
-  let alloc = find_coloring f liveness in
+  let alloc = find_coloring ~coalescing:`Aggressive f liveness in
   if !option_dalloctrace then begin
     fprintf !pp "-------------- After initial register allocation\n\n";
+    PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f
+  end;
+  let ts = tospill_function f alloc in
+  if VSet.is_empty ts then success f alloc else second_round f liveness
+
+and second_round f liveness =
+  let alloc = find_coloring ~coalescing:`Prudent f liveness in
+  if !option_dalloctrace then begin
+    fprintf !pp "-------------- After register allocation without aggressive coalescing\n\n";
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f
   end;
   let ts = tospill_function f alloc in
@@ -1165,7 +1174,7 @@ and more_rounds f ts count =
   if count >= 40 then raise Timeout;
   let f' = spill_function f ts count in
   let liveness = liveness_analysis f' in
-  let alloc = find_coloring f' liveness in
+  let alloc = find_coloring ~coalescing:`Prudent f' liveness in
   if !option_dalloctrace then begin
     fprintf !pp "-------------- After register allocation (round %d)\n\n" count;
     PrintXTL.print_function !pp ~alloc: alloc ~live: liveness f'
