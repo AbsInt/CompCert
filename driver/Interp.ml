@@ -295,33 +295,49 @@ external format_int64: string -> int64 -> string
   = "caml_int64_format"
 
 let format_value m flags length conv arg =
-  match conv.[0], length, arg with
-  | ('d'|'i'|'u'|'o'|'x'|'X'|'c'), (""|"h"|"hh"|"l"|"z"|"t"), Vint i ->
-      format_int32 (flags ^ conv) (camlint_of_coqint i)
-  | ('d'|'i'|'u'|'o'|'x'|'X'|'c'), (""|"h"|"hh"|"l"|"z"|"t"), _ ->
-      "<int argument expected>"
-  | ('d'|'i'|'u'|'o'|'x'|'X'), ("ll"|"j"), Vlong i ->
-      format_int64 (flags ^ conv) (camlint64_of_coqint i)
-  | ('d'|'i'|'u'|'o'|'x'|'X'), ("ll"|"j"), _ ->
-      "<long long argument expected"
-  | ('f'|'e'|'E'|'g'|'G'|'a'), (""|"l"), Vfloat f ->
-      format_float (flags ^ conv) (camlfloat_of_coqfloat f)
-  | ('f'|'e'|'E'|'g'|'G'|'a'), "", _ ->
-      "<float argument expected"
-  | 's', "", Vptr(blk, ofs) ->
-      begin match extract_string m blk ofs with
-      | Some s -> s
-      | None -> "<bad string>"
+  match conv.[0], length with
+  | ('d'|'i'|'u'|'o'|'x'|'X'|'c'), (""|"h"|"hh"|"l") ->
+      begin match arg with
+      | Vint i -> format_int32 (flags ^ conv) (camlint_of_coqint i)
+      | _ -> "<int argument expected>"
       end
-  | 's', "", _ ->
-      "<pointer argument expected>"
-  | 'p', "", Vptr(blk, ofs) ->
-      Printf.sprintf "<%ld%+ld>" (P.to_int32 blk) (camlint_of_coqint ofs)
-  | 'p', "", Vint i ->
-      format_int32 (flags ^ "x") (camlint_of_coqint i)
-  | 'p', "", _ ->
-      "<int or pointer argument expected>"
-  | _, _, _ ->
+  | ('d'|'i'|'u'|'o'|'x'|'X'), ("ll"|"j") ->
+      begin match arg with
+      | Vlong i -> format_int64 (flags ^ conv) (camlint64_of_coqint i)
+      | _ -> "<long long argument expected"
+      end
+  | ('d'|'i'|'u'|'o'|'x'|'X'), ("z"|"t") ->
+      begin match arg with
+      | Vint i -> format_int32 (flags ^ conv) (camlint_of_coqint i)
+      | Vlong i -> format_int64 (flags ^ conv) (camlint64_of_coqint i)
+      | _ -> "<size argument expected>"
+      end
+  | ('f'|'e'|'E'|'g'|'G'|'a'), (""|"l") ->
+      begin match arg with
+      | Vfloat f -> format_float (flags ^ conv) (camlfloat_of_coqfloat f)
+      | _ -> "<float argument expected"
+      end
+  | 's', "" ->
+      begin match arg with
+      | Vptr(blk, ofs) ->
+          begin match extract_string m blk ofs with
+          | Some s -> s
+          | None -> "<bad string>"
+          end
+      | _ -> "<pointer argument expected>"
+      end
+  | 'p', "" ->
+      begin match arg with
+      | Vptr(blk, ofs) ->
+          Printf.sprintf "<%ld%+ld>" (P.to_int32 blk) (camlint_of_coqint ofs)
+      | Vint i ->
+          format_int32 (flags ^ "x") (camlint_of_coqint i)
+      | Vlong i ->
+          format_int64 (flags ^ "x") (camlint64_of_coqint i)
+      | _ ->
+          "<int or pointer argument expected>"
+      end
+  | _, _ ->
       "<unrecognized format>"
 
 let do_printf m fmt args =
