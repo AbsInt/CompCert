@@ -37,15 +37,11 @@ Definition ptrdiff_t : type :=
 
 (** The type of a member of a composite (struct or union).
   The "volatile" attribute carried by the composite propagates
-  to the type of the member, but not the "alignas" attribute. *)
-
-Definition attr_add_volatile (vol: bool) (a: attr) :=
-  {| attr_volatile := a.(attr_volatile) || vol;
-     attr_alignas  := a.(attr_alignas) |}.
+  to the type of the member, but not the other attributes. *)
 
 Definition type_of_member (a: attr) (f: ident) (m: members) : res type :=
   do ty <- field_type f m;
-  OK (change_attributes (attr_add_volatile a.(attr_volatile)) ty).
+  OK (if a.(attr_volatile) then make_volatile ty else ty).
 
 (** Type-checking of arithmetic and logical operators *)
 
