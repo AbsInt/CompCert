@@ -713,9 +713,7 @@ and singleline_comment = parse
             | Pre_parser.STRING_LITERAL (enc', str', loc') ->
                ignore (Queue.pop tokens);
                let (enc'', str'') = doConcat enc' str' in
-               if str'' <> []
-               then (combine_encodings loc enc enc'', str @ str'')
-               else (enc, str)
+               (combine_encodings loc enc enc'', str @ str'')
             | _ -> (enc, str)
             | exception Queue.Empty -> (enc, str)
           in
