@@ -503,14 +503,17 @@ let expand_instruction instr =
         current_function_stacksize := Z.to_int64 sz
       end;
       assert (retaddrofs = Z.(add linkofs (of_uint 8)));
-      let sz1 = Z.(sub sz linkofs) in
-      if Z.(le sz1 (of_uint 512)) then begin
+      (* Keep the intermediate stack pointer 16-aligned.  The back link
+         itself is only 8-aligned, so it may lie 8 bytes above SP. *)
+      let linkdisp = Z.(modulo linkofs _16) in
+      let sz1 = Z.(add (sub sz linkofs) linkdisp) in
+      if Z.(eq linkdisp zero && le sz1 (of_uint 512)) then begin
         emit (Pstp(X15, X30, ADpreincr(XSP, I64.repr (Z.neg sz1))));
         emit (Pcfi_adjust sz1)
       end else begin
         expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz1));
         emit (Pcfi_adjust sz1);
-        emit (Pstp(X15, X30, ADimm(XSP, I64.zero)))
+        emit (Pstp(X15, X30, ADimm(XSP, I64.repr linkdisp)))
       end;
       let sz2 = Z.(sub sz sz1) in
       if Z.(gt sz2 zero) then begin
