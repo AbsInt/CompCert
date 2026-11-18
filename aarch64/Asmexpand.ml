@@ -504,6 +504,7 @@ let expand_instruction instr =
       end;
       assert (retaddrofs = Z.(add linkofs (of_uint 8)));
       let sz1 = Z.(sub sz linkofs) in
+      assert (Z.modulo sz1 _16 = Z.zero);
       if Z.(le sz1 (of_uint 512)) then begin
         emit (Pstp(X15, X30, ADpreincr(XSP, I64.repr (Z.neg sz1))));
         emit (Pcfi_adjust sz1)
@@ -513,6 +514,7 @@ let expand_instruction instr =
         emit (Pstp(X15, X30, ADimm(XSP, I64.zero)))
       end;
       let sz2 = Z.(sub sz sz1) in
+      assert (Z.modulo sz2 _16 = Z.zero);
       if Z.(gt sz2 zero) then begin
         expand_addimm64 XSP XSP (Ptrofs.repr (Z.neg sz2));
         emit (Pcfi_adjust sz2)

@@ -33,7 +33,7 @@ The stack pointer is kept 16-aligned.
 Definition fe_ofs_arg := 0.
 
 Definition make_env (b: bounds) : frame_env :=
-  let olink := align (4 * b.(bound_outgoing)) 8 in  (* back link *)
+  let olink := align (4 * b.(bound_outgoing)) 16 in (* back link *)
   let oretaddr := olink + 8 in                      (* return address *)
   let ocs := oretaddr + 8 in                        (* callee-saves *)
   let ol :=  align (size_callee_save_area b ocs) 8 in (* locals *)
@@ -60,7 +60,7 @@ Lemma frame_env_separated:
 Proof.
 Local Opaque Z.add Z.mul sepconj range.
   intros; simpl.
-  set (olink := align (4 * b.(bound_outgoing)) 8).
+  set (olink := align (4 * b.(bound_outgoing)) 16).
   set (oretaddr := olink + 8).
   set (ocs := oretaddr + 8).
   set (ol :=  align (size_callee_save_area b ocs) 8).
@@ -100,7 +100,7 @@ Lemma frame_env_range:
   0 <= fe_stack_data fe /\ fe_stack_data fe + bound_stack_data b <= fe_size fe.
 Proof.
   intros; simpl.
-  set (olink := align (4 * b.(bound_outgoing)) 8).
+  set (olink := align (4 * b.(bound_outgoing)) 16).
   set (oretaddr := olink + 8).
   set (ocs := oretaddr + 8).
   set (ol :=  align (size_callee_save_area b ocs) 8).
@@ -126,15 +126,17 @@ Lemma frame_env_aligned:
   /\ (align_chunk Mptr | fe_ofs_retaddr fe).
 Proof.
   intros; simpl.
-  set (olink := align (4 * b.(bound_outgoing)) 8).
+  set (olink := align (4 * b.(bound_outgoing)) 16).
   set (oretaddr := olink + 8).
   set (ocs := oretaddr + 8).
   set (ol :=  align (size_callee_save_area b ocs) 8).
   set (ostkdata := align (ol + 4 * b.(bound_local)) 8).
   change (align_chunk Mptr) with 8.
+  assert ((8 | olink)).
+  { apply Z.divide_trans with 16. exists 2; auto. apply align_divides; lia. }
   split. apply Z.divide_0_r.
   split. apply align_divides; lia.
   split. apply align_divides; lia.
-  split. apply align_divides; lia.
-  apply Z.divide_add_r. apply align_divides; lia. apply Z.divide_refl.
+  split. auto.
+  apply Z.divide_add_r; auto using Z.divide_refl.
 Qed.
