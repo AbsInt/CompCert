@@ -213,8 +213,13 @@ Proof.
  (* sel cond same *)
  - exists (valu y); split; auto. inv H0. destruct (eval_condition cond (map valu args1) m); auto.
    simpl. destruct b, (valu y), ty; auto.
- - exists r; split; auto. rewrite <- H0.
-   simpl. erewrite combine_cond_sound; eauto.
+ - (* sel cond swapped condition *)
+   exists r; split; auto. rewrite <- H0.
+   simpl. rewrite eval_negate_condition.
+   erewrite combine_cond_sound; eauto.
+   destruct (eval_condition cond (map valu args1) m) as [[]|]; simpl; auto.
+- exists r; split; auto. rewrite <- H0.
+  simpl. erewrite combine_cond_sound; eauto.
 Qed.
 
 End COMBINE.

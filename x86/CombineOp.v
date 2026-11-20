@@ -15,7 +15,7 @@
 
 Require Import Coqlib.
 Require Import AST Integers.
-Require Import Op CSEdomain.
+Require Import SelectOp Op CSEdomain.
 
 Definition valnum := positive.
 
@@ -160,7 +160,11 @@ Function combine_op (op: operation) (args: list valnum) : option(operation * lis
       | None =>
           if eq_valnum x y then Some (Omove, x :: nil) else
           match combine_cond cond args with
-          | Some (cond', args') => Some (Osel cond' ty, x :: y :: args')
+          | Some (cond', args') =>
+              if select_swap cond' then
+                Some (Osel (negate_condition cond') ty, y :: x :: args')
+              else
+                Some (Osel cond' ty, x :: y :: args')
           | None => None
           end
       end
