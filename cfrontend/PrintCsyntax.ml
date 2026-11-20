@@ -101,7 +101,9 @@ let rec name_cdecl id ty =
         | _                      -> sprintf "*%s%s" (attributes_space a) id in
       name_cdecl id' t
   | Tarray(t, n, a) ->
-      name_cdecl (sprintf "%s[%ld]" id (camlint_of_coqint n)) t
+      name_cdecl
+        (sprintf "%s[%s%ld]" id (attributes_space a) (camlint_of_coqint n))
+        t
   | Tfunction(args, res, cconv) ->
       let b = Buffer.create 20 in
       if id = ""
