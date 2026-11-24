@@ -219,7 +219,7 @@ let transf_expr loc env ctx e =
          is_byteswapped_ptr e1.etyp fieldname)
     | EBinop(Oindex, e1, e2, tyres) ->
         let (e1', swap) = lvalue e1 in
-        ({edesc = EBinop(Oindex, e1', e2, tyres); etyp = e.etyp}, swap)
+        ({edesc = EBinop(Oindex, e1', texp Val e2, tyres); etyp = e.etyp}, swap)
     | _ ->
         (texp Val e, false)
 
