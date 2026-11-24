@@ -128,7 +128,7 @@ Definition attr_of_type (ty: type) :=
   | Tunion id a => a
   end.
 
-(** Change the top-level attributes of a type *)
+(** Change the top-level attributes of a type. *)
 
 Definition change_attributes (f: attr -> attr) (ty: type) : type :=
   match ty with
@@ -143,25 +143,29 @@ Definition change_attributes (f: attr -> attr) (ty: type) : type :=
   | Tunion id a => Tunion id (f a)
   end.
 
-(** Erase the top-level attributes of a type *)
+(** Erase the top-level attributes of a type. *)
 
 Definition remove_attributes (ty: type) : type :=
   change_attributes (fun _ => noattr) ty.
 
-(** Add extra attributes to the top-level attributes of a type *)
+(** Set the volatile attribute on a type.
+    For array types, the volatile attribute is also applied to the element type. *)
 
-Definition attr_union (a1 a2: attr) : attr :=
-  {| attr_volatile := a1.(attr_volatile) || a2.(attr_volatile);
-     attr_alignas :=
-       match a1.(attr_alignas), a2.(attr_alignas) with
-       | None, al => al
-       | al, None => al
-       | Some n1, Some n2 => Some (N.max n1 n2)
-       end
-  |}.
+Definition make_attr_volatile (a: attr) : attr :=
+  {| attr_volatile := true; attr_alignas := a.(attr_alignas) |}.
 
-Definition merge_attributes (ty: type) (a: attr) : type :=
-  change_attributes (attr_union a) ty.
+Fixpoint make_volatile (ty: type) : type :=
+  match ty with
+  | Tvoid => ty
+  | Tint sz si a => Tint sz si (make_attr_volatile a)
+  | Tlong si a => Tlong si (make_attr_volatile a)
+  | Tfloat sz a => Tfloat sz (make_attr_volatile a)
+  | Tpointer elt a => Tpointer elt (make_attr_volatile a)
+  | Tarray elt sz a => Tarray (make_volatile elt) sz (make_attr_volatile a)
+  | Tfunction args res cc => ty
+  | Tstruct id a => Tstruct id (make_attr_volatile a)
+  | Tunion id a => Tunion id (make_attr_volatile a)
+  end.
 
 (** Maximal size in bits of a bitfield of type [sz]. *)
 

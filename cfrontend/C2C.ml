@@ -804,8 +804,9 @@ let rec convertExpr env e =
       ewrap (Ctyping.evalof l)
 
   | C.EConst(C.CInt(i, k, _)) ->
-      let sg = if Cutil.is_signed_ikind k then Signed else Unsigned in
-      if Cutil.sizeof_ikind k = 8
+      let sz = Cutil.sizeof_ikind k in
+      let sg = if sz < 4 || Cutil.is_signed_ikind k then Signed else Unsigned in
+      if sz = 8
       then Ctyping.econst_long (convertInt64 i) sg
       else Ctyping.econst_int (convertInt32 i) sg
   | C.EConst(C.CFloat(f, k)) ->

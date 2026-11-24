@@ -229,14 +229,6 @@ let binop env op tyop tyres ty1 v1 ty2 v2 =
         comparison env (<=) None tyop v1 v2
     | Oge ->
         comparison env (>=) None tyop v1 v2
-    | Ologand ->
-        if boolean_value v1
-        then if boolean_value v2 then I 1L else I 0L
-        else I 0L
-    | Ologor ->
-        if boolean_value v1
-        then I 1L
-        else if boolean_value v2 then I 1L else I 0L
     | _ -> raise Notconst
   (* force normalization of result, e.g. of double to float *)
   in cast env tyres res
@@ -259,6 +251,14 @@ let rec expr env e =
       raise Notconst
   | EUnop(op, e1) ->
       unop env op e.etyp e1.etyp (expr env e1)
+  | EBinop(Ologand, e1, e2, ty) ->
+      if boolean_value (expr env e1)
+      then if boolean_value (expr env e2) then I 1L else I 0L
+      else I 0L
+  | EBinop(Ologor, e1, e2, ty) ->
+      if boolean_value (expr env e1)
+      then I 1L
+      else if boolean_value (expr env e2) then I 1L else I 0L
   | EBinop(op, e1, e2, ty) ->
       binop env op ty e.etyp e1.etyp (expr env e1) e2.etyp (expr env e2)
   | EConditional(e1, e2, e3) ->
